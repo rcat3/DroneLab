@@ -28,6 +28,8 @@ The whole housing turns as it's screwed in, so how it ends up sitting depends on
 3. Hold the mask upright and read the number at the top of the scale.
 4. Set `thread_phase` to that number in `msa_housing.scad`, and print the body.
 
+The numbers count up clockwise from the arrow, seen from the front.  If you read between them, the arrow's angle clockwise from the top is the same number.  On the mask it's been tried on so far, the arrow ended up at the lower left (about 225), so `thread_phase` is set to 135.  As the thread starts in the same place on every Millennium, you shouldn't need to print `phase_test` unless your housing doesn't sit level.
+
 ## Files
 
 - `msa_housing.scad` - The design, in [OpenSCAD](https://openscad.org/).  All of the dimensions are named settings at the top.  Its preview shows the board, the battery, and the mask's filter mount in red.
@@ -40,6 +42,8 @@ The whole housing turns as it's screwed in, so how it ends up sitting depends on
 Set `board` in `board.scad` to `"rp2040"` or `"rp2350"` first, then run `./render.sh` in this folder to render the housing's parts to the `stl/` folder.  It needs [OpenSCAD](https://openscad.org/).  `./render.sh tests` renders `phase_test` and `fit_test`, and `./render.sh body bezel` just those parts.  A single part can also be rendered by hand with, for example, `openscad -D 'part="body"' -o body.stl msa_housing.scad`.  The parts are all turned the right way up to print.
 
 There are no screws: the bezel snaps on and the switch clicks into place.
+
+**Materials:** print the `gasket` in TPU (or cut it from rubber or foam).  PETG is best for the `body` and the `bezel`, as the bezel's skirt and the switch's catch flex; PLA+ works, but they're more likely to break.  The test prints are fine in PLA.
 
 - **`body`** - Printed back down.  The pocket for the USB-C plug needs a little support.
 - **`bezel`** - Printed front down.  PETG is a good choice, as its skirt flexes to snap on.

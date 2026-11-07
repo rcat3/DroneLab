@@ -28,10 +28,12 @@ The board has its own amplifier, speaker socket, microphones and battery charger
 
 Run `./render.sh` in this folder to render all of the housing's parts to the `stl/` folder.  It needs [OpenSCAD](https://openscad.org/).  `./render.sh tests` renders the test prints, and `./render.sh body chin` just those parts.  A single part can also be rendered by hand with, for example, `openscad -D 'part="body"' -o body.stl msa_speaker_housing.scad`.  The parts are all turned the right way up to print.
 
+**Materials:** print the `gasket` and the `usb_plug` in TPU.  Everything else is PLA or PLA+.
+
 - **`body`** - The display cup and the speaker pod.  Like the 1.46" body, it'll probably print best standing on one of its sides with tree supports.
 - **`chin`** - Closes the back of the pod and slopes back to the body.  It prints on the flat face that meets the pod, with no supports.
 - **`back`** - Closes the chamber, with the posts the collar turns on.  Use 4 or more walls so the posts are solid.
-- **`collar`**, **`washer`** and **`gasket`** - The turning collar, as on the 1.46" speaker housing.
+- **`collar`**, **`washer`** and **`gasket`** - The turning collar, as on the 1.46" speaker housing.  The gasket is TPU, or cut from 1 mm rubber or craft foam.
 - **`plungers`** - Two pins that press the board's side buttons through the wall.
 - **`usb_plug`** - Covers the USB-C port when it's not in use, flush with the outside of the housing.  A tongue on its back pushes into the slot for the plug, and the notch at its top edge is for a fingernail to pull it out.  It's a tight push fit, best printed in TPU.  In PLA or PETG, loosen it with the second number in `usb_tongue` if it's too tight.
 ### Test prints

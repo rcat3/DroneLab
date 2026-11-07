@@ -29,7 +29,7 @@ The board folders have the same names as the firmware's board folders in `platfo
 - `board.scad` - The board's dimensions, in the coordinates of the maker's 3D model: the front of the glass at z = 0, the board towards -z, and x/y seen from the front with the USB port at the bottom.  Every housing for the board includes it.
 - `<mask>_<kind>.scad` - A housing, named for the mask it fits and what it is, such as `msa_speaker_housing.scad`.  Each has a `part` setting that picks which part to render.
 - `render.sh` - Renders a housing's parts to STL files in `stl/`.  The STL files are made from the `.scad` files, so they aren't kept in the repository.
-- `README.md` - How it goes together, what to buy, and what's been checked with a print.
+- `README.md` - How it goes together, what to buy, what's been checked with a print, and which parts need a material other than PLA (such as TPU for gaskets).
 - A subfolder for anything else, such as a PCB (`header_adapter/`) or a case (`travel_case/`).
 
 ## Adding a board

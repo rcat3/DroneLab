@@ -23,8 +23,9 @@ The housing is two printed parts and no screws.  The body has the voice port thr
 The design is [`hardware/boards/waveshare_touch_lcd_1_28/msa_housing.scad`](../../hardware/boards/waveshare_touch_lcd_1_28/), in [OpenSCAD](https://openscad.org/).  Set `board` to `"rp2040"` or `"rp2350"` in `board.scad`, then run `./render.sh` in that folder to make the STL files.  Its README lists the parts and how to print them.
 
 1. Print `fit_test`, the front of the body without the thread, to check the board, the switch and the bezel fit.
-2. Print `phase_test`, the thread with a scale on its front, screw it all the way into the mask, hold the mask upright and read the number at the top.  Set `thread_phase` to it, so the housing ends up level.
+2. Print `phase_test`, the thread with a scale on its front, screw it all the way into the mask, hold the mask upright and read the number at the top.  Set `thread_phase` to it, so the housing ends up level.  It's already set from one mask, so this step is only needed if yours sits crooked.
 3. Print the `body` and the `bezel`.  PETG is a good choice for both, as the bezel's skirt and the switch's catch flex.
+4. Optionally, print the `gasket` in TPU, or cut it from 1 mm rubber or craft foam.
 
 ## Wiring
 

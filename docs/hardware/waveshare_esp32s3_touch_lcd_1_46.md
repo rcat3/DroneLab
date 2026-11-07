@@ -30,7 +30,7 @@ The board sits in a cup on the outside of the mask, with its glass flush with th
 
 ### Printing
 
-In [`hardware/boards/waveshare_esp32s3_touch_lcd_1_46`](../../hardware/boards/waveshare_esp32s3_touch_lcd_1_46/), run `./render.sh simple` (it needs [OpenSCAD](https://openscad.org/)) and print `stl/housing.stl`, front down.  That folder's README has more about the design, and some optional test prints.
+In [`hardware/boards/waveshare_esp32s3_touch_lcd_1_46`](../../hardware/boards/waveshare_esp32s3_touch_lcd_1_46/), run `./render.sh simple` (it needs [OpenSCAD](https://openscad.org/)) and print `stl/housing.stl`, front down, in PLA or PLA+.  That folder's README has more about the design, and some optional test prints.
 
 ### Putting it together
 
@@ -68,6 +68,8 @@ A small PCB that solders onto the 2x10, 1.27 mm pin header (J9) on the back of t
 ### Printing
 
 In [`hardware/boards/waveshare_esp32s3_touch_lcd_1_46`](../../hardware/boards/waveshare_esp32s3_touch_lcd_1_46/), run `./render.sh speaker` (it needs [OpenSCAD](https://openscad.org/)) to make the STL files in `stl/`.  That folder's README says how to print each part, and lists every screw and where it goes.
+
+**Materials:** print the `gasket` in TPU, or cut it from 1 mm rubber or craft foam.  Everything else is PLA or PLA+.
 
 ### Wiring
 

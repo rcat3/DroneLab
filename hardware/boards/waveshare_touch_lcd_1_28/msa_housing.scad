@@ -44,7 +44,7 @@ include <../../masks/msa_millennium/keepout.scad>
 /* [Layout] */
 board_rot = 90;             // USB-C on the right
 switch_angle = 145;         // the battery switch, at the upper left, clear of the pads
-thread_phase = 0;           // degrees, counter-clockwise seen from the front. From phase_test
+thread_phase = 135;         // degrees, counter-clockwise seen from the front. From phase_test
 
 /* [Body] */
 body_r = 28.5;
@@ -316,12 +316,15 @@ module phase_test()
                 translate([body_r - (a % 30 == 0 ? 4 : 2), -0.4, flange - 0.6]) cube([5, 0.8, 1]);
     }
     // The numbers: the tick at angle a, counter-clockwise from the top, reads
-    // -a, which is the thread_phase that brings it to the top
-    for (a = [0 : 30 : 330])
-        rotate([0, 0, 90 + a]) translate([body_r - 7.5, 0, flange]) rotate([0, 0, -90])
-            linear_extrude(0.6) text(str(a == 0 ? 0 : (a <= 180 ? -a : 360 - a)), size = 2.6, halign = "center", valign = "center");
-    // and an arrow at the top
-    translate([0, body_r - 10.5, flange]) linear_extrude(0.6) polygon([[-2, 0], [2, 0], [0, 3]]);
+    // -a, which is the thread_phase that brings it to the top. So they count
+    // up clockwise, like a compass. They're bold and big enough that a slicer
+    // doesn't drop their strokes as too thin for the nozzle.
+    for (a = [30 : 30 : 330])
+        rotate([0, 0, 90 + a]) translate([body_r - 8.5, 0, flange - 0.01]) rotate([0, 0, -90])
+            linear_extrude(0.81) text(str(360 - a), size = 3.6, font = "Liberation Sans:style=Bold",
+                                      halign = "center", valign = "center");
+    // and an arrow in place of 0
+    translate([0, body_r - 11, flange - 0.01]) linear_extrude(0.81) polygon([[-2.2, 0], [2.2, 0], [0, 5]]);
 }
 
 // The thread, pointing down from z = 0, as it is on the body
