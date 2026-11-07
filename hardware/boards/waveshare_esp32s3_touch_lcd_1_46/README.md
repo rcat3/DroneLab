@@ -35,6 +35,8 @@ To render just some parts, name them, like `./render.sh body back`.  A single pa
 
 ### Parts to print
 
+**Materials:** PLA or PLA+.
+
 - **`housing`** - The whole housing, in one piece.  It prints with its front on the bed.
 
 ### Screws
@@ -52,6 +54,8 @@ The display sits in the middle, with a small speaker in a pod on each side, and 
 The wiring to the board goes through the [J9 header adapter](header_adapter/), a small PCB soldered onto the board's pin header, so the board can come out without cutting anything.  `header_adapter = true` (the default) shapes the back plate for it.
 
 ### Parts to print
+
+**Materials:** print the `gasket` in TPU (or cut it from rubber or foam).  Everything else is PLA or PLA+.
 
 - **`body`** - The display cup and the speaker pods.  It prints well standing on one of its short sides with tree supports.  Printed on its back, the curved front edges show more layer lines.
 - **`back`** - Closes the chamber, with the posts the collar turns on.  Use 4 or more walls so the posts are solid.

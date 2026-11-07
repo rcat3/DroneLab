@@ -31,6 +31,8 @@ The board's own amplifier, speaker socket and microphones are used, so there are
 
 The design is [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75/msa_speaker_housing.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/), in [OpenSCAD](https://openscad.org/).  Run `./render.sh` in that folder to make the STL files.  Its README lists the parts, how to print them, and the test prints to check first: the glass's fit (`lens_fit`), the micro SD slot, and the speaker (`pod_test`).
 
+**Materials:** print the `gasket` and the `usb_plug` in TPU.  Everything else is PLA or PLA+.
+
 ## Wiring
 
 ```mermaid
