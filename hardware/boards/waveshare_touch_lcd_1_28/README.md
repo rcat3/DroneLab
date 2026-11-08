@@ -14,7 +14,7 @@ It's two printed parts and no screws:
 - **The board** drops into the body from the front and rests on three small pads behind the edge of its PCB.
 - **The battery** sits behind the board, in a closed compartment inside the thread, in a shallow cradle in the floor so it can't slide around.  There's 1 mm between the top of the battery and the tallest parts on the back of the board, for a piece of 1 mm foam tape on top of the battery.  The board presses it down, so the battery stays put and nothing on the board can rub against it.
 - **A slide switch** in the side wall turns the battery on and off.  It sits in a pocket in the wall, with its lever out through a slot, so there's nothing to drill.  A catch holds it in: the roof of the pocket is a little tongue with a hook under its end, which the switch pushes up as it goes in, and which drops down behind it.
-- **The bezel** snaps over the front of the body and holds the board in by the edge of its glass.  To take it off, pry it up with a fingernail at the notch at the bottom.
+- **The bezel** goes over the front of the body and holds the board in by the edge of its glass.  It twist-locks on: line up the small arrow on its edge with the one on the body, push it down so the three lugs inside it drop into their slots, and turn it clockwise about 25 degrees until it clicks.  The grooves pull it down tight as it turns.  To take it off, turn it back and lift it off.  Nothing has to stretch, so it doesn't crack.
 - **The USB-C port** is reachable through a pocket in the right side (seen from the front), for charging and flashing.  The board is turned a quarter turn so the port isn't facing the mask's filter mount, below the voice port.  Set the display's Rotation to 90 degrees to match.
 
 The housing stands about 12 mm out of the mask: 11.6 mm with the RP2040 board, 12.2 mm with the RP2350 board.
@@ -41,12 +41,12 @@ The numbers count up clockwise from the arrow, seen from the front.  If you read
 
 Set `board` in `board.scad` to `"rp2040"` or `"rp2350"` first, then run `./render.sh` in this folder to render the housing's parts to the `stl/` folder.  It needs [OpenSCAD](https://openscad.org/).  `./render.sh tests` renders `phase_test` and `fit_test`, and `./render.sh body bezel` just those parts.  A single part can also be rendered by hand with, for example, `openscad -D 'part="body"' -o body.stl msa_housing.scad`.  The parts are all turned the right way up to print.
 
-There are no screws: the bezel snaps on and the switch clicks into place.
+There are no screws: the bezel twist-locks on and the switch clicks into place.
 
-**Materials:** print the `gasket` in TPU (or cut it from rubber or foam).  PETG is best for the `body` and the `bezel`, as the bezel's skirt and the switch's catch flex; PLA+ works, but they're more likely to break.  The test prints are fine in PLA.
+**Materials:** print the `gasket` in TPU (or cut it from rubber or foam).  PETG is best for the `body`, as the switch's catch flexes; PLA+ works, but the catch is more likely to break.  The `bezel` is fine in either.  The test prints are fine in PLA.
 
-- **`body`** - Printed back down.  The pocket for the USB-C plug needs a little support.
-- **`bezel`** - Printed front down.  PETG is a good choice, as its skirt flexes to snap on.
+- **`body`** - Printed back down.  Its front is hidden under the bezel, so printing it on its side gains nothing, and makes the USB-C pocket rough where the supports were.  The top of the pocket bridges, or use a little support there.
+- **`bezel`** - Printed front down, with no supports.
 - **`gasket`** - Optional.  A thin ring between the body and the voice port, to seal it.  Print it in TPU, or cut it from 1 mm rubber or craft foam.
 - **`phase_test`** - The thread with a scale on its front, for `thread_phase` (see above).
 - **`fit_test`** - The front of the body without the thread, to check the board, the switch and the bezel fit before printing the whole body.
@@ -55,10 +55,10 @@ There are no screws: the bezel snaps on and the switch clicks into place.
 
 These come from the 3D model, not from a print, so check them with `fit_test`:
 
-- The board's fit in its pocket (`clearance`) and on its pads.  If the board rattles once the bezel is on, the pads are too low.  If the bezel won't snap on, they're too high.
+- The board's fit in its pocket (`clearance`) and on its pads.  If the board rattles once the bezel is on, the pads are too low.  If the bezel won't turn to lock, they're too high.
 - With the RP2350 board, its thickness: from the front of the glass to the back of the PCB should be about 5.5 mm (`pcb_back_z` in `board.scad`).
 - The switch's fit in its pocket (`switch_body`), that the lever moves freely in its slot, and that the catch clicks behind it (`catch_hook`).  If the catch is too stiff or breaks, print the body in PETG, which bends more than PLA before it breaks.
-- How firmly the bezel snaps on (`snap_bead`).
+- How firmly the bezel locks.  `lock_play` sets how tight the grooves pull it down, and `lock_detent` how firmly it clicks.
 
 ## Parts to buy, wiring and putting it together
 

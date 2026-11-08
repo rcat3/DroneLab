@@ -6,7 +6,7 @@ The [Waveshare RP2040-Touch-LCD-1.28](https://www.waveshare.com/wiki/RP2040-Touc
 
 ![The 1.28" housing](../images/housing_1_28.png)
 
-The housing is two printed parts and no screws.  The body has the voice port thread on its back, and holds the board, the battery in a cradle inside the thread, and a slide switch in its side wall.  The bezel snaps over the front and holds the board in by its glass.  Nothing sticks out of the back, so it screws all the way in and sits flat.  It stands about 12 mm out of the mask.
+The housing is two printed parts and no screws.  The body has the voice port thread on its back, and holds the board, the battery in a cradle inside the thread, and a slide switch in its side wall.  The bezel twist-locks over the front and holds the board in by its glass.  Nothing sticks out of the back, so it screws all the way in and sits flat.  It stands about 12 mm out of the mask.
 
 **Status: new.**  The housing is designed but hasn't been printed yet.  It replaces the [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa) model by whyrlpool, which this project started out with, and whose voice port thread it uses.
 
@@ -24,7 +24,7 @@ The design is [`hardware/boards/waveshare_touch_lcd_1_28/msa_housing.scad`](../.
 
 1. Print `fit_test`, the front of the body without the thread, to check the board, the switch and the bezel fit.
 2. Print `phase_test`, the thread with a scale on its front, screw it all the way into the mask, hold the mask upright and read the number at the top.  Set `thread_phase` to it, so the housing ends up level.  It's already set from one mask, so this step is only needed if yours sits crooked.
-3. Print the `body` and the `bezel`.  PETG is a good choice for both, as the bezel's skirt and the switch's catch flex.
+3. Print the `body` back down and the `bezel` front down.  PETG is a good choice for the body, as the switch's catch flexes.
 4. Optionally, print the `gasket` in TPU, or cut it from 1 mm rubber or craft foam.
 
 ## Wiring
@@ -47,7 +47,7 @@ Check the polarity at the plug against the board before plugging it in.
 2. Push the switch into its pocket from inside the body, lever first, until it clicks past the catch and its lever is out through the slot.
 3. Stick the foam tape over the top of the battery, and lay it in its cradle with its leads at the left, in the notch.
 4. Plug the battery into the board, then drop the board in, with its USB-C port at the right-hand side of the pocket and the plug in the space beside the board.
-5. Snap the bezel on.  To take it off again, pry it up with a fingernail at the notch at the bottom.
+5. Line up the arrow on the bezel's edge with the one on the body, push the bezel down, and turn it clockwise about 25 degrees until it clicks.  To take it off again, turn it back and lift it off.
 
 ## Charging
 
