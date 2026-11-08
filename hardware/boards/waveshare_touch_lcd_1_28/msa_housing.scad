@@ -9,8 +9,10 @@
 //    A slide switch in the side wall turns the battery on and off, held in
 //    its pocket by a catch that it clicks past as it goes in, and the
 //    USB-C port is reachable through a pocket in the other side.
-//  - bezel: a ring that snaps over the front of the body and holds the board
-//    in by the edge of its glass. A notch at the bottom is for prying it off.
+//  - bezel: a ring over the front of the body that holds the board in by the
+//    edge of its glass. It twist-locks on: three lugs inside its skirt drop
+//    into slots in the body, and a turn clockwise slides them along grooves
+//    that pull it down tight, until they click past a small ridge.
 //  - gasket (optional): a thin ring between the body and the voice port, to
 //    seal it. Print it in TPU, or cut it from 1 mm rubber or craft foam.
 //  - phase_test: the thread with a scale on its front, to find thread_phase
@@ -57,11 +59,19 @@ pad_r = 17.4;               // how far in they reach under the edge of the PCB
 /* [Bezel] */
 bezel_t = 1.2;              // over the edge of the glass
 bezel_opening_r = active_r + 0.4;
-skirt = [1.4, 3.2];         // thickness, length: the part that snaps over the body
-snap_bead = 0.35;           // how far the bead inside the skirt reaches into the groove in the body
-skirt_slits = 8;            // slits in the skirt, so it flexes when it snaps on
-slit_w = 1.0;
-pry_notch = [6, 1.2];       // width, depth
+skirt = [1.4, 3.2];         // thickness, length: the part that goes over the body
+// The twist-lock. Nothing has to stretch to put it on, so it doesn't crack.
+lug_angles = [60, 180, 300];    // where the lugs end up, counter-clockwise from the right seen
+                                // from the front: clear of the USB-C pocket (right) and the
+                                // battery plug's pocket (bottom)
+lug = [6.0, 0.9, 1.2];      // width along the skirt, how far in it reaches, front to back
+lock_turn = 25;             // degrees clockwise from the slots to locked
+lock_play = [0.3, 0.0];     // front to back play at the start of the turn, and once locked
+lock_detent = 0.2;          // how far the ridge the lugs click past reaches into the groove
+lug_nub = 1.2;              // the narrow part at the leading end of each lug that clicks past
+                            // the ridge. The rest of the lug's face is lower, so it clears it.
+lug_clear = 0.25;           // around the lugs in the grooves, in and along
+mark = [1.2, 0.5, 1.5];     // the marks that line the bezel up with the slots: width, depth, height
 
 /* [Battery: 502030 LiPo, 5 x 20 x 30 mm, 250-310 mAh] */
 battery = [30, 20, 5];      // long side, short side, thickness
@@ -143,10 +153,57 @@ module body_shape()
             translate([0, 0, z_rim + 0.1]) rotate([0, 0, thread_phase]) rotate([180, 0, 0]) vpu_thread(thread_scale);
             translate([0, 0, z_back]) cylinder(r = 21.2 * thread_scale, h = z_battery + cradle_depth - z_back, $fn = 128);
         }
-        // The groove the bezel's bead snaps into
-        translate([0, 0, (z_glass + z_skirt) / 2])
-            rotate_extrude($fn = 192) translate([skirt_ir - 0.05, 0]) circle(r = snap_bead + 0.1, $fn = 16);
+        lock_grooves();
+        // The mark at the slot the bezel's mark lines up with to go on
+        rotate([0, 0, 90 + lock_turn]) translate([body_r, 0, z_skirt]) lock_mark();
     }
+}
+
+// Millimeters along the skirt, in degrees
+function skirt_deg(mm) = mm / skirt_ir * 180 / PI;
+lug_half = skirt_deg(lug[0] / 2);
+
+// The front to back room in a groove at angle a, for the lug that locks at L.
+// The lug's leading (clockwise) end, its nub, ends up at L - lug_half, just
+// past a narrow ridge. From there back to the slot, the groove widens from
+// lock_play[1] to lock_play[0], so the turn pulls the bezel down tight.
+function groove_h(a, L) =
+    let(ridge_hw = skirt_deg(0.6),
+        ridge_a = L - lug_half + skirt_deg(lug_nub + lug_clear) + ridge_hw,
+        ramp = max(0, min(1, (a - ridge_a - ridge_hw) / lock_turn)),
+        ridge = max(0, 1 - abs(a - ridge_a) / ridge_hw))
+    lug[2] + lock_play[1] + ramp * (lock_play[0] - lock_play[1]) - ridge * lock_detent;
+
+// In the body under the skirt, for each lug: a slot from the front, and a
+// groove from it clockwise to where the lug locks
+module lock_grooves()
+{
+    hw = lug_half + skirt_deg(lug_clear);
+    r_in = skirt_ir - lug[1] - lug_clear;
+    r_out = skirt_ir + 0.5;
+    step = 1;
+    for (L = lug_angles)
+    {
+        // The slot
+        rotate([0, 0, L + lock_turn - hw]) rotate_extrude(angle = 2 * hw, $fn = 192)
+            translate([r_in, z_skirt]) square([r_out - r_in, z_glass - z_skirt + 1]);
+        // The groove, in thin slices
+        a0 = L - hw - 0.5;
+        a1 = L + lock_turn;
+        n = ceil((a1 - a0) / step);
+        for (i = [0 : n - 1])
+            hull()
+                for (a = [a0 + i * (a1 - a0) / n, a0 + (i + 1) * (a1 - a0) / n])
+                    rotate([0, 0, a]) translate([r_in, -0.005, z_skirt]) cube([r_out - r_in, 0.01, groove_h(a, L)]);
+    }
+}
+
+// A small V cut into the outside, pointing at the front, at x = 0
+module lock_mark()
+{
+    translate([0, 0, -mark[2]]) rotate([0, 0, 90]) rotate([90, 0, 0])
+        linear_extrude(mark[1] * 2, center = true)
+            polygon([[-mark[0] / 2, -0.01], [mark[0] / 2, -0.01], [0, mark[2] + 0.01]]);
 }
 
 module body()
@@ -261,28 +318,27 @@ module bezel()
                         translate([0, -10]) square([body_r, 10]);
                     }
             }
-            // The skirt, with a bead inside near its end
+            // The skirt, with the lugs inside at its end
             translate([0, 0, z_skirt]) difference()
             {
                 cylinder(r = body_r, h = skirt[1] + 0.01, $fn = 192);
                 translate([0, 0, -1]) cylinder(r = skirt_ir, h = skirt[1] + 2, $fn = 192);
             }
-            intersection()
+            // The lugs, their faces lowered to clear the ridge except for
+            // the nub at their leading (clockwise) end
+            for (L = lug_angles)
             {
-                translate([0, 0, (z_glass + z_skirt) / 2])
-                    rotate_extrude($fn = 192) translate([skirt_ir, 0]) circle(r = snap_bead, $fn = 16);
-                translate([0, 0, z_skirt]) cylinder(r = body_r, h = skirt[1], $fn = 192);
+                rotate([0, 0, L - lug_half]) rotate_extrude(angle = 2 * lug_half, $fn = 192)
+                    translate([skirt_ir - lug[1], z_skirt]) square([lug[1] + 0.01, lug[2] - lock_detent - 0.05]);
+                rotate([0, 0, L - lug_half]) rotate_extrude(angle = skirt_deg(lug_nub), $fn = 192)
+                    translate([skirt_ir - lug[1], z_skirt]) square([lug[1] + 0.01, lug[2]]);
             }
         }
         // The opening, with a small chamfer on its front edge
         translate([0, 0, z_glass - 1]) cylinder(r = bezel_opening_r, h = bezel_t + 2, $fn = 128);
         translate([0, 0, -0.5]) cylinder(r1 = bezel_opening_r, r2 = bezel_opening_r + 0.6, h = 0.51, $fn = 128);
-        // Slits so the skirt flexes, between the USB and switch pockets
-        for (i = [0 : skirt_slits - 1])
-            rotate([0, 0, (i + 0.5) * 360 / skirt_slits])
-                translate([skirt_ir - 1, -slit_w / 2, z_skirt - 1]) cube([skirt[0] + 2, slit_w, skirt[1] + 0.5]);
-        // The pry notch at the bottom
-        translate([-pry_notch[0] / 2, -body_r - 1, z_skirt - 1]) cube([pry_notch[0], skirt[0] + 1.1, pry_notch[1] + 1]);
+        // The mark that lines up with the body's to put it on, at the top
+        rotate([0, 0, 90]) translate([body_r, 0, z_skirt]) mirror([0, 0, 1]) lock_mark();
     }
 }
 
