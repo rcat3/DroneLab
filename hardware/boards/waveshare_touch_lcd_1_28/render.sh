@@ -13,9 +13,9 @@
 cd "$(dirname "$0")"
 
 SCAD=msa_housing.scad
-ALL_PARTS=(body bezel gasket phase_test fit_test)
+ALL_PARTS=(body bezel phase_test fit_test)
 PART_GROUPS=(housing tests)
-GROUP_housing="body bezel gasket"
+GROUP_housing="body bezel"
 GROUP_tests="phase_test fit_test"
 DEFAULT=(housing)
 

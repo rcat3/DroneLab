@@ -28,6 +28,12 @@ outline_r = 19.25;
 outline_point = [[-13.97, -13.25], [-6.46, -21.02], [-4.48, -22.10],
                  [4.48, -22.10], [6.46, -21.02], [13.97, -13.25]];
 pcb_r = 18.77;
+pcb_t = board == "rp2350" ? 1.6 : 1.0;
+// The PCB itself, inside the outline above, has 45 degree edges either side
+// of its point, along y = |x| - pcb_point. The PCB isn't quite centered on
+// the glass, and not by the same amount on the two boards. From Waveshare's
+// 3D models.
+pcb_point = board == "rp2350" ? 26.40 : 26.90;
 // From the front of the glass to the back of the PCB. The RP2350 board's PCB
 // is 1.6 mm thick instead of 1.0, so it's thicker by 0.6 mm (not yet checked
 // on a real board).
@@ -37,6 +43,12 @@ back_height = 3.4;          // the tallest part on the back (the battery socket)
 battery_socket = [[-17.80, -4.60], [-12.60, 3.05], 3.4];    // the plug goes in from -x
 usb = [[-4.80, -22.10], [4.79, -14.57], 3.25];              // its front is at y = -22.10
 usb_z = [-0.91, 3.25];      // the USB-C port, from the back of the PCB
+// The USB-C port's shell behind the PCB, between its mounting legs and the
+// opening: its half width, and over what depth behind the PCB it's that wide.
+// The parts beside it on the PCB are no more than 0.9 mm tall.
+usb_shell_hw = 4.46;
+usb_shell_y = [-18.9, -16.8];
+usb_shell_z = [0.9, 2.1];
 header = [[-7.17, 7.40], [7.18, 12.50], 3.13];
 buttons = [[[8.63, 8.58], [13.28, 11.88], 2.5], [[-13.28, 8.58], [-8.63, 11.88], 2.5]];
 crystal = [[5.86, -13.54], [11.24, -8.16], 2.0];
