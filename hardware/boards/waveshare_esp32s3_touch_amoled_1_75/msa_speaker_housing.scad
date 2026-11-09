@@ -57,6 +57,11 @@ spk_corner = 2.0;           // the box's corners, seen from the front
 spk_cone = [30, 20.5];      // the oval cone, inside the adhesive frame on the front
 spk_clear = 0.3;
 spk_back_gap = 2.0;         // behind the speaker, for its wire to run to the chamber
+spk_wire_notch = [5, 2];    // in the middle of each short side of the pocket, for the wire where
+                            // it comes out of the box: width, depth
+wire_pass = [12, 4];        // the opening from the pocket into the chamber, for the speaker's plug:
+                            // width, and how far behind the chamber's top it reaches out into the
+                            // body's wall, leaving 1 mm of it
 
 /* [Battery: 103450 LiPo, 10 x 34 x 50 mm, 2000 mAh] */
 battery = [50.5, 34, 9.9];  // taped to the back
@@ -233,11 +238,25 @@ module grille_slots_2d()
 }
 
 // What's cut out of the pod: the pocket the speaker sits in, open at the
-// back, and the grille in front of it. The inner end of the pocket overlaps
-// the chamber, which is how the speaker's wire gets to the board.
+// back, with a notch in each short side for its wire, and the grille in front
+// of it. The wire runs behind the speaker to the pocket's inner end, which
+// overlaps the chamber, and there an opening out into the body's wall makes
+// room for its plug to go through.
 module pod_cut()
 {
-    translate([0, 0, z_pod_back - 1]) linear_extrude(z_land - z_pod_back + 1) pocket_2d();
+    translate([0, 0, z_pod_back - 1]) linear_extrude(z_land - z_pod_back + 1)
+    {
+        pocket_2d();
+        for (s = [-1, 1]) translate([-spk_wire_notch[0] / 2, s * pocket[0] / 2 - (s < 0 ? spk_wire_notch[1] : 0.01)])
+            square([spk_wire_notch[0], spk_wire_notch[1] + 0.01]);
+    }
+    x0 = -pocket[1] / 2;
+    z0 = chamber_top - wire_pass[1];
+    intersection()
+    {
+        translate([x0, -wire_pass[0] / 2, z0]) cube([body_r - pod_dist - x0, wire_pass[0], z_pod_back - 0.5 - z0]);
+        translate([-pod_dist, 0, z0 - 1]) cylinder(r = body_r - 1, h = 20, $fn = 192);
+    }
     translate([0, 0, z_land - 0.01]) linear_extrude(cone_gap + 0.02) rotate(90) stadium(spk_cone);
     translate([0, 0, z_face - grille_t - 0.01]) linear_extrude(grille_t + 1) grille_slots_2d();
 }
