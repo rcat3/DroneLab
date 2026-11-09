@@ -6,7 +6,7 @@ A hinged case that carries the [1.28" housing](../) with the board in it, so the
 
 - `travel_case_1_28.stl` - All five parts laid out to print: the bottom, the lid, the hinge, the clasp and the hinge pin.  The layout is 109 x 159 mm.
 
-Inside, the case has a round pocket 57.6 mm across and 20.5 mm deep, which fits the housing with about 0.3 mm to spare around it.  It's the 1.46" housing's travel case scaled up evenly to 109.84%, so the pocket fits the 1.28" housing's 57 mm body, with the lid's pocket made 3 mm shallower so the housing doesn't rattle.  Scaling every part by the same amount keeps the hinge, the clasp and the pin working together.  The housing is 19.6 mm tall with the RP2040 board and 20.2 mm with the RP2350 board, so the case fits either one.
+Inside, the case has a round pocket 57.6 mm across and 20.5 mm deep, which fits the housing with about 0.3 mm to spare around it.  It's the 1.46" housing's travel case scaled up evenly to 109.84%, so the pocket fits the 1.28" housing's 57 mm body, with the lid's pocket made 3 mm shallower so the housing doesn't rattle.  Scaling every part by the same amount keeps the hinge, the clasp and the pin working together.  The holes for the filament the hinge and clasp turn on were then put back to the 1.46" case's 2.1 mm, as scaling had made them 2.3 mm, too loose to hold 1.75 mm filament.  The housing is 19.6 mm tall with either board, so the case fits either one.
 
 ## Credits and License
 
