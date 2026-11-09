@@ -13,8 +13,6 @@
 //    edge of its glass. It twist-locks on: three lugs inside its skirt drop
 //    into slots in the body, and a turn clockwise slides them along grooves
 //    that pull it down tight, until they click past a small ridge.
-//  - gasket (optional): a thin ring between the body and the voice port, to
-//    seal it. Print it in TPU, or cut it from 1 mm rubber or craft foam.
 //  - phase_test: the thread with a scale on its front, to find thread_phase
 //    (see below). Print it first.
 //
@@ -23,7 +21,7 @@
 // The whole housing turns as it's screwed in, so how it ends up sitting
 // depends on where the thread starts. thread_phase turns the thread on the
 // body so the housing ends up level. Screw phase_test all the way into the
-// mask (with the gasket, if you'll use one), hold the mask upright, read the
+// mask, hold the mask upright, read the
 // number at the top of the scale, and set thread_phase to it.
 //
 // The board is turned a quarter turn from its usual way up, so its USB-C port
@@ -36,7 +34,7 @@
 // Render a part to print with, for example:
 //   openscad -D 'part="body"' -o body.stl msa_housing.scad
 
-part = "preview";           // "preview", "body", "bezel", "gasket", "phase_test", "fit_test" or "layout"
+part = "preview";           // "preview", "body", "bezel", "phase_test", "fit_test" or "layout"
 
 include <board.scad>
 include <../../masks/msa_millennium/keepout.scad>
@@ -46,31 +44,39 @@ include <../../masks/msa_millennium/keepout.scad>
 /* [Layout] */
 board_rot = 90;             // USB-C on the right
 switch_angle = 145;         // the battery switch, at the upper left, clear of the pads
-thread_phase = 135;         // degrees, counter-clockwise seen from the front. From phase_test
+thread_phase = 123;         // degrees, counter-clockwise seen from the front. From a housing in a mask
 
 /* [Body] */
 body_r = 28.5;
 clearance = 0.3;            // around the board
+usb_key_gap = 0.1;          // either side of the USB-C port, between it and the posts that stop the board turning
 front_round = 1.5;          // rounds the front edge of the bezel
 back_chamfer = 0.8;
 pad = [3.2, 3.0];           // the pads the board rests on: width, depth below the board
 pad_r = 17.4;               // how far in they reach under the edge of the PCB
 
 /* [Bezel] */
-bezel_t = 1.2;              // over the edge of the glass
-bezel_opening_r = active_r + 0.4;
+// The bezel's front is flush with the glass. Behind the glass, the board is
+// wider, and a thin lip of the bezel holds it in by that. Outside the board,
+// the bezel is bezel_t thick, over the front of the body.
+bezel_t = 1.2;
+glass_clear = 0.15;         // around the glass
+bezel_opening_r = glass_r + glass_clear;
 skirt = [1.4, 3.2];         // thickness, length: the part that goes over the body
 // The twist-lock. Nothing has to stretch to put it on, so it doesn't crack.
 lug_angles = [60, 180, 300];    // where the lugs end up, counter-clockwise from the right seen
                                 // from the front: clear of the USB-C pocket (right) and the
                                 // battery plug's pocket (bottom)
-lug = [6.0, 0.9, 1.2];      // width along the skirt, how far in it reaches, front to back
+lug = [6.0, 1.1, 1.8];      // width along the skirt, how far in it reaches, front to back. Its
+                            // front face slopes at 45 degrees, so it prints without sagging.
 lock_turn = 25;             // degrees clockwise from the slots to locked
-lock_play = [0.3, 0.0];     // front to back play at the start of the turn, and once locked
-lock_detent = 0.2;          // how far the ridge the lugs click past reaches into the groove
+lock_play = [0.4, 0.1];     // front to back play at the start of the turn, and once locked
+lock_detent = 0.3;          // how far the ridge the lugs click past reaches into the groove
 lug_nub = 1.2;              // the narrow part at the leading end of each lug that clicks past
                             // the ridge. The rest of the lug's face is lower, so it clears it.
 lug_clear = 0.25;           // around the lugs in the grooves, in and along
+skirt_clear = 0.3;          // between the skirt and the body under it, so it turns freely
+skirt_gap = 0.2;            // between the end of the skirt and the body, so the bezel sits on the front
 mark = [1.2, 0.5, 1.5];     // the marks that line the bezel up with the slots: width, depth, height
 
 /* [Battery: 502030 LiPo, 5 x 20 x 30 mm, 250-310 mAh] */
@@ -88,40 +94,43 @@ switch_body = [8.7, 3.7, 3.7];  // along the wall, front to back, out from the c
 switch_lever = [1.6, 1.6];  // the lever's width along the wall, and front to back
 switch_travel = 2.0;
 switch_wall = 1.2;          // in front of the switch, with the slot for the lever
-// The catch that keeps the switch in: the roof of its pocket is a tongue,
-// free on three sides, with a hook under its free end. The switch pushes it
-// up as it goes in, and it drops down behind the switch.
-catch_tongue = [3.0, 0.8, 0.6];     // width, thickness, and the gap that lets it flex
-catch_hook = [1.2, 0.55];   // how far along the hook's ramp is, and how far it reaches down
-catch_root_r = 27.6;        // where the tongue joins the wall, from the center
+// The catch that keeps the switch in: a finger either side of the pocket,
+// standing up from near the back of the body, each with a hook on its side
+// that reaches into the pocket. The switch pushes them apart as it goes in,
+// and they spring back behind it. They print upright, so nothing in or
+// around the pocket needs supports.
+catch_finger = [1.6, 0.8, 0.6];     // length out from the center, thickness, and the gap around it
+catch_hook = [1.2, 0.4];    // how far along the hook's ramp is, and how far it reaches into the pocket
+catch_skin = 1.0;           // the back of the body, under the fingers
 
 /* [USB-C] */
 usb_opening = [12.4, 6.6];  // the plug's overmold
 usb_recess = [16.0, 1.0];   // width of the pocket in the side, and how far the port is behind its floor
 
-/* [Gasket] */
-gasket = [25.6, 28.5, 1.0]; // inner and outer radius, thickness
-
 $fn = 96;
 
-z_glass = -bezel_t;                             // the front of the glass, and of the body
+z_glass = 0;                                    // the front of the glass, flush with the bezel's
+z_front = z_glass - bezel_t;                    // the front of the body, under the bezel
 z_pcb_back = z_glass + pcb_back_z;
 z_parts_back = z_pcb_back - back_height;
 z_usb = z_pcb_back - (usb_z[0] + usb_z[1]) / 2; // the USB-C port's center
 usb_front_r = -usb[0][1];
 usb_recess_r = usb_front_r + usb_recess[1];
+z_skirt = z_front - skirt[1];                   // where the bezel's skirt ends
+// The switch is outside the edge of the board, behind the end of the skirt
+z_switch = [z_skirt - 1.5 - switch_body[1], z_skirt - 1.5];
+switch_floor = 1.8;         // under the switch's pocket
 // The body's back sits on the voice port's rim. It's as far forward as it can
-// be with the USB-C pocket in front of it.
-z_rim = min(z_usb - usb_opening[1] / 2 - 0.4 - 0.6, z_parts_back - 1.0);
+// be with the USB-C pocket in front of it and the floor under the switch.
+z_rim = min(z_usb - usb_opening[1] / 2 - 0.4 - 0.6, z_parts_back - 1.0, z_switch[0] - 0.15 - switch_floor);
 z_back = z_rim - thread_length;                 // the back of the thread
 z_battery = z_parts_back - battery_gap - battery[2];    // the bottom of the battery, where it sits in its cradle
-z_skirt = z_glass - skirt[1];                   // where the bezel's skirt ends
 skirt_ir = body_r - skirt[0];
-z_switch = [z_pcb_back - 0.6 - switch_body[1], z_pcb_back - 0.6];
 switch_r = body_r - switch_wall;                // the switch's outer face
 switch_inner_r = switch_r - switch_body[2];     // and its inner face, where its pins are
-z_pocket_top = z_switch[1] + 0.15;
-catch_free_r = switch_inner_r - 0.05 - catch_hook[0];   // the free end of the catch's tongue
+z_pocket = [z_switch[0] - 0.15, z_switch[1] + 0.15];
+pocket_hw = switch_body[0] / 2 + 0.15;          // half the pocket's width
+catch_r = [switch_inner_r - 0.05 - catch_finger[0], switch_inner_r - 0.05];   // the fingers' inner and outer ends
 
 // The battery socket's plug goes in from the edge, so the pocket has room for
 // it and its wires beside the board.
@@ -148,7 +157,7 @@ module body_shape()
             // Behind the skirt, out to the full radius
             chamfered_prism(z_rim, z_skirt, back_chamfer, front = false) circle(r = body_r, $fn = 192);
             // and under the skirt, a little narrower
-            translate([0, 0, z_skirt - 0.01]) cylinder(r = skirt_ir - 0.05, h = z_glass - z_skirt + 0.01, $fn = 192);
+            translate([0, 0, z_skirt - 0.01]) cylinder(r = skirt_ir - skirt_clear, h = z_front - z_skirt + 0.01, $fn = 192);
             // The thread, turned by thread_phase, and the floor at its end
             translate([0, 0, z_rim + 0.1]) rotate([0, 0, thread_phase]) rotate([180, 0, 0]) vpu_thread(thread_scale);
             translate([0, 0, z_back]) cylinder(r = 21.2 * thread_scale, h = z_battery + cradle_depth - z_back, $fn = 128);
@@ -163,6 +172,17 @@ module body_shape()
 function skirt_deg(mm) = mm / skirt_ir * 180 / PI;
 lug_half = skirt_deg(lug[0] / 2);
 
+// The lug's outline, seen from the side: x out from the center, z from its
+// back, h tall where it meets the skirt, with its front face at 45 degrees
+module lug_profile(h)
+{
+    polygon([[skirt_ir + 0.01, 0], [skirt_ir - lug[1], 0], [skirt_ir - lug[1], h - lug[1]], [skirt_ir + 0.01, h + 0.01]]);
+}
+
+// The bezel sits on the front of the body, and the lugs start this far
+// from the body's shoulder
+z_lug = z_skirt + skirt_gap;
+
 // The front to back room in a groove at angle a, for the lug that locks at L.
 // The lug's leading (clockwise) end, its nub, ends up at L - lug_half, just
 // past a narrow ridge. From there back to the slot, the groove widens from
@@ -173,6 +193,13 @@ function groove_h(a, L) =
         ramp = max(0, min(1, (a - ridge_a - ridge_hw) / lock_turn)),
         ridge = max(0, 1 - abs(a - ridge_a) / ridge_hw))
     lug[2] + lock_play[1] + ramp * (lock_play[0] - lock_play[1]) - ridge * lock_detent;
+
+// A slice of a groove, seen from the side: down to the shoulder, and up to
+// h above z_lug where it meets the skirt, sloping like the lug's face
+module groove_profile(h, r_in, r_out)
+{
+    polygon([[r_in, -skirt_gap], [r_out, -skirt_gap], [r_out, h + r_out - skirt_ir], [r_in, h - (skirt_ir - r_in)]]);
+}
 
 // In the body under the skirt, for each lug: a slot from the front, and a
 // groove from it clockwise to where the lug locks
@@ -186,7 +213,7 @@ module lock_grooves()
     {
         // The slot
         rotate([0, 0, L + lock_turn - hw]) rotate_extrude(angle = 2 * hw, $fn = 192)
-            translate([r_in, z_skirt]) square([r_out - r_in, z_glass - z_skirt + 1]);
+            translate([r_in, z_skirt]) square([r_out - r_in, z_front - z_skirt + 1]);
         // The groove, in thin slices
         a0 = L - hw - 0.5;
         a1 = L + lock_turn;
@@ -194,7 +221,8 @@ module lock_grooves()
         for (i = [0 : n - 1])
             hull()
                 for (a = [a0 + i * (a1 - a0) / n, a0 + (i + 1) * (a1 - a0) / n])
-                    rotate([0, 0, a]) translate([r_in, -0.005, z_skirt]) cube([r_out - r_in, 0.01, groove_h(a, L)]);
+                    rotate([0, 0, a]) translate([0, 0, z_lug]) rotate([90, 0, 0])
+                        linear_extrude(0.01, center = true) groove_profile(groove_h(a, L), r_in, r_out);
     }
 }
 
@@ -224,7 +252,33 @@ module body()
     // The pads the board rests on, each with a slope below it so it prints
     // without support
     at_board() for (a = pcb_rest_angles) rotate([0, 0, a]) pcb_pad();
+    at_board() usb_key();
     switch_catch();
+}
+
+// Two posts behind the board, either side of the USB-C port's shell, so the
+// board can't turn and the port stays in line with its opening. They stand up
+// from the floor, and stop short of the small parts on the back of the PCB
+// beside the port. Their tops are chamfered on the inside to guide it in. A
+// web under the USB-C opening joins them to the outside wall.
+module usb_key()
+{
+    w = 2.0;                                // across
+    lead = 0.25;
+    top = z_pcb_back - usb_shell_z[0] - 0.2;
+    z0 = z_battery + cradle_depth - 0.01;   // the floor
+    x1 = usb_shell_hw + usb_key_gap + w;
+    translate([-x1, -usb_recess_r, z0])
+        cube([2 * x1, usb_recess_r + usb_shell_y[0] + 0.01, z_usb - usb_opening[1] / 2 - 0.15 - z0]);
+    for (m = [0, 1]) mirror([m, 0, 0])
+    {
+        x = usb_shell_hw + usb_key_gap;
+        hull()
+        {
+            translate([x, usb_shell_y[0], z0]) cube([w, usb_shell_y[1] - usb_shell_y[0], top - lead - z0]);
+            translate([x + lead, usb_shell_y[0], z0]) cube([w - lead, usb_shell_y[1] - usb_shell_y[0], top - z0]);
+        }
+    }
 }
 
 // The battery's outline in its cradle, long side across, with the notch for
@@ -254,35 +308,37 @@ module switch_cut()
     rotate([0, 0, switch_angle])
     {
         // The pocket, open to the inside
-        translate([15, -switch_body[0] / 2 - 0.15, z_switch[0] - 0.15])
-            cube([switch_r - 15, switch_body[0] + 0.3, switch_body[1] + 0.3]);
+        translate([15, -pocket_hw, z_pocket[0]])
+            cube([switch_r - 15, 2 * pocket_hw, z_pocket[1] - z_pocket[0]]);
         // The slot for the lever
         translate([switch_r - 0.1, -(switch_lever[0] + switch_travel) / 2 - 0.2, (z_switch[0] + z_switch[1]) / 2 - switch_lever[1] / 2 - 0.2])
             cube([switch_wall + 1, switch_lever[0] + switch_travel + 0.4, switch_lever[1] + 0.4]);
-        // Around the catch's tongue: a slot across its free end, one either
-        // side, and the gap above it
-        t = catch_tongue;
-        r0 = catch_free_r - t[2];
-        translate([r0, -t[0] / 2 - t[2], z_pocket_top - 0.01]) cube([t[2], t[0] + 2 * t[2], t[1] + t[2] + 0.01]);
-        for (s = [-1, 1])
-            translate([r0, s > 0 ? t[0] / 2 : -t[0] / 2 - t[2], z_pocket_top - 0.01])
-                cube([catch_root_r - r0, t[2], t[1] + t[2] + 0.01]);
-        translate([r0, -t[0] / 2 - t[2], z_pocket_top + t[1]])
-            cube([catch_root_r - r0, t[0] + 2 * t[2], t[2]]);
+        // Around the catch's fingers, from just above the back of the body
+        // to just above the pocket
+        g = catch_finger[2];
+        for (m = [0, 1]) mirror([0, m, 0])
+            translate([catch_r[0] - g, pocket_hw - g, z_rim + catch_skin])
+                cube([catch_finger[0] + 2 * g, catch_finger[1] + 2 * g, z_pocket[1] + 0.3 - z_rim - catch_skin]);
     }
 }
 
-// The hook under the free end of the catch's tongue. Its ramp faces the
-// center, so the switch pushes it up on the way in, and its square face
-// stops the switch coming back out.
+// The catch's fingers, flush with the sides of the pocket, and their hooks.
+// The ramps face the center, so the switch pushes the fingers apart on the
+// way in, and their square faces stop it coming back out.
 module switch_catch()
 {
+    f = catch_finger;
+    h = catch_hook;
     rotate([0, 0, switch_angle])
-        translate([0, catch_tongue[0] / 2 - 0.1, z_pocket_top + 0.01])
-            rotate([90, 0, 0])
-                linear_extrude(catch_tongue[0] - 0.2)
-                    polygon([[catch_free_r, 0], [switch_inner_r - 0.05, 0], [switch_inner_r - 0.05, -catch_hook[1] - 0.01],
-                             [switch_inner_r - 0.05 - 0.2, -catch_hook[1] - 0.01]]);
+        for (m = [0, 1]) mirror([0, m, 0])
+        {
+            translate([catch_r[0], pocket_hw, z_rim + catch_skin - 0.01])
+                cube([f[0], f[1], z_pocket[1] - z_rim - catch_skin + 0.01]);
+            translate([0, 0, z_pocket[0]])
+                linear_extrude(z_pocket[1] - z_pocket[0])
+                    polygon([[catch_r[1] - h[0], pocket_hw + 0.01], [catch_r[1], pocket_hw + 0.01],
+                             [catch_r[1], pocket_hw - h[1]], [catch_r[1] - 0.2, pocket_hw - h[1]]]);
+        }
 }
 
 // In the board's coordinates: the slot for the plug, in a pocket in the side
@@ -306,11 +362,11 @@ module bezel()
     {
         union()
         {
-            // The ring over the glass, its front edge rounded
+            // The ring, its front edge rounded
             intersection()
             {
-                translate([0, 0, z_glass]) cylinder(r = body_r, h = bezel_t, $fn = 192);
-                translate([0, 0, -front_round]) rotate_extrude($fn = 192)
+                translate([0, 0, z_front]) cylinder(r = body_r, h = z_glass - z_front, $fn = 192);
+                translate([0, 0, z_glass - front_round]) rotate_extrude($fn = 192)
                     hull()
                     {
                         square([0.01, front_round]);
@@ -319,35 +375,30 @@ module bezel()
                     }
             }
             // The skirt, with the lugs inside at its end
-            translate([0, 0, z_skirt]) difference()
+            translate([0, 0, z_lug]) difference()
             {
-                cylinder(r = body_r, h = skirt[1] + 0.01, $fn = 192);
+                cylinder(r = body_r, h = skirt[1] - skirt_gap + 0.01, $fn = 192);
                 translate([0, 0, -1]) cylinder(r = skirt_ir, h = skirt[1] + 2, $fn = 192);
             }
             // The lugs, their faces lowered to clear the ridge except for
             // the nub at their leading (clockwise) end
             for (L = lug_angles)
             {
-                rotate([0, 0, L - lug_half]) rotate_extrude(angle = 2 * lug_half, $fn = 192)
-                    translate([skirt_ir - lug[1], z_skirt]) square([lug[1] + 0.01, lug[2] - lock_detent - 0.05]);
-                rotate([0, 0, L - lug_half]) rotate_extrude(angle = skirt_deg(lug_nub), $fn = 192)
-                    translate([skirt_ir - lug[1], z_skirt]) square([lug[1] + 0.01, lug[2]]);
+                translate([0, 0, z_lug]) rotate([0, 0, L - lug_half])
+                    rotate_extrude(angle = 2 * lug_half, $fn = 192) lug_profile(lug[2] - lock_detent - 0.05);
+                translate([0, 0, z_lug]) rotate([0, 0, L - lug_half])
+                    rotate_extrude(angle = skirt_deg(lug_nub), $fn = 192) lug_profile(lug[2]);
             }
         }
-        // The opening, with a small chamfer on its front edge
-        translate([0, 0, z_glass - 1]) cylinder(r = bezel_opening_r, h = bezel_t + 2, $fn = 128);
-        translate([0, 0, -0.5]) cylinder(r1 = bezel_opening_r, r2 = bezel_opening_r + 0.6, h = 0.51, $fn = 128);
+        // The opening for the glass, and behind it, room for the wider part of
+        // the board, leaving the lip that holds it in
+        translate([0, 0, z_front - 1]) cylinder(r = bezel_opening_r, h = bezel_t + 2, $fn = 128);
+        at_board() translate([0, 0, z_front - 1]) linear_extrude(z_glass - glass_t - z_front + 1) pocket_2d();
+        // A notch in the skirt over the USB-C pocket, so the plug goes in
+        at_board() translate([-usb_recess[0] / 2 - 0.3, -body_r - 1, z_skirt - 1])
+            cube([usb_recess[0] + 0.6, body_r - skirt_ir + 1.5, z_usb + (usb_opening[1] + 0.8) / 2 + 0.3 - z_skirt + 1]);
         // The mark that lines up with the body's to put it on, at the top
-        rotate([0, 0, 90]) translate([body_r, 0, z_skirt]) mirror([0, 0, 1]) lock_mark();
-    }
-}
-
-module gasket()
-{
-    difference()
-    {
-        cylinder(r = gasket[1], h = gasket[2], $fn = 192);
-        translate([0, 0, -1]) cylinder(r = gasket[0], h = gasket[2] + 2, $fn = 192);
+        rotate([0, 0, 90]) translate([body_r, 0, z_lug]) mirror([0, 0, 1]) lock_mark();
     }
 }
 
@@ -428,6 +479,5 @@ else if (part == "layout") layout();
 else if (part == "body") translate([0, 0, -z_back]) body();
 // Printed front down
 else if (part == "bezel") rotate([180, 0, 0]) bezel();
-else if (part == "gasket") gasket();
 else if (part == "phase_test") translate([0, 0, thread_length - 0.1]) phase_test();
-else if (part == "fit_test") rotate([180, 0, 0]) translate([0, 0, -z_glass]) fit_test();
+else if (part == "fit_test") rotate([180, 0, 0]) translate([0, 0, -z_front]) fit_test();
