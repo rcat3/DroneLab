@@ -46,7 +46,7 @@ The speaker and battery sockets stand up off the back of the board, so their plu
 ## Putting it together
 
 1. Push the plungers in from inside the display's pocket, then fit the board and screw it to the back plate with the countersunk screws.
-2. Stick the speaker into its pocket from the back of the pod, then screw the chin on.  Leave the speaker's wire out through the opening at the inner end of the pocket, into the chamber.
+2. Push the speaker's plug through the opening at the inner end of the pocket, into the chamber.  Then stick the speaker into its pocket from the back of the pod, with its wire in the notch in the side of the pocket, run the wire behind the speaker to the opening, and screw the chin on.
 3. Plug the speaker into the board's speaker socket, through the opening in the back plate.
 4. Plug in the battery the same way, and tape it to the back.
 5. Screw the back on with the M2 x 8 screws.
