@@ -8,7 +8,7 @@ The [Waveshare RP2040-Touch-LCD-1.28](https://www.waveshare.com/wiki/RP2040-Touc
 
 The housing is two printed parts and no screws.  The body has the voice port thread on its back, and holds the board, the battery in a cradle inside the thread, and a slide switch in its side wall.  The bezel twist-locks over the front, flush with the glass, and holds the board in.  Nothing sticks out of the back, so it screws all the way in and sits flat.  It stands about 11.6 mm out of the mask.
 
-**Status: new.**  The housing is designed but hasn't been printed yet.  It replaces the [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa) model by whyrlpool, which this project started out with, and whose voice port thread it uses.
+**Status: working.**  The housing and its travel case have been printed in PLA+ and put together with the RP2040 board.  The RP2350 board should fit the same way, but hasn't been tried in it yet.  It replaces the [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa) model by whyrlpool, which this project started out with, and whose voice port thread it uses.
 
 ## Parts to buy
 

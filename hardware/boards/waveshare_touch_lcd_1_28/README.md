@@ -4,7 +4,7 @@ A 3D printable housing that screws the [Waveshare RP2040-Touch-LCD-1.28](https:/
 
 This README is about the design files.  For the whole build, with the parts to buy, wiring, putting it together and charging, see the [build guide](../../../docs/hardware/waveshare_touch_lcd_1_28.md).
 
-**Status: draft, not yet printed.**  It's modeled from Waveshare's 3D model of the RP2040 board.  Their model of the RP2350 board leaves out the touch panel and the battery socket, so it's taken to be the same apart from its thicker PCB.
+**Status: printed and working with the RP2040 board, in PLA+.**  It's modeled from Waveshare's 3D model of the RP2040 board, then adjusted from test prints.  Their model of the RP2350 board leaves out the touch panel and the battery socket, so it's taken to be the same apart from its thicker PCB.  The RP2350 board hasn't been tried in it yet.
 
 ## How it goes together
 
@@ -52,7 +52,7 @@ There are no screws: the bezel twist-locks on and the switch clicks into place.
 
 ### Check these first
 
-These come from the 3D model, not from a print, so check them with `fit_test`:
+These have been checked on a print with the RP2040 board, but printers differ, so check them with `fit_test`:
 
 - The board's fit in its pocket (`clearance`) and on its pads.  If the board rattles once the bezel is on, the pads are too low.  If the bezel won't turn to lock, they're too high.  Two posts behind the board, either side of the USB-C port's metal shell, keep it from turning, so the port stays in line with its opening.  If the port won't go down between them, make `usb_key_gap` bigger, and if the board still turns, smaller.
 - With the RP2350 board, its thickness: from the front of the glass to the back of the PCB should be about 5.5 mm (`pcb_back_z` in `board.scad`).
