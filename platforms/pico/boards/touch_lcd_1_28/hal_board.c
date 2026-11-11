@@ -158,6 +158,37 @@ bool rcat_hal_battery_gauge(uint8_t *percent, bool *charging)
     return false;
 }
 
+// Each model's default discharge curve, from tools/battery_log.py, until the
+// board learns its own (see core/app/battery_log.h). 0% still leaves some time
+// in hand: the reading stops following the battery near empty, and these end
+// there.
+#if PICO_RP2350
+// 2026-11-10: 4 h 27 min from full to 0%, with 14 min more after.
+static const rcat_battery_point_t bat_curve[] = {
+    { 4.071f, 100 }, { 4.017f, 95 }, { 3.971f, 90 }, { 3.930f, 85 }, { 3.896f, 80 },
+    { 3.856f, 75 }, { 3.816f, 70 }, { 3.778f, 65 }, { 3.753f, 60 }, { 3.736f, 55 },
+    { 3.723f, 50 }, { 3.714f, 45 }, { 3.703f, 40 }, { 3.687f, 35 }, { 3.663f, 30 },
+    { 3.622f, 25 }, { 3.580f, 20 }, { 3.532f, 15 }, { 3.493f, 10 }, { 3.454f, 5 },
+    { 3.371f, 0 },
+};
+#else
+// 2026-11-11: 5 h 34 min from full to 0%, with 37 min more after.
+static const rcat_battery_point_t bat_curve[] = {
+    { 4.133f, 100 }, { 4.075f, 95 }, { 4.023f, 90 }, { 3.972f, 85 }, { 3.923f, 80 },
+    { 3.876f, 75 }, { 3.831f, 70 }, { 3.782f, 65 }, { 3.756f, 60 }, { 3.716f, 55 },
+    { 3.685f, 50 }, { 3.659f, 45 }, { 3.640f, 40 }, { 3.622f, 35 }, { 3.605f, 30 },
+    { 3.589f, 25 }, { 3.567f, 20 }, { 3.541f, 15 }, { 3.512f, 10 }, { 3.473f, 5 },
+    { 3.436f, 0 },
+};
+#endif
+#define BAT_CURVE_POINTS (sizeof(bat_curve) / sizeof(bat_curve[0]))
+
+size_t rcat_hal_battery_curve(const rcat_battery_point_t **points)
+{
+    *points = bat_curve;
+    return BAT_CURVE_POINTS;
+}
+
 bool rcat_hal_accel_read(float *x, float *y, float *z)
 {
     // The board has a QMI8658, but it isn't hooked up here yet.
@@ -239,6 +270,47 @@ bool rcat_hal_log_write(const void *data, size_t len)
     memcpy(block, data, len);
     settings_write_t w = { block, (len + FLASH_PAGE_SIZE - 1) / FLASH_PAGE_SIZE * FLASH_PAGE_SIZE };
     return flash_safe_execute(log_write_cb, &w, 100) == PICO_OK;
+}
+
+typedef struct
+{
+    size_t offset;          // of the page in the block
+    const uint8_t *page;
+} log_program_t;
+
+static void log_program_cb(void *param)
+{
+    const log_program_t *p = param;
+    flash_range_program(LOG_FLASH_OFFSET + p->offset, p->page, FLASH_PAGE_SIZE);
+}
+
+bool rcat_hal_log_program(size_t offset, const void *data, size_t len)
+{
+    if (offset + len > RCAT_HAL_LOG_SIZE || (uintptr_t)&__flash_binary_end - XIP_BASE > LOG_FLASH_OFFSET)
+    {
+        return false;
+    }
+    // The flash is programmed a whole page at a time. Programming only ever
+    // clears bits, so the rest of the page is 0xFF to leave it as it is.
+    static uint8_t page[FLASH_PAGE_SIZE];
+    const uint8_t *src = data;
+    while (len > 0)
+    {
+        size_t page_start = offset / FLASH_PAGE_SIZE * FLASH_PAGE_SIZE;
+        size_t in_page = offset - page_start;
+        size_t n = FLASH_PAGE_SIZE - in_page < len ? FLASH_PAGE_SIZE - in_page : len;
+        memset(page, 0xFF, sizeof(page));
+        memcpy(page + in_page, src, n);
+        log_program_t p = { page_start, page };
+        if (flash_safe_execute(log_program_cb, &p, 100) != PICO_OK)
+        {
+            return false;
+        }
+        offset += n;
+        src += n;
+        len -= n;
+    }
+    return true;
 }
 
 bool rcat_hal_audio_in_start(uint32_t sample_rate, rcat_hal_audio_block_cb_t cb, void *user_data)

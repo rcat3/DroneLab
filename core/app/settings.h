@@ -7,6 +7,7 @@
 #define SETTINGS_DEFAULT_VOLUME     50
 #define SETTINGS_NAME_LEN           24
 #define SETTINGS_REMOTE_LEN         16
+#define SETTINGS_CURVE_POINTS       21      // 100%, 95% ... 0%
 
 /* Startup image names that select the blank (black) tile and the KITT tile. */
 #define SETTINGS_STARTUP_BLANK      "blank"
@@ -30,6 +31,9 @@ typedef struct
     char remote_ssid[SETTINGS_REMOTE_LEN];      // the phone remote's hotspot; empty until it's first used
     char remote_password[SETTINGS_REMOTE_LEN];
     uint8_t terminal_size;                  // Terminal letter size: 0 to fit the message, or 1 to 6 for 8 to 48 px
+    uint16_t battery_curve_mv[SETTINGS_CURVE_POINTS];  // the learned discharge curve, highest first
+    uint8_t battery_curve_runs;             // how many runs it's learned from, 0 for none
+    uint32_t battery_curve_last_run;        // the battery log session it last learned from
 } settings_t;
 
 /* Load the saved settings, or the defaults if nothing valid has been saved. */
@@ -52,5 +56,7 @@ void settings_set_voice_effect(uint8_t preset);
 void settings_set_lovense_release_to_zero(uint8_t enabled);
 void settings_set_remote(const char *ssid, const char *password);
 void settings_set_terminal_size(uint8_t size);
+/* Keep a learned battery curve (see app/battery_log.h), or forget it with runs = 0. */
+void settings_set_battery_curve(const uint16_t *mv, uint8_t runs, uint32_t last_run);
 
 #endif

@@ -257,6 +257,13 @@ bool rcat_hal_battery_gauge(uint8_t *percent, bool *charging)
     return false;
 }
 
+size_t rcat_hal_battery_curve(const rcat_battery_point_t **points)
+{
+    // Not measured yet: the core uses a typical LiPo's.
+    *points = NULL;
+    return 0;
+}
+
 bool rcat_hal_accel_read(float *x, float *y, float *z)
 {
     float a[3];
