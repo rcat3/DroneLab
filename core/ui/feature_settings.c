@@ -87,6 +87,10 @@ static void battery_timer_cb(lv_timer_t *t)
         snprintf(label_text, sizeof(label_text), "%s %d%%  %.2fV", battery_symbol(&b), b.percent, b.volts);
         lv_label_set_text(battery_label, label_text);
     }
+    else
+    {
+        lv_label_set_text(battery_label, "No battery");
+    }
 }
 
 static lv_obj_t *uptime_label;
@@ -137,12 +141,10 @@ static void add_brightness_page(ui_feature_t *feature)
     lv_timer_t *uptime_timer = lv_timer_create(uptime_timer_cb, UPTIME_UPDATE_MS, NULL);
     lv_timer_ready(uptime_timer);
 
-    battery_status_t b;
-    if (battery_update(&b))
-    {
-        lv_timer_t *timer = lv_timer_create(battery_timer_cb, BATTERY_UPDATE_MS, NULL);
-        lv_timer_ready(timer);
-    }
+    // Kept up all the time, as on some boards the battery can be plugged in
+    // while it's running
+    lv_timer_t *timer = lv_timer_create(battery_timer_cb, BATTERY_UPDATE_MS, NULL);
+    lv_timer_ready(timer);
 }
 
 /* ----- Rotation ----- */

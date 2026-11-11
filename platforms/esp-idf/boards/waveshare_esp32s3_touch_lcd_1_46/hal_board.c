@@ -275,9 +275,10 @@ bool rcat_hal_accel_read(float *x, float *y, float *z)
     // The IMU's axes in the panel's own frame (x right, y down, z out of the
     // glass, with the USB port at the bottom). The IMU is on the back of the
     // board, facing away from the glass, and turned a quarter turn from the
-    // panel, so its x runs along the panel's y and its y along the panel's x.
+    // panel, so its x runs along the panel's y, the other way, and its y along
+    // the panel's x.
     float px = a[1];
-    float py = a[0];
+    float py = -a[0];
     *z = -a[2];
 
     // Then into the frame of the picture, which is turned clockwise on the panel

@@ -284,11 +284,9 @@ bool rcat_hal_accel_read(float *x, float *y, float *z)
 
     // The IMU's axes in the panel's own frame (x right, y down, z out of the
     // glass, with the USB port at the bottom). Like the 1.46" board's, it's on
-    // the back of the board. This is the 1.46" board's mapping, which hasn't
-    // been checked on this board yet: if the level reads the wrong way, this
-    // is the place to fix it.
+    // the back of the board, but with its x the other way.
     float px = a[1];
-    float py = a[0];
+    float py = -a[0];
     *z = -a[2];
 
     // Then into the frame of the picture, which is turned clockwise on the panel
