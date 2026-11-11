@@ -62,6 +62,7 @@ target_link_libraries(board PUBLIC
     hardware_dma
     hardware_clocks
     hardware_flash
+    hardware_watchdog
     pico_flash
 )
 

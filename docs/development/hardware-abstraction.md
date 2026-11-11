@@ -5,10 +5,11 @@ Code in `core/` never includes anything from pico-sdk or ESP-IDF.  It reaches th
 | Area | Functions |
 |---|---|
 | Startup, display and touch | `rcat_hal_init()`, `rcat_hal_lvgl_register()`, `rcat_hal_display_set_rotation()`, `rcat_hal_backlight_set()` |
-| Power and sensors | `rcat_hal_battery_voltage()`, `rcat_hal_accel_read()` |
-| Settings storage | `rcat_hal_settings_read()`, `rcat_hal_settings_write()` |
+| Power and sensors | `rcat_hal_battery_voltage()`, `rcat_hal_battery_gauge()` (a fuel gauge, if the board has one), `rcat_hal_accel_read()` |
+| Settings storage | `rcat_hal_settings_read()`, `rcat_hal_settings_write()`, and `rcat_hal_log_read()` and `rcat_hal_log_write()` for the battery log |
 | Audio | `rcat_hal_audio_in_start()` (microphone), `rcat_hal_audio_out_start()` (speaker) |
 | WiFi | `rcat_hal_wifi_connect()`, `rcat_hal_wifi_disconnect()`, `rcat_hal_wifi_address()`, `rcat_hal_hotspot_start()`, `rcat_hal_hotspot_stop()`, `rcat_hal_hotspot_clients()`, `rcat_hal_random()` |
+| Firmware updates | `rcat_hal_update_supported()`, `rcat_hal_update_begin()`, `rcat_hal_update_write()`, `rcat_hal_update_finish()`, `rcat_hal_update_abort()`, `rcat_hal_update_confirm()`, `rcat_hal_restart()` |
 | SD card | `rcat_hal_storage_mount()` |
 | Bluetooth LE | `rcat_hal_ble_scan_start()`, `rcat_hal_ble_connect()`, `rcat_hal_ble_send()`, `rcat_hal_ble_receive()` and the rest |
 

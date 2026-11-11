@@ -39,7 +39,7 @@ In [`hardware/boards/waveshare_esp32s3_touch_lcd_1_46`](../../hardware/boards/wa
 3. Screw the board to the back plate with the three M2 screws, from the back, through the inside of the thread, into the standoffs on the board.
 4. Plug the battery into the extension and tuck it into the space inside the thread.
 
-To use USB (to flash new firmware, or to charge), take the board out and unplug the battery first.  To print the housing with an opening for the port, set `usb_access = true` in the design.
+To use USB (to charge, or for the first flash with [updates over WiFi](../building-firmware.md#updating-over-wifi), after which new firmware can go over WiFi), take the board out and unplug the battery first.  To print the housing with an opening for the port, set `usb_access = true` in the design.
 
 ## The speaker housing
 
@@ -109,7 +109,7 @@ Dots are joints, and wires that cross without a dot don't touch.  The two amplif
 5. Put the gasket over the posts, then the collar, grip first.
 6. Drop each half of the washer in through the threaded end, line its holes up with two posts, and screw it down with the M2 x 6 screws.  Stop when the collar turns firmly but smoothly.
 
-To take the board out for a firmware update, take the back off, unplug the SH cable and then the battery, then take out the board's three screws and push it out the front.  The adapter comes with it.
+Firmware updates can go over WiFi (see [Updating over WiFi](../building-firmware.md#updating-over-wifi)), once the board has had one flash over USB with that in it.  To take the board out for that, or to charge it, take the back off, unplug the SH cable and then the battery, then take out the board's three screws and push it out the front.  The adapter comes with it.
 
 ## Travel case
 

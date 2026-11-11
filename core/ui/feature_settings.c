@@ -8,13 +8,18 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "app/battery.h"
+#include "app/battery_log.h"
 #include "app/remote.h"
 #include "app/settings.h"
+#include "app/updater.h"
 #include "hal.h"
 #include "ui/ui_internal.h"
 
 #define BATTERY_UPDATE_MS 1000
 #define REMOTE_POLL_MS    50
+#define LOG_UPDATE_MS     1000
+#define UPDATE_POLL_MS    200
 #define COLOR_MUTED       lv_palette_main(LV_PALETTE_GREY)
 
 // Apply a new rotation only once the roller has been left alone this long, so
@@ -33,7 +38,7 @@ static lv_obj_t *brightness_value_label;
 static lv_timer_t *rotation_timer;
 static uint8_t pending_rotation;
 
-/* ----- Brightness (and battery voltage) ----- */
+/* ----- Brightness (and the battery) ----- */
 
 static void brightness_slider_event_cb(lv_event_t *e)
 {
@@ -46,14 +51,39 @@ static void brightness_slider_event_cb(lv_event_t *e)
     settings_set_brightness(brightness);
 }
 
+static const char *battery_symbol(const battery_status_t *b)
+{
+    if (b->charging)
+    {
+        return LV_SYMBOL_CHARGE;
+    }
+    if (b->percent >= 85)
+    {
+        return LV_SYMBOL_BATTERY_FULL;
+    }
+    if (b->percent >= 60)
+    {
+        return LV_SYMBOL_BATTERY_3;
+    }
+    if (b->percent >= 35)
+    {
+        return LV_SYMBOL_BATTERY_2;
+    }
+    if (b->percent >= 10)
+    {
+        return LV_SYMBOL_BATTERY_1;
+    }
+    return LV_SYMBOL_BATTERY_EMPTY;
+}
+
 static void battery_timer_cb(lv_timer_t *t)
 {
-    float volts;
-    char label_text[20];
+    battery_status_t b;
+    char label_text[32];
 
-    if (rcat_hal_battery_voltage(&volts))
+    if (battery_update(&b))
     {
-        snprintf(label_text, sizeof(label_text), "Battery: %.2fV", volts);
+        snprintf(label_text, sizeof(label_text), "%s %d%%  %.2fV", battery_symbol(&b), b.percent, b.volts);
         lv_label_set_text(battery_label, label_text);
     }
 }
@@ -81,8 +111,8 @@ static void add_brightness_page(ui_feature_t *feature)
     lv_label_set_text(battery_label, "");
     lv_obj_align(battery_label, LV_ALIGN_TOP_MID, 0, ui_px(35));
 
-    float volts;
-    if (rcat_hal_battery_voltage(&volts))
+    battery_status_t b;
+    if (battery_update(&b))
     {
         lv_timer_t *timer = lv_timer_create(battery_timer_cb, BATTERY_UPDATE_MS, NULL);
         lv_timer_ready(timer);
@@ -176,6 +206,75 @@ static void add_startup_page(ui_feature_t *feature)
     lv_obj_t *startup_label = lv_label_create(page);
     lv_label_set_text(startup_label, "Startup");
     lv_obj_align_to(startup_label, startup_roller, LV_ALIGN_OUT_TOP_MID, 0, ui_px(-10));
+}
+
+/* ----- Battery log ----- */
+
+static lv_obj_t *log_page;
+static lv_obj_t *log_status;
+static lv_obj_t *log_start;
+
+static void show_log(void)
+{
+    uint32_t minutes = battery_log_seconds() / 60;
+    bool running = battery_log_running();
+    if (running)
+    {
+        lv_label_set_text_fmt(log_status, "Logging  %luh %02lum\n\nLeave it running\nuntil it switches off",
+                              (unsigned long)(minutes / 60), (unsigned long)(minutes % 60));
+    }
+    else if (minutes > 0)
+    {
+        lv_label_set_text_fmt(log_status, "Last log  %luh %02lum", (unsigned long)(minutes / 60),
+                              (unsigned long)(minutes % 60));
+    }
+    else
+    {
+        lv_label_set_text(log_status, "Charge it, unplug USB,\nthen start the log");
+    }
+    lv_obj_set_hidden(log_start, running);
+}
+
+static void log_start_event_cb(lv_event_t *e)
+{
+    battery_log_start();
+    show_log();
+}
+
+static void log_timer_cb(lv_timer_t *t)
+{
+    if (ui_current_page() == log_page)
+    {
+        show_log();
+    }
+}
+
+static void add_log_page(ui_feature_t *feature)
+{
+    log_page = ui_feature_add_page(feature, "Battery Log", false);
+    lv_obj_set_scrollable(log_page, false);
+
+    lv_obj_t *title = lv_label_create(log_page);
+    lv_label_set_text(title, "Battery Log");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(40));
+
+    log_status = lv_label_create(log_page);
+    lv_obj_set_style_text_align(log_status, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(log_status, COLOR_MUTED, 0);
+    lv_obj_align(log_status, LV_ALIGN_CENTER, 0, ui_px(-12));
+
+    // Only while it isn't running, as starting again throws the log away
+    log_start = lv_button_create(log_page);
+    lv_obj_set_size(log_start, ui_px(130), ui_px(36));
+    lv_obj_set_style_radius(log_start, LV_RADIUS_CIRCLE, 0);
+    lv_obj_align(log_start, LV_ALIGN_CENTER, 0, ui_px(52));
+    lv_obj_add_event_cb(log_start, log_start_event_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *text = lv_label_create(log_start);
+    lv_label_set_text(text, "Start log");
+    lv_obj_center(text);
+
+    show_log();
+    lv_timer_create(log_timer_cb, LOG_UPDATE_MS, NULL);
 }
 
 /* ----- Phone remote ----- */
@@ -318,6 +417,78 @@ static void add_remote_page(ui_feature_t *feature)
     lv_timer_create(remote_timer_cb, REMOTE_POLL_MS, NULL);
 }
 
+/* ----- Firmware update ----- */
+
+static lv_obj_t *update_page;
+static lv_obj_t *update_switch;
+static lv_obj_t *update_code;
+static lv_obj_t *update_join;
+static lv_obj_t *update_status;
+
+static void show_update(void)
+{
+    bool on = updater_allowed();
+    lv_obj_set_state(update_switch, LV_STATE_CHECKED, on);
+    lv_obj_set_hidden(update_code, !on);
+    lv_obj_set_hidden(update_join, !on);
+    if (on)
+    {
+        lv_label_set_text(update_code, updater_code());
+        lv_label_set_text_fmt(update_join, "%s\n%s", remote_ssid(), remote_password());
+    }
+    const char *status = updater_status();
+    lv_label_set_text(update_status, status[0] != '\0' ? status : "Update from a computer\nwith tools/update.py");
+}
+
+static void update_switch_event_cb(lv_event_t *e)
+{
+    updater_allow(lv_obj_has_state(update_switch, LV_STATE_CHECKED));
+    show_update();
+}
+
+static void update_timer_cb(lv_timer_t *t)
+{
+    if (ui_current_page() == update_page)
+    {
+        show_update();
+    }
+}
+
+static void add_update_page(ui_feature_t *feature)
+{
+    update_page = ui_feature_add_page(feature, "Firmware Update", false);
+    lv_obj_set_scrollable(update_page, false);
+
+    lv_obj_t *title = lv_label_create(update_page);
+    lv_label_set_text(title, "Firmware Update");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(28));
+
+    update_switch = lv_switch_create(update_page);
+    lv_obj_set_size(update_switch, ui_px(64), ui_px(32));
+    lv_obj_align(update_switch, LV_ALIGN_CENTER, 0, ui_px(-58));
+    lv_obj_add_event_cb(update_switch, update_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    // The code for tools/update.py, big enough to read off easily
+    update_code = lv_label_create(update_page);
+    lv_obj_set_style_text_font(update_code, &lv_font_montserrat_24, 0);
+    lv_label_set_text(update_code, "");
+    lv_obj_align(update_code, LV_ALIGN_CENTER, 0, ui_px(-12));
+
+    // The hotspot to join, and its password
+    update_join = lv_label_create(update_page);
+    lv_obj_set_style_text_align(update_join, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(update_join, COLOR_MUTED, 0);
+    lv_label_set_text(update_join, "");
+    lv_obj_align(update_join, LV_ALIGN_CENTER, 0, ui_px(30));
+
+    update_status = lv_label_create(update_page);
+    lv_obj_set_style_text_align(update_status, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(update_status, LV_ALIGN_CENTER, 0, ui_px(72));
+
+    show_update();
+    lv_timer_create(update_timer_cb, UPDATE_POLL_MS, NULL);
+}
+
 #endif  // RCAT_HAVE_NETWORK
 
 static bool build(ui_feature_t *feature)
@@ -325,10 +496,18 @@ static bool build(ui_feature_t *feature)
     add_brightness_page(feature);
     add_rotation_page(feature);
     add_startup_page(feature);
+    if (battery_log_available())
+    {
+        add_log_page(feature);
+    }
 #if RCAT_HAVE_NETWORK
     if (remote_available())
     {
         add_remote_page(feature);
+    }
+    if (updater_available())
+    {
+        add_update_page(feature);
     }
 #endif
     return true;
