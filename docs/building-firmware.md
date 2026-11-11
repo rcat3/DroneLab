@@ -121,6 +121,20 @@ A few things that can come up:
 - **Watching the log without flashing:** `idf.py -C platforms/esp-idf -B build-s3-146 -p /dev/ttyACM0 monitor`
 - **After updating the code, a setting doesn't seem to take effect.**  ESP-IDF keeps its configuration in the build folder and doesn't apply new defaults to an existing one.  Delete the build folder and build again.
 
+### Updating over WiFi
+
+Once a board has firmware with updates over WiFi in it (flashed over USB, as above, once), later firmware can go over its hotspot, with the board still in its housing:
+
+1. On the board, go to Settings, **Firmware Update**, and switch it on.  It shows a six digit code, and the name and password of the board's hotspot, which it starts if it isn't on already.
+2. Join the hotspot from your computer.
+3. From the top of the repo, run `tools/update.py build-s3-146/dronelab.bin <code>` (or `build-s3-175` for the 1.75" board).
+
+The script checks the firmware is for that board and that its battery is at 20% or more, then sends it.  The board writes it beside the firmware it's running, checks it, and restarts into it.  If the new firmware doesn't start properly and run for 15 seconds, the board goes back to the old one the next time it's restarted, so switch it off and on again.
+
+It has nothing to do with the [phone remote](features/phone-remote.md)'s page, which can't update the board.  The updates run on a separate port, only while they're switched on on the board itself, and need the code from its screen, which is new each time.  They switch off again after 10 minutes, after 3 wrong codes, and when the board restarts.
+
+The first flash with this in it has to be over USB, as it changes how the flash is laid out (into two places for firmware, so a new one can be written while the old one runs).  The settings are kept.  After that, it won't need USB again unless the update over WiFi itself goes wrong.
+
 ## Choosing features
 
 Each of the display's [features](features/README.md) can be left out of the build.  Each platform has a file listing them:

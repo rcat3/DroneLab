@@ -74,6 +74,9 @@ static const char *TAG = "board";
 #define BAT_ADC_CHANNEL     ADC_CHANNEL_7
 #define BAT_DIVIDER         3.0f
 #define BAT_CORRECTION      0.990476f   // from Waveshare's demo
+// Then a little more, from a multimeter on the battery: 3.867 V measured,
+// 3.82 V read
+#define BAT_CALIBRATION     1.0123f
 
 // Microphone (I2S). It sends 24-bit samples in the top of 32-bit slots, on
 // the right channel (from Waveshare's demo).
@@ -244,8 +247,14 @@ bool rcat_hal_battery_voltage(float *volts)
     {
         return false;
     }
-    *volts = millivolts * BAT_DIVIDER / 1000.0f / BAT_CORRECTION;
+    *volts = millivolts * BAT_DIVIDER / 1000.0f / BAT_CORRECTION * BAT_CALIBRATION;
     return true;
+}
+
+bool rcat_hal_battery_gauge(uint8_t *percent, bool *charging)
+{
+    // No fuel gauge
+    return false;
 }
 
 bool rcat_hal_accel_read(float *x, float *y, float *z)

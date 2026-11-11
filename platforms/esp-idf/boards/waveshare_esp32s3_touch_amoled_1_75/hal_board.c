@@ -69,6 +69,12 @@ static const char *TAG = "board";
 #define AXP_ADDR            0x34
 #define AXP_REG_STATUS1     0x00
 #define AXP_STATUS1_BATTERY 0x08    // a battery is connected
+#define AXP_REG_STATUS2     0x01
+#define AXP_STATUS2_DIR_SHIFT 5     // the battery current's direction, 2 bits
+#define AXP_DIR_CHARGING    1
+#define AXP_REG_GAUGE_CTRL  0x18
+#define AXP_GAUGE_ENABLE    0x08
+#define AXP_REG_PERCENT     0xA4    // the fuel gauge's charge, in percent
 #define AXP_REG_COMMON      0x10
 #define AXP_COMMON_PWROFF   0x01
 #define AXP_REG_ADC_ENABLE  0x30
@@ -246,6 +252,18 @@ bool rcat_hal_battery_voltage(float *volts)
         return false;
     }
     *volts = (((raw[0] & 0x3F) << 8) | raw[1]) / 1000.0f;
+    return true;
+}
+
+bool rcat_hal_battery_gauge(uint8_t *percent, bool *charging)
+{
+    uint8_t status[2];
+    if (!axp_read(AXP_REG_STATUS1, status, sizeof(status)) || !(status[0] & AXP_STATUS1_BATTERY)
+        || !axp_read(AXP_REG_PERCENT, percent, 1) || *percent > 100)
+    {
+        return false;
+    }
+    *charging = ((status[1] >> AXP_STATUS2_DIR_SHIFT) & 0x03) == AXP_DIR_CHARGING;
     return true;
 }
 
@@ -649,11 +667,12 @@ static void power_init(void)
     }
 
     // DCDC1 is the board's 3.3 V and ALDO1 the codecs' analog 3.3 V. The
-    // AXP2101 starts both, but make sure of ALDO1, and of the battery
-    // voltage measurement. The charge current is left as it is (300 mA).
+    // AXP2101 starts both, but make sure of ALDO1, the battery voltage
+    // measurement and the fuel gauge. The charge current is left as it is (300 mA).
     bool ok = axp_write(AXP_REG_ALDO1_V, AXP_ALDO1_3V3)
               && axp_set_bits(AXP_REG_LDO_ONOFF0, AXP_LDO_ALDO1)
-              && axp_set_bits(AXP_REG_ADC_ENABLE, AXP_ADC_VBAT);
+              && axp_set_bits(AXP_REG_ADC_ENABLE, AXP_ADC_VBAT)
+              && axp_set_bits(AXP_REG_GAUGE_CTRL, AXP_GAUGE_ENABLE);
     if (!ok)
     {
         ESP_LOGW(TAG, "The power manager didn't answer");

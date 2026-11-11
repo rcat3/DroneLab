@@ -35,6 +35,7 @@
 
 #include "hardware/flash.h"
 #include "pico/flash.h"
+#include "hardware/watchdog.h"
 
 #include "DEV_Config.h"
 #include "LCD_1in28.h"
@@ -45,6 +46,10 @@
 // Settings live in the last sector of flash, well past the end of the firmware.
 // Flashing a new .uf2 doesn't touch it, so settings survive firmware updates.
 #define SETTINGS_FLASH_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
+// The battery log is in the sector before it. tools/battery_log.py reads it
+// from there.
+#define LOG_FLASH_OFFSET (PICO_FLASH_SIZE_BYTES - 2 * FLASH_SECTOR_SIZE)
+_Static_assert(RCAT_HAL_LOG_SIZE <= FLASH_SECTOR_SIZE, "the battery log must fit in a sector");
 
 extern char __flash_binary_end;
 
@@ -125,12 +130,32 @@ void rcat_hal_backlight_set(uint8_t percent)
     DEV_SET_PWM(percent);
 }
 
+// The ADC reads a little low, by a different amount on the two chips. These
+// put it right, from a multimeter on the battery of each board.
+#if PICO_RP2350
+#define BAT_CORRECTION  1.0414f     // 3.77 V measured, 3.62 V read
+#else
+#define BAT_CORRECTION  1.0142f     // 3.783 V measured, 3.73 V read
+#endif
+#define BAT_SAMPLES     64          // averaged, as single readings are noisy
+
 bool rcat_hal_battery_voltage(float *volts)
 {
     // The battery is measured through a 1/3 voltage divider.
-    const float conversion_factor = 3.3f / (1 << 12) * 3;
-    *volts = adc_read() * conversion_factor;
+    const float conversion_factor = 3.3f / (1 << 12) * 3 * BAT_CORRECTION;
+    uint32_t sum = 0;
+    for (int i = 0; i < BAT_SAMPLES; i++)
+    {
+        sum += adc_read();
+    }
+    *volts = (float)sum / BAT_SAMPLES * conversion_factor;
     return true;
+}
+
+bool rcat_hal_battery_gauge(uint8_t *percent, bool *charging)
+{
+    // No fuel gauge, and the charger's status only lights an LED.
+    return false;
 }
 
 bool rcat_hal_accel_read(float *x, float *y, float *z)
@@ -183,6 +208,37 @@ bool rcat_hal_settings_write(const void *data, size_t len)
 
     settings_write_t w = { data, len };
     return flash_safe_execute(settings_write_cb, &w, 100) == PICO_OK;
+}
+
+bool rcat_hal_log_read(void *data, size_t len)
+{
+    if (len > RCAT_HAL_LOG_SIZE)
+    {
+        return false;
+    }
+    memcpy(data, (const void *)(XIP_BASE + LOG_FLASH_OFFSET), len);
+    return true;
+}
+
+static void log_write_cb(void *param)
+{
+    const settings_write_t *w = param;
+    flash_range_erase(LOG_FLASH_OFFSET, FLASH_SECTOR_SIZE);
+    flash_range_program(LOG_FLASH_OFFSET, w->data, w->len);
+}
+
+bool rcat_hal_log_write(const void *data, size_t len)
+{
+    // Programmed whole pages at a time, from RAM
+    static uint8_t block[RCAT_HAL_LOG_SIZE];
+    if (len > sizeof(block) || (uintptr_t)&__flash_binary_end - XIP_BASE > LOG_FLASH_OFFSET)
+    {
+        return false;
+    }
+    memset(block, 0xFF, sizeof(block));
+    memcpy(block, data, len);
+    settings_write_t w = { block, (len + FLASH_PAGE_SIZE - 1) / FLASH_PAGE_SIZE * FLASH_PAGE_SIZE };
+    return flash_safe_execute(log_write_cb, &w, 100) == PICO_OK;
 }
 
 bool rcat_hal_audio_in_start(uint32_t sample_rate, rcat_hal_audio_block_cb_t cb, void *user_data)
@@ -280,6 +336,43 @@ bool rcat_hal_ble_send(int link, const void *data, size_t len)
 size_t rcat_hal_ble_receive(int link, void *data, size_t max)
 {
     return 0;
+}
+
+bool rcat_hal_update_supported(void)
+{
+    // No WiFi: these boards are updated over USB-C, with picotool.
+    return false;
+}
+
+bool rcat_hal_update_begin(void)
+{
+    return false;
+}
+
+bool rcat_hal_update_write(const void *data, size_t len)
+{
+    return false;
+}
+
+bool rcat_hal_update_finish(void)
+{
+    return false;
+}
+
+void rcat_hal_update_abort(void)
+{
+}
+
+void rcat_hal_update_confirm(void)
+{
+}
+
+void rcat_hal_restart(void)
+{
+    watchdog_reboot(0, 0, 0);
+    while (1)
+    {
+    }
 }
 
 void rcat_hal_delay_ms(uint32_t ms)

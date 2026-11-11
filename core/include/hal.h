@@ -35,6 +35,11 @@ void rcat_hal_backlight_set(uint8_t percent);
  * Returns false if the board can't measure it. */
 bool rcat_hal_battery_voltage(float *volts);
 
+/* Read the board's fuel gauge, if it has one: the charge left in percent, and
+ * whether the battery's charging. Returns false if the board has no gauge, in
+ * which case the core works the charge out from the voltage. */
+bool rcat_hal_battery_gauge(uint8_t *percent, bool *charging);
+
 /* Read the accelerometer, in g, in the frame of the picture as it's shown
  * (after rcat_hal_display_set_rotation): x to the right, y down, and z out of
  * the screen towards the viewer. At rest it reads the opposite of gravity, so
@@ -48,6 +53,15 @@ bool rcat_hal_accel_read(float *x, float *y, float *z);
  * or nothing saved yet). */
 bool rcat_hal_settings_read(void *data, size_t len);
 bool rcat_hal_settings_write(const void *data, size_t len);
+
+/* Storage for the battery log (see app/battery_log.h): one block of up to
+ * RCAT_HAL_LOG_SIZE bytes, kept apart from the settings, in a fixed place in
+ * flash so tools/battery_log.py can read it straight out over USB. The
+ * caller validates the contents. rcat_hal_log_read returns false if the
+ * board has nowhere to keep it. */
+#define RCAT_HAL_LOG_SIZE 4096
+bool rcat_hal_log_read(void *data, size_t len);
+bool rcat_hal_log_write(const void *data, size_t len);
 
 /* Called with each block of microphone samples (mono, signed 16-bit). It runs
  * on the board's audio task, not the UI loop, so it has to be quick and must
@@ -161,6 +175,25 @@ bool rcat_hal_ble_send(int link, const void *data, size_t len);
 /* Take up to max of the bytes received on a link since the last call (the
  * board keeps about 256 per link). Returns how many were copied. */
 size_t rcat_hal_ble_receive(int link, void *data, size_t max);
+
+/* Firmware updates (see app/updater.h). The new firmware is written beside
+ * the running one: begin, then write it in order, in pieces of any size, then
+ * finish, which checks it and makes it the one to start next time. abort
+ * throws away an update that didn't finish. rcat_hal_update_supported
+ * returns false if the board can't update itself this way. */
+bool rcat_hal_update_supported(void);
+bool rcat_hal_update_begin(void);
+bool rcat_hal_update_write(const void *data, size_t len);
+bool rcat_hal_update_finish(void);
+void rcat_hal_update_abort(void);
+
+/* Called once the firmware has been running long enough to show it works.
+ * Until then, after an update, the board goes back to the firmware it had
+ * before if it's restarted. */
+void rcat_hal_update_confirm(void);
+
+/* Restart the board. */
+void rcat_hal_restart(void);
 
 void rcat_hal_delay_ms(uint32_t ms);
 

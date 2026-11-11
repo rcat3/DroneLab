@@ -11,3 +11,7 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 
 # Lets LVGL's component pull in libjpeg-turbo (enabled in config/lv_conf.h)
 CONFIG_LV_USE_LIBJPEG_TURBO=y
+
+# After an update over WiFi, go back to the old firmware if the new one
+# doesn't get as far as confirming it works (see core/app/updater.h)
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y

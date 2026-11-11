@@ -55,3 +55,5 @@ endif()
 target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_HAVE_FILESYSTEM=1)
 # and the voice lab streams over WiFi with BSD sockets
 target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_HAVE_NETWORK=1)
+# and the board's name, so a firmware update can be checked it's for this board
+target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_BOARD_NAME="${board_component}")
