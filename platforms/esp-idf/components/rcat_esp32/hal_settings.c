@@ -88,3 +88,9 @@ bool rcat_hal_log_write(const void *data, size_t len)
            && esp_partition_erase_range(part, 0, part->size) == ESP_OK
            && esp_partition_write(part, 0, data, len) == ESP_OK;
 }
+
+bool rcat_hal_log_program(size_t offset, const void *data, size_t len)
+{
+    const esp_partition_t *part = log_partition();
+    return part != NULL && offset + len <= part->size && esp_partition_write(part, offset, data, len) == ESP_OK;
+}

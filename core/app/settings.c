@@ -88,6 +88,14 @@ static bool load(settings_t *out)
     out->sound_track[SETTINGS_NAME_LEN - 1] = '\0';
     // voice_effect is checked against the preset list by the UI
     out->lovense_release_to_zero = out->lovense_release_to_zero ? 1 : 0;
+    for (int k = 0; k < SETTINGS_CURVE_POINTS && out->battery_curve_runs > 0; k++)
+    {
+        uint16_t mv = out->battery_curve_mv[k];
+        if (mv < 2500 || mv > 4500 || (k > 0 && mv >= out->battery_curve_mv[k - 1]))
+        {
+            out->battery_curve_runs = 0;
+        }
+    }
     return true;
 }
 
@@ -214,5 +222,20 @@ void settings_set_remote(const char *ssid, const char *password)
 void settings_set_terminal_size(uint8_t size)
 {
     current.terminal_size = size <= 6 ? size : 0;
+    schedule_save();
+}
+
+void settings_set_battery_curve(const uint16_t *mv, uint8_t runs, uint32_t last_run)
+{
+    if (runs > 0)
+    {
+        memcpy(current.battery_curve_mv, mv, sizeof(current.battery_curve_mv));
+    }
+    else
+    {
+        memset(current.battery_curve_mv, 0, sizeof(current.battery_curve_mv));
+    }
+    current.battery_curve_runs = runs;
+    current.battery_curve_last_run = last_run;
     schedule_save();
 }

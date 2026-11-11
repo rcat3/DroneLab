@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Read the battery log back from a board, over USB.
 
-Start the log on the board's Battery Log settings page with the battery full,
-unplug USB, and leave it running until it switches off. Then plug it back in
-and run, for example:
+The boards log their battery all the time, and learn their own discharge
+curve from a run that goes from full to flat. This reads the log, to see it,
+or to make the default curve for a board model: charge the battery until the
+charger stops, unplug USB, and leave the board running until it switches off
+or stops responding. Then, within ten minutes of plugging it back in (after
+that, the next run's log replaces it), run, for example:
 
     tools/battery_log.py rp2350
     tools/battery_log.py esp32 --port /dev/ttyACM0
 
 It prints the log, and writes it to battery_log.csv (--csv to change). It also
-prints the discharge curve it shows, as a table for core/app/battery.c: the
-board draws about the same all the time, so the share of the run left is the
-share of the charge left.
+prints the discharge curve it shows, as a table for the board's
+rcat_hal_battery_curve: the board draws about the same all the time, so the
+share of the run left is the share of the charge left. It finds the run the
+same way the board does (see core/app/battery_log.c).
 
 The RP2040 and RP2350 boards are read with picotool, which restarts the board
 to read it. The ESP32 boards are read with esptool, from ESP-IDF's
@@ -28,7 +32,7 @@ import tempfile
 
 LOG_SIZE = 4096
 LOG_MAGIC = 0x474F4C42
-LOG_VERSION = 1
+LOG_VERSIONS = (1, 2)
 FLAG_CHARGING = 0x01
 FLAG_GAUGE = 0x02
 
@@ -45,7 +49,7 @@ ESP_LOG = 0xE12000
 
 def read_pico(board, path):
     start = PICO_LOG[board]
-    subprocess.run(["picotool", "save", "-f", "-r", hex(start), hex(start + LOG_SIZE), path], check=True)
+    subprocess.run(["picotool", "save", "-r", hex(start), hex(start + LOG_SIZE), "-f", path], check=True)
 
 
 def read_esp(port, path):
@@ -61,13 +65,46 @@ def parse(data):
     magic, version, interval, count, _, sequence = struct.unpack_from("<IHHHHI", data, 0)
     if magic != LOG_MAGIC:
         sys.exit("There's no battery log on the board. Start one from its Battery Log settings page.")
-    if version != LOG_VERSION:
-        sys.exit(f"The log is version {version}, and this reads version {LOG_VERSION}.")
+    if version not in LOG_VERSIONS:
+        sys.exit(f"The log is version {version}, and this reads versions {LOG_VERSIONS}.")
     entries = []
-    for i in range(count):
+    for i in range((LOG_SIZE - 16) // 4 if version >= 2 else count):
         mv, gauge, flags = struct.unpack_from("<HBB", data, 16 + 4 * i)
+        if version >= 2 and mv == 0xFFFF:
+            break
         entries.append((mv / 1000.0, gauge if flags & FLAG_GAUGE else None, bool(flags & FLAG_CHARGING)))
     return interval, entries
+
+
+# What makes a run, as core/app/battery_log.c finds it. Near empty, the
+# board's 3.3 V supply can't keep up, and the reading stops following the
+# battery: it sits flat until the board stops.
+FLAT_MV = 5         # within this of the lowest
+MIN_FLAT = 10       # for at least this many entries
+RISE_MV = 8         # a rise of more than this between entries is charging
+
+
+def find_run(entries):
+    """(start, end, flat): the run from full to flat, as entries[start:end],
+    and how many entries it sat flat for after it."""
+    mv = [round(v * 1000) for v, _, _ in entries]
+    charging = [c for _, _, c in entries]
+    low = min(range(len(mv)), key=lambda i: (mv[i], i))
+    flat = 0
+    while flat < low and mv[low - flat - 1] <= mv[low] + FLAT_MV:
+        flat += 1
+    end = low - flat if flat + 1 >= MIN_FLAT else low + 1
+    start = end - 1
+    while start > 0 and not charging[start] and not charging[start - 1] and mv[start] <= mv[start - 1] + RISE_MV:
+        start -= 1
+    while start + 1 < end and mv[start] <= mv[start + 1]:
+        start += 1
+    if flat + 1 < MIN_FLAT:
+        return start, end, 0
+    after = low + 1     # still flat after its lowest
+    while after < len(mv) and abs(mv[after] - mv[low]) <= FLAT_MV:
+        after += 1
+    return start, end, after - end
 
 
 def curve(entries):
@@ -129,7 +166,17 @@ def main():
         print("It was charging for some of it, so the curve below is off: unplug USB before starting the log.")
     print(f"Wrote {args.csv}")
     print()
-    print("The curve, for core/app/battery.c:")
+    start, end, flat = find_run(entries)
+    if start > 0:
+        print(f"The run starts {start * interval / 60:g} min in, after it was last charging.")
+    if flat:
+        print(f"For {flat * interval / 60:g} min at the end, the reading sat at about {entries[end][0]:.3f} V, as the")
+        print("board's supply couldn't keep up. The curve ends where that starts, so 0% leaves that time in hand.")
+    else:
+        print("It didn't end flat, so it may not have run all the way down.")
+    entries = entries[start:end]
+    print()
+    print("The curve, for the board's rcat_hal_battery_curve:")
     points = curve(entries)
     for k in range(0, len(points), 5):
         print("    " + " ".join(f"{{ {v:.3f}f, {p} }}," for v, p in points[k:k + 5]))

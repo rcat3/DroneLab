@@ -19,6 +19,7 @@
 #define BATTERY_UPDATE_MS 1000
 #define REMOTE_POLL_MS    50
 #define LOG_UPDATE_MS     1000
+#define UPTIME_UPDATE_MS  1000
 #define UPDATE_POLL_MS    200
 #define COLOR_MUTED       lv_palette_main(LV_PALETTE_GREY)
 
@@ -88,6 +89,25 @@ static void battery_timer_cb(lv_timer_t *t)
     }
 }
 
+static lv_obj_t *uptime_label;
+
+static void uptime_timer_cb(lv_timer_t *t)
+{
+    // Since the board started; lv_tick_get wraps after 49 days.
+    uint32_t minutes = lv_tick_get() / 60000;
+    uint32_t hours = minutes / 60;
+    if (hours >= 24)
+    {
+        lv_label_set_text_fmt(uptime_label, "Uptime  %lud %luh %02lum", (unsigned long)(hours / 24),
+                              (unsigned long)(hours % 24), (unsigned long)(minutes % 60));
+    }
+    else
+    {
+        lv_label_set_text_fmt(uptime_label, "Uptime  %luh %02lum", (unsigned long)hours,
+                              (unsigned long)(minutes % 60));
+    }
+}
+
 static void add_brightness_page(ui_feature_t *feature)
 {
     lv_obj_t *page = ui_feature_add_page(feature, "Brightness", false);
@@ -110,6 +130,12 @@ static void add_brightness_page(ui_feature_t *feature)
     battery_label = lv_label_create(page);
     lv_label_set_text(battery_label, "");
     lv_obj_align(battery_label, LV_ALIGN_TOP_MID, 0, ui_px(35));
+
+    uptime_label = lv_label_create(page);
+    lv_obj_set_style_text_color(uptime_label, COLOR_MUTED, 0);
+    lv_obj_align(uptime_label, LV_ALIGN_TOP_MID, 0, ui_px(57));
+    lv_timer_t *uptime_timer = lv_timer_create(uptime_timer_cb, UPTIME_UPDATE_MS, NULL);
+    lv_timer_ready(uptime_timer);
 
     battery_status_t b;
     if (battery_update(&b))
@@ -212,32 +238,56 @@ static void add_startup_page(ui_feature_t *feature)
 
 static lv_obj_t *log_page;
 static lv_obj_t *log_status;
-static lv_obj_t *log_start;
+static lv_obj_t *log_forget;
+
+static void append_time(char *buf, size_t len, const char *what, uint32_t seconds)
+{
+    uint32_t minutes = seconds / 60;
+    size_t used = strlen(buf);
+    snprintf(buf + used, len - used, "%s  %luh %02lum\n", what, (unsigned long)(minutes / 60),
+             (unsigned long)(minutes % 60));
+}
 
 static void show_log(void)
 {
-    uint32_t minutes = battery_log_seconds() / 60;
-    bool running = battery_log_running();
-    if (running)
+    static const char *const last_run_text[] = {
+        [BATTERY_RUN_NONE] = "",
+        [BATTERY_RUN_LEARNED] = "Learned from it",
+        [BATTERY_RUN_SHORT] = "Too short to learn from",
+        [BATTERY_RUN_NOT_FULL] = "Didn't start full",
+        [BATTERY_RUN_NOT_EMPTY] = "Didn't run flat",
+        [BATTERY_RUN_GAUGE] = "",
+    };
+    char text[160] = "";
+    uint8_t runs = settings_get()->battery_curve_runs;
+    battery_run_t last = battery_log_last_run();
+
+    if (last == BATTERY_RUN_GAUGE)
     {
-        lv_label_set_text_fmt(log_status, "Logging  %luh %02lum\n\nLeave it running\nuntil it switches off",
-                              (unsigned long)(minutes / 60), (unsigned long)(minutes % 60));
+        strcpy(text, "The power chip gauges\nthe battery\n\n");
     }
-    else if (minutes > 0)
+    else if (runs > 0)
     {
-        lv_label_set_text_fmt(log_status, "Last log  %luh %02lum", (unsigned long)(minutes / 60),
-                              (unsigned long)(minutes % 60));
+        snprintf(text, sizeof(text), "Curve learned from\n%u full run%s\n\n", runs, runs == 1 ? "" : "s");
     }
     else
     {
-        lv_label_set_text(log_status, "Charge it, unplug USB,\nthen start the log");
+        strcpy(text, "Standard curve, until it\nruns flat from full once\n\n");
     }
-    lv_obj_set_hidden(log_start, running);
+    append_time(text, sizeof(text), "This run", battery_log_seconds());
+    if (last != BATTERY_RUN_NONE)
+    {
+        append_time(text, sizeof(text), "Last run", battery_log_last_seconds());
+        size_t used = strlen(text);
+        snprintf(text + used, sizeof(text) - used, "%s", last_run_text[last]);
+    }
+    lv_label_set_text(log_status, text);
+    lv_obj_set_hidden(log_forget, runs == 0);
 }
 
-static void log_start_event_cb(lv_event_t *e)
+static void log_forget_event_cb(lv_event_t *e)
 {
-    battery_log_start();
+    settings_set_battery_curve(NULL, 0, 0);
     show_log();
 }
 
@@ -256,21 +306,21 @@ static void add_log_page(ui_feature_t *feature)
 
     lv_obj_t *title = lv_label_create(log_page);
     lv_label_set_text(title, "Battery Log");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(40));
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(32));
 
     log_status = lv_label_create(log_page);
     lv_obj_set_style_text_align(log_status, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(log_status, COLOR_MUTED, 0);
-    lv_obj_align(log_status, LV_ALIGN_CENTER, 0, ui_px(-12));
+    lv_obj_align(log_status, LV_ALIGN_CENTER, 0, ui_px(-8));
 
-    // Only while it isn't running, as starting again throws the log away
-    log_start = lv_button_create(log_page);
-    lv_obj_set_size(log_start, ui_px(130), ui_px(36));
-    lv_obj_set_style_radius(log_start, LV_RADIUS_CIRCLE, 0);
-    lv_obj_align(log_start, LV_ALIGN_CENTER, 0, ui_px(52));
-    lv_obj_add_event_cb(log_start, log_start_event_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *text = lv_label_create(log_start);
-    lv_label_set_text(text, "Start log");
+    // Held, not tapped, so it isn't thrown away by accident
+    log_forget = lv_button_create(log_page);
+    lv_obj_set_size(log_forget, ui_px(150), ui_px(32));
+    lv_obj_set_style_radius(log_forget, LV_RADIUS_CIRCLE, 0);
+    lv_obj_align(log_forget, LV_ALIGN_BOTTOM_MID, 0, ui_px(-34));
+    lv_obj_add_event_cb(log_forget, log_forget_event_cb, LV_EVENT_LONG_PRESSED, NULL);
+    lv_obj_t *text = lv_label_create(log_forget);
+    lv_label_set_text(text, "Hold to forget");
     lv_obj_center(text);
 
     show_log();

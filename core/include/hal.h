@@ -40,6 +40,19 @@ bool rcat_hal_battery_voltage(float *volts);
  * which case the core works the charge out from the voltage. */
 bool rcat_hal_battery_gauge(uint8_t *percent, bool *charging);
 
+/* One point on a battery's discharge curve. */
+typedef struct
+{
+    float volts;
+    uint8_t percent;
+} rcat_battery_point_t;
+
+/* The board's own discharge curve, measured with tools/battery_log.py: what
+ * rcat_hal_battery_voltage reads at each charge, highest first. Sets *points
+ * and returns how many there are, or returns 0 if the board hasn't been
+ * measured, and the core uses a typical LiPo's curve instead. */
+size_t rcat_hal_battery_curve(const rcat_battery_point_t **points);
+
 /* Read the accelerometer, in g, in the frame of the picture as it's shown
  * (after rcat_hal_display_set_rotation): x to the right, y down, and z out of
  * the screen towards the viewer. At rest it reads the opposite of gravity, so
@@ -58,10 +71,16 @@ bool rcat_hal_settings_write(const void *data, size_t len);
  * RCAT_HAL_LOG_SIZE bytes, kept apart from the settings, in a fixed place in
  * flash so tools/battery_log.py can read it straight out over USB. The
  * caller validates the contents. rcat_hal_log_read returns false if the
- * board has nowhere to keep it. */
+ * board has nowhere to keep it.
+ *
+ * rcat_hal_log_write erases the block and writes it from the start, leaving
+ * the rest erased (0xFF). rcat_hal_log_program then writes more into the
+ * erased part without erasing again, so adding to the log doesn't wear the
+ * flash out; it mustn't be given bytes that have already been written. */
 #define RCAT_HAL_LOG_SIZE 4096
 bool rcat_hal_log_read(void *data, size_t len);
 bool rcat_hal_log_write(const void *data, size_t len);
+bool rcat_hal_log_program(size_t offset, const void *data, size_t len);
 
 /* Called with each block of microphone samples (mono, signed 16-bit). It runs
  * on the board's audio task, not the UI loop, so it has to be quick and must
