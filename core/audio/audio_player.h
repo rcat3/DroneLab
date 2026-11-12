@@ -33,6 +33,12 @@ void audio_player_play(size_t index);
 /* Choose a track without playing it. Resuming plays it from the start. */
 void audio_player_cue(size_t index);
 
+/* Move to a time in the track that's playing or paused, in milliseconds,
+ * carrying on playing or staying paused. In an MP3, it's found in
+ * proportion to the file's length, which is exact for a constant bitrate and
+ * close for a variable one. */
+void audio_player_seek(uint32_t position_ms);
+
 /* Pause and carry on from the same place. */
 void audio_player_pause(void);
 void audio_player_resume(void);
@@ -41,6 +47,13 @@ bool audio_player_is_playing(void);
 
 /* The track that's playing or paused, or was played last. */
 size_t audio_player_current(void);
+
+/* How far into the track that's playing or paused it is, and how long the
+ * track is, in milliseconds. The length is 0 while it isn't known: before
+ * the track starts, or for a file that doesn't say. For an MP3 that doesn't
+ * say, it's worked out from the file's size and how fast it's being read, so
+ * it may move a little at first. */
+void audio_player_progress(uint32_t *position_ms, uint32_t *length_ms);
 
 void audio_player_set_volume(uint8_t percent);
 void audio_player_set_repeat(audio_repeat_t repeat);
