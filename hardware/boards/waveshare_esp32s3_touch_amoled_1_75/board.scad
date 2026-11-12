@@ -55,8 +55,8 @@ screw_head_d = 4.0;                 // M2 countersunk head
 header_grow = 0.5;                  // around the pin header
 conn_grow = 0.5;                    // around the speaker and battery sockets
 mic_hole = 2.0;
-usb_access = true;                  // the board charges at 300 mA unless the firmware changes it,
-                                    // which is safe for any battery that fits, so the port is open
+usb_access = true;                  // the firmware sets the board to charge at 500 mA, which is
+                                    // gentle on any battery that fits, so the port is open
 usb_opening = [12.4, 6.6];          // width, height of the slot for the USB-C plug. The plug's
                                     // overmold has to fit into it to plug in all the way
 usb_recess_w = 16.0;                // a pocket in the outside of the housing around the slot, so the
