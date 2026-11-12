@@ -37,8 +37,8 @@ Four displays are supported, all made by Waveshare.  Each has a 3D printable hou
 | Micro SD card | | | Yes | Yes |
 | WiFi and Bluetooth LE | | | Yes | Yes |
 | Accelerometer | Yes (not supported yet) | Yes (not supported yet) | Yes | Yes |
-| Battery charging | 1 A | 1 A | Up to 2 A, power button | 300 mA, power button |
-| Status | Works | Works | Works | Firmware and housing new, not yet tried |
+| Battery charging | 1 A | 1 A | Up to 2 A, power button | 500 mA, set by the firmware, power button |
+| Status | Works | Works | Works | Works |
 
 Which features each one runs:
 

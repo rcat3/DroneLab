@@ -4,7 +4,7 @@ A 3D printable housing that screws the [Waveshare ESP32-S3-Touch-AMOLED-1.75](ht
 
 This README is about the design files.  For the whole build, with the parts to buy, wiring and putting it together, see the [build guide](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md).
 
-**Status: draft, not yet printed.**  It's modeled from Waveshare's 3D model and drawing of the board, and its clearance from the mask from a 3D scan.  The firmware runs on the board: the display, touch, microphones and level work, while the speaker and the battery gauge are still to be tried.
+**Status: printed and working.**  It's modeled from Waveshare's 3D model and drawing of the board, and its clearance from the mask from a 3D scan, and the first print fits the board and the mask.  The display, touch, microphones, speaker, micro SD card and level all work in it.  The battery gauge is still to be tried over a full charge.
 
 The board has its own amplifier, speaker socket, microphones and battery charger, so the speaker and the battery plug straight into it.  There are no other boards to wire in.
 
@@ -53,7 +53,7 @@ This housing hasn't been printed yet, so these are worth printing first (`./rend
 | M2 x 8 socket head | 4 | Hold the back onto the body.  They cut their own thread in the body. |
 | M2 x 6 socket head | 4 | Hold the two halves of the washer to the ends of the collar's posts, inside the collar.  Stop when the collar turns firmly but smoothly. |
 
-The board's charger (an AXP2101) charges at 300 mA, set by the firmware, so there's no resistor to change.
+The board's charger (an AXP2101) charges at up to 500 mA, set by the firmware, so there's no resistor to change.
 
 ### Check these first
 

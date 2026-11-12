@@ -87,6 +87,17 @@ static const char *TAG = "board";
 #define AXP_LDO_ALDO1       0x01
 #define AXP_REG_ALDO1_V     0x92
 #define AXP_ALDO1_3V3       ((3300 - 500) / 100)    // 0.5 V + 0.1 V a step
+// Charging. The board draws up to about 250 mA itself with the screen on, so
+// the most it takes from USB is set to 500 mA, which any USB port can supply;
+// the charger slows down to fit while the board's busy. 500 mA charges a
+// 2000 mAh battery from flat in about 4.5 hours, and keeps it cool in the
+// housing.
+#define AXP_REG_INPUT_LIMIT 0x16    // bits 2:0: 0 100 mA, 1 500 mA, 2 900 mA, 3 1 A, 4 1.5 A, 5 2 A
+#define AXP_INPUT_LIMIT     1       // 500 mA
+#define AXP_REG_CHARGE_CUR  0x62    // bits 4:0: 25 mA steps to 200 mA (8), then 100 mA steps to 1 A (16)
+#define AXP_CHARGE_CUR      11      // 500 mA
+#define AXP_REG_CHARGE_VOLT 0x64    // bits 2:0: 1 4.0 V, 2 4.1 V, 3 4.2 V, 4 4.35 V, 5 4.4 V
+#define AXP_CHARGE_VOLT     3       // 4.2 V, for an ordinary LiPo
 #define AXP_I2C_HZ          400000
 #define AXP_TIMEOUT_MS      50
 #define POWER_OFF_HOLD_MS   2000
@@ -277,6 +288,13 @@ static bool axp_write(uint8_t reg, uint8_t value)
 {
     const uint8_t data[2] = { reg, value };
     return axp != NULL && i2c_master_transmit(axp, data, sizeof(data), AXP_TIMEOUT_MS) == ESP_OK;
+}
+
+/* Sets the bits in mask to value, and leaves the rest as they are */
+static bool axp_update(uint8_t reg, uint8_t mask, uint8_t value)
+{
+    uint8_t old;
+    return axp_read(reg, &old, 1) && axp_write(reg, (old & ~mask) | (value & mask));
 }
 
 static bool axp_set_bits(uint8_t reg, uint8_t bits)
@@ -1112,15 +1130,28 @@ static void power_init(void)
 
     // DCDC1 is the board's 3.3 V and ALDO1 the codecs' analog 3.3 V. The
     // AXP2101 starts both, but make sure of ALDO1, the battery voltage
-    // measurement and the fuel gauge. The charge current is left as it is (300 mA).
+    // measurement and the fuel gauge, and set up the charger.
+    uint8_t was[3] = {0};
+    axp_read(AXP_REG_INPUT_LIMIT, &was[0], 1);
+    axp_read(AXP_REG_CHARGE_CUR, &was[1], 1);
+    axp_read(AXP_REG_CHARGE_VOLT, &was[2], 1);
     bool ok = axp_write(AXP_REG_ALDO1_V, AXP_ALDO1_3V3)
               && axp_set_bits(AXP_REG_LDO_ONOFF0, AXP_LDO_ALDO1)
               && axp_set_bits(AXP_REG_ADC_ENABLE, AXP_ADC_VBAT)
-              && axp_set_bits(AXP_REG_GAUGE_CTRL, AXP_GAUGE_ENABLE);
+              && axp_set_bits(AXP_REG_GAUGE_CTRL, AXP_GAUGE_ENABLE)
+              && axp_update(AXP_REG_INPUT_LIMIT, 0x07, AXP_INPUT_LIMIT)
+              && axp_update(AXP_REG_CHARGE_CUR, 0x1F, AXP_CHARGE_CUR)
+              && axp_update(AXP_REG_CHARGE_VOLT, 0x07, AXP_CHARGE_VOLT);
+    uint8_t now[3] = {0};
+    axp_read(AXP_REG_INPUT_LIMIT, &now[0], 1);
+    axp_read(AXP_REG_CHARGE_CUR, &now[1], 1);
+    axp_read(AXP_REG_CHARGE_VOLT, &now[2], 1);
     if (!ok)
     {
         ESP_LOGW(TAG, "The power manager didn't answer");
     }
+    ESP_LOGI(TAG, "Charger: input limit 0x%02x -> 0x%02x, current 0x%02x -> 0x%02x, voltage 0x%02x -> 0x%02x",
+             was[0], now[0], was[1], now[1], was[2], now[2]);
 
     // The SD card's D3 line has to stay high in 1-bit SD mode.
     const gpio_config_t d3 = {
