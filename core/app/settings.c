@@ -38,6 +38,7 @@ static void set_defaults(settings_t *s)
     s->sound_track[0] = '\0';
     s->voice_effect = 0;
     s->lovense_release_to_zero = 0;
+    s->voice_volume = SETTINGS_DEFAULT_VOICE_VOLUME;
 }
 
 static uint32_t checksum(const void *data, size_t len)
@@ -87,6 +88,10 @@ static bool load(settings_t *out)
     out->sound_autoplay = out->sound_autoplay ? 1 : 0;
     out->sound_track[SETTINGS_NAME_LEN - 1] = '\0';
     // voice_effect is checked against the preset list by the UI
+    if (out->voice_volume > 100)
+    {
+        out->voice_volume = SETTINGS_DEFAULT_VOICE_VOLUME;
+    }
     out->lovense_release_to_zero = out->lovense_release_to_zero ? 1 : 0;
     for (int k = 0; k < SETTINGS_CURVE_POINTS && out->battery_curve_runs > 0; k++)
     {
@@ -194,6 +199,12 @@ void settings_set_sound_autoplay(uint8_t enabled)
 void settings_set_voice_effect(uint8_t preset)
 {
     current.voice_effect = preset;
+    schedule_save();
+}
+
+void settings_set_voice_volume(uint8_t percent)
+{
+    current.voice_volume = percent;
     schedule_save();
 }
 

@@ -25,6 +25,10 @@ const char *voice_fx_preset_name(size_t index);
 /* Choose a preset (0 for off). Safe to call from the UI loop. */
 void voice_fx_set_preset(size_t index);
 
+/* How loud it is on the speaker, in percent: 50 is 10 dB up from the
+ * microphone, and each step 0.5 dB more or less, with a limiter. 0 is silent. */
+void voice_fx_set_volume(uint8_t percent);
+
 /* Play the processed voice on the speaker instead of the sound player. */
 void voice_fx_set_speaker(bool on);
 bool voice_fx_speaker_on(void);

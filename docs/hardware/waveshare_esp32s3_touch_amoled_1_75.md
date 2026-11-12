@@ -15,6 +15,8 @@ The board's own amplifier, speaker socket and microphones are used, so there are
 - **Power:** the board runs from USB-C or from a 3.7 V LiPo battery on its MX1.25 connector (check the polarity before plugging a battery in), and charges the battery at 300 mA, which is safe for any battery that fits.  Press `PWR` to turn it on, and hold it for 2 seconds to turn it off.
 - **Brightness:** an AMOLED has no backlight, so the Brightness setting dims the screen itself.  Black parts of the picture are truly off.
 - **Microphones:** the two microphones are mixed together.  Their gain is `MIC_GAIN_DB` in the board's `hal_board.c`.
+- **Echo cancelling:** the board's audio chip also hears the speaker's own signal, so the firmware takes the speaker out of what the microphones pick up.  That lets the [voice effect](../features/voice-effects.md) go much louder before it feeds back: in the housing, with the opening packed, Dalek goes from about 30% to 80% on the Effect Volume.  It's a small adaptive filter, run a sample at a time so it adds no delay (`AEC_` settings in `hal_board.c`).  In the housing, the speaker reaches the microphones most strongly around 1.5 kHz, so that band is turned down a little after the echo canceller (`FEEDBACK_CUT_`), which lets it go a little louder again.
+- **Voice through the mask:** the microphones hear you through the mask's speaking diaphragm, which booms around 250 Hz and muffles everything above about 2 kHz, where the consonants are.  The firmware turns the boom down and the treble up (`VOICE_BOOM_` and `VOICE_TREBLE_`), which makes the voice effects much easier to understand.  More treble than that mostly brings up hiss.
 - **Speaker:** the microphones and the speaker share one audio clock, so sound is resampled to 32 kHz for the speaker, which is plenty for a small speaker.  `SPK_VOLUME` in `hal_board.c` sets how loud the board's amplifier goes, on top of the volume setting.
 - **Level:** the accelerometer's directions are taken from the 1.46" board and haven't been checked on this one.  If the [Level](../features/level.md) reads the wrong way, see `rcat_hal_accel_read()` in `hal_board.c`.
 - **Not used yet:** the clock chip, and the GPS on the -G version.
@@ -47,7 +49,7 @@ The speaker and battery sockets stand up off the back of the board, so their plu
 
 1. Push the plungers in from inside the display's pocket, then fit the board and screw it to the back plate with the countersunk screws.
 2. Push the speaker's plug through the opening at the inner end of the pocket, into the chamber.  Then stick the speaker into its pocket from the back of the pod, with its wire in the notch in the side of the pocket, run the wire behind the speaker to the opening, and screw the chin on.
-3. Plug the speaker into the board's speaker socket, through the opening in the back plate.
+3. Plug the speaker into the board's speaker socket, through the opening in the back plate.  Then pack the opening between the speaker's pocket and the chamber around the wire, with a scrap of foam.  The microphones listen into the chamber, so the less of the speaker reaches it, the louder the voice effect can go before it feeds back.
 4. Plug in the battery the same way, and tape it to the back.
 5. Screw the back on with the M2 x 8 screws.
 6. Put the gasket over the posts, then the collar, grip first.

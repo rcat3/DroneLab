@@ -30,6 +30,7 @@ static lv_obj_t *ring_switch;
 static lv_obj_t *ring_roller;
 static lv_obj_t *lab_status_label;
 static lv_obj_t *lab_switch;
+static lv_obj_t *volume_value_label;
 
 #define LAB_POLL_MS 250
 
@@ -138,11 +139,50 @@ static void add_effect_page(ui_feature_t *feature)
     // off at startup.
     lv_obj_t *speaker_label = lv_label_create(page);
     lv_label_set_text(speaker_label, "Play on speaker");
-    lv_obj_align(speaker_label, LV_ALIGN_CENTER, 0, ui_px(48));
+    lv_obj_align(speaker_label, LV_ALIGN_CENTER, 0, ui_px(44));
 
+    // Big, so it's easy to hit with a gloved finger
     lv_obj_t *speaker_switch = lv_switch_create(page);
-    lv_obj_align(speaker_switch, LV_ALIGN_CENTER, 0, ui_px(74));
+    lv_obj_set_size(speaker_switch, ui_px(76), ui_px(38));
+    lv_obj_set_ext_click_area(speaker_switch, ui_px(8));
+    lv_obj_align(speaker_switch, LV_ALIGN_CENTER, 0, ui_px(76));
     lv_obj_add_event_cb(speaker_switch, effect_speaker_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+}
+
+static void volume_slider_event_cb(lv_event_t *e)
+{
+    uint8_t volume = lv_slider_get_value(lv_event_get_target_obj(e));
+    lv_label_set_text_fmt(volume_value_label, "%d%%", volume);
+    voice_fx_set_volume(volume);
+    settings_set_voice_volume(volume);
+}
+
+static void add_volume_page(ui_feature_t *feature)
+{
+    lv_obj_t *page = ui_feature_add_page(feature, "Effect Volume", false);
+    uint8_t volume = settings_get()->voice_volume;
+    voice_fx_set_volume(volume);
+
+    lv_obj_t *title = lv_label_create(page);
+    lv_label_set_text(title, "Effect Volume");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(32));
+
+    lv_obj_t *slider = lv_slider_create(page);
+    lv_obj_set_size(slider, ui_px(160), ui_px(20));
+    lv_slider_set_range(slider, 0, 100);
+    lv_slider_set_value(slider, volume, LV_ANIM_OFF);
+    lv_obj_align(slider, LV_ALIGN_CENTER, 0, ui_px(-10));
+    lv_obj_add_event_cb(slider, volume_slider_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    volume_value_label = lv_label_create(page);
+    lv_label_set_text_fmt(volume_value_label, "%d%%", volume);
+    lv_obj_align(volume_value_label, LV_ALIGN_CENTER, 0, ui_px(16));
+
+    lv_obj_t *help = lv_label_create(page);
+    lv_label_set_text(help, "Turn it down\nif it feeds back");
+    lv_obj_set_style_text_align(help, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(help, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_align(help, LV_ALIGN_CENTER, 0, ui_px(56));
 }
 
 /* ----- Voice lab ----- */
@@ -237,6 +277,7 @@ static bool build(ui_feature_t *feature)
     if (voice_fx_start())
     {
         add_effect_page(feature);
+        add_volume_page(feature);
     }
     if (voice_lab_available())
     {

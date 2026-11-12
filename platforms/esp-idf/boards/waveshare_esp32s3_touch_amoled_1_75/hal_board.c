@@ -12,6 +12,9 @@
  * the other ESP32 boards, in components/rcat_esp32.
  */
 
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"
@@ -20,7 +23,7 @@
 
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
-#include "driver/i2s_std.h"
+#include "driver/i2s_tdm.h"
 #include "driver/spi_master.h"
 #include "esp_codec_dev.h"
 #include "esp_codec_dev_defaults.h"
@@ -98,16 +101,56 @@ static const char *TAG = "board";
 #define PIN_I2S_DOUT        8       // to the ES8311
 #define PIN_I2S_DIN         10      // from the ES7210
 #define PIN_PA_EN           46      // the NS4150B amplifier, on while high
+#define AUDIO_DEBUG         0       // 1 prints the levels, echo cancelling and CPU use every second
+#define AUDIO_CAPTURE       0       // 1 streams the microphones and the speaker's sound, at 16 kHz, over USB; 2 MIC1 and MIC2
+#define AUDIO_SLOTS         4       // TDM: MIC1, MIC2, MIC3 (the speaker's sound) and MIC4
+#define REF_GAIN_DB         24.0f   // MIC3, the speaker's sound
+// The slots, in the order the ES7210 sends them in TDM
+#define SLOT_MIC1           0
+#define SLOT_REF            1
+#define SLOT_MIC2           2
+// Echo cancelling: the speaker's sound is taken out of the microphones, so
+// the voice effect can be turned up further before it feeds back. It's an
+// NLMS filter, run a sample at a time so it adds no delay, at 16 kHz: the
+// microphones and the speaker's sound are halved in rate, and the result
+// doubled back to AUDIO_RATE. The speaker's sound comes in alongside the
+// microphones, so the filter only has to cover the few milliseconds the
+// sound takes through the housing.
+#define AEC_ENABLED         1
+#define AEC_TAPS            128     // 8 ms at 16 kHz
+#define AEC_STEP            0.2f
+#define AEC_NEAR_WEIGHT     1.0f    // slows the learning while your voice is louder than the echo
+// In the speaker housing, the speaker reaches the microphones about 20 dB
+// more strongly around 1.5 kHz than at other frequencies, so that's where it
+// feeds back first. Cutting that band after the echo canceller lets the voice
+// effect go louder. 0 dB turns it off.
+#define FEEDBACK_CUT_HZ     1450.0f
+#define FEEDBACK_CUT_Q      1.2f
+#define FEEDBACK_CUT_DB     -10.0f
+// The microphones hear you through the mask's speaking diaphragm, which
+// booms around 250 Hz and loses 15-25 dB above 2 kHz, where the consonants
+// are. This puts some of it back: less boom, more treble. More treble than
+// this mostly brings up hiss, as the voice is only 10-15 dB above the
+// microphones' noise up there.
+#define VOICE_BOOM_HZ       240.0f
+#define VOICE_BOOM_Q        1.0f
+#define VOICE_BOOM_DB       -8.0f
+#define VOICE_TREBLE_HZ     2200.0f
+#define VOICE_TREBLE_DB     8.0f
+#define HALF_TAPS           31      // the low pass for halving and doubling the rate
 #define AUDIO_RATE          32000   // MIC_SAMPLE_RATE in core/audio/mic.h
 #define AUDIO_BLOCK_MS      5       // short, to keep the voice effect's delay down
 #define AUDIO_TASK_STACK    8192    // the voice effects and the voice lab run on it too
 #define AUDIO_TASK_PRIORITY 5
 #define AUDIO_TASK_CORE     1       // LVGL runs on core 0
-#define MIC_GAIN_DB         30.0f   // the ES7210's microphone gain, 0 to 37.5 dB
+// The ES7210's microphone gain, 0 to 37.5 dB. At 30 dB a voice in the mask
+// peaks about -22 dBFS, as on the 1.46" board, without clipping. Much lower
+// and the voice effect's gate (-45 dBFS) cuts most of the speech.
+#define MIC_GAIN_DB         30.0f
 #define SPK_VOLUME          80      // the ES8311's volume, 0 to 100
 #define SPK_BLOCK_FRAMES    256
 #define SPK_MAX_RATIO       6       // up to this many frames out for each frame in (5.3 kHz)
-#define SPK_DMA_DESC_NUM    16
+#define SPK_DMA_DESC_NUM    4       // 16 ms: live sound waits a whole lap of these, so it's kept short
 #define SPK_DMA_FRAME_NUM   128
 #define SPK_IDLE_MS         500     // silence before the amplifier turns off, to save power
 #define SPK_IDLE_POLL_MS    20
@@ -304,7 +347,7 @@ bool rcat_hal_accel_read(float *x, float *y, float *z)
 /********************************************************************************
 function:	Set up the I2S port and both codecs, the first time either the
             microphone or the speaker is started. Both directions run at
-            AUDIO_RATE, 16-bit stereo.
+            AUDIO_RATE, 16-bit, in four TDM slots.
 parameter:
 ********************************************************************************/
 static bool audio_init(void)
@@ -323,9 +366,12 @@ static bool audio_init(void)
         ESP_LOGE(TAG, "No I2S channels for the audio");
         return false;
     }
-    i2s_std_config_t std_config = {
-        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(AUDIO_RATE),
-        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+    // TDM, so the ADC can send all four of its inputs. The DAC reads it as
+    // ordinary I2S: slots 0 and 1 are its left channel, 2 and 3 its right.
+    i2s_tdm_config_t tdm_config = {
+        .clk_cfg = I2S_TDM_CLK_DEFAULT_CONFIG(AUDIO_RATE),
+        .slot_cfg = I2S_TDM_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO,
+                                                        I2S_TDM_SLOT0 | I2S_TDM_SLOT1 | I2S_TDM_SLOT2 | I2S_TDM_SLOT3),
         .gpio_cfg = {
             .mclk = PIN_I2S_MCLK,
             .bclk = PIN_I2S_BCLK,
@@ -334,9 +380,12 @@ static bool audio_init(void)
             .din = PIN_I2S_DIN,
         },
     };
-    std_config.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-    ESP_ERROR_CHECK(i2s_channel_init_std_mode(i2s_tx, &std_config));
-    ESP_ERROR_CHECK(i2s_channel_init_std_mode(i2s_rx, &std_config));
+    tdm_config.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+    tdm_config.slot_cfg.total_slot = AUDIO_SLOTS;
+    tdm_config.slot_cfg.left_align = true;
+    tdm_config.slot_cfg.ws_width = 16 * AUDIO_SLOTS / 2;
+    ESP_ERROR_CHECK(i2s_channel_init_tdm_mode(i2s_tx, &tdm_config));
+    ESP_ERROR_CHECK(i2s_channel_init_tdm_mode(i2s_rx, &tdm_config));
 
     audio_codec_i2s_cfg_t i2s_cfg = {
         .port = I2S_PORT,
@@ -370,9 +419,9 @@ static bool audio_init(void)
         .data_if = data_if,
     };
 
-    // The microphones' ADC: MIC1 and MIC2 are the two microphones, left and
-    // right. MIC3 is the speaker's sound, for echo cancelling, which isn't
-    // used.
+    // The microphones' ADC: MIC1 and MIC2 are the two microphones. MIC3 is
+    // the speaker's sound, for echo cancelling. MIC4 isn't connected, but
+    // TDM needs at least three, and the slots come in fours.
     audio_codec_i2c_cfg_t adc_i2c = {
         .port = I2C_NUM_0,
         .addr = ES7210_CODEC_DEFAULT_ADDR,
@@ -380,7 +429,7 @@ static bool audio_init(void)
     };
     es7210_codec_cfg_t adc_cfg = {
         .ctrl_if = audio_codec_new_i2c_ctrl(&adc_i2c),
-        .mic_selected = ES7210_SEL_MIC1 | ES7210_SEL_MIC2,
+        .mic_selected = ES7210_SEL_MIC1 | ES7210_SEL_MIC2 | ES7210_SEL_MIC3 | ES7210_SEL_MIC4,
     };
     const esp_codec_dev_cfg_t mic_cfg = {
         .dev_type = ESP_CODEC_DEV_TYPE_IN,
@@ -392,7 +441,8 @@ static bool audio_init(void)
     mic_dev = esp_codec_dev_new((esp_codec_dev_cfg_t *)&mic_cfg);
     esp_codec_dev_sample_info_t fs = {
         .bits_per_sample = 16,
-        .channel = 2,
+        .channel = AUDIO_SLOTS,
+        .channel_mask = 0x0F,
         .sample_rate = AUDIO_RATE,
         .mclk_multiple = I2S_MCLK_MULTIPLE_256,
     };
@@ -407,6 +457,7 @@ static bool audio_init(void)
     }
     esp_codec_dev_set_out_vol(spk_dev, SPK_VOLUME);
     esp_codec_dev_set_in_gain(mic_dev, MIC_GAIN_DB);
+    esp_codec_dev_set_in_channel_gain(mic_dev, ESP_CODEC_DEV_MAKE_CHANNEL_MASK(2), REF_GAIN_DB);
 
     const gpio_config_t pa_config = {
         .pin_bit_mask = 1ULL << PIN_PA_EN,
@@ -431,25 +482,410 @@ function:	Read the microphones in blocks, mix them to mono and hand them to
             the callback
 parameter:
 ********************************************************************************/
+/* A low pass at 7 kHz, for halving 32 kHz to 16 kHz and back. The delay
+ * line is kept twice over, so the taps always read it in one run. */
+typedef struct
+{
+    float x[2 * HALF_TAPS];
+    int pos;
+} half_fir_t;
+
+static float half_taps[HALF_TAPS];
+
+static void half_fir_init(void)
+{
+    float sum = 0;
+    for (int i = 0; i < HALF_TAPS; i++)
+    {
+        float t = i - HALF_TAPS / 2;
+        float c = 7000.0f / AUDIO_RATE;
+        float sinc = (t == 0) ? 2 * c : sinf(2 * (float)M_PI * c * t) / ((float)M_PI * t);
+        half_taps[i] = sinc * (0.54f - 0.46f * cosf(2 * (float)M_PI * i / (HALF_TAPS - 1)));
+        sum += half_taps[i];
+    }
+    for (int i = 0; i < HALF_TAPS; i++)
+    {
+        half_taps[i] /= sum;
+    }
+}
+
+static void half_fir_push(half_fir_t *f, float v)
+{
+    f->x[f->pos] = v;
+    f->x[f->pos + HALF_TAPS] = v;
+    f->pos = (f->pos + 1) % HALF_TAPS;
+}
+
+static float half_fir_out(const half_fir_t *f)
+{
+    const float *p = &f->x[f->pos];
+    float y0 = 0, y1 = 0;
+    for (int k = 0; k < HALF_TAPS - 1; k += 2)
+    {
+        y0 += half_taps[k] * p[k];
+        y1 += half_taps[k + 1] * p[k + 1];
+    }
+    return y0 + y1 + half_taps[HALF_TAPS - 1] * p[HALF_TAPS - 1];
+}
+
+/* Doubling the rate: the samples in between are zeros, so each of the two
+ * outputs only needs every other tap. */
+#define UP_TAPS ((HALF_TAPS + 1) / 2)
+typedef struct
+{
+    float x[2 * UP_TAPS];
+    int pos;
+} up_fir_t;
+
+static void up_fir(up_fir_t *f, float v, float *a, float *b)
+{
+    f->x[f->pos] = v;
+    f->x[f->pos + UP_TAPS] = v;
+    f->pos = (f->pos + 1) % UP_TAPS;
+    const float *p = &f->x[f->pos];     // oldest first
+    float ya = 0, yb = 0;
+    for (int j = 0; j < UP_TAPS; j++)
+    {
+        // Tap 2j (or 2j + 1) meets the sample j back from the newest
+        const float s = p[UP_TAPS - 1 - j];
+        ya += half_taps[2 * j] * s;
+        if (2 * j + 1 < HALF_TAPS)
+        {
+            yb += half_taps[2 * j + 1] * s;
+        }
+    }
+    *a = 2.0f * ya;
+    *b = 2.0f * yb;
+}
+
+static int16_t clamp16(float v)
+{
+    return (int16_t)(v > 32767.0f ? 32767 : (v < -32768.0f ? -32768 : v));
+}
+
+/* Hands samples to the callback in blocks of at most 10 ms */
+static void deliver(int16_t *samples, size_t count)
+{
+    const size_t most = AUDIO_RATE / 100;
+    while (count > 0)
+    {
+        size_t n = count > most ? most : count;
+        audio_cb(samples, n, audio_cb_user_data);
+        samples += n;
+        count -= n;
+    }
+}
+
+/* The echo canceller: an NLMS filter from the speaker's sound to what the
+ * microphones hear of it. The step is normalised by the speaker's power, and
+ * by what's left after cancelling, so it learns slowly while that's mostly
+ * your own voice. The speaker's samples are kept twice over, so the taps
+ * always read them in one run. */
+typedef struct
+{
+    float w[AEC_TAPS];
+    float x[2 * AEC_TAPS];
+    int pos;
+    float x_power;          // the sum of the squares of the samples in x
+    float e_power;          // a running average of the square of the result
+    uint32_t count;
+} aec_t;
+
+static float aec_sample(aec_t *a, float mic, float ref)
+{
+    float old = a->x[a->pos];
+    a->x[a->pos] = ref;
+    a->x[a->pos + AEC_TAPS] = ref;
+    a->pos = (a->pos + 1) % AEC_TAPS;
+    a->x_power += ref * ref - old * old;
+    if (++a->count % 4096 == 0 || a->x_power < 0)
+    {
+        // Rounding builds up in the running sum, so work it out again now and then
+        float sum = 0;
+        for (int k = 0; k < AEC_TAPS; k++)
+        {
+            sum += a->x[k] * a->x[k];
+        }
+        a->x_power = sum;
+    }
+
+    // Four sums at once, so the multiplies don't wait on each other
+    const float *x = &a->x[a->pos];
+    float y0 = 0, y1 = 0, y2 = 0, y3 = 0;
+    for (int k = 0; k < AEC_TAPS; k += 4)
+    {
+        y0 += a->w[k] * x[k];
+        y1 += a->w[k + 1] * x[k + 1];
+        y2 += a->w[k + 2] * x[k + 2];
+        y3 += a->w[k + 3] * x[k + 3];
+    }
+    float e = mic - (y0 + y1 + y2 + y3);
+    a->e_power += 0.002f * (e * e - a->e_power);
+
+    float denom = a->x_power + AEC_NEAR_WEIGHT * AEC_TAPS * a->e_power + 1e-6f;
+    float g = AEC_STEP * e / denom;
+    for (int k = 0; k < AEC_TAPS; k += 4)
+    {
+        a->w[k] += g * x[k];
+        a->w[k + 1] += g * x[k + 1];
+        a->w[k + 2] += g * x[k + 2];
+        a->w[k + 3] += g * x[k + 3];
+    }
+    if (!isfinite(e))
+    {
+        memset(a, 0, sizeof(*a));
+        return mic;
+    }
+    return e;
+}
+
+#if AUDIO_CAPTURE
+/* For tuning the echo canceller on a computer: the microphones and the
+ * speaker's sound, before cancelling, as pairs of 16-bit samples, sent over
+ * the USB serial port as lines of "@A <sequence> <base64>". A task of its
+ * own sends them, so a slow port drops lines rather than holding up the
+ * audio. */
+#define CAPTURE_LINE_PAIRS  255     // 1020 bytes, a multiple of 3 for base64
+#define CAPTURE_RING_PAIRS  (16 * 1024)     // a second, in PSRAM
+
+static int16_t (*capture_ring)[2];
+static volatile uint32_t capture_write;
+static uint32_t capture_read;
+
+static void capture_push(float mic, float ref)
+{
+    uint32_t w = capture_write;
+    capture_ring[w % CAPTURE_RING_PAIRS][0] = clamp16(mic);
+    capture_ring[w % CAPTURE_RING_PAIRS][1] = clamp16(ref);
+    __atomic_store_n(&capture_write, w + 1, __ATOMIC_RELEASE);
+}
+
+static void capture_task(void *arg)
+{
+    static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static uint8_t bytes[CAPTURE_LINE_PAIRS * 4];
+    static char line[CAPTURE_LINE_PAIRS * 4 * 4 / 3 + 32];
+    uint32_t seq = 0;
+    while (1)
+    {
+        uint32_t w = __atomic_load_n(&capture_write, __ATOMIC_ACQUIRE);
+        if (w - capture_read > CAPTURE_RING_PAIRS - CAPTURE_LINE_PAIRS)
+        {
+            capture_read = w - CAPTURE_LINE_PAIRS;      // fell behind: skip ahead, and the sequence shows it
+            seq++;
+        }
+        if (w - capture_read < CAPTURE_LINE_PAIRS)
+        {
+            rcat_hal_delay_ms(5);
+            continue;
+        }
+        for (int i = 0; i < CAPTURE_LINE_PAIRS; i++)
+        {
+            const int16_t *pair = capture_ring[(capture_read + i) % CAPTURE_RING_PAIRS];
+            memcpy(&bytes[4 * i], pair, 4);
+        }
+        capture_read += CAPTURE_LINE_PAIRS;
+        int n = sprintf(line, "@A %lu ", (unsigned long)seq++);
+        for (size_t i = 0; i < sizeof(bytes); i += 3)
+        {
+            uint32_t v = bytes[i] << 16 | bytes[i + 1] << 8 | bytes[i + 2];
+            line[n++] = b64[v >> 18];
+            line[n++] = b64[(v >> 12) & 63];
+            line[n++] = b64[(v >> 6) & 63];
+            line[n++] = b64[v & 63];
+        }
+        line[n++] = '\n';
+        fwrite(line, 1, n, stdout);
+        fflush(stdout);
+    }
+}
+#endif
+
+/* A peaking filter (RBJ cookbook), for the feedback cut */
+typedef struct
+{
+    float b0, b1, b2, a1, a2;
+    float x1, x2, y1, y2;
+} biquad_t;
+
+static void peaking_init(biquad_t *f, float fs, float hz, float q, float db)
+{
+    float A = powf(10.0f, db / 40.0f);
+    float w0 = 2.0f * (float)M_PI * hz / fs;
+    float alpha = sinf(w0) / (2.0f * q);
+    float a0 = 1.0f + alpha / A;
+    *f = (biquad_t){
+        .b0 = (1.0f + alpha * A) / a0,
+        .b1 = -2.0f * cosf(w0) / a0,
+        .b2 = (1.0f - alpha * A) / a0,
+        .a1 = -2.0f * cosf(w0) / a0,
+        .a2 = (1.0f - alpha / A) / a0,
+    };
+}
+
+/* A high shelf (RBJ cookbook, shelf slope 1) */
+static void high_shelf_init(biquad_t *f, float fs, float hz, float db)
+{
+    float A = powf(10.0f, db / 40.0f);
+    float w0 = 2.0f * (float)M_PI * hz / fs;
+    float c = cosf(w0);
+    float alpha = sinf(w0) / 2.0f * sqrtf(2.0f);
+    float s = 2.0f * sqrtf(A) * alpha;
+    float a0 = (A + 1) - (A - 1) * c + s;
+    *f = (biquad_t){
+        .b0 = A * ((A + 1) + (A - 1) * c + s) / a0,
+        .b1 = -2 * A * ((A - 1) + (A + 1) * c) / a0,
+        .b2 = A * ((A + 1) + (A - 1) * c - s) / a0,
+        .a1 = 2 * ((A - 1) - (A + 1) * c) / a0,
+        .a2 = ((A + 1) - (A - 1) * c - s) / a0,
+    };
+}
+
+static float biquad(biquad_t *f, float x)
+{
+    float y = f->b0 * x + f->b1 * f->x1 + f->b2 * f->x2 - f->a1 * f->y1 - f->a2 * f->y2;
+    f->x2 = f->x1;
+    f->x1 = x;
+    f->y2 = f->y1;
+    f->y1 = y;
+    return y;
+}
+
+/********************************************************************************
+function:	Read the microphones in blocks, mix them to mono, take the
+            speaker out of them, and hand them to the callback
+parameter:
+********************************************************************************/
 static void audio_task(void *arg)
 {
     size_t frames = AUDIO_RATE * AUDIO_BLOCK_MS / 1000;
-    int16_t *raw = heap_caps_malloc(frames * 2 * sizeof(int16_t), MALLOC_CAP_INTERNAL);
+    int16_t *raw = heap_caps_malloc(frames * AUDIO_SLOTS * sizeof(int16_t), MALLOC_CAP_INTERNAL);
     int16_t *samples = heap_caps_malloc(frames * sizeof(int16_t), MALLOC_CAP_INTERNAL);
     assert(raw && samples);
 
+#if AEC_ENABLED
+    half_fir_init();
+    static half_fir_t mic_down, ref_down;
+#if AUDIO_CAPTURE == 2
+    static half_fir_t mic1_down, mic2_down;
+#endif
+    static up_fir_t out_up;
+    static aec_t aec;
+    static biquad_t feedback_cut, voice_boom, voice_treble;
+    peaking_init(&feedback_cut, AUDIO_RATE / 2, FEEDBACK_CUT_HZ, FEEDBACK_CUT_Q, FEEDBACK_CUT_DB);
+    peaking_init(&voice_boom, AUDIO_RATE / 2, VOICE_BOOM_HZ, VOICE_BOOM_Q, VOICE_BOOM_DB);
+    high_shelf_init(&voice_treble, AUDIO_RATE / 2, VOICE_TREBLE_HZ, VOICE_TREBLE_DB);
+    int16_t *up = heap_caps_malloc(frames * sizeof(int16_t), MALLOC_CAP_INTERNAL);
+    assert(up);
+    bool odd = false;
+#endif
+#if AUDIO_CAPTURE
+    capture_ring = heap_caps_malloc(CAPTURE_RING_PAIRS * sizeof(*capture_ring), MALLOC_CAP_SPIRAM);
+    assert(capture_ring);
+    xTaskCreatePinnedToCore(capture_task, "capture", 4096, NULL, 2, NULL, 0);
+#endif
+#if AUDIO_DEBUG
+    double sq_in = 0, sq_ref = 0, sq_out = 0;
+    uint32_t n_in = 0, n_out = 0;
+    int64_t busy_us = 0;
+    int64_t aec_us = 0;
+    int64_t window_start = esp_timer_get_time();
+#endif
+
     while (1)
     {
-        if (esp_codec_dev_read(mic_dev, raw, frames * 2 * sizeof(int16_t)) != ESP_CODEC_DEV_OK)
+        if (esp_codec_dev_read(mic_dev, raw, frames * AUDIO_SLOTS * sizeof(int16_t)) != ESP_CODEC_DEV_OK)
         {
             rcat_hal_delay_ms(AUDIO_BLOCK_MS);
             continue;
         }
+#if AUDIO_DEBUG
+        int64_t t0 = esp_timer_get_time();
+        float block_in = 0, block_ref = 0, block_out = 0;
+#endif
         for (size_t i = 0; i < frames; i++)
         {
-            samples[i] = (int16_t)(((int32_t)raw[2 * i] + raw[2 * i + 1]) / 2);
+            const int16_t *f = &raw[AUDIO_SLOTS * i];
+            samples[i] = (int16_t)(((int32_t)f[SLOT_MIC1] + f[SLOT_MIC2]) / 2);
+#if AUDIO_DEBUG
+            block_in += (float)samples[i] * samples[i];
+            block_ref += (float)f[SLOT_REF] * f[SLOT_REF];
+#endif
         }
-        audio_cb(samples, frames, audio_cb_user_data);
+#if !AEC_ENABLED
+        deliver(samples, frames);
+#else
+        size_t n = 0;
+        for (size_t i = 0; i < frames; i++)
+        {
+            half_fir_push(&mic_down, samples[i]);
+            half_fir_push(&ref_down, raw[AUDIO_SLOTS * i + SLOT_REF]);
+#if AUDIO_CAPTURE == 2
+            half_fir_push(&mic1_down, raw[AUDIO_SLOTS * i + SLOT_MIC1]);
+            half_fir_push(&mic2_down, raw[AUDIO_SLOTS * i + SLOT_MIC2]);
+#endif
+            odd = !odd;
+            if (odd)
+            {
+                continue;
+            }
+            float m = half_fir_out(&mic_down);
+            float r = half_fir_out(&ref_down);
+#if AUDIO_CAPTURE == 2
+            capture_push(half_fir_out(&mic1_down), half_fir_out(&mic2_down));
+#elif AUDIO_CAPTURE
+            capture_push(m, r);
+#endif
+            float e = aec_sample(&aec, m / 32768.0f, r / 32768.0f) * 32768.0f;
+            e = biquad(&feedback_cut, e);
+            e = biquad(&voice_treble, biquad(&voice_boom, e));
+            float ua, ub;
+            up_fir(&out_up, e, &ua, &ub);
+            up[n++] = clamp16(ua);
+            up[n++] = clamp16(ub);
+        }
+#if AUDIO_DEBUG
+        for (size_t k = 0; k < n; k++)
+        {
+            block_out += (float)up[k] * up[k];
+        }
+        n_out += n;
+#endif
+#if AUDIO_DEBUG
+        aec_us += esp_timer_get_time() - t0;    // mixing, halving, cancelling and doubling
+#endif
+        deliver(up, n);
+#endif
+#if AUDIO_DEBUG
+        sq_in += block_in;
+        sq_ref += block_ref;
+        sq_out += block_out;
+        n_in += frames;
+        int64_t now = esp_timer_get_time();
+        busy_us += now - t0;
+        if (n_in >= AUDIO_RATE)
+        {
+            float mic_db = 20 * log10f(sqrtf(sq_in / n_in) / 32768 + 1e-9f);
+            float ref_db = 20 * log10f(sqrtf(sq_ref / n_in) / 32768 + 1e-9f);
+            float out_db = 20 * log10f(sqrtf(sq_out / (n_out ? n_out : 1)) / 32768 + 1e-9f);
+            printf("mics %6.1f dB  speaker %6.1f dB  after AEC %6.1f dB  audio task %4.1f%%, AEC %4.1f%%",
+                   mic_db, ref_db, out_db, 100.0f * busy_us / (now - window_start),
+                   100.0f * aec_us / (now - window_start));
+            // While the speaker's playing and you're quiet, how loud it is in
+            // the microphones, against its own signal: the lower, the louder
+            // the voice effect can go
+            if (ref_db > -60)
+            {
+                printf("  |  pickup %+5.1f dB, after AEC %+5.1f dB", mic_db - ref_db, out_db - ref_db);
+            }
+            printf("\n");
+            sq_in = sq_ref = sq_out = 0;
+            n_in = n_out = 0;
+            busy_us = 0;
+            aec_us = 0;
+            window_start = now;
+        }
+#endif
     }
 }
 
@@ -500,7 +936,10 @@ static size_t resample(const int16_t *in, size_t count, uint32_t in_rate, int16_
         while (phase < 1.0f && n < max_frames)
         {
             int16_t s = (int16_t)(last + (next - last) * phase);
-            out[2 * n] = out[2 * n + 1] = s;
+            for (int k = 0; k < AUDIO_SLOTS; k++)
+            {
+                out[AUDIO_SLOTS * n + k] = s;
+            }
             n++;
             phase += step;
         }
@@ -521,7 +960,7 @@ static void speaker_task(void *arg)
     int16_t *frames = heap_caps_calloc(SPK_BLOCK_FRAMES * 2, sizeof(int16_t), MALLOC_CAP_INTERNAL);
     int16_t *mono = heap_caps_calloc(SPK_BLOCK_FRAMES, sizeof(int16_t), MALLOC_CAP_INTERNAL);
     size_t out_max = SPK_BLOCK_FRAMES * SPK_MAX_RATIO;
-    int16_t *out = heap_caps_calloc(out_max * 2, sizeof(int16_t), MALLOC_CAP_INTERNAL);
+    int16_t *out = heap_caps_calloc(out_max * AUDIO_SLOTS, sizeof(int16_t), MALLOC_CAP_INTERNAL);
     assert(frames && mono && out);
 
     uint32_t rate = AUDIO_RATE;
@@ -567,7 +1006,7 @@ static void speaker_task(void *arg)
             mono[i] = (int16_t)(((int32_t)frames[2 * i] + frames[2 * i + 1]) / 2);
         }
         size_t n = resample(mono, count, rate, out, out_max);
-        if (esp_codec_dev_write(spk_dev, out, n * 2 * sizeof(int16_t)) != ESP_CODEC_DEV_OK)
+        if (esp_codec_dev_write(spk_dev, out, n * AUDIO_SLOTS * sizeof(int16_t)) != ESP_CODEC_DEV_OK)
         {
             ESP_LOGW(TAG, "Speaker write failed");
         }

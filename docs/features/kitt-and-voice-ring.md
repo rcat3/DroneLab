@@ -2,7 +2,7 @@
 
 *Boards with a microphone: the ESP32-S3 boards*
 
-The Voice feature shows how loud you're talking.  Its pages, left to right, are KITT, the Voice Ring's settings, the [Voice Effect](voice-effects.md) and the [Voice Lab](voice-lab.md).
+The Voice feature shows how loud you're talking.  Its pages, left to right, are KITT, the Voice Ring's settings, the [Voice Effect](voice-effects.md) and its volume, and the [Voice Lab](voice-lab.md).
 
 ## KITT
 
