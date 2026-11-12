@@ -13,7 +13,6 @@
 //   z_grip       the back of the collar's grip, where the posts end. The
 //                thread starts here, so this is where the front of the
 //                voice port's rim ends up.
-//   screw_pilot  hole M2 screws cut their own thread in
 //   screw_clear  M2 clearance hole
 
 collar_r = 34;              // the knurled grip, a little bigger than the body around the display
@@ -25,6 +24,9 @@ gasket_t = 0.5;             // the gap the gasket is squeezed into
 gasket = [20.8, 33.0, 1.0]; // inner and outer radius, thickness
 post_r = 17.7;              // the posts on the back are this far from the center
 post_d = 4.6;               // thick enough that the washer's screws don't split them
+post_pilot = 1.8;           // the washer's screws cut their own thread in this. Wider than the
+                            // housing's screw_pilot, as such a small hole at the end of a post
+                            // prints too tight
 post_angles = [45, 135, 225, 315];
 washer = [15.0, 22.2, 2.0]; // inner and outer radius, thickness
 washer_arc = 130;           // each half spans this many degrees, so it fits through the thread
@@ -38,7 +40,7 @@ module collar_posts()
             difference()
             {
                 cylinder(d = post_d, h = z_back - z_grip + 0.01, $fn = 32);
-                translate([0, 0, -0.01]) cylinder(d = screw_pilot, h = 5, $fn = 16);
+                translate([0, 0, -0.01]) cylinder(d = post_pilot, h = 5, $fn = 16);
             }
 }
 

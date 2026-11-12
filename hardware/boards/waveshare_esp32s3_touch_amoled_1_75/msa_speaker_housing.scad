@@ -125,6 +125,14 @@ screw_head = [4.2, 2.1];    // counterbore for an M2 socket head (3.8 x 2.0): di
 boss_r = 3.2;
 chin_screw_grip = 3.5;      // how much of the chin each of its screws clamps, under the head
 
+/* [Socket marks: which socket is which, seen from the back] */
+socket_marks = true;        // a speaker and a battery engraved in the back plate, beside the
+                            // speaker and battery sockets, which look the same and whose labels
+                            // are hidden under the plate
+mark_size = 6.0;            // how tall each mark is
+mark_depth = 0.6;
+mark_gap = 1.0;             // between a mark and its socket's opening
+
 /* [Collar: the rest of its settings are in turning_collar.scad] */
 collar_r = 35;              // a little bigger than the body, so it can be turned from the sides
 
@@ -296,6 +304,56 @@ module body()
             translate([s[0], s[1], z_back - 1]) cylinder(d = screw_pilot, h = cover_t + 9, $fn = 16);
         at_pod() for (s = chin_screws)
             translate([s[0], s[1], z_pod_back - 1]) cylinder(d = screw_pilot, h = 7, $fn = 16);
+        if (socket_marks)
+            translate([0, 0, plate_back - 1]) linear_extrude(mark_depth + 1) socket_marks_2d();
+    }
+}
+
+// A speaker: the magnet, the cone, and two waves coming off it. Drawn
+// mark_size tall, centered, the way it reads, with lines at least 0.8 mm
+// wide so they print
+module speaker_mark_2d()
+{
+    k = mark_size / 6;
+    scale(k) translate([-3.6, 0])
+    {
+        translate([0, -1.2]) square([1.6, 2.4]);
+        polygon([[1.6, -1.2], [3.6, -3], [3.6, 3], [1.6, 1.2]]);
+        for (r = [1.6, 3.2]) translate([3.6, 0]) intersection()
+        {
+            difference() { circle(r = r + 0.9, $fn = 48); circle(r = r, $fn = 48); }
+            polygon([[0, 0], [8, -5.5], [8, 5.5]]);
+        }
+    }
+}
+
+// A battery: its outline, the terminal on its end, and a plus sign
+module battery_mark_2d()
+{
+    k = mark_size / 6;
+    w = 8.4; h = 4.6; t = 0.8;
+    scale(k) translate([-(w + 1) / 2, 0])
+    {
+        translate([0, -h / 2]) difference() { square([w, h]); translate([t, t]) square([w - 2 * t, h - 2 * t]); }
+        translate([w - 0.01, -1]) square([1.01, 2]);
+        translate([w / 2, 0]) { square([2.6, t], center = true); square([t, 2.6], center = true); }
+    }
+}
+
+// The marks, beside each socket's opening on the side towards the middle of
+// the board. They're cut into the back of the plate, which is seen from the
+// back, so they're mirrored to read the right way round from there, and
+// upright with the pod at the bottom.
+module socket_marks_2d()
+{
+    for (m = [[spk_conn_box, 0], [bat_conn_box, 1]])
+    {
+        b = m[0];
+        rotate(board_rot) translate([b[1][0] + conn_grow + mark_gap + mark_size / 2, box_center(b)[1]])
+            rotate(-board_rot) mirror([1, 0])
+            {
+                if (m[1] == 0) speaker_mark_2d(); else battery_mark_2d();
+            }
     }
 }
 
