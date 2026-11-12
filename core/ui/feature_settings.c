@@ -258,17 +258,12 @@ static void show_log(void)
         [BATTERY_RUN_SHORT] = "Too short to learn from",
         [BATTERY_RUN_NOT_FULL] = "Didn't start full",
         [BATTERY_RUN_NOT_EMPTY] = "Didn't run flat",
-        [BATTERY_RUN_GAUGE] = "",
     };
     char text[160] = "";
     uint8_t runs = settings_get()->battery_curve_runs;
     battery_run_t last = battery_log_last_run();
 
-    if (last == BATTERY_RUN_GAUGE)
-    {
-        strcpy(text, "The power chip gauges\nthe battery\n\n");
-    }
-    else if (runs > 0)
+    if (runs > 0)
     {
         snprintf(text, sizeof(text), "Curve learned from\n%u full run%s\n\n", runs, runs == 1 ? "" : "s");
     }

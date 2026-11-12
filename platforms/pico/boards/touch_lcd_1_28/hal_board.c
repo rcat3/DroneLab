@@ -152,10 +152,10 @@ bool rcat_hal_battery_voltage(float *volts)
     return true;
 }
 
-bool rcat_hal_battery_gauge(uint8_t *percent, bool *charging)
+rcat_charger_t rcat_hal_battery_charger(void)
 {
-    // No fuel gauge, and the charger's status only lights an LED.
-    return false;
+    // The charger's status only lights an LED.
+    return RCAT_CHARGER_UNKNOWN;
 }
 
 // Each model's default discharge curve, from tools/battery_log.py, until the

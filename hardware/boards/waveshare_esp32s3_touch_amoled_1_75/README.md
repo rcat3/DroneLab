@@ -4,7 +4,7 @@ A 3D printable housing that screws the [Waveshare ESP32-S3-Touch-AMOLED-1.75](ht
 
 This README is about the design files.  For the whole build, with the parts to buy, wiring and putting it together, see the [build guide](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md).
 
-**Status: printed and working.**  It's modeled from Waveshare's 3D model and drawing of the board, and its clearance from the mask from a 3D scan, and the first print fits the board and the mask.  The display, touch, microphones, speaker, micro SD card and level all work in it.  The battery gauge is still to be tried over a full charge.
+**Status: printed and working.**  It's modeled from Waveshare's 3D model and drawing of the board, and its clearance from the mask from a 3D scan, and the first print fits the board and the mask.  The display, touch, microphones, speaker, micro SD card and level all work in it.  A 2000 mAh battery runs it for about 13.5 hours.
 
 The board has its own amplifier, speaker socket, microphones and battery charger, so the speaker and the battery plug straight into it.  There are no other boards to wire in.
 

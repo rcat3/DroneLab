@@ -25,7 +25,6 @@ typedef enum
     BATTERY_RUN_SHORT,          // under an hour
     BATTERY_RUN_NOT_FULL,       // the battery wasn't full at the start
     BATTERY_RUN_NOT_EMPTY,      // it was switched off before the battery ran flat
-    BATTERY_RUN_GAUGE,          // the board has a fuel gauge, so needs no curve
 } battery_run_t;
 
 /* Look at the last run, learn from it if it was a complete one, and start

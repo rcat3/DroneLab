@@ -35,10 +35,17 @@ void rcat_hal_backlight_set(uint8_t percent);
  * Returns false if the board can't measure it. */
 bool rcat_hal_battery_voltage(float *volts);
 
-/* Read the board's fuel gauge, if it has one: the charge left in percent, and
- * whether the battery's charging. Returns false if the board has no gauge, in
- * which case the core works the charge out from the voltage. */
-bool rcat_hal_battery_gauge(uint8_t *percent, bool *charging);
+/* What the board's charger is doing. */
+typedef enum
+{
+    RCAT_CHARGER_UNKNOWN,       // the board can't tell
+    RCAT_CHARGER_IDLE,          // running on the battery, or not charging it
+    RCAT_CHARGER_CHARGING,
+    RCAT_CHARGER_FULL,          // it's finished charging the battery
+} rcat_charger_t;
+
+/* Read what the board's charger is doing. */
+rcat_charger_t rcat_hal_battery_charger(void);
 
 /* One point on a battery's discharge curve. */
 typedef struct

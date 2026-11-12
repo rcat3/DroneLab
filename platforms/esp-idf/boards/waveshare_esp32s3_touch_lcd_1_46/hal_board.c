@@ -251,10 +251,10 @@ bool rcat_hal_battery_voltage(float *volts)
     return true;
 }
 
-bool rcat_hal_battery_gauge(uint8_t *percent, bool *charging)
+rcat_charger_t rcat_hal_battery_charger(void)
 {
-    // No fuel gauge
-    return false;
+    // Not read on this board.
+    return RCAT_CHARGER_UNKNOWN;
 }
 
 size_t rcat_hal_battery_curve(const rcat_battery_point_t **points)
