@@ -3,6 +3,7 @@
  * SD card, then a page of sound options. Sound keeps playing in the
  * background while you look at other pages.
  */
+#include <stdio.h>
 #include <string.h>
 
 #include "app/settings.h"
@@ -12,6 +13,9 @@
 // How often the player page catches up with the speaker task (the track
 // changes at the end of each one).
 #define STATUS_UPDATE_MS 250
+// After a seek, the bar stays where it was let go until the speaker task has
+// caught up, rather than jumping back for a moment.
+#define SEEK_SETTLE_MS   600
 
 static bool build(ui_feature_t *feature);
 
@@ -23,6 +27,11 @@ const ui_feature_def_t feature_sound = {
 static lv_obj_t *track_label;
 static lv_obj_t *position_label;
 static lv_obj_t *play_label;
+static lv_obj_t *progress_slider;
+static uint32_t seek_settle_until;
+static uint32_t shown_length;       // the track's length when the bar was last updated, in ms
+static lv_obj_t *elapsed_label;
+static lv_obj_t *remaining_label;
 static lv_obj_t *volume_value_label;
 static lv_obj_t *repeat_label;
 
@@ -54,6 +63,77 @@ static int find_saved_track(void)
 
 /* ----- Player page ----- */
 
+static void format_time(char *text, size_t len, const char *sign, uint32_t ms)
+{
+    uint32_t s = ms / 1000;
+    if (s >= 3600)
+    {
+        snprintf(text, len, "%s%lu:%02lu:%02lu", sign, (unsigned long)(s / 3600), (unsigned long)(s / 60 % 60),
+                 (unsigned long)(s % 60));
+    }
+    else
+    {
+        snprintf(text, len, "%s%lu:%02lu", sign, (unsigned long)(s / 60), (unsigned long)(s % 60));
+    }
+}
+
+static void show_times(uint32_t position, uint32_t length)
+{
+    char text[16];
+    format_time(text, sizeof(text), "", position);
+    lv_label_set_text(elapsed_label, text);
+    if (length > 0)
+    {
+        // Rounded the same way as the time gone, so the two add up.
+        format_time(text, sizeof(text), "-", length / 1000 * 1000 - position / 1000 * 1000);
+        lv_label_set_text(remaining_label, text);
+    }
+    else
+    {
+        lv_label_set_text(remaining_label, "");
+    }
+}
+
+static void show_progress(void)
+{
+    // Leave the bar alone while it's being dragged, and just after
+    if (lv_slider_is_dragged(progress_slider) || (int32_t)(lv_tick_get() - seek_settle_until) < 0)
+    {
+        return;
+    }
+    uint32_t position, length;
+    audio_player_progress(&position, &length);
+    show_times(position, length);
+    shown_length = length;
+    lv_slider_set_value(progress_slider, length > 0 ? (int32_t)((uint64_t)position * 1000 / length) : 0,
+                        LV_ANIM_OFF);
+    // It can only be dragged once the track's length is known
+    lv_obj_set_clickable(progress_slider, length > 0);
+}
+
+static uint32_t slider_position(void)
+{
+    return (uint32_t)((uint64_t)lv_slider_get_value(progress_slider) * shown_length / 1000);
+}
+
+/* While it's dragged, the times show where it'll go */
+static void seek_drag_event_cb(lv_event_t *e)
+{
+    if (shown_length > 0)
+    {
+        show_times(slider_position(), shown_length);
+    }
+}
+
+static void seek_release_event_cb(lv_event_t *e)
+{
+    if (shown_length > 0)
+    {
+        audio_player_seek(slider_position());
+        seek_settle_until = lv_tick_get() + SEEK_SETTLE_MS;
+    }
+}
+
 static void show_status(void)
 {
     size_t index = audio_player_current();
@@ -66,6 +146,7 @@ static void show_status(void)
         settings_set_sound_track(name);
     }
     lv_label_set_text(play_label, audio_player_is_playing() ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+    show_progress();
 }
 
 static void status_timer_cb(lv_timer_t *t)
@@ -107,7 +188,7 @@ static lv_obj_t *add_button(lv_obj_t *page, const char *symbol, int32_t size, in
     lv_obj_t *button = lv_button_create(page);
     lv_obj_set_size(button, ui_px(size), ui_px(size));
     lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-    lv_obj_align(button, LV_ALIGN_CENTER, ui_px(x), ui_px(20));
+    lv_obj_align(button, LV_ALIGN_CENTER, ui_px(x), ui_px(50));
 
     lv_obj_t *label = lv_label_create(button);
     lv_label_set_text(label, symbol);
@@ -139,12 +220,12 @@ static void add_player_page(ui_feature_t *feature)
     lv_label_set_long_mode(track_label, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
     lv_obj_set_width(track_label, ui_px(170));
     lv_obj_set_style_text_align(track_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(track_label, LV_ALIGN_CENTER, 0, ui_px(-42));
+    lv_obj_align(track_label, LV_ALIGN_CENTER, 0, ui_px(-56));
 
     position_label = lv_label_create(page);
     lv_label_set_text(position_label, "");
     lv_obj_set_style_text_color(position_label, lv_palette_main(LV_PALETTE_GREY), 0);
-    lv_obj_align(position_label, LV_ALIGN_CENTER, 0, ui_px(-18));
+    lv_obj_align(position_label, LV_ALIGN_CENTER, 0, ui_px(-32));
 
     lv_obj_t *prev = add_button(page, LV_SYMBOL_PREV, 44, -62);
     lv_obj_add_event_cb(prev, skip_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)-1);
@@ -155,6 +236,30 @@ static void add_player_page(ui_feature_t *feature)
 
     lv_obj_t *next = add_button(page, LV_SYMBOL_NEXT, 44, 62);
     lv_obj_add_event_cb(next, skip_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)1);
+
+    // How far through the track it is, in the middle, with the time gone on
+    // the left and the time left on the right. Dragging it moves through the
+    // track. It's thin, but takes touches well above and below.
+    progress_slider = lv_slider_create(page);
+    lv_obj_set_size(progress_slider, ui_px(96), ui_px(6));
+    lv_slider_set_range(progress_slider, 0, 1000);
+    lv_obj_align(progress_slider, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_ext_click_area(progress_slider, ui_px(16));
+    lv_obj_set_style_pad_all(progress_slider, ui_px(4), LV_PART_KNOB);
+    lv_obj_add_event_cb(progress_slider, seek_drag_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(progress_slider, seek_release_event_cb, LV_EVENT_RELEASED, NULL);
+
+    elapsed_label = lv_label_create(page);
+    lv_obj_set_width(elapsed_label, ui_px(48));
+    lv_obj_set_style_text_align(elapsed_label, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_color(elapsed_label, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_align_to(elapsed_label, progress_slider, LV_ALIGN_OUT_LEFT_MID, ui_px(-8), 0);
+
+    remaining_label = lv_label_create(page);
+    lv_obj_set_width(remaining_label, ui_px(48));
+    lv_obj_set_style_text_align(remaining_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_color(remaining_label, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_align_to(remaining_label, progress_slider, LV_ALIGN_OUT_RIGHT_MID, ui_px(8), 0);
 
     show_status();
     lv_timer_create(status_timer_cb, STATUS_UPDATE_MS, NULL);
