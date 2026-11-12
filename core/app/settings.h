@@ -5,6 +5,7 @@
 
 #define SETTINGS_DEFAULT_BRIGHTNESS 50
 #define SETTINGS_DEFAULT_VOLUME     50
+#define SETTINGS_DEFAULT_VOICE_VOLUME 50
 #define SETTINGS_NAME_LEN           24
 #define SETTINGS_REMOTE_LEN         16
 #define SETTINGS_CURVE_POINTS       21      // 100%, 95% ... 0%
@@ -34,6 +35,7 @@ typedef struct
     uint16_t battery_curve_mv[SETTINGS_CURVE_POINTS];  // the learned discharge curve, highest first
     uint8_t battery_curve_runs;             // how many runs it's learned from, 0 for none
     uint32_t battery_curve_last_run;        // the battery log session it last learned from
+    uint8_t voice_volume;                   // the voice effect on the speaker, percent
 } settings_t;
 
 /* Load the saved settings, or the defaults if nothing valid has been saved. */
@@ -53,6 +55,7 @@ void settings_set_sound_repeat(uint8_t repeat);
 void settings_set_sound_autoplay(uint8_t enabled);
 void settings_set_sound_track(const char *name);
 void settings_set_voice_effect(uint8_t preset);
+void settings_set_voice_volume(uint8_t percent);
 void settings_set_lovense_release_to_zero(uint8_t enabled);
 void settings_set_remote(const char *ssid, const char *password);
 void settings_set_terminal_size(uint8_t size);

@@ -712,19 +712,20 @@ static void run_chain(float *x, int n)
 // Written by the microphone's task, read by the speaker's task.
 #define SPEAKER_BUF     2048                // a power of two
 #define SPEAKER_MAX_LAG (FS * 30 / 1000)    // drop anything older than 30 ms
-#define SPEAKER_GAIN    3.0f                // about 10 dB louder, with a limiter
 static int16_t speaker_buf[SPEAKER_BUF];
 static uint32_t speaker_write;
 static uint32_t speaker_read;
 static volatile bool speaker_on;
+static volatile float speaker_gain = 3.16f;    // set by voice_fx_set_volume
 
 static void speaker_push(const float *x, int n)
 {
     uint32_t w = speaker_write;
+    float gain = speaker_gain;
     for (int i = 0; i < n; i++)
     {
         // tanh rounds off peaks instead of clipping them.
-        speaker_buf[w++ & (SPEAKER_BUF - 1)] = (int16_t)(tanhf(x[i] * SPEAKER_GAIN) * 32767.0f);
+        speaker_buf[w++ & (SPEAKER_BUF - 1)] = (int16_t)(tanhf(x[i] * gain) * 32767.0f);
     }
     __atomic_store_n(&speaker_write, w, __ATOMIC_RELEASE);
 }
@@ -890,6 +891,11 @@ void voice_fx_set_speaker(bool on)
         speaker_read = __atomic_load_n(&speaker_write, __ATOMIC_ACQUIRE);
     }
     speaker_on = on;
+}
+
+void voice_fx_set_volume(uint8_t percent)
+{
+    speaker_gain = percent == 0 ? 0.0f : powf(10.0f, (10.0f + (percent - 50) * 0.5f) / 20.0f);
 }
 
 bool voice_fx_speaker_on(void)
