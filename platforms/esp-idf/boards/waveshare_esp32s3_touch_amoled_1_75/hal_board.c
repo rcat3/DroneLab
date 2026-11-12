@@ -75,9 +75,8 @@ static const char *TAG = "board";
 #define AXP_REG_STATUS2     0x01
 #define AXP_STATUS2_DIR_SHIFT 5     // the battery current's direction, 2 bits
 #define AXP_DIR_CHARGING    1
-#define AXP_REG_GAUGE_CTRL  0x18
-#define AXP_GAUGE_ENABLE    0x08
-#define AXP_REG_PERCENT     0xA4    // the fuel gauge's charge, in percent
+#define AXP_STATUS2_CHG_MASK 0x07   // the charger's stage
+#define AXP_CHG_DONE        4
 #define AXP_REG_COMMON      0x10
 #define AXP_COMMON_PWROFF   0x01
 #define AXP_REG_ADC_ENABLE  0x30
@@ -316,23 +315,43 @@ bool rcat_hal_battery_voltage(float *volts)
     return true;
 }
 
-bool rcat_hal_battery_gauge(uint8_t *percent, bool *charging)
+rcat_charger_t rcat_hal_battery_charger(void)
 {
     uint8_t status[2];
-    if (!axp_read(AXP_REG_STATUS1, status, sizeof(status)) || !(status[0] & AXP_STATUS1_BATTERY)
-        || !axp_read(AXP_REG_PERCENT, percent, 1) || *percent > 100)
+    if (!axp_read(AXP_REG_STATUS1, status, sizeof(status)) || !(status[0] & AXP_STATUS1_BATTERY))
     {
-        return false;
+        return RCAT_CHARGER_UNKNOWN;
     }
-    *charging = ((status[1] >> AXP_STATUS2_DIR_SHIFT) & 0x03) == AXP_DIR_CHARGING;
-    return true;
+    if ((status[1] & AXP_STATUS2_CHG_MASK) == AXP_CHG_DONE)
+    {
+        return RCAT_CHARGER_FULL;
+    }
+    if (((status[1] >> AXP_STATUS2_DIR_SHIFT) & 0x03) == AXP_DIR_CHARGING)
+    {
+        return RCAT_CHARGER_CHARGING;
+    }
+    return RCAT_CHARGER_IDLE;
 }
+
+// The model's default discharge curve, from tools/battery_log.py, until the
+// board learns its own (see core/app/battery_log.h). The power chip has a
+// fuel gauge too, but without a profile for the battery it read up to 15%
+// high mid-run, and 0% half an hour before the end, so the voltage is used.
+// 2026-11-12: 13 h 36 min on a 2000 mAh battery, from full until the power
+// chip switched off at 2.9 V.
+static const rcat_battery_point_t bat_curve[] = {
+    { 4.089f, 100 }, { 4.042f, 95 }, { 4.025f, 90 }, { 4.006f, 85 }, { 3.998f, 80 },
+    { 3.984f, 75 }, { 3.950f, 70 }, { 3.901f, 65 }, { 3.857f, 60 }, { 3.835f, 55 },
+    { 3.820f, 50 }, { 3.802f, 45 }, { 3.777f, 40 }, { 3.741f, 35 }, { 3.686f, 30 },
+    { 3.609f, 25 }, { 3.551f, 20 }, { 3.491f, 15 }, { 3.432f, 10 }, { 3.347f, 5 },
+    { 2.895f, 0 },
+};
+#define BAT_CURVE_POINTS (sizeof(bat_curve) / sizeof(bat_curve[0]))
 
 size_t rcat_hal_battery_curve(const rcat_battery_point_t **points)
 {
-    // Not measured yet: the core uses a typical LiPo's.
-    *points = NULL;
-    return 0;
+    *points = bat_curve;
+    return BAT_CURVE_POINTS;
 }
 
 bool rcat_hal_accel_read(float *x, float *y, float *z)
@@ -1130,7 +1149,7 @@ static void power_init(void)
 
     // DCDC1 is the board's 3.3 V and ALDO1 the codecs' analog 3.3 V. The
     // AXP2101 starts both, but make sure of ALDO1, the battery voltage
-    // measurement and the fuel gauge, and set up the charger.
+    // measurement, and set up the charger.
     uint8_t was[3] = {0};
     axp_read(AXP_REG_INPUT_LIMIT, &was[0], 1);
     axp_read(AXP_REG_CHARGE_CUR, &was[1], 1);
@@ -1138,7 +1157,6 @@ static void power_init(void)
     bool ok = axp_write(AXP_REG_ALDO1_V, AXP_ALDO1_3V3)
               && axp_set_bits(AXP_REG_LDO_ONOFF0, AXP_LDO_ALDO1)
               && axp_set_bits(AXP_REG_ADC_ENABLE, AXP_ADC_VBAT)
-              && axp_set_bits(AXP_REG_GAUGE_CTRL, AXP_GAUGE_ENABLE)
               && axp_update(AXP_REG_INPUT_LIMIT, 0x07, AXP_INPUT_LIMIT)
               && axp_update(AXP_REG_CHARGE_CUR, 0x1F, AXP_CHARGE_CUR)
               && axp_update(AXP_REG_CHARGE_VOLT, 0x07, AXP_CHARGE_VOLT);

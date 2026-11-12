@@ -10,7 +10,7 @@ Settings are saved about two seconds after you change them, and are restored whe
 
 How bright the screen is, with the battery's charge above it, in percent and volts, and how long the display's been on since it was last switched on or restarted.  On the ESP32-S3-Touch-AMOLED-1.75, which has no backlight, the screen dims itself.
 
-The ESP32-S3-Touch-AMOLED-1.75's power chip has its own fuel gauge, which gives the percentage and shows a lightning bolt while it's charging.  The other boards work the percentage out from the voltage, along a discharge curve the board learns for itself (see [Battery Log](#battery-log) below), so it reads high while USB is plugged in and charging, and settles back once it's unplugged.  The voltage is smoothed over about 10 seconds, so the percentage doesn't jump around as the screen's brightness or the speaker changes how much the board draws.
+The percentage is worked out from the voltage, along a discharge curve the board learns for itself (see [Battery Log](#battery-log) below), so it reads high while USB is plugged in and charging, and settles back once it's unplugged.  On the ESP32-S3-Touch-AMOLED-1.75, the power chip also says when it's charging, and a lightning bolt shows then; the percentage stays at 99% or below until the charger finishes, and then shows 100%.  That power chip has a fuel gauge too, but it isn't used: without a profile for the battery it read up to 15% high halfway through a run, and reached 0% half an hour before the board switched off.  The voltage is smoothed over about 10 seconds, so the percentage doesn't jump around as the screen's brightness or the speaker changes how much the board draws.
 
 ## Rotation
 
@@ -22,7 +22,7 @@ What's shown when the display turns on: any image (see [Images](images.md)), the
 
 ## Battery Log
 
-The boards without a fuel gauge learn how their battery's voltage falls as it runs down, so the percentage on the Brightness page is right for that board and its battery.  Every board reads its voltage a little differently, and every battery is a little different, so a curve measured on one board can be out by 10-20% on another.
+The boards learn how their battery's voltage falls as it runs down, so the percentage on the Brightness page is right for that board and its battery.  Every board reads its voltage a little differently, and every battery is a little different, so a curve measured on one board can be out by 10-20% on another.
 
 The board records the battery's voltage once a minute, all the time it's on.  When it starts up, it looks back at the last run, and learns from it if that was a complete one:
 

@@ -1,9 +1,9 @@
 /*
  * The battery's charge, for showing to the user.
  *
- * Boards with a fuel gauge report it themselves. On the others it's worked
- * out from the voltage, along the discharge curve the board's learned (see
- * app/battery_log.h), or until then its model's, smoothed so it doesn't jump around as the load changes.
+ * It's worked out from the voltage, along the discharge curve the board's
+ * learned (see app/battery_log.h), or until then its model's, smoothed so it
+ * doesn't jump around as the load changes.
  */
 #ifndef RCAT_BATTERY_H
 #define RCAT_BATTERY_H
@@ -18,7 +18,7 @@ typedef struct
 {
     float volts;            // smoothed
     uint8_t percent;        // 0-100
-    bool charging;          // only known on boards with a fuel gauge
+    bool charging;          // only known on boards that can read their charger
     bool charging_known;
 } battery_status_t;
 

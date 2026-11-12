@@ -15,7 +15,7 @@
 #define KEEP_LAST       10              // entries before the last run's log is overwritten
 
 #define FLAG_CHARGING   0x01
-#define FLAG_GAUGE      0x02            // gauge holds the fuel gauge's percent
+#define FLAG_GAUGE      0x02            // gauge holds a fuel gauge's percent (no longer written)
 
 // What makes a run complete, to learn from. Kept the same as the run that
 // tools/battery_log.py finds.
@@ -33,7 +33,7 @@
 typedef struct
 {
     uint16_t millivolts;    // 0xFFFF where nothing's been written
-    uint8_t gauge;
+    uint8_t gauge;          // 0: no board records a fuel gauge now
     uint8_t flags;
 } entry_t;
 
@@ -62,9 +62,7 @@ static bool available;
 static lv_timer_t *timer;
 
 static float volt_sum;
-static uint32_t gauge_sum;
 static uint32_t samples;
-static uint32_t gauge_samples;
 static bool charging;
 
 static uint32_t last_seconds;
@@ -89,12 +87,6 @@ static uint16_t default_mv(uint8_t percent)
 
 static battery_run_t learn(const entry_t *e, uint16_t n, uint16_t interval, uint32_t session)
 {
-    uint8_t percent;
-    bool gauge_charging;
-    if (rcat_hal_battery_gauge(&percent, &gauge_charging))
-    {
-        return BATTERY_RUN_GAUGE;
-    }
     if (n < 2)
     {
         return n == 0 ? BATTERY_RUN_NONE : BATTERY_RUN_SHORT;
@@ -247,7 +239,7 @@ static void halve(void)
         const entry_t *b = &log_data.entries[2 * i + 1];
         entry_t e = {
             .millivolts = (uint16_t)((a->millivolts + b->millivolts + 1) / 2),
-            .gauge = (uint8_t)((a->gauge + b->gauge + 1) / 2),
+            .gauge = 0,
             .flags = a->flags | b->flags,
         };
         log_data.entries[i] = e;
@@ -270,11 +262,6 @@ static void add_entry(void)
         .gauge = 0,
         .flags = charging ? FLAG_CHARGING : 0,
     };
-    if (gauge_samples > 0)
-    {
-        e.gauge = (uint8_t)((gauge_sum + gauge_samples / 2) / gauge_samples);
-        e.flags |= FLAG_GAUGE;
-    }
     log_data.entries[count++] = e;
 
     if (!in_flash)
@@ -306,22 +293,13 @@ static void timer_cb(lv_timer_t *t)
         volt_sum += volts;
         samples++;
     }
-    uint8_t percent;
-    bool now_charging;
-    if (rcat_hal_battery_gauge(&percent, &now_charging))
-    {
-        gauge_sum += percent;
-        gauge_samples++;
-        charging |= now_charging;
-    }
+    charging |= rcat_hal_battery_charger() == RCAT_CHARGER_CHARGING;
 
     if (samples > 0 && samples * SAMPLE_MS >= (uint32_t)log_data.header.interval * 1000)
     {
         add_entry();
         volt_sum = 0;
-        gauge_sum = 0;
         samples = 0;
-        gauge_samples = 0;
         charging = false;
     }
 }

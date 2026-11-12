@@ -9,6 +9,9 @@
 // a second, it follows a change over about 10 seconds.
 #define SMOOTHING 0.1f
 
+// The most it shows while the charger's still going.
+#define CHARGING_MAX_PERCENT 99
+
 // A typical LiPo cell, at a light load, highest first, for boards that haven't
 // had theirs measured. Between the points, it's a straight line.
 static const rcat_battery_point_t typical_curve[] = {
@@ -91,19 +94,19 @@ bool battery_update(battery_status_t *status)
     }
     status->volts = smoothed;
 
-    uint8_t percent;
-    bool charging;
-    if (rcat_hal_battery_gauge(&percent, &charging))
+    status->percent = battery_percent_from_volts(smoothed);
+    rcat_charger_t charger = rcat_hal_battery_charger();
+    status->charging = charger == RCAT_CHARGER_CHARGING;
+    status->charging_known = charger != RCAT_CHARGER_UNKNOWN;
+    if (charger == RCAT_CHARGER_FULL)
     {
-        status->percent = percent > 100 ? 100 : percent;
-        status->charging = charging;
-        status->charging_known = true;
+        status->percent = 100;
     }
-    else
+    else if (status->charging && status->percent > CHARGING_MAX_PERCENT)
     {
-        status->percent = battery_percent_from_volts(smoothed);
-        status->charging = false;
-        status->charging_known = false;
+        // Charging holds the voltage up, at the top for the last part of the
+        // charge, so only the charger can say when it's full.
+        status->percent = CHARGING_MAX_PERCENT;
     }
     return true;
 }
