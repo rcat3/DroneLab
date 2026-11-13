@@ -27,7 +27,7 @@ typedef struct
     uint8_t sound_repeat;                   // audio_repeat_t
     uint8_t sound_autoplay;                 // 1 to start playing at startup
     char sound_track[SETTINGS_NAME_LEN];    // file name of the last track played
-    uint8_t voice_effect;                   // voice effect preset, 0 for off
+    uint8_t voice_effect;                   // voice effect preset, 0 for your natural voice
     uint8_t lovense_release_to_zero;        // 1 to set a Lovense motor back to 0 when its ring is let go
     char remote_ssid[SETTINGS_REMOTE_LEN];      // the phone remote's hotspot; empty until it's first used
     char remote_password[SETTINGS_REMOTE_LEN];

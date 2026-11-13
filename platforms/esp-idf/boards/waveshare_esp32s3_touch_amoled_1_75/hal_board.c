@@ -112,7 +112,8 @@ static const char *TAG = "board";
 #define PIN_I2S_DIN         10      // from the ES7210
 #define PIN_PA_EN           46      // the NS4150B amplifier, on while high
 #define AUDIO_DEBUG         0       // 1 prints the levels, echo cancelling and CPU use every second
-#define AUDIO_CAPTURE       0       // 1 streams the microphones and the speaker's sound, at 16 kHz, over USB; 2 MIC1 and MIC2
+#define AUDIO_CAPTURE       0       // 1 streams the microphones and the speaker's sound, at 16 kHz, over USB; 2 MIC1 and MIC2;
+                                    // 3 the microphones after echo cancelling and EQ (what the voice effect gets), and the speaker's sound
 #define AUDIO_SLOTS         4       // TDM: MIC1, MIC2, MIC3 (the speaker's sound) and MIC4
 #define REF_GAIN_DB         24.0f   // MIC3, the speaker's sound
 // The slots, in the order the ES7210 sends them in TDM
@@ -870,12 +871,15 @@ static void audio_task(void *arg)
             float r = half_fir_out(&ref_down);
 #if AUDIO_CAPTURE == 2
             capture_push(half_fir_out(&mic1_down), half_fir_out(&mic2_down));
-#elif AUDIO_CAPTURE
+#elif AUDIO_CAPTURE == 1
             capture_push(m, r);
 #endif
             float e = aec_sample(&aec, m / 32768.0f, r / 32768.0f) * 32768.0f;
             e = biquad(&feedback_cut, e);
             e = biquad(&voice_treble, biquad(&voice_boom, e));
+#if AUDIO_CAPTURE == 3
+            capture_push(e, r);
+#endif
             float ua, ub;
             up_fir(&out_up, e, &ua, &ub);
             up[n++] = clamp16(ua);
