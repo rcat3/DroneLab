@@ -4,7 +4,7 @@ A 3D printable housing that screws the [Waveshare ESP32-S3-Touch-AMOLED-1.75](ht
 
 This README is about the design files.  For the whole build, with the parts to buy, wiring and putting it together, see the [build guide](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md).
 
-**Status: printed and working.**  It's modeled from Waveshare's 3D model and drawing of the board, and its clearance from the mask from a 3D scan, and the first print fits the board and the mask.  The display, touch, microphones, speaker, micro SD card and level all work in it.  A 2000 mAh battery runs it for about 13.5 hours.
+**Status: printed and working.**  It's modeled from Waveshare's 3D model and drawing of the board, and its clearance from the mask from a 3D scan, and the first print fits the board and the mask.  The display, touch, microphones, speaker, micro SD card and level all work in it.  A 2000 mAh battery runs it for about 13.5 hours.  Since that print, the battery stands upright and the microphones have a sealed cell of their own (`mic_cell`), which hasn't been printed yet.
 
 The board has its own amplifier, speaker socket, microphones and battery charger, so the speaker and the battery plug straight into it.  There are no other boards to wire in.
 
@@ -13,9 +13,10 @@ The board has its own amplifier, speaker socket, microphones and battery charger
 - The board sits in a cup at the front, with its glass flush with the front, and screws to the cup's back plate with three M2 countersunk screws (about M2 x 5) into the standoffs on its back.
 - It's turned a quarter turn from its usual way up, so its USB-C port faces right, out through the side of the housing.  The port is in a pocket in the side, only about 3 mm behind the pocket's floor, so any cable's plug reaches it, not just the slimmest.  Its side buttons and micro SD slot are on the left, and its pin header is at the top.  Set Rotation to 90 degrees in the settings to match.
 - The speaker sits in a shallow pod below the display.  Right below the voice port is the mask's filter mount, so the pod is only as deep as the speaker needs, and the **chin** behind it slopes back to the body, over the mount.  From the scan, the chin clears the mount by about 4.7 mm at its closest, at the mount's top edge, and the pod by about 8 mm.
-- The speaker goes in from the back of the pod before the chin goes on, and the adhesive frame on its front sticks it to the grille.  Its wire comes out of a notch in the middle of either short side of the pocket, and runs in a 2 mm gap behind it to the pocket's inner end, where an opening 12 mm wide lets its plug through into the chamber, to the board's speaker socket.
-- The chamber behind the board holds a 2000 mAh battery, taped to the back.  The board's speaker and battery sockets stand up off the back of the board, and their plugs go in through openings in the back plate, from the chamber.  The two sockets look the same, and the plate hides their labels, so a speaker and a battery are engraved in the plate beside them (`socket_marks`).
-- The microphones are on the back of the board and listen backwards.  They hear through holes in the back plate, across the gap in front of the battery, and through an opening in the back into the voice port.
+- The speaker goes in from the back of the pod before the chin goes on, and the adhesive frame on its front sticks it to the grille.  Its wire comes out of a notch in the middle of either short side of the pocket, and runs in a 2 mm gap behind it to the pocket's inner end, where an opening 7 mm wide lets its plug through into the chamber, to the board's speaker socket.  That end of the pocket reaches over the chamber's edge, and a 1.6 mm floor (`pocket_floor`) closes it off, so the opening is the only way through.  Plasticine seals the opening around the wire, and fills the gap behind the speaker, so less of the speaker reaches the microphones.
+- The chamber behind the board holds a 2000 mAh battery, standing upright and taped to the back.  The back's four screws are either side of it.  The board's speaker and battery sockets stand up off the back of the board, and their plugs go in through openings in the back plate, from the chamber.  The two sockets look the same, and the plate hides their labels, so a speaker and a battery are engraved in the plate beside them (`socket_marks`).
+- The microphones are on the back of the board, near its USB-C edge, and listen backwards, so in the housing they're on the right.  They have a cell of their own (`mic_cell`): the strip of the chamber beside the battery, walled off from the rest of it by ribs on the back plate, and closed by the battery's side.  The voice port opens straight into it, through an opening in the back beside the battery.  The sockets, their plugs and the speaker's wire are all on the other side of the ribs.  In front of the battery, the ribs stop 0.5 mm short of it, for foam tape that seals them against it.
+- The board sits on its standoffs 3.5 mm in front of the back plate, so the gap behind it reaches the USB-C and micro SD openings, and the sockets' openings into the chamber.  A sleeve around each microphone's hole reaches up to 1.5 mm short of the board, and a small foam ring on it seals it against the board, so the microphones hear the cell and nothing else.
 - The voice port thread is on a collar that turns freely on the back, so the housing can be held level while the collar is screwed in.  It's the same collar as the 1.46" speaker housing's, from [`../../masks/msa_millennium`](../../masks/msa_millennium/).
 
 ## Files
@@ -30,15 +31,15 @@ Run `./render.sh` in this folder to render all of the housing's parts to the `st
 
 **Materials:** print the `gasket` and the `usb_plug` in TPU.  Everything else is PLA or PLA+.
 
-- **`body`** - The display cup and the speaker pod.  Like the 1.46" body, it'll probably print best standing on one of its sides with tree supports.
+- **`body`** - The display cup and the speaker pod.  Like the 1.46" body, it'll probably print best standing on one of its sides with tree supports.  The microphone cell's ribs hang off the back plate in front of the battery, so they need supports too.
 - **`chin`** - Closes the back of the pod and slopes back to the body.  It prints on the flat face that meets the pod, with no supports.
 - **`back`** - Closes the chamber, with the posts the collar turns on.  Use 4 or more walls so the posts are solid.
 - **`collar`**, **`washer`** and **`gasket`** - The turning collar, as on the 1.46" speaker housing.  The gasket is TPU, or cut from 1 mm rubber or craft foam.
-- **`plungers`** - Two pins that press the board's side buttons through the wall.
+- **`plungers`** - Two pins that press the board's side buttons through the wall.  Behind each one, a small mark is engraved in the side wall (`button_marks`): a power symbol for PWR, the lower one, nearer the pod, and a download arrow for BOOT, which is held down to flash the board.
 - **`usb_plug`** - Covers the USB-C port when it's not in use, flush with the outside of the housing.  A tongue on its back pushes into the slot for the plug, and the notch at its top edge is for a fingernail to pull it out.  It's a tight push fit, best printed in TPU.  In PLA or PETG, loosen it with the second number in `usb_tongue` if it's too tight.
 ### Test prints
 
-This housing hasn't been printed yet, so these are worth printing first (`./render.sh tests`):
+These are worth printing first on a new printer (`./render.sh tests`):
 
 - **`pod_test`** - The pod on its own, to check the speaker's fit and hear how it sounds.
 - **`lens_fit`** - The front 3 mm of the body around the display.  The glass should drop in with a little play, but not rattle.  Adjust `clearance` if it doesn't.
@@ -62,6 +63,7 @@ These come from the 3D model, not from a print, so check them with test prints:
 - The glass's fit in the cup (`clearance`), with `lens_fit`.
 - That the micro SD card lines up with its slot.  If it doesn't, move the slot with `sd_shift`.  The 1.46" board's slot needed moving by 1 to 1.5 mm.
 - That the speaker and battery plugs go into their sockets from behind, as the model suggests.  If the sockets turn out to face sideways, the openings in the back plate need to be bigger.
+- That nothing on the back of the board, beside each microphone, gets in the way of its sleeve (`mic_sleeve`): 4 mm across, around the microphone's hole, and reaching to 1.5 mm short of the board.  Each microphone is a small part about 1 mm tall, and the foam ring takes up the rest.
 
 ## Parts to buy, wiring and putting it together
 
