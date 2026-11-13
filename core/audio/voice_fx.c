@@ -12,6 +12,8 @@
  * - gain, highpass, lowpass, ring (ring modulator), crush (fewer bits)
  * - drive: soft clipping above a level, for a harsh, compressed edge
  * - pitch: two delay taps sweeping through a short window, cross faded
+ * - shift: PSOLA, your own voice raised or lowered, with the formants moved
+ *   separately (see shift_process)
  * - chorus: two delayed copies, their delays swept by slow sine waves
  * - vocoder and tune: the voice rebuilt from its spectral envelope (smoothed
  *   spectrum) on a new buzz, so pitch and formants can be moved separately.
@@ -54,6 +56,7 @@ typedef enum
     FX_PITCH,       // ratio
     FX_RING,        // Hz, mix
     FX_TUNE,        // ratio, formant, snap
+    FX_SHIFT,       // ratio, formant, snap
     FX_VOCODER,     // Hz, formant
     FX_CHORUS,      // rate Hz, depth ms, mix
     FX_CRUSH,       // bits, factor
@@ -78,10 +81,13 @@ static const fx_preset_t presets[] = {
     // Your own voice, like a mask's voice amplifier: only the boom below the
     // voice and the hiss above it taken out
     { "Natural", 3, { GATE, { FX_HIGHPASS, { 200 } }, { FX_LOWPASS, { 5000 } } } },
-    // Raised to around 180 Hz from a typical male voice, and kept to the
-    // middle of the voice's range, which sounds less buzzy
-    { "Female", 4, { GATE, { FX_HIGHPASS, { 250 } }, { FX_TUNE, { 1.9f, 1.2f, 0 } }, { FX_LOWPASS, { 4000 } } } },
-    { "Fembot", 3, { GATE, { FX_TUNE, { 1.6f, 1.18f, 1 } }, { FX_CHORUS, { 0.6f, 6, 0.35f } } } },
+    // Your own voice raised to around 180 Hz from a typical male voice, and
+    // kept to the middle of the voice's range
+    { "Female", 5, { GATE, { FX_SHIFT, { 1.9f, 1.2f, 0 } }, { FX_HIGHPASS, { 250 } }, { FX_LOWPASS, { 4500 } }, { FX_GAIN, { 2 } } } },
+    // Female snapped to notes, with a faint metallic ring, a little digital
+    // grit and a flanger
+    { "Fembot", 8, { GATE, { FX_SHIFT, { 1.9f, 1.2f, 1 } }, { FX_RING, { 300, 0.2f } }, { FX_CRUSH, { 10, 1 } },
+                     { FX_CHORUS, { 2, 1.5f, 0.5f } }, { FX_HIGHPASS, { 250 } }, { FX_LOWPASS, { 4500 } }, { FX_GAIN, { 8 } } } },
     { "Synthetic", 4, { GATE, { FX_TUNE, { 1.7f, 1.2f, 1 } }, { FX_RING, { 500, 0.15f } }, { FX_CRUSH, { 12, 1 } } } },
     { "Android", 3, { GATE, { FX_VOCODER, { 220, 1.18f } }, { FX_CHORUS, { 0.4f, 4, 0.3f } } } },
     { "AI", 4, { GATE, { FX_HIGHPASS, { 250 } }, { FX_TUNE, { 1.75f, 1.22f, 1 } }, { FX_CHORUS, { 1.5f, 2, 0.4f } } } },
@@ -592,6 +598,272 @@ static void resynth_process(resynth_t *r, float *x, int n)
     memmove(r->ready, r->ready + n, r->ready_count * sizeof(float));
 }
 
+/* ----- PSOLA pitch shifting ----- */
+
+// Your own voice, raised or lowered (pitch-synchronous overlap and add). The
+// pitch is found as for tune, and the voice is cut into grains two pitch
+// periods long, centered one per period at the same point in each cycle
+// ("marks"). Laying the grains down closer together raises the pitch, and
+// squeezing each one moves the formants up as well. Unvoiced sound passes
+// through in short grains. It adds about 20 ms of delay: a grain needs a
+// period of the voice after its center, and reaches back about one before.
+// tools/voice_monitor.py's shift is the same, for trying it out.
+#define SH_IN           2048                // input kept, a power of two (128 ms)
+#define SH_OUT          1024                // output being built, a power of two
+#define SH_MARKS        64                  // a power of two
+#define SH_DETECT_HOP   64                  // how often the pitch is found
+#define SH_DELAY        80                  // 5 ms, on top of a grain's reach
+#define SH_UNVOICED     80                  // grain spacing for unvoiced sound, 5 ms
+#define SH_MAX_PERIOD   (FS / 60)
+#define SH_LAG_RELAX    8.0                 // samples per grain
+#define SH_MIN_WEIGHT   0.5f                // the windows' sum is divided out, but never more than doubles anything
+
+typedef struct
+{
+    int64_t pos;        // in input samples since the start
+    float period;       // 0 for unvoiced
+} shift_mark_t;
+
+typedef struct
+{
+    float ratio;
+    float formant;
+    bool snap;
+
+    float in[SH_IN];
+    int64_t count;                  // input samples so far
+    int since_detect;
+    float period;                   // the voice's pitch period now, 0 unvoiced
+    float history[PITCH_HISTORY];   // for detect_pitch
+
+    shift_mark_t marks[SH_MARKS];
+    unsigned mark_count;            // marks so far; the last SH_MARKS are kept
+    int64_t last_mark;
+
+    float out[SH_OUT];
+    float weight[SH_OUT];
+    double next_synth;              // the next grain's center, in output time
+    double lag;                     // how far behind its center a grain is taken from
+} shift_t;
+
+static void shift_init(shift_t *s, float ratio, float formant, bool snap)
+{
+    memset(s, 0, sizeof(*s));
+    s->ratio = ratio;
+    s->formant = formant;
+    s->snap = snap;
+}
+
+/* The input at absolute sample position i. */
+#define SHIFT_IN(s, i)  ((s)->in[(uint64_t)(i) & (SH_IN - 1)])
+
+/* The input off samples from absolute position base, between samples.  The
+ * fraction is kept in a float, because the ESP32-S3 does doubles in software. */
+static float shift_at(const shift_t *s, int64_t base, float off)
+{
+    float whole = floorf(off);
+    float frac = off - whole;
+    int64_t i = base + (int)whole;
+    float a = SHIFT_IN(s, i);
+    float b = SHIFT_IN(s, i + 1);
+    return a + (b - a) * frac;
+}
+
+/* Move a new mark to where the waveform best matches the one at the last
+ * mark, so every grain starts at the same point in its cycle. */
+static int64_t shift_refine(const shift_t *s, int64_t guess, float period)
+{
+    int half = (int)(period / 2);
+    int reach = (int)(period / 4);
+    float best = -1e30f;
+    int best_d = 0;
+    for (int d = -reach; d <= reach; d++)
+    {
+        float dot = 0, energy = 0;
+        for (int k = -half; k < half; k++)
+        {
+            float a = SHIFT_IN(s, s->last_mark + k);
+            float b = SHIFT_IN(s, guess + d + k);
+            dot += a * b;
+            energy += b * b;
+        }
+        float score = dot / sqrtf(energy + 1e-12f);
+        if (score > best)
+        {
+            best = score;
+            best_d = d;
+        }
+    }
+    return guess + best_d;
+}
+
+/* The strongest point within half a period of guess: where the vocal cords
+ * close, which is where a grain is best centered. */
+static int64_t shift_peak(const shift_t *s, int64_t guess, float period)
+{
+    int half = (int)(period / 2);
+    float best = -1;
+    int best_k = 0;
+    for (int k = -half; k <= half; k++)
+    {
+        float v = fabsf(SHIFT_IN(s, guess + k));
+        if (v > best)
+        {
+            best = v;
+            best_k = k;
+        }
+    }
+    return guess + best_k;
+}
+
+static void shift_add_marks(shift_t *s)
+{
+    for (;;)
+    {
+        float p = s->period;
+        int64_t pos;
+        if (p > 0)
+        {
+            if (s->last_mark + p + p * 0.75 + 1 > s->count)
+            {
+                return;
+            }
+            bool after_voiced = s->mark_count > 0 && s->marks[(s->mark_count - 1) & (SH_MARKS - 1)].period > 0;
+            // The first of a voiced run starts at a peak, and the rest follow it.
+            int64_t guess = s->last_mark + (int)(p + 0.5f);
+            pos = after_voiced ? shift_refine(s, guess, p) : shift_peak(s, guess, p);
+        }
+        else
+        {
+            if (s->last_mark + 2 * SH_UNVOICED + 1 > s->count)
+            {
+                return;
+            }
+            pos = s->last_mark + SH_UNVOICED;
+        }
+        shift_mark_t *m = &s->marks[s->mark_count++ & (SH_MARKS - 1)];
+        m->pos = pos;
+        m->period = p;
+        s->last_mark = pos;
+    }
+}
+
+/* Overlap-add the grain at a mark, centered at output time at. Returns how
+ * far on the next grain goes. */
+static double shift_grain(shift_t *s, const shift_mark_t *m, double at)
+{
+    float p = m->period;
+    float half, spacing;
+    if (p > 0)
+    {
+        float target = FS / p * s->ratio;
+        if (s->snap)
+        {
+            target = 440.0f * powf(2.0f, roundf(12.0f * log2f(target / 440.0f)) / 12.0f);
+        }
+        half = p / s->formant;
+        spacing = FS / target;
+    }
+    else
+    {
+        p = half = spacing = SH_UNVOICED;
+    }
+    int reach = (int)half;
+    float step = p / half;
+    int64_t center = (int64_t)llround(at);
+    for (int k = -reach; k <= reach; k++)
+    {
+        float w = 0.5f + 0.5f * cosf((float)M_PI * k / half);
+        unsigned o = (uint64_t)(center + k) & (SH_OUT - 1);
+        s->out[o] += shift_at(s, m->pos, k * step) * w;
+        s->weight[o] += w;
+    }
+    return spacing;
+}
+
+static void shift_process(shift_t *s, float *x, int n)
+{
+    for (int i = 0; i < n; i++)
+    {
+        s->in[(uint64_t)s->count & (SH_IN - 1)] = x[i];
+        s->count++;
+        if (++s->since_detect == SH_DETECT_HOP)
+        {
+            s->since_detect = 0;
+            for (int k = 0; k < PITCH_HISTORY; k++)
+            {
+                s->history[k] = s->in[(uint64_t)(s->count - PITCH_HISTORY + k) & (SH_IN - 1)];
+            }
+            float f0 = s->count >= PITCH_HISTORY ? detect_pitch(s->history) : 0;
+            s->period = f0 > 0 ? FS / f0 : 0;
+            shift_add_marks(s);
+        }
+    }
+    shift_add_marks(s);
+
+    // Each grain is taken from the mark nearest the same time in the input,
+    // lag behind it, so the timing stays as it was. lag grows at once when a
+    // grain isn't ready yet, and shrinks back slowly, so the delay stays
+    // steady from voiced sounds to unvoiced ones and back.
+    int64_t end = s->count - SH_DELAY;
+    for (;;)
+    {
+        float next_half = s->period > 0 ? s->period / s->formant : SH_UNVOICED;
+        if (s->next_synth - next_half >= end)
+        {
+            break;
+        }
+        unsigned first = s->mark_count > SH_MARKS ? s->mark_count - SH_MARKS : 0;
+        int newest = -1;
+        for (unsigned j = first; j < s->mark_count; j++)
+        {
+            const shift_mark_t *m = &s->marks[j & (SH_MARKS - 1)];
+            if (m->pos + (m->period > 0 ? m->period : SH_UNVOICED) <= s->count)
+            {
+                newest = (int)j;
+            }
+        }
+        if (newest < 0)
+        {
+            break;
+        }
+        double newest_pos = (double)s->marks[newest & (SH_MARKS - 1)].pos;
+        if (newest_pos < s->next_synth - s->lag)
+        {
+            s->lag = s->next_synth - newest_pos;
+        }
+        double want = s->next_synth - s->lag;
+        const shift_mark_t *best = NULL;
+        double best_dist = 0;
+        for (unsigned j = first; j <= (unsigned)newest; j++)
+        {
+            const shift_mark_t *m = &s->marks[j & (SH_MARKS - 1)];
+            if (m->pos + (m->period > 0 ? m->period : SH_UNVOICED) > s->count)
+            {
+                continue;
+            }
+            double dist = fabs((double)m->pos - want);
+            if (best == NULL || dist < best_dist)
+            {
+                best = m;
+                best_dist = dist;
+            }
+        }
+        s->next_synth += shift_grain(s, best, s->next_synth);
+        s->lag -= SH_LAG_RELAX;
+    }
+
+    // Hand back what's finished: up to end, n samples.
+    for (int i = 0; i < n; i++)
+    {
+        int64_t t = end - n + i;
+        unsigned o = (uint64_t)t & (SH_OUT - 1);
+        x[i] = t < 0 ? 0 : s->out[o] / fmaxf(s->weight[o], SH_MIN_WEIGHT);
+        s->out[o] = 0;
+        s->weight[o] = 0;
+    }
+}
+
 /* ----- The chain ----- */
 
 typedef struct
@@ -606,6 +878,7 @@ typedef struct
         ring_t ring;
         crush_t crush;
         pitch_t *pitch;
+        shift_t *shift;
         chorus_t *chorus;
         resynth_t *resynth;
     } u;
@@ -624,6 +897,9 @@ static void free_chain(void)
         {
             case FX_PITCH:
                 free(chain[i].u.pitch);
+                break;
+            case FX_SHIFT:
+                free(chain[i].u.shift);
                 break;
             case FX_CHORUS:
                 free(chain[i].u.chorus);
@@ -683,6 +959,14 @@ static void build_chain(int index)
                 s->u.pitch->ratio = step->p[0];
                 s->u.pitch->window = FS * 0.020f;   // 20 ms: long enough for a deep voice, short enough not to add much delay
                 break;
+            case FX_SHIFT:
+                s->u.shift = malloc(sizeof(shift_t));
+                if (s->u.shift == NULL)
+                {
+                    continue;
+                }
+                shift_init(s->u.shift, step->p[0], step->p[1], step->p[2] != 0);
+                break;
             case FX_CHORUS:
                 s->u.chorus = calloc(1, sizeof(chorus_t));
                 if (s->u.chorus == NULL)
@@ -740,6 +1024,9 @@ static void run_chain(float *x, int n)
                 break;
             case FX_PITCH:
                 pitch_process(s->u.pitch, x, n);
+                break;
+            case FX_SHIFT:
+                shift_process(s->u.shift, x, n);
                 break;
             case FX_CHORUS:
                 chorus_process(s->u.chorus, x, n);

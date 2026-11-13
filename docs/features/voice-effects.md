@@ -7,8 +7,8 @@ The *Voice Effect* page, in the Voice feature, runs your voice through an effect
 | Preset | Sound |
 |---|---|
 | Natural | Your own voice, like a mask's voice amplifier, with just the boom below it and the hiss above it taken out |
-| Female | Your own intonation, raised in pitch to around 180 Hz, with the vowels raised less, kept to the middle of the voice's range |
-| Fembot | Female, with the pitch snapped to musical notes and a light chorus |
+| Female | Your own voice, raised in pitch to around 180 Hz, with the vowels raised less, kept to the middle of the voice's range |
+| Fembot | Female, snapped to musical notes, with a faint metallic ring, a little digital grit and a flanger |
 | Synthetic | Snapped pitch, a faint metallic ring and slight digital grit |
 | Android | A monotone female robot |
 | AI | Thinner, higher and snapped, with a quick shimmer |
