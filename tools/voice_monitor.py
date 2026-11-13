@@ -275,6 +275,217 @@ class Tune(Resynth):
         return self.hz
 
 
+class Shift:
+    """shift:<ratio>:<formant>:<snap> - raises or lowers your pitch by ratio
+    while keeping your own voice's texture (PSOLA: pitch-synchronous overlap
+    and add). It finds your pitch, cuts your voice into grains two pitch
+    periods long, one per period, and lays them down closer together (higher)
+    or further apart (lower). Squeezing each grain by formant moves the vowels
+    up as well, less than the pitch (around 1.15-1.2 for female). snap:1 snaps
+    the pitch to musical notes. Unvoiced sounds (consonants, breath) pass
+    through. It adds about 20 ms of delay, two pitch periods."""
+
+    HOP = 64            # how often the pitch is found, in samples at 16 kHz
+    HISTORY = 512       # the pitch is found from the last 32 ms
+    DECIMATE = 4
+    DELAY_MS = 5.0      # on top of a grain's reach either side, about 20 ms in all
+    UNVOICED_MS = 5.0   # grain spacing for unvoiced sound
+    LAG_RELAX = 8.0     # samples per grain
+    MIN_WEIGHT = 0.5    # the windows' sum is divided out, but never more than doubles anything
+
+    def __init__(self, fs, ratio=1.9, formant=1.2, snap=0):
+        self.fs = fs
+        self.ratio = float(ratio)
+        self.formant = float(formant)
+        self.snap = bool(int(float(snap)))
+        self.delay = int(fs * self.DELAY_MS / 1000)
+        self.unvoiced = int(fs * self.UNVOICED_MS / 1000)
+        self.max_period = fs // 60
+        self.min_period = fs // 500
+        self.buf = np.zeros(0, dtype=np.float32)    # input, from absolute sample self.base
+        self.base = 0
+        self.count = 0                              # input samples so far
+        self.since_detect = 0
+        self.period = 0.0                           # current pitch period in samples, 0 unvoiced
+        self.marks = []                             # analysis marks: (position, period or 0)
+        self.last_mark = 0
+        self.next_synth = 0.0                       # next synthesis mark, in output time
+        self.lag = 0.0                              # how far behind each synthesis mark its grain is taken from
+        self.out = np.zeros(0, dtype=np.float32)    # overlap-add, from absolute output time self.out_base
+        self.weight = np.zeros(0, dtype=np.float32) # the windows' sum there, to even out the level
+        self.out_base = -self.delay
+
+    def _at(self, pos, n):
+        """n input samples from absolute position pos (fractional positions
+        are interpolated)."""
+        idx = pos - self.base
+        i = np.floor(idx).astype(int)
+        f = (idx - i).astype(np.float32)
+        i = np.clip(i, 0, len(self.buf) - 2)
+        return self.buf[i] * (1 - f) + self.buf[i + 1] * f
+
+    def _detect(self):
+        """The board's pitch detector: normalized autocorrelation at 4 kHz."""
+        h = self.buf[-self.HISTORY:]
+        if len(h) < self.HISTORY:
+            return 0.0
+        x = h.reshape(-1, self.DECIMATE).mean(axis=1)
+        n = len(x)
+        energy = np.concatenate([[0.0], np.cumsum(x * x)])
+        if energy[-1] / n < 1e-7:
+            return 0.0
+        pfs = self.fs / self.DECIMATE
+        lo, hi = int(pfs / 500), int(pfs / 60)
+        r = {}
+        for lag in range(lo - 1, hi + 2):
+            r[lag] = float(np.dot(x[:n - lag], x[lag:])) / math.sqrt(energy[n - lag] * (energy[n] - energy[lag]) + 1e-12)
+        best = max(range(lo, hi + 1), key=lambda k: r[k])
+        if r[best] < 0.5:
+            return 0.0
+        a, b, c = r[best - 1], r[best], r[best + 1]
+        lag = best + 0.5 * (a - c) / (a - 2 * b + c + 1e-12)
+        return self.fs / (lag * self.DECIMATE)
+
+    def _refine(self, guess, period):
+        """Move a new mark to where the waveform best matches the one at the
+        last mark, so every grain starts at the same point in its cycle."""
+        half = int(period / 2)
+        reach = int(period / 4)
+        ref = self._at(self.last_mark + np.arange(-half, half), 2 * half)
+        best, best_d = -1e9, 0
+        for d in range(-reach, reach + 1):
+            seg = self._at(guess + d + np.arange(-half, half), 2 * half)
+            score = float(np.dot(ref, seg)) / math.sqrt(float(np.dot(seg, seg)) + 1e-12)
+            if score > best:
+                best, best_d = score, d
+        return guess + best_d
+
+    def _peak(self, guess, period):
+        """The strongest point within half a period of guess: where the vocal
+        cords close, which is where a grain is best centered."""
+        half = int(period / 2)
+        seg = np.abs(self._at(guess + np.arange(-half, half + 1), 2 * half + 1))
+        return guess - half + int(np.argmax(seg))
+
+    def _add_marks(self):
+        while True:
+            p = self.period
+            if p > 0:
+                if self.last_mark + p + p * 0.75 + 1 > self.count:
+                    return
+                if self.marks and self.marks[-1][1] > 0:
+                    pos = self._refine(self.last_mark + int(p + 0.5), p)
+                else:
+                    # The first of a voiced run: start at a peak, and the rest
+                    # follow it
+                    pos = self._peak(self.last_mark + int(p + 0.5), p)
+            else:
+                if self.last_mark + 2 * self.unvoiced + 1 > self.count:
+                    return
+                pos = self.last_mark + self.unvoiced
+            self.marks.append((pos, p))
+            self.last_mark = pos
+
+    def _next_half(self):
+        """About how far the next grain reaches back from its center."""
+        return self.period / self.formant if self.period > 0 else self.unvoiced
+
+    def _grain(self, mark, at):
+        """Overlap-add the grain at an analysis mark, centered at output time
+        at. Returns how far on the next synthesis mark is."""
+        pos, p = mark
+        if p > 0:
+            f0 = self.fs / p
+            target = f0 * self.ratio
+            if self.snap:
+                target = 440.0 * 2 ** (round(12 * math.log2(target / 440.0)) / 12)
+            half = p / self.formant
+            spacing = self.fs / target
+        else:
+            half = self.unvoiced
+            spacing = self.unvoiced
+            p = self.unvoiced
+        k = np.arange(-int(half), int(half) + 1)
+        grain = self._at(pos + k * (p / half), len(k))
+        window = (0.5 + 0.5 * np.cos(np.pi * k / half)).astype(np.float32)
+        start = int(round(at)) + k[0] - self.out_base
+        need = start + len(k)
+        self._grow(need)
+        if start >= 0:
+            self.out[start:need] += grain * window
+            self.weight[start:need] += window
+        return spacing
+
+    def _grow(self, need):
+        if need > len(self.out):
+            extra = np.zeros(need - len(self.out), dtype=np.float32)
+            self.out = np.concatenate([self.out, extra])
+            self.weight = np.concatenate([self.weight, extra])
+
+    def process(self, x):
+        n = len(x)
+        self.buf = np.concatenate([self.buf, x.astype(np.float32)])
+        for i in range(n):
+            self.count += 1
+            self.since_detect += 1
+            if self.since_detect == self.HOP:
+                self.since_detect = 0
+                f0 = self._detect_upto(self.count)
+                self.period = self.fs / f0 if f0 > 0 else 0.0
+                self._add_marks()
+        self._add_marks()
+
+        # Synthesis marks, up to where the output's needed, from the nearest
+        # analysis mark that's ready (its grain is all in)
+        # Each synthesis mark takes the grain nearest to the same time in the
+        # input, lag behind it, so the timing stays as it was. lag grows at
+        # once when a grain isn't ready yet, and shrinks back slowly, so the
+        # delay stays steady from voiced sounds to unvoiced ones and back.
+        end = self.count - self.delay
+        while self.next_synth - self._next_half() < end:
+            ready = [m for m in self.marks if m[0] + (m[1] or self.unvoiced) <= self.count]
+            if not ready:
+                break
+            newest = ready[-1][0]
+            if newest < self.next_synth - self.lag:
+                self.lag = self.next_synth - newest
+            want = self.next_synth - self.lag
+            mark = min(ready, key=lambda m: abs(m[0] - want))
+            self.next_synth += self._grain(mark, self.next_synth)
+            self.lag -= self.LAG_RELAX
+
+        start = end - n
+        y = np.zeros(n, dtype=np.float32)
+        self._grow(end - self.out_base)
+        lo = max(start, self.out_base)
+        if end > lo:
+            done = slice(lo - self.out_base, end - self.out_base)
+            y[lo - start:] = self.out[done] / np.maximum(self.weight[done], self.MIN_WEIGHT)
+        # Forget what's done with
+        drop = end - self.out_base
+        if drop > 0:
+            self.out = self.out[drop:]
+            self.weight = self.weight[drop:]
+            self.out_base = end
+        keep_from = self.count - 4 * self.max_period - self.delay
+        if keep_from > self.base:
+            self.buf = self.buf[keep_from - self.base:]
+            self.base = keep_from
+        self.marks = [m for m in self.marks if m[0] > keep_from + self.max_period]
+        return y
+
+    def _detect_upto(self, count):
+        h = self.buf[count - self.base - self.HISTORY:count - self.base] if count - self.base >= self.HISTORY else None
+        if h is None:
+            return 0.0
+        saved = self.buf
+        self.buf = h
+        try:
+            return self._detect()
+        finally:
+            self.buf = saved
+
+
 class Chorus:
     """chorus:<Hz>:<ms>:<mix> - adds two slightly detuned copies of the voice,
     for a synthetic shimmer. Short delays (ms around 2) sound more like a
@@ -378,7 +589,7 @@ class Crush:
         return out
 
 
-EFFECTS = {"gain": Gain, "gate": Gate, "pitch": Pitch, "ring": Ring, "vocoder": Vocoder, "tune": Tune,
+EFFECTS = {"gain": Gain, "gate": Gate, "pitch": Pitch, "ring": Ring, "vocoder": Vocoder, "tune": Tune, "shift": Shift,
            "chorus": Chorus, "highpass": Highpass, "lowpass": Lowpass, "drive": Drive, "crush": Crush}
 
 # Named combinations to start from.
@@ -392,9 +603,9 @@ PRESETS = {
     "drone": "gate:-45,pitch:0.85,ring:60:0.6,crush:10:1",
     # Higher, toward a female voice. Your own pitch, raised, with the vowels
     # moved up less than the pitch so it doesn't sound like a chipmunk. Female
-    # is kept to the middle of the voice's range, which sounds less buzzy.
-    "female": "gate:-45,highpass:250,tune:1.9:1.2,lowpass:4000",
-    "fembot": "gate:-45,tune:1.6:1.18:1,chorus:0.6:6:0.35",
+    # and Fembot keep your own voice (shift); the others rebuild it (tune).
+    "female": "gate:-45,shift:1.9:1.2,highpass:250,lowpass:4500,gain:2",
+    "fembot": "gate:-45,shift:1.9:1.2:1,ring:300:0.2,crush:10:1,chorus:2:1.5:0.5,highpass:250,lowpass:4500,gain:8",
     "synthetic": "gate:-45,tune:1.7:1.2:1,ring:500:0.15,crush:12:1",
     "android": "gate:-45,vocoder:220:1.18,chorus:0.4:4:0.3",
     "ai": "gate:-45,highpass:250,tune:1.75:1.22:1,chorus:1.5:2:0.4",
