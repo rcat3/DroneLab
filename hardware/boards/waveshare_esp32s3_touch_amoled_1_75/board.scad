@@ -41,7 +41,7 @@ sd_x = [-8.30, 7.80];               // micro SD socket, card goes in from the to
 sd_z = [-6.30, -3.85];
 sd_shift = [0, 0];                  // move the slot by this much (across, towards the front) if the
                                     // card doesn't line up. Not yet checked with a print
-button_angles = [56, 124];          // side buttons, 34 degrees either side of the top
+button_angles = [56, 124];          // side buttons, 34 degrees either side of the top: BOOT, then PWR
 button_z = [-8.70, -6.50];
 button_reach_r = 22.81;             // how far out the button actuators reach
 
@@ -54,7 +54,8 @@ screw_d = 2.2;                      // M2 clearance, snug so the screws center t
 screw_head_d = 4.0;                 // M2 countersunk head
 header_grow = 0.5;                  // around the pin header
 conn_grow = 0.5;                    // around the speaker and battery sockets
-mic_hole = 2.0;
+mic_hole = 2.5;                     // each microphone's sound hole is off to one end of it, by about 0.7 mm, so
+                                    // the hole is wide enough to take it wherever it is
 usb_access = true;                  // the firmware sets the board to charge at 500 mA, which is
                                     // gentle on any battery that fits, so the port is open
 usb_opening = [12.4, 6.6];          // width, height of the slot for the USB-C plug. The plug's

@@ -14,7 +14,8 @@
 //    adhesive frame on its front sticks it to the grille.
 //  - chin: closes the back of the pod, and slopes from it back to the body,
 //    over the filter mount. Four M2 x 8 socket head screws hold it on.
-//  - back: closes the chamber. The battery is taped to it.
+//  - back: closes the chamber. The battery is taped to it, standing upright,
+//    and the voice port is open beside it, behind the microphones.
 //  - collar, washer and gasket: the voice port thread, which turns freely on
 //    the back, so the housing can be held level while only the collar is
 //    screwed in. They're in hardware/masks/msa_millennium/turning_collar.scad.
@@ -29,6 +30,16 @@
 //
 // The back is held on with four M2 x 8 socket head screws, which cut their
 // own threads in the body.
+//
+// The microphones have a cell of their own: the strip of the chamber beside
+// the battery, walled off from the rest of it, with the voice port open into
+// it through the back. Ribs on the back plate wall it off, and the battery's
+// side closes it. In front of the battery the ribs stop short of it, and a
+// strip of foam tape or plasticine on them seals it against the battery. The
+// rest of the chamber, with the sockets and the speaker's wire, is on the
+// other side. Behind the plate, the board sits on its standoffs, so a sleeve
+// around each microphone's hole reaches up towards the board, and a foam ring
+// on it seals it there, so the microphones only hear the cell.
 //
 // The board is turned a quarter turn from its usual way up, so its USB-C port
 // faces right, out through the side of the housing, instead of into the pod.
@@ -57,20 +68,35 @@ spk_corner = 2.0;           // the box's corners, seen from the front
 spk_cone = [30, 20.5];      // the oval cone, inside the adhesive frame on the front
 spk_clear = 0.3;
 spk_back_gap = 2.0;         // behind the speaker, for its wire to run to the chamber
+pocket_floor = 1.6;         // where the pocket's inner end reaches over the chamber's edge, the wall
+                            // between them. It leaves a smaller gap behind that end of the speaker
 spk_wire_notch = [5, 2];    // in the middle of each short side of the pocket, for the wire where
                             // it comes out of the box: width, depth
-wire_pass = [12, 4];        // the opening from the pocket into the chamber, for the speaker's plug:
-                            // width, and how far behind the chamber's top it reaches out into the
-                            // body's wall, leaving 1 mm of it
+wire_pass = [7, 4];         // the opening from the pocket into the chamber, for the speaker's plug
+                            // (about 5 mm wide) to go through, and no more, as it's sealed with
+                            // plasticine around the wire: width, and how far behind the chamber's
+                            // top it reaches out into the body's wall, leaving 1 mm of it
 
 /* [Battery: 103450 LiPo, 10 x 34 x 50 mm, 2000 mAh] */
 battery = [50.5, 34, 9.9];  // taped to the back
 battery_xy = [0, 0];        // where its center is, seen from the front
-battery_rot = 0;
+battery_rot = 90;           // standing upright, so the voice port is open beside it, behind the
+                            // microphones. Only 90 is supported
 battery_clear = 0.5;
 battery_gap = 4.0;          // in front of the battery, for the plugs in the board's speaker and
-                            // battery sockets, which go in from behind, and their wires. The
-                            // microphones hear through the voice port across this gap too
+                            // battery sockets, which go in from behind, and their wires
+
+/* [Microphone cell] */
+mic_cell = true;
+mic_cell_clear = 0.15;      // inside the cell, around the microphones' holes
+mic_cell_rib = 1.0;         // the ribs that wall it off. Where it passes between MIC2's hole and
+                            // a board screw, there's only just room for one this wide
+mic_cell_rib_gap = 0.5;     // in front of the battery, the ribs stop this far short of it, for
+                            // foam tape or plasticine to seal it
+mic_sleeve = [4.4, 1.5];    // around each microphone's hole, reaching up towards the board: outer
+                            // diameter, and the gap left in front of the board for a foam ring.
+                            // The board is 3.5 mm in front of the plate, and each microphone is a
+                            // small part on its back, about 1 mm tall
 
 /* [Layout] */
 board_rot = 90;             // USB-C to the right, buttons and micro SD to the left
@@ -88,8 +114,7 @@ bezel_step = 1.0;           // the ring around the display stands this far proud
 bezel_chamfer = 0.5;        // on the outside of the ring
 chin_foot = 1.5;            // the chin's sloped underside meets the back this far below the body
 usb_floor = [20, 26.5];     // width, and distance from the center: the chamber stops here under the
-                            // pocket around the USB-C port, so the pocket has a solid floor. The
-                            // battery's edge is at 25.75
+                            // pocket around the USB-C port, so the pocket has a solid floor
 
 /* [Side buttons: plungers through the wall] */
 plunger_d = 3.6;
@@ -117,8 +142,8 @@ grille_bar = 1.2;
 /* [Back] */
 cover_t = 3.0;
 cover_lip = 1.0;            // the back sits in a rebate this wide around the chamber
-cover_screws = [[17, 23], [-17, 23], [17, -23.5], [-17, -23.5]];  // just outside the thread, and
-                            // above and below the battery
+cover_screws = [[23, 17], [-23, 17], [23, -17], [-23, -17]];  // just outside the thread, and
+                            // either side of the battery
 screw_pilot = 1.7;          // M2 machine screws cut their own thread in this
 screw_clear = 2.3;
 screw_head = [4.2, 2.1];    // counterbore for an M2 socket head (3.8 x 2.0): diameter, depth
@@ -132,6 +157,14 @@ socket_marks = true;        // a speaker and a battery engraved in the back plat
 mark_size = 6.0;            // how tall each mark is
 mark_depth = 0.6;
 mark_gap = 1.0;             // between a mark and its socket's opening
+
+/* [Button marks: which side button is which, on the outside] */
+button_marks = true;        // a power symbol beside the PWR button's plunger, and a download arrow
+                            // (for flashing) beside BOOT's, engraved in the side wall behind each
+button_mark_size = 4.0;     // how tall each mark is
+button_mark_line = 0.8;     // its lines, wide enough to print on a side wall
+button_mark_depth = 0.5;
+button_mark_gap = 1.2;      // between the plunger's hole and its mark
 
 /* [Collar: the rest of its settings are in turning_collar.scad] */
 collar_r = 35;              // a little bigger than the body, so it can be turned from the sides
@@ -192,6 +225,14 @@ module outline_2d()
         }
 }
 
+// The board's microphones, seen from the front, in the housing
+mic_pos = [for (m = mic_xy) [m[0] * cos(board_rot) - m[1] * sin(board_rot), m[0] * sin(board_rot) + m[1] * cos(board_rot)]];
+// The battery's side towards the microphones
+battery_side = battery_xy[0] + battery[1] / 2;
+
+assert(battery_rot == 90, "the microphone cell and the voice port's opening are laid out for the battery upright");
+assert(min([for (m = mic_pos) m[0]]) > 0, "the microphone cell is on the right, where the microphones are");
+
 module bosses_2d()
 {
     for (s = cover_screws) translate(s) circle(r = boss_r, $fn = 32);
@@ -249,20 +290,34 @@ module grille_slots_2d()
 // back, with a notch in each short side for its wire, and the grille in front
 // of it. The wire runs behind the speaker to the pocket's inner end, which
 // overlaps the chamber, and there an opening out into the body's wall makes
-// room for its plug to go through.
+// room for its plug to go through. Over the chamber, the pocket has a floor
+// (pocket_floor), so the only way through is that opening.
 module pod_cut()
 {
-    translate([0, 0, z_pod_back - 1]) linear_extrude(z_land - z_pod_back + 1)
+    z_floor = chamber_top + pocket_floor;
+    module pocket_and_notches()
     {
         pocket_2d();
         for (s = [-1, 1]) translate([-spk_wire_notch[0] / 2, s * pocket[0] / 2 - (s < 0 ? spk_wire_notch[1] : 0.01)])
             square([spk_wire_notch[0], spk_wire_notch[1] + 0.01]);
     }
+    // Clear of the round part of the body, through the pod's back
+    translate([0, 0, z_pod_back - 1]) linear_extrude(z_land - z_pod_back + 1) difference()
+    {
+        pocket_and_notches();
+        translate([-pod_dist, 0]) circle(r = body_r, $fn = 192);
+    }
+    // Over the round part, down to the floor
+    translate([0, 0, z_floor]) linear_extrude(z_land - z_floor) intersection()
+    {
+        pocket_and_notches();
+        translate([-pod_dist, 0]) circle(r = body_r + 0.5, $fn = 192);
+    }
     x0 = -pocket[1] / 2;
     z0 = chamber_top - wire_pass[1];
     intersection()
     {
-        translate([x0, -wire_pass[0] / 2, z0]) cube([body_r - pod_dist - x0, wire_pass[0], z_pod_back - 0.5 - z0]);
+        translate([x0, -wire_pass[0] / 2, z0]) cube([body_r - pod_dist - x0, wire_pass[0], z_floor + 0.5 - z0]);
         translate([-pod_dist, 0, z0 - 1]) cylinder(r = body_r - 1, h = 20, $fn = 192);
     }
     translate([0, 0, z_land - 0.01]) linear_extrude(cone_gap + 0.02) rotate(90) stadium(spk_cone);
@@ -270,6 +325,20 @@ module pod_cut()
 }
 
 module body()
+{
+    // The sleeves stand in the display's pocket, so they go on after it's cut
+    difference()
+    {
+        union()
+        {
+            body_shell();
+            if (mic_cell) mic_sleeves();
+        }
+        if (mic_cell) for (m = mic_pos) translate([m[0], m[1], plate_back - 1]) cylinder(d = mic_hole, h = 10, $fn = 24);
+    }
+}
+
+module body_shell()
 {
     difference()
     {
@@ -296,8 +365,20 @@ module body()
             wall_openings();
         }
         at_buttons() plunger_cut();
-        // The chamber, and the rebate the back sits in
-        translate([0, 0, z_back - 1]) linear_extrude(chamber_top - z_back + 1) chamber_2d();
+        // The chamber, around the microphones' ribs, and the rebate the back
+        // sits in. In front of the battery, the ribs stop short of it.
+        translate([0, 0, z_back - 1]) linear_extrude(chamber_top - z_back + 1) difference()
+        {
+            chamber_2d();
+            if (mic_cell) mic_cell_rib_2d();
+        }
+        if (mic_cell)
+            translate([0, 0, z_back - 1]) linear_extrude(chamber_top - battery_gap + mic_cell_rib_gap - z_back + 1)
+                intersection()
+                {
+                    mic_cell_rib_2d();
+                    battery_2d();
+                }
         translate([0, 0, z_back - 1]) linear_extrude(cover_t + 1) rebate_2d();
         at_pod() pod_cut();
         for (s = cover_screws)
@@ -306,6 +387,7 @@ module body()
             translate([s[0], s[1], z_pod_back - 1]) cylinder(d = screw_pilot, h = 7, $fn = 16);
         if (socket_marks)
             translate([0, 0, plate_back - 1]) linear_extrude(mark_depth + 1) socket_marks_2d();
+        if (button_marks) button_marks();
     }
 }
 
@@ -354,6 +436,57 @@ module socket_marks_2d()
             {
                 if (m[1] == 0) speaker_mark_2d(); else battery_mark_2d();
             }
+    }
+}
+
+// The power symbol: a ring, open at the top, with a bar through the gap.
+// Drawn button_mark_size tall, centered, upright
+module power_mark_2d()
+{
+    s = button_mark_size;
+    w = button_mark_line;
+    difference()
+    {
+        circle(d = s, $fn = 48);
+        circle(d = s - 2 * w, $fn = 48);
+        polygon([[0, 0], [-s * tan(35), s], [s * tan(35), s]]);
+    }
+    translate([-w / 2, 0]) square([w, s / 2]);
+}
+
+// A download arrow, for BOOT, which is held to flash the board: an arrow
+// pointing down onto a bar
+module boot_mark_2d()
+{
+    s = button_mark_size;
+    w = button_mark_line;
+    head = [2.6, 1.5] * s / 4;      // width, height
+    tip = -s / 2 + w + 0.6 * s / 4;
+    translate([-s * 0.4, -s / 2]) square([s * 0.8, w]);
+    polygon([[0, tip], [-head[0] / 2, tip + head[1]], [head[0] / 2, tip + head[1]]]);
+    translate([-w / 2, tip + head[1] - 0.01]) square([w, s / 2 - tip - head[1] + 0.01]);
+}
+
+// The marks, engraved in the outside of the side wall behind each plunger,
+// upright with the pod at the bottom, and read from outside
+module button_marks()
+{
+    z = z_button - (plunger_d / 2 + plunger_clear) - button_mark_gap - button_mark_size / 2;
+    for (i = [0, 1])
+    {
+        a = button_angles[i] + board_rot;
+        c = cos(a);
+        s = sin(a);
+        // On the left side wall, seen from outside: the mark's up is along
+        // the wall towards the top, its right towards the front, and its
+        // depth out through the wall
+        assert(c < 0, "the button marks are laid out for buttons on the left");
+        multmatrix([[0, s, c, (body_r - button_mark_depth) * c],
+                    [0, -c, s, (body_r - button_mark_depth) * s],
+                    [1, 0, 0, z],
+                    [0, 0, 0, 1]])
+            linear_extrude(button_mark_depth + 1)
+                if (i == 1) power_mark_2d(); else boot_mark_2d();
     }
 }
 
@@ -454,15 +587,52 @@ module screw_cut()
     translate([0, 0, z_back - 0.01]) cylinder(d = screw_head[0], h = screw_head[1] + 0.01, $fn = 32);
 }
 
-// Inside the thread, below the battery, so the microphones hear through the
-// voice port
+// Inside the thread, beside the battery, into the microphones' cell, so they
+// hear through the voice port
 module mic_opening_2d()
 {
     intersection()
     {
         circle(r = 19.5, $fn = 96);
-        translate([-20, -20]) square([40, battery_xy[1] - battery[1] / 2 - battery_clear + 20]);
+        translate([battery_side + battery_clear, -20]) square([20, 40]);
     }
+}
+
+// The microphones' cell, inside its ribs. The ribs are what the chamber's
+// cut leaves: in front of the battery, from the back plate to just short of
+// it, and beside the battery, all the way to the back.: the strip beside the battery, out
+// to the chamber's wall, and around the microphones' holes, which are just in
+// front of the battery's edge
+module mic_cell_2d()
+{
+    r = mic_hole / 2 + mic_cell_clear;
+    ys = [for (m = mic_pos) m[1]];
+    hull()
+    {
+        for (m = mic_pos) translate(m) circle(r = r, $fn = 32);
+        translate([battery_side, min(ys) - r]) square([body_r - battery_side, max(ys) - min(ys) + 2 * r]);
+    }
+}
+
+module mic_cell_rib_2d()
+{
+    intersection()
+    {
+        difference()
+        {
+            offset(r = mic_cell_rib) mic_cell_2d();
+            mic_cell_2d();
+        }
+        circle(r = body_r - 0.5, $fn = 192);
+    }
+}
+
+// A sleeve around each microphone's hole, on the front of the back plate.
+// body() bores them out
+module mic_sleeves()
+{
+    for (m = mic_pos) translate([m[0], m[1], plate_front - 0.5])
+        cylinder(d = mic_sleeve[0], h = pcb_z[0] - plate_front - mic_sleeve[1] + 0.5, $fn = 32);
 }
 
 // The back, with its back face at z_back
@@ -510,6 +680,7 @@ module layout()
     }
     color("orange", 0.5) battery_2d();
     color("cyan") mic_opening_2d();
+    if (mic_cell) color("lime") mic_cell_rib_2d();
     rotate(board_rot)
     {
         color("red") for (a = button_angles) rotate(a) translate([cup_ir, -1.5]) square([body_r - cup_ir, 3]);
