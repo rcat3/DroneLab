@@ -333,6 +333,31 @@ class Highpass:
         return out
 
 
+class Lowpass(Highpass):
+    """lowpass:<Hz> - takes out everything above this, for a narrower, radio
+    or speaker-like voice."""
+
+    def __init__(self, fs, freq=3000.0):
+        w = 2 * math.pi * float(freq) / fs
+        alpha = math.sin(w) / math.sqrt(2)
+        a0 = 1 + alpha
+        self.b = [(1 - math.cos(w)) / 2 / a0, (1 - math.cos(w)) / a0, (1 - math.cos(w)) / 2 / a0]
+        self.a = [-2 * math.cos(w) / a0, (1 - alpha) / a0]
+        self.state = [0.0, 0.0, 0.0, 0.0]
+
+
+class Drive:
+    """drive:<dB> - soft clipping above this many dB below full scale. Quiet
+    sound passes as it is, and louder sound is squashed, which adds a harsh
+    edge and evens out the level."""
+
+    def __init__(self, fs, db=30.0):
+        self.knee = 10 ** (-float(db) / 20)
+
+    def process(self, x):
+        return (self.knee * np.tanh(x / self.knee)).astype(np.float32)
+
+
 class Crush:
     """crush:<bits>:<factor> - fewer bits and a lower sample rate, for a
     lo-fi digital edge."""
@@ -354,18 +379,21 @@ class Crush:
 
 
 EFFECTS = {"gain": Gain, "gate": Gate, "pitch": Pitch, "ring": Ring, "vocoder": Vocoder, "tune": Tune,
-           "chorus": Chorus, "highpass": Highpass, "crush": Crush}
+           "chorus": Chorus, "highpass": Highpass, "lowpass": Lowpass, "drive": Drive, "crush": Crush}
 
 # Named combinations to start from.
 PRESETS = {
+    # Your own voice, like a mask's voice amplifier
+    "natural": "gate:-45,highpass:200,lowpass:5000",
     # Lower and robotic
     "robot": "gate:-45,vocoder:110",
     "deep": "gate:-45,pitch:0.75",
-    "dalek": "gate:-45,ring:30,gain:3",
+    "dalek": "gate:-45,highpass:400,pitch:1.26,drive:24,ring:30,lowpass:3500,gain:8",
     "drone": "gate:-45,pitch:0.85,ring:60:0.6,crush:10:1",
     # Higher, toward a female voice. Your own pitch, raised, with the vowels
-    # moved up less than the pitch so it doesn't sound like a chipmunk.
-    "female": "gate:-45,tune:1.6:1.18",
+    # moved up less than the pitch so it doesn't sound like a chipmunk. Female
+    # is kept to the middle of the voice's range, which sounds less buzzy.
+    "female": "gate:-45,highpass:250,tune:1.9:1.2,lowpass:4000",
     "fembot": "gate:-45,tune:1.6:1.18:1,chorus:0.6:6:0.35",
     "synthetic": "gate:-45,tune:1.7:1.2:1,ring:500:0.15,crush:12:1",
     "android": "gate:-45,vocoder:220:1.18,chorus:0.4:4:0.3",

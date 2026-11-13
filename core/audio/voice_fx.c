@@ -9,7 +9,8 @@
  * The effects are the same as tools/voice_monitor.py's, so a preset tried
  * there sounds the same here:
  * - gate: silence below a level, so breathing and noise don't come through
- * - gain, highpass, ring (ring modulator), crush (fewer bits)
+ * - gain, highpass, lowpass, ring (ring modulator), crush (fewer bits)
+ * - drive: soft clipping above a level, for a harsh, compressed edge
  * - pitch: two delay taps sweeping through a short window, cross faded
  * - chorus: two delayed copies, their delays swept by slow sine waves
  * - vocoder and tune: the voice rebuilt from its spectral envelope (smoothed
@@ -35,7 +36,7 @@
 #define MAX_BLOCK           (FS / 100)
 #define DECIMATE_TAPS       31
 
-#define MAX_STEPS           6
+#define MAX_STEPS           8
 
 // Set to 1 to print how much of the CPU the effect takes, every few seconds.
 #define VOICE_FX_DEBUG      0
@@ -48,6 +49,8 @@ typedef enum
     FX_GAIN,        // dB
     FX_GATE,        // threshold dBFS
     FX_HIGHPASS,    // Hz
+    FX_LOWPASS,     // Hz
+    FX_DRIVE,       // dB below full scale where it starts to clip
     FX_PITCH,       // ratio
     FX_RING,        // Hz, mix
     FX_TUNE,        // ratio, formant, snap
@@ -72,15 +75,22 @@ typedef struct
 #define GATE { FX_GATE, { -45 } }
 
 static const fx_preset_t presets[] = {
-    { "Off", 0, { { 0 } } },
-    { "Female", 2, { GATE, { FX_TUNE, { 1.6f, 1.18f, 0 } } } },
+    // Your own voice, like a mask's voice amplifier: only the boom below the
+    // voice and the hiss above it taken out
+    { "Natural", 3, { GATE, { FX_HIGHPASS, { 200 } }, { FX_LOWPASS, { 5000 } } } },
+    // Raised to around 180 Hz from a typical male voice, and kept to the
+    // middle of the voice's range, which sounds less buzzy
+    { "Female", 4, { GATE, { FX_HIGHPASS, { 250 } }, { FX_TUNE, { 1.9f, 1.2f, 0 } }, { FX_LOWPASS, { 4000 } } } },
     { "Fembot", 3, { GATE, { FX_TUNE, { 1.6f, 1.18f, 1 } }, { FX_CHORUS, { 0.6f, 6, 0.35f } } } },
     { "Synthetic", 4, { GATE, { FX_TUNE, { 1.7f, 1.2f, 1 } }, { FX_RING, { 500, 0.15f } }, { FX_CRUSH, { 12, 1 } } } },
     { "Android", 3, { GATE, { FX_VOCODER, { 220, 1.18f } }, { FX_CHORUS, { 0.4f, 4, 0.3f } } } },
     { "AI", 4, { GATE, { FX_HIGHPASS, { 250 } }, { FX_TUNE, { 1.75f, 1.22f, 1 } }, { FX_CHORUS, { 1.5f, 2, 0.4f } } } },
     { "Robot", 2, { GATE, { FX_VOCODER, { 110, 1 } } } },
     { "Deep", 2, { GATE, { FX_PITCH, { 0.75f } } } },
-    { "Dalek", 3, { GATE, { FX_RING, { 30, 1 } }, { FX_GAIN, { 3 } } } },
+    // A Dalek: a 30 Hz ring modulator, on a voice that's higher, thinner and
+    // driven hard
+    { "Dalek", 7, { GATE, { FX_HIGHPASS, { 400 } }, { FX_PITCH, { 1.26f } }, { FX_DRIVE, { 24 } }, { FX_RING, { 30, 1 } },
+                    { FX_LOWPASS, { 3500 } }, { FX_GAIN, { 8 } } } },
     { "Drone", 4, { GATE, { FX_PITCH, { 0.85f } }, { FX_RING, { 60, 0.6f } }, { FX_CRUSH, { 10, 1 } } } },
 };
 #define PRESET_COUNT (sizeof(presets) / sizeof(presets[0]))
@@ -118,6 +128,8 @@ typedef struct
     float x1, x2, y1, y2;
 } biquad_t;
 
+// Second order Butterworth filters (RBJ's cookbook)
+
 static void highpass_init(biquad_t *f, float hz)
 {
     float w = 2.0f * (float)M_PI * hz / FS;
@@ -125,6 +137,18 @@ static void highpass_init(biquad_t *f, float hz)
     float a0 = 1 + alpha;
     f->b0 = (1 + cosf(w)) / 2 / a0;
     f->b1 = -(1 + cosf(w)) / a0;
+    f->b2 = f->b0;
+    f->a1 = -2 * cosf(w) / a0;
+    f->a2 = (1 - alpha) / a0;
+}
+
+static void lowpass_init(biquad_t *f, float hz)
+{
+    float w = 2.0f * (float)M_PI * hz / FS;
+    float alpha = sinf(w) / sqrtf(2.0f);
+    float a0 = 1 + alpha;
+    f->b0 = (1 - cosf(w)) / 2 / a0;
+    f->b1 = (1 - cosf(w)) / a0;
     f->b2 = f->b0;
     f->a1 = -2 * cosf(w) / a0;
     f->a2 = (1 - alpha) / a0;
@@ -160,6 +184,16 @@ static void ring_process(ring_t *r, float *x, int n)
             r->phase -= 2.0f * (float)M_PI;
         }
         x[i] *= 1.0f - r->mix + r->mix * sinf(r->phase);
+    }
+}
+
+// Soft clipping: quiet sound passes as it is, and anything much above the
+// knee is squashed towards it, which adds a harsh edge and evens out the level.
+static void drive_process(float knee, float *x, int n)
+{
+    for (int i = 0; i < n; i++)
+    {
+        x[i] = knee * tanhf(x[i] / knee);
     }
 }
 
@@ -566,6 +600,7 @@ typedef struct
     union
     {
         float gain;
+        float knee;
         gate_t gate;
         biquad_t biquad;
         ring_t ring;
@@ -578,7 +613,7 @@ typedef struct
 
 static fx_state_t chain[MAX_STEPS];
 static int chain_count;
-static int chain_preset;            // the preset the chain was built for
+static int chain_preset = -1;       // the preset the chain was built for, or -1 for none
 static volatile int wanted_preset;  // set by the UI loop
 
 static void free_chain(void)
@@ -624,6 +659,12 @@ static void build_chain(int index)
                 break;
             case FX_HIGHPASS:
                 highpass_init(&s->u.biquad, step->p[0]);
+                break;
+            case FX_LOWPASS:
+                lowpass_init(&s->u.biquad, step->p[0]);
+                break;
+            case FX_DRIVE:
+                s->u.knee = powf(10.0f, -step->p[0] / 20.0f);
                 break;
             case FX_RING:
                 s->u.ring.step = 2.0f * (float)M_PI * step->p[0] / FS;
@@ -685,7 +726,11 @@ static void run_chain(float *x, int n)
                 gate_process(&s->u.gate, x, n);
                 break;
             case FX_HIGHPASS:
+            case FX_LOWPASS:
                 biquad_process(&s->u.biquad, x, n);
+                break;
+            case FX_DRIVE:
+                drive_process(s->u.knee, x, n);
                 break;
             case FX_RING:
                 ring_process(&s->u.ring, x, n);
@@ -790,12 +835,23 @@ static void make_decimator(void)
 
 static void mic_cb(const int16_t *samples, size_t count, void *user_data)
 {
+    // Only run while something's listening: the speaker or the voice lab.
+    // Starting again builds the chain afresh, so nothing stale comes out.
+    if (!speaker_on && !voice_lab_running())
+    {
+        if (chain_preset >= 0)
+        {
+            free_chain();
+            chain_preset = -1;
+        }
+        return;
+    }
     int preset = wanted_preset;
     if (preset != chain_preset)
     {
         build_chain(preset);
     }
-    if (preset == 0 || count > MAX_IN_BLOCK || count % 2 != 0)
+    if (count > MAX_IN_BLOCK || count % 2 != 0)
     {
         return;
     }

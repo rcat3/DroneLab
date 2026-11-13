@@ -18,11 +18,11 @@
 /* Start listening to the microphone. Returns false without one. */
 bool voice_fx_start(void);
 
-/* The presets, with 0 being "Off". */
+/* The presets. 0 is "Natural", your own voice. */
 size_t voice_fx_preset_count(void);
 const char *voice_fx_preset_name(size_t index);
 
-/* Choose a preset (0 for off). Safe to call from the UI loop. */
+/* Choose a preset. Safe to call from the UI loop. */
 void voice_fx_set_preset(size_t index);
 
 /* How loud it is on the speaker, in percent: 50 is 10 dB up from the
