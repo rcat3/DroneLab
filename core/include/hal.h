@@ -202,6 +202,54 @@ bool rcat_hal_ble_send(int link, const void *data, size_t len);
  * board keeps about 256 per link). Returns how many were copied. */
 size_t rcat_hal_ble_receive(int link, void *data, size_t max);
 
+/*
+ * Bluetooth LE, as a peripheral that one phone connects to, alongside the
+ * central links above. The board offers one service with two
+ * characteristics: one it notifies the phone on, and one the phone writes
+ * to. Each notification and each write is a message of its own.
+ */
+typedef struct
+{
+    uint8_t service[16];        // 128-bit UUIDs, in the order they're written as text
+    uint8_t to_phone[16];       // notify
+    uint8_t from_phone[16];     // write, with or without a response
+} rcat_hal_ble_peer_service_t;
+
+/* Say which service the board offers. Call it once, before anything else
+ * that uses Bluetooth, as the service is added when the stack starts. The
+ * board keeps the pointer. */
+void rcat_hal_ble_peer_setup(const rcat_hal_ble_peer_service_t *service);
+
+/* Advertise the service, under name, until a phone connects, and again
+ * whenever it disconnects, until rcat_hal_ble_peer_stop(), which also drops
+ * the phone. Returns false if the board has no Bluetooth or can't be a
+ * peripheral. Safe to call from the UI loop. */
+bool rcat_hal_ble_peer_start(const char *name);
+void rcat_hal_ble_peer_stop(void);
+
+/* True while a phone is connected and has turned notifications on. */
+bool rcat_hal_ble_peer_connected(void);
+
+/* The biggest message rcat_hal_ble_peer_send() can take, which depends on
+ * what the phone agreed to. 0 while nothing's connected. */
+size_t rcat_hal_ble_peer_max_send(void);
+
+/* Notify the phone with one message. Safe to call from any task. Returns
+ * false if it isn't connected, the message is too big, or the stack has no
+ * room for it just now (try again in a few milliseconds). */
+bool rcat_hal_ble_peer_send(const void *data, size_t len);
+
+/* Take the oldest message the phone has written (the board keeps a few, of
+ * up to 64 bytes each). Returns its length, or 0 if there isn't one. */
+size_t rcat_hal_ble_peer_receive(void *data, size_t max);
+
+/* Run fn(arg) on a task of its own, for work that mustn't hold up the UI loop
+ * or the audio, such as encoding sound. stack_size is in bytes; the board may
+ * put the stack in slower memory. fn can call rcat_hal_delay_ms() to wait,
+ * and must not call LVGL. It runs for as long as the board does, so it must
+ * never return. Returns false if the task couldn't be started. */
+bool rcat_hal_task_start(const char *name, void (*fn)(void *arg), void *arg, size_t stack_size);
+
 /* Firmware updates (see app/updater.h). The new firmware is written beside
  * the running one: begin, then write it in order, in pieces of any size, then
  * finish, which checks it and makes it the one to start next time. abort

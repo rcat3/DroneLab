@@ -410,6 +410,45 @@ size_t rcat_hal_ble_receive(int link, void *data, size_t max)
     return 0;
 }
 
+void rcat_hal_ble_peer_setup(const rcat_hal_ble_peer_service_t *service)
+{
+}
+
+bool rcat_hal_ble_peer_start(const char *name)
+{
+    return false;
+}
+
+void rcat_hal_ble_peer_stop(void)
+{
+}
+
+bool rcat_hal_ble_peer_connected(void)
+{
+    return false;
+}
+
+size_t rcat_hal_ble_peer_max_send(void)
+{
+    return 0;
+}
+
+bool rcat_hal_ble_peer_send(const void *data, size_t len)
+{
+    return false;
+}
+
+size_t rcat_hal_ble_peer_receive(void *data, size_t max)
+{
+    return 0;
+}
+
+bool rcat_hal_task_start(const char *name, void (*fn)(void *arg), void *arg, size_t stack_size)
+{
+    // Nothing on these boards needs one yet.
+    return false;
+}
+
 bool rcat_hal_update_supported(void)
 {
     // No WiFi: these boards are updated over USB-C, with picotool.

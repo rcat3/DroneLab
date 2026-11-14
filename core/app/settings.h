@@ -40,6 +40,8 @@ typedef struct
     uint8_t voice_volume;                   // the voice effect on the speaker, percent
     uint8_t remote_autostart;               // 1 to switch the phone remote on at power-up
     uint8_t visualizer;                     // which visualizer style, 0 for KITT
+    uint8_t comm_on;                        // 1 to start the comm channel at startup
+    uint8_t comm_mode;                      // comm_mode_t: push to talk, or voice
 } settings_t;
 
 /* Load the saved settings, or the defaults if nothing valid has been saved. */
@@ -65,6 +67,7 @@ void settings_set_remote(const char *ssid, const char *password);
 void settings_set_remote_autostart(uint8_t enabled);
 void settings_set_terminal_size(uint8_t size);
 void settings_set_visualizer(uint8_t index);
+void settings_set_comm(uint8_t on, uint8_t mode);
 /* Keep a learned battery curve (see app/battery_log.h), or forget it with runs = 0. */
 void settings_set_battery_curve(const uint16_t *mv, uint8_t runs, uint32_t last_run);
 

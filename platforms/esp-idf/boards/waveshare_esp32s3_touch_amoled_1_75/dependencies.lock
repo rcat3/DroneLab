@@ -1,4 +1,14 @@
 dependencies:
+  78/esp-opus:
+    component_hash: 8182b733f071d7bfe1e837f4c9f8649a63e4c937177f089e65772880c02f2e17
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.5
   espressif/cmake_utilities:
     component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
     dependencies:
@@ -96,12 +106,13 @@ dependencies:
       type: service
     version: 2.0.0
 direct_dependencies:
+- 78/esp-opus
 - espressif/esp_codec_dev
 - espressif/esp_io_expander_tca9554
 - espressif/esp_lcd_co5300
 - espressif/libjpeg-turbo
 - idf
 - waveshare/esp_lcd_touch_cst9217
-manifest_hash: 0cfaf42e193507e0b9477a855d4081516bc741db2e77855fe9728c6077758a3c
+manifest_hash: ce8da7f11f619e747b2f8b005b3b49bc95dd066101f1b253a9f0a5534dcf0b1e
 target: esp32s3
 version: 2.0.0

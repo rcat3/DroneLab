@@ -38,7 +38,7 @@ idf_component_register(SRCS ${CORE_SOURCES} ${IMAGE_SOURCES}
                        INCLUDE_DIRS ${CORE_DIR}/include
                        PRIV_INCLUDE_DIRS ${CORE_DIR} ${CORE_DIR}/../third_party/dr_libs
                        REQUIRES lvgl
-                       PRIV_REQUIRES ${board_component} lwip)
+                       PRIV_REQUIRES ${board_component} lwip 78__esp-opus)
 
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     rcat_feature_definitions(feature_definitions)
@@ -54,6 +54,12 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     idf_build_get_property(voice_fx RCAT_VOICE_FX)
     if(voice_fx)
         target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_VOICE_FX=1)
+    endif()
+
+    # The comm channel, on boards where a phone can connect over Bluetooth
+    # (CONFIG_BT_NIMBLE_ROLE_PERIPHERAL in the board's sdkconfig.defaults)
+    if(CONFIG_BT_NIMBLE_ROLE_PERIPHERAL)
+        target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_HAVE_COMM=1)
     endif()
 endif()
 

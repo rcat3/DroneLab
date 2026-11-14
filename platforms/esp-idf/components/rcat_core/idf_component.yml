@@ -1,0 +1,3 @@
+dependencies:
+  # Opus, for the comm channel's voice (core/app/comm.c)
+  78/esp-opus: "1.0.5"

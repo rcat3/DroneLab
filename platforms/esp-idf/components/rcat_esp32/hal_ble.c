@@ -1,12 +1,14 @@
 /*
  * Bluetooth LE for the HAL (see "Bluetooth LE" in hal.h), on ESP-IDF's
- * NimBLE stack as a central with a few links.
+ * NimBLE stack as a central with a few links, and as a peripheral that one
+ * phone connects to (on boards configured with the peripheral role).
  *
  * NimBLE runs on its own task and calls back from there. The UI loop only
  * reads the state and buffers kept here, under ble_lock, and starts NimBLE
  * procedures, which NimBLE allows from any task.
  */
 
+#include <stdio.h>
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"
@@ -16,6 +18,10 @@
 #include "host/util/util.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
+#if CONFIG_BT_NIMBLE_ROLE_PERIPHERAL
+#include "services/gap/ble_svc_gap.h"
+#include "services/gatt/ble_svc_gatt.h"
+#endif
 
 #include "hal.h"
 
@@ -59,6 +65,8 @@ static uint8_t own_addr_type;
 
 static int scan_event_cb(struct ble_gap_event *event, void *arg);
 static int link_event_cb(struct ble_gap_event *event, void *arg);
+static void peer_register(void);
+static void peer_advertise(void);
 
 static void set_state(ble_link_t *link, rcat_hal_ble_state_t s)
 {
@@ -398,6 +406,7 @@ static void on_sync(void)
     synced = true;
     ESP_LOGI(TAG, "Bluetooth ready");
     scan_begin();
+    peer_advertise();
 }
 
 static void on_reset(int reason)
@@ -439,6 +448,7 @@ static bool ble_start(void)
     }
     ble_hs_cfg.sync_cb = on_sync;
     ble_hs_cfg.reset_cb = on_reset;
+    peer_register();    // services have to be in place before the host starts
     nimble_port_freertos_init(host_task);
     started = true;
     ESP_LOGI(TAG, "Free internal RAM after Bluetooth: %u bytes",
@@ -583,3 +593,373 @@ size_t rcat_hal_ble_receive(int link, void *data, size_t max)
     taskEXIT_CRITICAL(&ble_lock);
     return n;
 }
+
+/********************************************************************************
+function:	The peripheral: one service that a phone connects to
+********************************************************************************/
+#if CONFIG_BT_NIMBLE_ROLE_PERIPHERAL
+
+#define PEER_MSGS           8
+#define PEER_MSG_MAX        64
+// How often it advertises, in 0.625 ms steps: 100 to 150 ms, which a phone
+// finds in a second or so, without costing much battery.
+#define PEER_ADV_MIN        160
+#define PEER_ADV_MAX        240
+// The connection the board asks for, in 1.25 ms steps: an event every 15 to
+// 30 ms, which carries 20 ms sound frames as they come. The board can skip up
+// to 4 events when it has nothing to send, to save battery.
+#define PEER_CONN_MIN       12
+#define PEER_CONN_MAX       24
+#define PEER_CONN_LATENCY   4
+#define PEER_CONN_TIMEOUT   500     // 10 ms steps
+
+static const rcat_hal_ble_peer_service_t *peer_service;
+static ble_uuid128_t peer_svc_uuid, peer_tx_uuid, peer_rx_uuid;
+static uint16_t peer_tx_handle;
+static char peer_name[32];
+static volatile bool peer_wanted;
+static volatile uint16_t peer_conn = BLE_HS_CONN_HANDLE_NONE;
+static volatile bool peer_subscribed;
+static volatile uint16_t peer_mtu;
+
+// What the phone wrote, oldest first, under ble_lock
+static uint8_t peer_msgs[PEER_MSGS][PEER_MSG_MAX];
+static uint8_t peer_msg_len[PEER_MSGS];
+static size_t peer_msg_head, peer_msg_count;
+
+static int peer_event_cb(struct ble_gap_event *event, void *arg);
+
+static void uuid_from_text_order(const uint8_t in[16], ble_uuid128_t *out)
+{
+    out->u.type = BLE_UUID_TYPE_128;
+    for (int i = 0; i < 16; i++)
+    {
+        out->value[i] = in[15 - i];     // NimBLE keeps them least significant byte first
+    }
+}
+
+static int peer_access_cb(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR)
+    {
+        return 0;       // reading the notify characteristic gives nothing
+    }
+    uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
+    if (len == 0 || len > PEER_MSG_MAX)
+    {
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    }
+    uint8_t data[PEER_MSG_MAX];
+    os_mbuf_copydata(ctxt->om, 0, len, data);
+    taskENTER_CRITICAL(&ble_lock);
+    size_t slot = (peer_msg_head + peer_msg_count) % PEER_MSGS;
+    if (peer_msg_count == PEER_MSGS)
+    {
+        peer_msg_head = (peer_msg_head + 1) % PEER_MSGS;   // drop the oldest
+    }
+    else
+    {
+        peer_msg_count++;
+    }
+    memcpy(peer_msgs[slot], data, len);
+    peer_msg_len[slot] = len;
+    taskEXIT_CRITICAL(&ble_lock);
+    return 0;
+}
+
+static struct ble_gatt_chr_def peer_chrs[] = {
+    {
+        .uuid = &peer_tx_uuid.u,
+        .access_cb = peer_access_cb,
+        .flags = BLE_GATT_CHR_F_NOTIFY,
+        .val_handle = &peer_tx_handle,
+    },
+    {
+        .uuid = &peer_rx_uuid.u,
+        .access_cb = peer_access_cb,
+        .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
+    },
+    { 0 },
+};
+
+static const struct ble_gatt_svc_def peer_svcs[] = {
+    {
+        .type = BLE_GATT_SVC_TYPE_PRIMARY,
+        .uuid = &peer_svc_uuid.u,
+        .characteristics = peer_chrs,
+    },
+    { 0 },
+};
+
+static void peer_register(void)
+{
+    if (peer_service == NULL)
+    {
+        return;
+    }
+    uuid_from_text_order(peer_service->service, &peer_svc_uuid);
+    uuid_from_text_order(peer_service->to_phone, &peer_tx_uuid);
+    uuid_from_text_order(peer_service->from_phone, &peer_rx_uuid);
+    ble_svc_gap_init();
+    ble_svc_gatt_init();
+    int rc = ble_gatts_count_cfg(peer_svcs);
+    if (rc == 0)
+    {
+        rc = ble_gatts_add_svcs(peer_svcs);
+    }
+    if (rc != 0)
+    {
+        ESP_LOGE(TAG, "Couldn't add the phone's service (%d)", rc);
+        peer_service = NULL;
+    }
+}
+
+static void peer_advertise(void)
+{
+    if (!synced || !peer_wanted || peer_service == NULL || peer_conn != BLE_HS_CONN_HANDLE_NONE
+        || ble_gap_adv_active())
+    {
+        return;
+    }
+    ble_svc_gap_device_name_set(peer_name);
+
+    // The service in the advertisement, so the phone can look for it, and the
+    // name in the scan response, as both don't fit in one.
+    struct ble_hs_adv_fields fields = { 0 };
+    fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
+    fields.uuids128 = &peer_svc_uuid;
+    fields.num_uuids128 = 1;
+    fields.uuids128_is_complete = 1;
+    int rc = ble_gap_adv_set_fields(&fields);
+    if (rc == 0)
+    {
+        struct ble_hs_adv_fields rsp = { 0 };
+        rsp.name = (const uint8_t *)peer_name;
+        rsp.name_len = strlen(peer_name);
+        rsp.name_is_complete = 1;
+        rc = ble_gap_adv_rsp_set_fields(&rsp);
+    }
+    if (rc == 0)
+    {
+        struct ble_gap_adv_params params = {
+            .conn_mode = BLE_GAP_CONN_MODE_UND,
+            .disc_mode = BLE_GAP_DISC_MODE_GEN,
+            .itvl_min = PEER_ADV_MIN,
+            .itvl_max = PEER_ADV_MAX,
+        };
+        rc = ble_gap_adv_start(own_addr_type, NULL, BLE_HS_FOREVER, &params, peer_event_cb, NULL);
+    }
+    if (rc != 0)
+    {
+        ESP_LOGE(TAG, "Advertising didn't start (%d)", rc);
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Advertising as %s", peer_name);
+    }
+}
+
+static int peer_event_cb(struct ble_gap_event *event, void *arg)
+{
+    switch (event->type)
+    {
+    case BLE_GAP_EVENT_CONNECT:
+        if (event->connect.status != 0)
+        {
+            ESP_LOGW(TAG, "Phone's connection failed (%d)", event->connect.status);
+            peer_advertise();
+            break;
+        }
+        peer_conn = event->connect.conn_handle;
+        peer_mtu = BLE_ATT_MTU_DFLT;
+        ESP_LOGI(TAG, "Phone connected");
+        if (!peer_wanted)
+        {
+            ble_gap_terminate(peer_conn, BLE_ERR_REM_USER_CONN_TERM);
+            break;
+        }
+        {
+            struct ble_gap_upd_params params = {
+                .itvl_min = PEER_CONN_MIN,
+                .itvl_max = PEER_CONN_MAX,
+                .latency = PEER_CONN_LATENCY,
+                .supervision_timeout = PEER_CONN_TIMEOUT,
+            };
+            ble_gap_update_params(peer_conn, &params);
+            ble_gattc_exchange_mtu(peer_conn, NULL, NULL);
+        }
+        break;
+
+    case BLE_GAP_EVENT_DISCONNECT:
+        ESP_LOGI(TAG, "Phone disconnected (reason %d)", event->disconnect.reason);
+        peer_conn = BLE_HS_CONN_HANDLE_NONE;
+        peer_subscribed = false;
+        peer_mtu = 0;
+        taskENTER_CRITICAL(&ble_lock);
+        peer_msg_count = 0;
+        taskEXIT_CRITICAL(&ble_lock);
+        peer_advertise();
+        break;
+
+    case BLE_GAP_EVENT_ADV_COMPLETE:
+        peer_advertise();       // if it stopped for anything but a connection
+        break;
+
+    case BLE_GAP_EVENT_SUBSCRIBE:
+        if (event->subscribe.attr_handle == peer_tx_handle)
+        {
+            peer_subscribed = event->subscribe.cur_notify;
+            ESP_LOGI(TAG, "Phone turned notifications %s", peer_subscribed ? "on" : "off");
+        }
+        break;
+
+    case BLE_GAP_EVENT_MTU:
+        peer_mtu = event->mtu.value;
+        ESP_LOGI(TAG, "Phone's MTU is %u", event->mtu.value);
+        break;
+
+    case BLE_GAP_EVENT_CONN_UPDATE:
+    {
+        struct ble_gap_conn_desc desc;
+        if (ble_gap_conn_find(event->conn_update.conn_handle, &desc) == 0)
+        {
+            ESP_LOGI(TAG, "Phone's connection: an event every %u.%02u ms, latency %u",
+                     desc.conn_itvl * 125 / 100, desc.conn_itvl * 125 % 100, desc.conn_latency);
+        }
+        break;
+    }
+
+    default:
+        break;
+    }
+    return 0;
+}
+
+void rcat_hal_ble_peer_setup(const rcat_hal_ble_peer_service_t *service)
+{
+    if (!started)
+    {
+        peer_service = service;
+    }
+}
+
+bool rcat_hal_ble_peer_start(const char *name)
+{
+    // ble_start() can find the service won't go in, and forget it.
+    if (peer_service == NULL || !ble_start() || peer_service == NULL)
+    {
+        return false;
+    }
+    snprintf(peer_name, sizeof(peer_name), "%s", name);
+    peer_wanted = true;
+    peer_advertise();       // or on_sync does, once the stack is ready
+    return true;
+}
+
+void rcat_hal_ble_peer_stop(void)
+{
+    peer_wanted = false;
+    if (!started)
+    {
+        return;
+    }
+    if (ble_gap_adv_active())
+    {
+        ble_gap_adv_stop();
+    }
+    uint16_t conn = peer_conn;
+    if (conn != BLE_HS_CONN_HANDLE_NONE)
+    {
+        ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
+    }
+}
+
+bool rcat_hal_ble_peer_connected(void)
+{
+    return peer_conn != BLE_HS_CONN_HANDLE_NONE && peer_subscribed;
+}
+
+size_t rcat_hal_ble_peer_max_send(void)
+{
+    uint16_t mtu = peer_mtu;
+    return rcat_hal_ble_peer_connected() && mtu > 3 ? mtu - 3 : 0;
+}
+
+bool rcat_hal_ble_peer_send(const void *data, size_t len)
+{
+    uint16_t conn = peer_conn;
+    if (conn == BLE_HS_CONN_HANDLE_NONE || !peer_subscribed || len == 0 || len > rcat_hal_ble_peer_max_send())
+    {
+        return false;
+    }
+    struct os_mbuf *om = ble_hs_mbuf_from_flat(data, len);
+    if (om == NULL)
+    {
+        return false;
+    }
+    return ble_gatts_notify_custom(conn, peer_tx_handle, om) == 0;     // it frees om either way
+}
+
+size_t rcat_hal_ble_peer_receive(void *data, size_t max)
+{
+    size_t len = 0;
+    taskENTER_CRITICAL(&ble_lock);
+    if (peer_msg_count > 0)
+    {
+        len = peer_msg_len[peer_msg_head];
+        if (len > max)
+        {
+            len = max;
+        }
+        memcpy(data, peer_msgs[peer_msg_head], len);
+        peer_msg_head = (peer_msg_head + 1) % PEER_MSGS;
+        peer_msg_count--;
+    }
+    taskEXIT_CRITICAL(&ble_lock);
+    return len;
+}
+
+#else   // no peripheral role on this board
+
+static void peer_register(void)
+{
+}
+
+static void peer_advertise(void)
+{
+}
+
+void rcat_hal_ble_peer_setup(const rcat_hal_ble_peer_service_t *service)
+{
+}
+
+bool rcat_hal_ble_peer_start(const char *name)
+{
+    return false;
+}
+
+void rcat_hal_ble_peer_stop(void)
+{
+}
+
+bool rcat_hal_ble_peer_connected(void)
+{
+    return false;
+}
+
+size_t rcat_hal_ble_peer_max_send(void)
+{
+    return 0;
+}
+
+bool rcat_hal_ble_peer_send(const void *data, size_t len)
+{
+    return false;
+}
+
+size_t rcat_hal_ble_peer_receive(void *data, size_t max)
+{
+    return 0;
+}
+
+#endif

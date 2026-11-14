@@ -11,7 +11,8 @@
  * VOICE_FX_SAMPLE_RATE, which is plenty for speech.
  *
  * The result goes to the voice lab stream (so voice_monitor.py --listen
- * effect can play it) and, if switched on, to the speaker.
+ * effect can play it), to a listener such as the comm channel, and, if
+ * switched on, to the speaker.
  */
 #define VOICE_FX_SAMPLE_RATE 16000
 
@@ -36,6 +37,13 @@ void voice_fx_set_volume(uint8_t percent);
 /* Play the processed voice on the speaker instead of the sound player. */
 void voice_fx_set_speaker(bool on);
 bool voice_fx_speaker_on(void);
+
+/* Also hand the processed voice to cb, in blocks of mono samples at
+ * VOICE_FX_SAMPLE_RATE, on the microphone's task (so cb has to be quick and
+ * must not call LVGL). While there's a listener, the effect runs even with
+ * the speaker off. NULL takes it away. There's room for one. */
+typedef void (*voice_fx_listener_t)(const int16_t *samples, size_t count, void *user_data);
+void voice_fx_set_listener(voice_fx_listener_t cb, void *user_data);
 
 /* For the speaker: up to max_frames frames of the processed voice as
  * stereo, at VOICE_FX_SAMPLE_RATE. Called on the speaker's task. */

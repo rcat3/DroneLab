@@ -4,9 +4,11 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/idf_additions.h"
 
 #include "driver/gpio.h"
 #include "driver/sdmmc_host.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_vfs_fat.h"
@@ -58,6 +60,26 @@ void rcat_hal_delay_ms(uint32_t ms)
 {
     TickType_t ticks = pdMS_TO_TICKS(ms);
     vTaskDelay(ticks > 0 ? ticks : 1);
+}
+
+// Background work runs on core 0, beside LVGL, as the audio has core 1. It
+// runs ahead of LVGL, which only makes the screen a moment late, but behind
+// Bluetooth and WiFi.
+#define TASK_CORE       0
+#define TASK_PRIORITY   3
+
+bool rcat_hal_task_start(const char *name, void (*fn)(void *arg), void *arg, size_t stack_size)
+{
+    // Stacks in PSRAM, as internal RAM is short. The tasks never write the
+    // flash, which is when PSRAM can't be reached.
+    BaseType_t ok = xTaskCreatePinnedToCoreWithCaps(fn, name, stack_size, arg, TASK_PRIORITY, NULL, TASK_CORE,
+                                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (ok != pdPASS)
+    {
+        ESP_LOGE("task", "Couldn't start task %s", name);
+        return false;
+    }
+    return true;
 }
 
 /* The BOOT button, on GPIO0 on every ESP32-S3 board. It only matters at reset

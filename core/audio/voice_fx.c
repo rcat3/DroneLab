@@ -1199,11 +1199,18 @@ static void make_decimator(void)
     }
 }
 
+// A listener for the processed voice (the comm channel), set from the UI
+// loop. user_data is filled in before cb, so the microphone's task never sees
+// a cb without it.
+static voice_fx_listener_t listener_cb;
+static void *listener_user_data;
+
 static void mic_cb(const int16_t *samples, size_t count, void *user_data)
 {
-    // Only run while something's listening: the speaker or the voice lab.
-    // Starting again builds the chain afresh, so nothing stale comes out.
-    if (!speaker_on && !voice_lab_running())
+    // Only run while something's listening: the speaker, the voice lab or a
+    // listener. Starting again builds the chain afresh, so nothing stale
+    // comes out.
+    if (!speaker_on && !voice_lab_running() && __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE) == NULL)
     {
         if (chain_preset >= 0)
         {
@@ -1257,6 +1264,11 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
         out[i] = (int16_t)(v * 32767.0f);
     }
     voice_lab_send(VOICE_LAB_KIND_EFFECT, FS, out, n);
+    voice_fx_listener_t cb = __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE);
+    if (cb != NULL)
+    {
+        cb(out, n, listener_user_data);
+    }
     if (speaker_on)
     {
         speaker_push(x, n, chain_preset >= 0 ? presets[chain_preset].speaker_db : 0);
@@ -1334,4 +1346,13 @@ void voice_fx_set_volume(uint8_t percent)
 bool voice_fx_speaker_on(void)
 {
     return speaker_on;
+}
+
+void voice_fx_set_listener(voice_fx_listener_t cb, void *user_data)
+{
+    if (cb != NULL)
+    {
+        listener_user_data = user_data;
+    }
+    __atomic_store_n(&listener_cb, cb, __ATOMIC_RELEASE);
 }

@@ -114,6 +114,8 @@ static bool load(settings_t *out)
     out->lovense_release_to_zero = out->lovense_release_to_zero ? 1 : 0;
     out->remote_autostart = out->remote_autostart ? 1 : 0;
     // visualizer is checked against the list of styles by the UI
+    out->comm_on = out->comm_on ? 1 : 0;
+    // comm_mode is checked by the comm channel
     for (int k = 0; k < SETTINGS_CURVE_POINTS && out->battery_curve_runs > 0; k++)
     {
         uint16_t mv = out->battery_curve_mv[k];
@@ -281,5 +283,12 @@ void settings_set_battery_curve(const uint16_t *mv, uint8_t runs, uint32_t last_
     }
     current.battery_curve_runs = runs;
     current.battery_curve_last_run = last_run;
+    schedule_save();
+}
+
+void settings_set_comm(uint8_t on, uint8_t mode)
+{
+    current.comm_on = on ? 1 : 0;
+    current.comm_mode = mode;
     schedule_save();
 }

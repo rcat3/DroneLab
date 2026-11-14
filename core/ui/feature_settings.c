@@ -4,13 +4,16 @@
  *
  * On boards with WiFi, the page after Brightness is the phone remote (see
  * app/remote.h): a switch for its hotspot, the QR code that joins it, a new
- * password, and whether it switches itself on at power-up.
+ * password, and whether it switches itself on at power-up.  After it comes
+ * the comm channel (see app/comm.h), on boards that have it.  The last page
+ * is firmware updates.
  */
 #include <stdio.h>
 #include <string.h>
 
 #include "app/battery.h"
 #include "app/battery_log.h"
+#include "app/comm.h"
 #include "app/remote.h"
 #include "app/settings.h"
 #include "app/updater.h"
@@ -19,6 +22,7 @@
 
 #define BATTERY_UPDATE_MS 1000
 #define REMOTE_POLL_MS    50
+#define COMM_POLL_MS      50
 #define LOG_UPDATE_MS     1000
 #define UPTIME_UPDATE_MS  1000
 #define UPDATE_POLL_MS    200
@@ -504,6 +508,159 @@ static void add_remote_page(ui_feature_t *feature)
     lv_timer_create(remote_timer_cb, REMOTE_POLL_MS, NULL);
 }
 
+/* ----- Comm channel ----- */
+
+static lv_obj_t *comm_page;
+static lv_obj_t *comm_title;
+static lv_obj_t *comm_switch;
+static lv_obj_t *comm_hint;
+static lv_obj_t *comm_modes;
+static lv_obj_t *comm_talk;
+static lv_obj_t *comm_name_label;
+
+/* Set a label's text only if it's changed, so it isn't redrawn every time. */
+static void set_label(lv_obj_t *label, const char *text)
+{
+    if (strcmp(lv_label_get_text(label), text) != 0)
+    {
+        lv_label_set_text(label, text);
+    }
+}
+
+static void show_comm(void)
+{
+    bool on = comm_running();
+    lv_obj_set_state(comm_switch, LV_STATE_CHECKED, on);
+    lv_obj_set_hidden(comm_hint, on);
+    lv_obj_set_hidden(comm_modes, !on);
+    lv_obj_set_hidden(comm_talk, !on);
+    lv_obj_set_hidden(comm_name_label, !on);
+    if (on)
+    {
+        // The phone can change the mode too
+        if (!lv_buttonmatrix_has_button_ctrl(comm_modes, comm_mode(), LV_BUTTONMATRIX_CTRL_CHECKED))
+        {
+            lv_buttonmatrix_set_button_ctrl(comm_modes, comm_mode(), LV_BUTTONMATRIX_CTRL_CHECKED);
+        }
+        set_label(comm_name_label, comm_name());
+    }
+
+    if (!on)
+    {
+        set_label(comm_title, "Comm");
+    }
+    else if (comm_sending())
+    {
+        set_label(comm_title, LV_SYMBOL_AUDIO "  Talking");
+    }
+    else if (!comm_phone_connected())
+    {
+        set_label(comm_title, comm_voice_heard() ? "No phone  " LV_SYMBOL_AUDIO : "Waiting for a phone");
+    }
+    else
+    {
+        set_label(comm_title, LV_SYMBOL_BLUETOOTH "  Phone connected");
+    }
+}
+
+static void comm_switch_event_cb(lv_event_t *e)
+{
+    bool on = lv_obj_has_state(comm_switch, LV_STATE_CHECKED);
+    if (on && !comm_start())
+    {
+        lv_label_set_text(comm_hint, "Bluetooth didn't start");
+    }
+    else if (!on)
+    {
+        comm_stop();
+        lv_label_set_text(comm_hint, "Talk to the group\nthrough a phone");
+    }
+    show_comm();
+}
+
+static void comm_mode_event_cb(lv_event_t *e)
+{
+    uint32_t selected = lv_buttonmatrix_get_selected_button(comm_modes);
+    if (selected < COMM_MODE_COUNT)
+    {
+        comm_set_mode((comm_mode_t)selected);
+    }
+}
+
+static void comm_talk_event_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_PRESSED)
+    {
+        comm_set_talk(true);
+    }
+    else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST)
+    {
+        comm_set_talk(false);
+    }
+}
+
+/* The channel answers the phone from here, whatever's on screen. */
+static void comm_timer_cb(lv_timer_t *t)
+{
+    comm_poll(lv_tick_get());
+    if (ui_current_page() == comm_page)
+    {
+        show_comm();
+    }
+}
+
+static void add_comm_page(ui_feature_t *feature)
+{
+    comm_page = ui_feature_add_page(feature, "Comm", false);
+    lv_obj_set_scrollable(comm_page, false);
+
+    comm_title = lv_label_create(comm_page);
+    lv_label_set_text(comm_title, "Comm");
+    lv_obj_align(comm_title, LV_ALIGN_TOP_MID, 0, ui_px(28));
+
+    comm_switch = lv_switch_create(comm_page);
+    lv_obj_set_size(comm_switch, ui_px(64), ui_px(32));
+    lv_obj_align(comm_switch, LV_ALIGN_CENTER, 0, ui_px(-58));
+    lv_obj_add_event_cb(comm_switch, comm_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    comm_hint = lv_label_create(comm_page);
+    lv_label_set_text(comm_hint, "Talk to the group\nthrough a phone");
+    lv_obj_set_style_text_align(comm_hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(comm_hint, COLOR_MUTED, 0);
+    lv_obj_align(comm_hint, LV_ALIGN_CENTER, 0, ui_px(0));
+
+    // Push to talk, or talk whenever it hears you
+    static const char *const modes[] = { "Push to talk", "Voice", "" };
+    comm_modes = lv_buttonmatrix_create(comm_page);
+    lv_buttonmatrix_set_map(comm_modes, modes);
+    lv_buttonmatrix_set_button_ctrl_all(comm_modes, LV_BUTTONMATRIX_CTRL_CHECKABLE);
+    lv_buttonmatrix_set_one_checked(comm_modes, true);
+    lv_buttonmatrix_set_button_ctrl(comm_modes, comm_mode(), LV_BUTTONMATRIX_CTRL_CHECKED);
+    lv_obj_set_size(comm_modes, ui_px(190), ui_px(40));
+    lv_obj_align(comm_modes, LV_ALIGN_CENTER, 0, ui_px(-12));
+    lv_obj_add_event_cb(comm_modes, comm_mode_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    // For trying it out with the display in hand; in the mask, the phone or
+    // a button paired with it does this
+    comm_talk = lv_button_create(comm_page);
+    lv_obj_set_size(comm_talk, ui_px(130), ui_px(36));
+    lv_obj_set_style_radius(comm_talk, LV_RADIUS_CIRCLE, 0);
+    lv_obj_align(comm_talk, LV_ALIGN_CENTER, 0, ui_px(38));
+    lv_obj_add_event_cb(comm_talk, comm_talk_event_cb, LV_EVENT_ALL, NULL);
+    lv_obj_t *text = lv_label_create(comm_talk);
+    lv_label_set_text(text, "Hold to talk");
+    lv_obj_center(text);
+
+    comm_name_label = lv_label_create(comm_page);
+    lv_label_set_text(comm_name_label, "");
+    lv_obj_set_style_text_color(comm_name_label, COLOR_MUTED, 0);
+    lv_obj_align(comm_name_label, LV_ALIGN_CENTER, 0, ui_px(80));
+
+    show_comm();
+    lv_timer_create(comm_timer_cb, COMM_POLL_MS, NULL);
+}
+
 /* ----- Firmware update ----- */
 
 static lv_obj_t *update_page;
@@ -612,6 +769,10 @@ static bool build(ui_feature_t *feature)
     if (remote_available())
     {
         add_remote_page(feature);
+    }
+    if (comm_available())
+    {
+        add_comm_page(feature);
     }
 #endif
     add_rotation_page(feature);
