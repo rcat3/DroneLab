@@ -2,7 +2,7 @@
 
 ![The speaker housing](images/speaker_housing_1_46.png)
 
-**This housing is no longer supported.**  The [ESP32-S3-Touch-AMOLED-1.75](../../boards/waveshare_esp32s3_touch_amoled_1_75/) and its speaker housing replace it.  The design is kept here for anyone who wants to build it or bring it back, for example as a stereo player.  The ESP32-S3-Touch-LCD-1.46 itself is still supported, in its [simple housing](../../boards/waveshare_esp32s3_touch_lcd_1_46/).
+**This housing is no longer supported.**  The [ESP32-S3-Touch-AMOLED-1.75](../../boards/waveshare_esp32s3_touch_amoled_1_75/) and its speaker housing replace it.  The design is kept here for anyone who wants to build it or bring it back, for example as a stereo player.  The board's [simple housing](../waveshare_esp32s3_touch_lcd_1_46/) is deprecated too, but the firmware still supports the board (see [Other Boards](../../../docs/other-boards.md)).
 
 It's an all-in-one housing that screws into the voice port of an MSA Millennium mask: the display in the middle, a small speaker in a pod on each side, and a chamber behind for a 2000 mAh battery, two MAX98357A amplifier boards and a USB-C charging port, with a turning collar.  It was fully assembled and worn.
 
@@ -31,7 +31,7 @@ Run `render.sh` in this folder.  It needs [OpenSCAD](https://openscad.org/).
 
 The STL files go in the `stl/` folder, turned the right way up to print.  The parts render in parallel, and the body and collar take the longest, around a minute.
 
-The housing uses the board's dimensions from [`../../boards/waveshare_esp32s3_touch_lcd_1_46/board.scad`](../../boards/waveshare_esp32s3_touch_lcd_1_46/board.scad), and the voice port thread and turning collar from [`../../masks/msa_millennium`](../../masks/msa_millennium/), which the 1.75" housing shares.
+The housing uses the board's dimensions from [`../waveshare_esp32s3_touch_lcd_1_46/board.scad`](../waveshare_esp32s3_touch_lcd_1_46/board.scad), and the voice port thread and turning collar from [`../../masks/msa_millennium`](../../masks/msa_millennium/), which the 1.75" housing shares.
 
 ## How it goes together
 
@@ -133,7 +133,7 @@ R8 is a tiny 0201 part, so changing it is fine soldering work.  Measure the char
 - **`pod_test`** - One of the pods on its own, to check the speaker's fit.
 - **`plunger_test`** - The plungers in three lengths, two of each, standing 1.3, 1.8 and 2.3 mm out of the housing.  `plunger_proud` is set to the one that worked best.
 
-The thread test rings are in the [1.46" board's folder](../../boards/waveshare_esp32s3_touch_lcd_1_46/#test-prints).
+The thread test rings are in the [1.46" simple housing's folder](../waveshare_esp32s3_touch_lcd_1_46/#test-prints).
 
 ## Files
 

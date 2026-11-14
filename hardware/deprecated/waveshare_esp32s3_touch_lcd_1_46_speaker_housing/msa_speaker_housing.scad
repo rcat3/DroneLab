@@ -52,7 +52,7 @@
 part = "preview";           // "preview", "body", "back", "collar", "washer", "gasket", "plungers", "plunger_test",
                             // "spacers", "pod_test" or "layout"
 
-include <../../boards/waveshare_esp32s3_touch_lcd_1_46/board.scad>
+include <../waveshare_esp32s3_touch_lcd_1_46/board.scad>
 include <header_adapter/header_adapter.scad>
 include <../../masks/msa_millennium/turning_collar.scad>
 

@@ -1,10 +1,12 @@
-# Building with the RP2040-Touch-LCD-1.28 or RP2350-Touch-LCD-1.28
+# Building with the RP2040-Touch-LCD-1.28 or RP2350-Touch-LCD-1.28 (deprecated)
 
-The [Waveshare RP2040-Touch-LCD-1.28](https://www.waveshare.com/wiki/RP2040-Touch-LCD-1.28) and [RP2350-Touch-LCD-1.28](https://www.waveshare.com/wiki/RP2350-Touch-LCD-1.28) are the same shape: a 1.28" round touch screen (240x240) with a battery charger and an accelerometer.  They show [images](../features/images.md) and [settings](../features/settings.md); they have no microphone, speaker, SD card slot, WiFi or Bluetooth.  They're the simplest and cheapest build, and the smallest on the mask.
+**This housing is no longer supported.**  Build the [ESP32-S3-Touch-AMOLED-1.75](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md) instead.  This guide is kept for anyone who wants to build it anyway.  The firmware still supports these boards: see [Other Boards](../../../docs/other-boards.md).
 
-**Which one?**  They cost about the same, and the RP2350 has twice the RAM (520 kB against 264 kB), so it can play full screen animated GIFs, which the RP2040 can't (see [Animated GIF memory use](../features/images.md#animated-gif-memory-use)).  Get the RP2350.
+The [Waveshare RP2040-Touch-LCD-1.28](https://www.waveshare.com/wiki/RP2040-Touch-LCD-1.28) and [RP2350-Touch-LCD-1.28](https://www.waveshare.com/wiki/RP2350-Touch-LCD-1.28) are the same shape: a 1.28" round touch screen (240x240) with a battery charger and an accelerometer.  They show [images](../../../docs/features/images.md) and [settings](../../../docs/features/settings.md); they have no microphone, speaker, SD card slot, WiFi or Bluetooth.  They were the cheapest build, and the smallest on the mask.
 
-![The 1.28" housing](../images/housing_1_28.png)
+**Which one?**  They cost about the same, and the RP2350 has twice the RAM (520 kB against 264 kB), so it can play full screen animated GIFs, which the RP2040 can't (see [Animated GIF memory use](../../../docs/features/images.md#animated-gif-memory-use)).  Get the RP2350.
+
+![The 1.28" housing](images/housing_1_28.png)
 
 The housing is two printed parts and no screws.  The body has the voice port thread on its back, and holds the board, the battery in a cradle inside the thread, and a slide switch in its side wall.  The bezel twist-locks over the front, flush with the glass, and holds the board in.  Nothing sticks out of the back, so it screws all the way in and sits flat.  It stands about 11.6 mm out of the mask.
 
@@ -20,7 +22,7 @@ The housing is two printed parts and no screws.  The body has the voice port thr
 
 ## Printing
 
-The design is [`hardware/boards/waveshare_touch_lcd_1_28/msa_housing.scad`](../../hardware/boards/waveshare_touch_lcd_1_28/), in [OpenSCAD](https://openscad.org/).  Set `board` to `"rp2040"` or `"rp2350"` in `board.scad`, then run `./render.sh` in that folder to make the STL files.  Its README lists the parts and how to print them.
+The design is [`msa_housing.scad`](./), in [OpenSCAD](https://openscad.org/).  Set `board` to `"rp2040"` or `"rp2350"` in `board.scad`, then run `./render.sh` in that folder to make the STL files.  Its README lists the parts and how to print them.
 
 1. Print `fit_test`, the front of the body without the thread, to check the board, the switch and the bezel fit.
 2. Print `phase_test`, the thread with a scale on its front, screw it all the way into the mask, hold the mask upright and read the number at the top.  Set `thread_phase` to it, so the housing ends up level.  It's already set from one mask, so this step is only needed if yours sits crooked.
@@ -64,11 +66,11 @@ Below about 300 mA isn't sensible, as the charger always starts a flat battery a
 
 ## Travel case
 
-There's a hinged case to carry the housing in, in [`hardware/boards/waveshare_touch_lcd_1_28/travel_case`](../../hardware/boards/waveshare_touch_lcd_1_28/travel_case/).  It prints in one go, all five parts laid out together.
+There's a hinged case to carry the housing in, in [`travel_case`](travel_case/).  It prints in one go, all five parts laid out together.
 
 ## Building and flashing the firmware
 
-Set up pico-sdk as described in [Building the Firmware](../building-firmware.md#rp2040-and-rp2350-boards), then from the top of the repo, for the RP2350 board:
+Set up pico-sdk as described in [Building the Firmware](../../../docs/building-firmware.md#rp2040-and-rp2350-boards), then from the top of the repo, for the RP2350 board:
 
 ```
 cmake -S platforms/pico -B build-rp2350 -DBOARD=waveshare_rp2350_touch_lcd_1_28
@@ -81,5 +83,5 @@ To flash it with the board in the housing, plug in the USB-C cable and run `pico
 
 ## After it's built
 
-- In the housing, the board is turned a quarter turn so its USB-C port faces the side, so set [Rotation](../features/settings.md#rotation) to 90 degrees.
-- The images are built into the firmware, so changing them means rebuilding it (see [Adding or changing built-in images](../features/images.md#adding-or-changing-built-in-images)).
+- In the housing, the board is turned a quarter turn so its USB-C port faces the side, so set [Rotation](../../../docs/features/settings.md#rotation) to 90 degrees.
+- The images are built into the firmware, so changing them means rebuilding it (see [Adding or changing built-in images](../../../docs/features/images.md#adding-or-changing-built-in-images)).

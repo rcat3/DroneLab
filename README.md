@@ -1,12 +1,12 @@
 # DroneLab
 
-This project features firmware and 3D printable housings for small round Waveshare touch displays.  While primarily intended to screw into the voice port on the front of an MSA Millennium gas mask, this ecosystem was designed to be flexible.  The immediate audience will be "latex drones" desiring slick high-tech accessories for their gas mask.  Though cosplayers and other costume designers might find the project suits their needs as well.  
+This project features firmware and 3D printable housings for a small round Waveshare touch display.  While primarily intended to screw into the voice port on the front of an MSA Millennium gas mask, this ecosystem was designed to be flexible.  The immediate audience will be "latex drones" desiring slick high-tech accessories for their gas mask.  Though cosplayers and other costume designers might find the project suits their needs as well.  
 
-What started as a simple application to display images on Waveshare displays has grown into a small platform.  The same firmware runs on several displays, and the bigger ones can also light up with your voice, play sound, control Lovense devices and be run from a phone.  The biggest can change your voice too.
+What started as a simple application to display images on Waveshare displays has grown into a small platform, built around the Waveshare ESP32-S3-Touch-AMOLED-1.75.  It shows images, lights up with your voice, changes your voice, plays sound, controls Lovense devices and can be run from a phone.
 
 ![The housings, to scale](docs/images/housings_to_scale.png)
 
-*The housings, to scale.  From left: the 1.28" housing (RP2040 or RP2350), the 1.46" housing, and the 1.75" speaker housing.*
+*The two housings, to scale: the low-profile housing (left) and the speaker housing (right).*
 
 ## What it does
 
@@ -25,47 +25,16 @@ You swipe up and down between features, and left and right between each feature'
 
 ## Hardware
 
-Four displays are supported, all made by Waveshare.  Each has a 3D printable housing in this repository that screws into the mask's voice port, and a build guide with everything needed to make it.
+DroneLab runs on the [Waveshare ESP32-S3-Touch-AMOLED-1.75](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md): a 1.75" round AMOLED touch screen (466x466) on an ESP32-S3 with 8 MB of PSRAM, two microphones, a speaker amplifier, a micro SD card slot, WiFi, Bluetooth LE, an accelerometer and a power button.  Its charger is set by the firmware, so there's no resistor to change, and the battery and speaker plug straight into the board: nothing needs soldering.
 
-| | [RP2040-Touch-LCD-1.28](docs/hardware/waveshare_touch_lcd_1_28.md) | [RP2350-Touch-LCD-1.28](docs/hardware/waveshare_touch_lcd_1_28.md) | [ESP32-S3-Touch-LCD-1.46](docs/hardware/waveshare_esp32s3_touch_lcd_1_46.md) | [ESP32-S3-Touch-AMOLED-1.75](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md) |
-|---|---|---|---|---|
-| Screen | 1.28" round LCD, 240x240 | 1.28" round LCD, 240x240 | 1.46" round LCD, 412x412 | 1.75" round AMOLED, 466x466 |
-| Processor | RP2040, 2 cores, 133 MHz | RP2350, 2 cores, 150 MHz | ESP32-S3, 2 cores, 240 MHz | ESP32-S3, 2 cores, 240 MHz |
-| RAM | 264 kB | 520 kB | 512 kB + 8 MB PSRAM | 512 kB + 8 MB PSRAM |
-| Microphone | | | One | Two |
-| Speaker | | | Built in | Amplifier and speaker socket |
-| Micro SD card | | | Yes | Yes |
-| WiFi and Bluetooth LE | | | Yes | Yes |
-| Accelerometer | Yes (not supported yet) | Yes (not supported yet) | Yes | Yes |
-| Battery charging | 1 A | 1 A | Up to 2 A, power button | 500 mA, set by the firmware, power button |
-| Status | Works | Works | Works | Works |
-
-Which features each one runs:
-
-| Feature | RP2040 1.28" | RP2350 1.28" | ESP32-S3 1.46" | ESP32-S3 1.75" |
-|---|:-:|:-:|:-:|:-:|
-| [Images](docs/features/images.md) | Yes | Yes | Yes | Yes |
-| [Full screen animated GIFs](docs/features/images.md#animated-gif-memory-use) | | Yes | From the SD card | From the SD card |
-| [Images from the SD card](docs/features/images.md#images-on-the-sd-card) | | | Yes | Yes |
-| [KITT and the Voice Ring](docs/features/kitt-and-voice-ring.md) | | | Yes | Yes |
-| [Voice Effects](docs/features/voice-effects.md) | | | | Yes |
-| [Voice Lab](docs/features/voice-lab.md) | | | Yes | Yes |
-| [Sound](docs/features/sound.md) | | | Yes | Yes |
-| [Lovense](docs/features/lovense.md) | | | Yes | Yes |
-| [Level](docs/features/level.md) | | | Yes | Yes |
-| [Terminal](docs/features/terminal.md) | | | Yes | Yes |
-| [Phone Remote](docs/features/phone-remote.md) | | | Yes | Yes |
-| [Settings](docs/features/settings.md) | Yes | Yes | Yes | Yes |
-
-### Choosing one
+There are two 3D printable housings for it that screw into the mask's voice port, and a [build guide](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md) with everything needed to make either:
 
 | | |
 |---|---|
-| ![The 1.28" housing](docs/images/housing_1_28.png) | **[RP2040 or RP2350, 1.28"](docs/hardware/waveshare_touch_lcd_1_28.md)**: the simplest, smallest and cheapest build, for showing images.  Two printed parts and no screws, with the battery and a power switch inside, standing about 12 mm out of the mask.  Get the RP2350: it costs the same as the RP2040 and has room for full screen animated GIFs. |
-| ![The 1.46" housing](docs/images/housing_1_46.png) | **[ESP32-S3, 1.46"](docs/hardware/waveshare_esp32s3_touch_lcd_1_46.md)**: every feature but the voice effects, in one printed part with no soldering.  The board's built-in speaker faces into the mask, so it's best for images, voice displays, Lovense control and the phone remote, rather than for sound. |
-| ![The 1.75" speaker housing](docs/images/speaker_housing_1_75.png) | **[ESP32-S3, 1.75" AMOLED](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md)**: the standard build, with every feature, including voice effects, on the biggest, sharpest screen.  True blacks, two microphones, a speaker below the display that faces out, and a 2000 mAh battery.  The board has its own amplifier, so there's nothing to solder but the speaker's plug, and it runs about 13.5 hours on a charge. |
+| ![The low-profile housing](docs/images/low_profile_housing_1_75.png) | **[Low-profile housing](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md#the-low-profile-housing)** (designed, not printed yet): the entry-level build, without a speaker, for images, voice displays, Lovense control and the phone remote.  A flat battery for about 4.5-5.5 hours and the thread fixed to the back, standing about 23 mm out of the mask. |
+| ![The speaker housing](docs/images/speaker_housing_1_75.png) | **[Speaker housing](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md#the-speaker-housing)**: every feature, including sound and voice effects, with a speaker below the display that faces out, and a 2000 mAh battery for about 13.5 hours.  A turning collar holds it level. |
 
-The housings' designs are in [`hardware/`](hardware/), in [OpenSCAD](https://openscad.org/), organized by board.  The 1.46" board's speaker housing, with two speakers, is no longer supported; its design is kept in [`hardware/deprecated`](hardware/deprecated/).
+The housings' designs are in [`hardware/`](hardware/), in [OpenSCAD](https://openscad.org/).  The firmware also runs on a few other Waveshare round displays, which may be useful for other projects (see [Other Boards](docs/other-boards.md)).
 
 ## How the software is put together
 
@@ -79,12 +48,13 @@ See [Developing](docs/development/README.md) for how it fits together, and how t
 
 ## Documentation
 
-- **Building one:** pick a display above, then follow its build guide: [1.28"](docs/hardware/waveshare_touch_lcd_1_28.md), [1.46"](docs/hardware/waveshare_esp32s3_touch_lcd_1_46.md) or [1.75"](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md).  Each has the parts to buy, printing, wiring, putting it together, and building and flashing the firmware.
-- **[Building the Firmware](docs/building-firmware.md):** getting the code, setting up pico-sdk or ESP-IDF, building, flashing, and choosing which features to build.
+- **[Building one](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md):** the parts to buy, printing, wiring, putting it together, and building and flashing the firmware, for either housing.
+- **[Building the Firmware](docs/building-firmware.md):** getting the code, setting up ESP-IDF, building, flashing, and choosing which features to build.
 - **[Using the Display](docs/using-the-display.md):** finding your way around, and turning it on and off.
 - **[Features](docs/features/README.md):** each feature in detail, with what it needs.
 - **[Developing](docs/development/README.md):** how it's put together, [adding a feature](docs/development/adding-a-feature.md), [the hardware abstraction layer](docs/development/hardware-abstraction.md) and [adding a board](docs/development/adding-a-board.md).
-- **[Hardware designs](hardware/):** the housings, PCBs and cases, and how they're organized.
+- **[Hardware designs](hardware/):** the housings, and how they're organized.
+- **[Other Boards](docs/other-boards.md):** the other displays the firmware runs on.
 
 ## Acknowledgement
 

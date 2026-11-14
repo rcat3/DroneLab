@@ -7,8 +7,6 @@ The Sound feature plays sound files from the SD card.  Its pages are:
 - **Player**: the track that's playing, with how far through it is in the middle, and previous, play/pause and next buttons below.  Drag the bar to move through the track; the times either side show where it'll go.  In an MP3, it goes to the same share of the file, which is exact if the bitrate is constant, and close if not.  Sound keeps playing in the background while you look at images or anything else.
 - **Options**: the volume, what happens at the end of a track (*Repeat all*, *Repeat one* or *Play once*), and *Play at startup*, which starts playing the last track as soon as the display turns on.
 
-On the ESP32-S3-Touch-LCD-1.46, the small round trimmer on the back of the board also sets the built-in speaker's volume, on top of the volume setting.
-
 ## Sounds on the SD card
 
 1. Make a folder called `sounds` on the card.

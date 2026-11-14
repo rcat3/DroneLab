@@ -25,7 +25,7 @@ The board's **BOOT** button switches *Play on speaker* off and on, to stop feedb
 
 *Play on speaker* is always off at startup, in case it feeds back.  The speaker in the board's housing faces away from the mask, but some of it still reaches the microphones.  The board cancels most of that, because its audio chip hears what the speaker is playing (see its [board notes](../hardware/waveshare_esp32s3_touch_amoled_1_75.md#board-notes)), so it can go much louder before it feeds back.
 
-The ESP32-S3-Touch-LCD-1.46 doesn't have voice effects.  Its built-in speaker faces into the mask, and it can't cancel the speaker out of its microphone, so it would feed back long before the effect was loud enough to hear.
+The voice effects need the [speaker housing](../hardware/waveshare_esp32s3_touch_amoled_1_75.md#the-speaker-housing): the low-profile housing has no speaker.  The [other boards](../other-boards.md) the firmware runs on don't have them.
 
 The presets are the same as the effects in `tools/voice_monitor.py`, so they can be tried and tuned on a computer first.  The pitch-following presets add about 15-20 ms of delay, the others less.
 

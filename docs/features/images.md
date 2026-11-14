@@ -28,7 +28,7 @@ The image name is also what shows up in the *Startup* setting.  To remove an ima
 
 ## Image sizes
 
-Images are drawn for a 240x240 screen.  On a bigger screen they're scaled up by the same amount, so a 240x240 image fills the 412x412 screen of the ESP32-S3-Touch-LCD-1.46, and a 120x120 image fills the middle half of any of the screens.  If an image is bigger than 240x240, it's treated as full screen artwork and scaled to fit each screen, so higher resolution artwork looks sharper on the bigger screens.
+Images are drawn for a 240x240 screen.  On a bigger screen they're scaled up by the same amount, so a 240x240 image fills the 466x466 screen of the ESP32-S3-Touch-AMOLED-1.75, and a 120x120 image fills the middle half of any of the screens.  If an image is bigger than 240x240, it's treated as full screen artwork and scaled to fit each screen, so higher resolution artwork looks sharper on the bigger screens.
 
 Animated GIFs that need resizing are re-encoded, without transparent pixels and with a black background, so a resized GIF can come out bigger than the original file.  GIFs that are already the right size are used as they are.
 
@@ -65,7 +65,7 @@ Images are sized for the screen the same way as the built-in images.  Still imag
 python3 tools/prepare_sd.py my_images/*.gif my_images/*.png --size 412 --out /media/you/SDCARD/images
 ```
 
-Use the path where your card is mounted.  `--size` is the board's screen size: 412 for the ESP32-S3-Touch-LCD-1.46, or 466 for the ESP32-S3-Touch-AMOLED-1.75.
+Use the path where your card is mounted.  `--size` is the board's screen size: 466 for the ESP32-S3-Touch-AMOLED-1.75 (or 412 for the [ESP32-S3-Touch-LCD-1.46](../other-boards.md)).
 
 Limits:
 

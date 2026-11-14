@@ -5,7 +5,7 @@ On the board, go to Settings, Firmware Update, and switch it on. It shows a
 six digit code, and the hotspot's name and password. Join the hotspot from
 this computer, then run, for example:
 
-    tools/update.py build-s3-146/dronelab.bin 123456
+    tools/update.py build-s3-175/dronelab.bin 123456
 
 It checks the firmware is for the board, sends it, and the board restarts into
 it. If the new firmware doesn't start properly, the board goes back to the old
@@ -60,7 +60,7 @@ class Progress:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("firmware", help="the .bin file, e.g. build-s3-146/dronelab.bin")
+    parser.add_argument("firmware", help="the .bin file, e.g. build-s3-175/dronelab.bin")
     parser.add_argument("code", help="the code on the board's Firmware Update page")
     parser.add_argument("--host", default=BOARD_ADDRESS, help="the board's address")
     args = parser.parse_args()
