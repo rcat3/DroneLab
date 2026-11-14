@@ -12,6 +12,7 @@
 #include "audio/audio_level.h"
 #include "audio/voice_fx.h"
 #include "audio/voice_lab.h"
+#include "hal.h"
 #include "ui/kitt.h"
 #include "ui/ui_internal.h"
 #include "ui/voice_ring.h"
@@ -31,8 +32,13 @@ static lv_obj_t *ring_roller;
 static lv_obj_t *lab_status_label;
 static lv_obj_t *lab_switch;
 static lv_obj_t *volume_value_label;
+static lv_obj_t *effect_roller;
+static lv_obj_t *speaker_switch;
+static lv_obj_t *volume_slider;
 
 #define LAB_POLL_MS 250
+#define SYNC_MS     250     // how often the effect pages catch up with the phone remote
+#define BUTTON_MS   20      // how often the board's button is checked
 
 /********************************************************************************
 function:	Show the voice ring if it's switched on and the page on screen is one
@@ -129,6 +135,7 @@ static void add_effect_page(ui_feature_t *feature)
     voice_fx_set_preset(preset);
 
     lv_obj_t *roller = lv_roller_create(page);
+    effect_roller = roller;
     lv_roller_set_options(roller, options, LV_ROLLER_MODE_NORMAL);
     lv_roller_set_visible_row_count(roller, 3);
     lv_roller_set_selected(roller, preset, LV_ANIM_OFF);
@@ -142,7 +149,7 @@ static void add_effect_page(ui_feature_t *feature)
     lv_obj_align(speaker_label, LV_ALIGN_CENTER, 0, ui_px(44));
 
     // Big, so it's easy to hit with a gloved finger
-    lv_obj_t *speaker_switch = lv_switch_create(page);
+    speaker_switch = lv_switch_create(page);
     lv_obj_set_size(speaker_switch, ui_px(76), ui_px(38));
     lv_obj_set_ext_click_area(speaker_switch, ui_px(8));
     lv_obj_align(speaker_switch, LV_ALIGN_CENTER, 0, ui_px(76));
@@ -168,6 +175,7 @@ static void add_volume_page(ui_feature_t *feature)
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(32));
 
     lv_obj_t *slider = lv_slider_create(page);
+    volume_slider = slider;
     lv_obj_set_size(slider, ui_px(160), ui_px(20));
     lv_slider_set_range(slider, 0, 100);
     lv_slider_set_value(slider, volume, LV_ANIM_OFF);
@@ -183,6 +191,46 @@ static void add_volume_page(ui_feature_t *feature)
     lv_obj_set_style_text_align(help, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(help, lv_palette_main(LV_PALETTE_GREY), 0);
     lv_obj_align(help, LV_ALIGN_CENTER, 0, ui_px(56));
+}
+
+/* Show what the phone remote changed, leaving alone anything that's being
+ * touched. */
+static void effect_sync_timer_cb(lv_timer_t *t)
+{
+    const settings_t *s = settings_get();
+    if (effect_roller != NULL && !lv_obj_has_state(effect_roller, LV_STATE_PRESSED)
+        && s->voice_effect < voice_fx_preset_count() && lv_roller_get_selected(effect_roller) != s->voice_effect)
+    {
+        lv_roller_set_selected(effect_roller, s->voice_effect, LV_ANIM_OFF);
+    }
+    if (speaker_switch != NULL && lv_obj_has_state(speaker_switch, LV_STATE_CHECKED) != voice_fx_speaker_on())
+    {
+        if (voice_fx_speaker_on())
+        {
+            lv_obj_add_state(speaker_switch, LV_STATE_CHECKED);
+        }
+        else
+        {
+            lv_obj_remove_state(speaker_switch, LV_STATE_CHECKED);
+        }
+    }
+    if (volume_slider != NULL && !lv_slider_is_dragged(volume_slider)
+        && lv_slider_get_value(volume_slider) != s->voice_volume)
+    {
+        lv_slider_set_value(volume_slider, s->voice_volume, LV_ANIM_OFF);
+        lv_label_set_text_fmt(volume_value_label, "%d%%", s->voice_volume);
+    }
+}
+
+/* The board's spare button (BOOT) switches Play on speaker on and off, to
+ * stop feedback quickly without finding the switch. */
+static void button_timer_cb(lv_timer_t *t)
+{
+    if (rcat_hal_button_pressed())
+    {
+        voice_fx_set_speaker(!voice_fx_speaker_on());
+        effect_sync_timer_cb(NULL);
+    }
 }
 
 /* ----- Voice lab ----- */
@@ -278,6 +326,8 @@ static bool build(ui_feature_t *feature)
     {
         add_effect_page(feature);
         add_volume_page(feature);
+        lv_timer_create(effect_sync_timer_cb, SYNC_MS, NULL);
+        lv_timer_create(button_timer_cb, BUTTON_MS, NULL);
     }
     if (voice_lab_available())
     {

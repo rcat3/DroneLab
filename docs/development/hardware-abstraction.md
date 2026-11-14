@@ -5,7 +5,7 @@ Code in `core/` never includes anything from pico-sdk or ESP-IDF.  It reaches th
 | Area | Functions |
 |---|---|
 | Startup, display and touch | `rcat_hal_init()`, `rcat_hal_lvgl_register()`, `rcat_hal_display_set_rotation()`, `rcat_hal_backlight_set()` |
-| Power and sensors | `rcat_hal_battery_voltage()`, `rcat_hal_battery_charger()` (whether it's charging or finished, if the board can tell), `rcat_hal_battery_curve()` (the model's default discharge curve, made with the battery log, until the board learns its own), `rcat_hal_accel_read()` |
+| Power and sensors | `rcat_hal_battery_voltage()`, `rcat_hal_battery_charger()` (whether it's charging or finished, if the board can tell), `rcat_hal_battery_curve()` (the model's default discharge curve, made with the battery log, until the board learns its own), `rcat_hal_accel_read()`, `rcat_hal_button_pressed()` (the spare button: BOOT on the ESP32-S3 boards) |
 | Settings storage | `rcat_hal_settings_read()`, `rcat_hal_settings_write()`, and `rcat_hal_log_read()`, `rcat_hal_log_write()` and `rcat_hal_log_program()` (which adds to the log without erasing it) for the battery log |
 | Audio | `rcat_hal_audio_in_start()` (microphone), `rcat_hal_audio_out_start()` (speaker) |
 | WiFi | `rcat_hal_wifi_connect()`, `rcat_hal_wifi_disconnect()`, `rcat_hal_wifi_address()`, `rcat_hal_hotspot_start()`, `rcat_hal_hotspot_stop()`, `rcat_hal_hotspot_clients()`, `rcat_hal_random()` |

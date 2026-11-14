@@ -34,6 +34,8 @@ static lv_obj_t *elapsed_label;
 static lv_obj_t *remaining_label;
 static lv_obj_t *volume_value_label;
 static lv_obj_t *repeat_label;
+static lv_obj_t *volume_slider;
+static lv_obj_t *autoplay_switch;
 
 static const char *const repeat_texts[AUDIO_REPEAT_COUNT] = {
     LV_SYMBOL_LOOP "  Repeat all",
@@ -299,6 +301,7 @@ static void add_options_page(ui_feature_t *feature)
     lv_obj_align(volume_label, LV_ALIGN_TOP_MID, 0, ui_px(32));
 
     lv_obj_t *slider = lv_slider_create(page);
+    volume_slider = slider;
     lv_obj_set_size(slider, ui_px(160), ui_px(20));
     lv_slider_set_range(slider, 0, 100);
     lv_slider_set_value(slider, settings_get()->sound_volume, LV_ANIM_OFF);
@@ -320,13 +323,40 @@ static void add_options_page(ui_feature_t *feature)
     lv_label_set_text(autoplay_label, "Play at startup");
     lv_obj_align(autoplay_label, LV_ALIGN_CENTER, 0, ui_px(42));
 
-    lv_obj_t *autoplay_switch = lv_switch_create(page);
+    autoplay_switch = lv_switch_create(page);
     if (settings_get()->sound_autoplay)
     {
         lv_obj_add_state(autoplay_switch, LV_STATE_CHECKED);
     }
     lv_obj_align(autoplay_switch, LV_ALIGN_CENTER, 0, ui_px(68));
     lv_obj_add_event_cb(autoplay_switch, autoplay_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+}
+
+/* Show what the phone remote changed, leaving the slider alone while it's
+ * dragged. */
+static void options_sync_timer_cb(lv_timer_t *t)
+{
+    const settings_t *s = settings_get();
+    if (!lv_slider_is_dragged(volume_slider) && lv_slider_get_value(volume_slider) != s->sound_volume)
+    {
+        lv_slider_set_value(volume_slider, s->sound_volume, LV_ANIM_OFF);
+        lv_label_set_text_fmt(volume_value_label, "%d%%", s->sound_volume);
+    }
+    if (s->sound_repeat < AUDIO_REPEAT_COUNT && strcmp(lv_label_get_text(repeat_label), repeat_texts[s->sound_repeat]) != 0)
+    {
+        lv_label_set_text(repeat_label, repeat_texts[s->sound_repeat]);
+    }
+    if (lv_obj_has_state(autoplay_switch, LV_STATE_CHECKED) != (s->sound_autoplay != 0))
+    {
+        if (s->sound_autoplay != 0)
+        {
+            lv_obj_add_state(autoplay_switch, LV_STATE_CHECKED);
+        }
+        else
+        {
+            lv_obj_remove_state(autoplay_switch, LV_STATE_CHECKED);
+        }
+    }
 }
 
 static bool build(ui_feature_t *feature)
@@ -358,5 +388,6 @@ static bool build(ui_feature_t *feature)
 
     add_player_page(feature);
     add_options_page(feature);
+    lv_timer_create(options_sync_timer_cb, STATUS_UPDATE_MS, NULL);
     return true;
 }

@@ -73,6 +73,10 @@ typedef struct
     const char *name;
     uint8_t count;
     fx_step_t steps[MAX_STEPS];
+    // dB on the speaker only, so that each one starts to feed back at about
+    // the same Effect Volume: 100% with the 1.75" board in its housing,
+    // facing open air
+    float speaker_db;
 } fx_preset_t;
 
 #define GATE { FX_GATE, { -45 } }
@@ -80,24 +84,24 @@ typedef struct
 static const fx_preset_t presets[] = {
     // Your own voice, like a mask's voice amplifier: only the boom below the
     // voice and the hiss above it taken out
-    { "Natural", 3, { GATE, { FX_HIGHPASS, { 200 } }, { FX_LOWPASS, { 5000 } } } },
+    { "Natural", 3, { GATE, { FX_HIGHPASS, { 200 } }, { FX_LOWPASS, { 5000 } } }, -10 },
     // Your own voice raised to around 180 Hz from a typical male voice, and
     // kept to the middle of the voice's range
-    { "Female", 5, { GATE, { FX_SHIFT, { 1.9f, 1.2f, 0 } }, { FX_HIGHPASS, { 250 } }, { FX_LOWPASS, { 4500 } }, { FX_GAIN, { 2 } } } },
+    { "Female", 5, { GATE, { FX_SHIFT, { 1.9f, 1.2f, 0 } }, { FX_HIGHPASS, { 250 } }, { FX_LOWPASS, { 4500 } }, { FX_GAIN, { 2 } } }, -2.5f },
     // Female snapped to notes, with a faint metallic ring, a little digital
     // grit and a flanger
     { "Fembot", 8, { GATE, { FX_SHIFT, { 1.9f, 1.2f, 1 } }, { FX_RING, { 300, 0.2f } }, { FX_CRUSH, { 10, 1 } },
-                     { FX_CHORUS, { 2, 1.5f, 0.5f } }, { FX_HIGHPASS, { 250 } }, { FX_LOWPASS, { 4500 } }, { FX_GAIN, { 8 } } } },
-    { "Synthetic", 4, { GATE, { FX_TUNE, { 1.7f, 1.2f, 1 } }, { FX_RING, { 500, 0.15f } }, { FX_CRUSH, { 12, 1 } } } },
-    { "Android", 3, { GATE, { FX_VOCODER, { 220, 1.18f } }, { FX_CHORUS, { 0.4f, 4, 0.3f } } } },
-    { "AI", 4, { GATE, { FX_HIGHPASS, { 250 } }, { FX_TUNE, { 1.75f, 1.22f, 1 } }, { FX_CHORUS, { 1.5f, 2, 0.4f } } } },
-    { "Robot", 2, { GATE, { FX_VOCODER, { 110, 1 } } } },
-    { "Deep", 2, { GATE, { FX_PITCH, { 0.75f } } } },
+                     { FX_CHORUS, { 2, 1.5f, 0.5f } }, { FX_HIGHPASS, { 250 } }, { FX_LOWPASS, { 4500 } }, { FX_GAIN, { 8 } } }, 2.5f },
+    { "Synthetic", 4, { GATE, { FX_TUNE, { 1.7f, 1.2f, 1 } }, { FX_RING, { 500, 0.15f } }, { FX_CRUSH, { 12, 1 } } }, -5 },
+    { "Android", 3, { GATE, { FX_VOCODER, { 220, 1.18f } }, { FX_CHORUS, { 0.4f, 4, 0.3f } } }, 0 },
+    { "AI", 4, { GATE, { FX_HIGHPASS, { 250 } }, { FX_TUNE, { 1.75f, 1.22f, 1 } }, { FX_CHORUS, { 1.5f, 2, 0.4f } } }, -2.5f },
+    { "Robot", 2, { GATE, { FX_VOCODER, { 110, 1 } } }, -7.5f },
+    { "Deep", 2, { GATE, { FX_PITCH, { 0.75f } } }, -2.5f },
     // A Dalek: a 30 Hz ring modulator, on a voice that's higher, thinner and
     // driven hard
     { "Dalek", 7, { GATE, { FX_HIGHPASS, { 400 } }, { FX_PITCH, { 1.26f } }, { FX_DRIVE, { 24 } }, { FX_RING, { 30, 1 } },
-                    { FX_LOWPASS, { 3500 } }, { FX_GAIN, { 8 } } } },
-    { "Drone", 4, { GATE, { FX_PITCH, { 0.85f } }, { FX_RING, { 60, 0.6f } }, { FX_CRUSH, { 10, 1 } } } },
+                    { FX_LOWPASS, { 3500 } }, { FX_GAIN, { 8 } } }, 2.5f },
+    { "Drone", 4, { GATE, { FX_PITCH, { 0.85f } }, { FX_RING, { 60, 0.6f } }, { FX_CRUSH, { 10, 1 } } }, 2.5f },
 };
 #define PRESET_COUNT (sizeof(presets) / sizeof(presets[0]))
 
@@ -1050,10 +1054,10 @@ static uint32_t speaker_read;
 static volatile bool speaker_on;
 static volatile float speaker_gain = 3.16f;    // set by voice_fx_set_volume
 
-static void speaker_push(const float *x, int n)
+static void speaker_push(const float *x, int n, float trim_db)
 {
     uint32_t w = speaker_write;
-    float gain = speaker_gain;
+    float gain = speaker_gain * powf(10.0f, trim_db / 20.0f);
     for (int i = 0; i < n; i++)
     {
         // tanh rounds off peaks instead of clipping them.
@@ -1180,7 +1184,7 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     voice_lab_send(VOICE_LAB_KIND_EFFECT, FS, out, n);
     if (speaker_on)
     {
-        speaker_push(x, n);
+        speaker_push(x, n, chain_preset >= 0 ? presets[chain_preset].speaker_db : 0);
     }
 
 #if VOICE_FX_DEBUG
@@ -1200,14 +1204,20 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
 
 /* ----- Public ----- */
 
+static bool started;
+
 bool voice_fx_start(void)
 {
-    static bool started;
     if (!started && mic_start())
     {
         make_decimator();
         started = mic_add_listener(mic_cb, NULL);
     }
+    return started;
+}
+
+bool voice_fx_available(void)
+{
     return started;
 }
 

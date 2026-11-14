@@ -221,6 +221,11 @@ void rcat_hal_update_confirm(void);
 /* Restart the board. */
 void rcat_hal_restart(void);
 
+/* True once for each press of the board's spare button (BOOT, on the ESP32-S3
+ * boards) since the last call. Call it often, every 50 ms or so. Always false
+ * on boards without one. */
+bool rcat_hal_button_pressed(void);
+
 void rcat_hal_delay_ms(uint32_t ms);
 
 #endif

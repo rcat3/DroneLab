@@ -439,6 +439,11 @@ void rcat_hal_update_confirm(void)
 {
 }
 
+bool rcat_hal_button_pressed(void)
+{
+    return false;
+}
+
 void rcat_hal_restart(void)
 {
     watchdog_reboot(0, 0, 0);
