@@ -65,7 +65,16 @@ for name in "${requested[@]}"; do
         if [ "${entry%%:*}" = "$entry" ]; then
             entry="$SCAD:$entry"
         fi
-        jobs_list+=("$entry")
+        # Once each, even if two groups share it
+        seen=""
+        for j in ${jobs_list[@]+"${jobs_list[@]}"}; do
+            if [ "$j" = "$entry" ]; then
+                seen=1
+            fi
+        done
+        if [ -z "$seen" ]; then
+            jobs_list+=("$entry")
+        fi
     done
 done
 

@@ -17,6 +17,4 @@ On boards with WiFi, the whole display can also be run from a phone, with the [P
 
 ## Turning it on and off
 
-- **RP2040 and RP2350 1.28" boards:** with the slide switch in the [1.28" housing](hardware/waveshare_touch_lcd_1_28.md), which disconnects the battery.  The boards have no power button.
-- **ESP32-S3-Touch-LCD-1.46:** press `PWR` on the side to turn it on.  Hold it for 2 seconds to turn it off.
-- **ESP32-S3-Touch-AMOLED-1.75:** the same, with its `PWR` button.
+Press `PWR` on the side to turn it on.  Hold it for 2 seconds to turn it off.  (On the [other boards](other-boards.md) the firmware runs on, see their notes.)

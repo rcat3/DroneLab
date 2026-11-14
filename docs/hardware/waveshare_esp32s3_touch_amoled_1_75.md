@@ -1,18 +1,20 @@
 # Building with the ESP32-S3-Touch-AMOLED-1.75
 
-The [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75) is a 1.75" round AMOLED touch screen (466x466) on an ESP32-S3 with 8 MB of PSRAM.  It has everything the 1.46" board has, plus two microphones, a speaker amplifier with its own socket, and a power management chip that charges the battery gently.  Every [feature](../features/README.md) runs on it, and it's the only board with [voice effects](../features/voice-effects.md).  It's the standard build.  Get the bare board, not the -B version that comes in its own case.
+The [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75) is a 1.75" round AMOLED touch screen (466x466) on an ESP32-S3 with 8 MB of PSRAM.  It has two microphones, a speaker amplifier with its own socket, a micro SD card slot, WiFi, Bluetooth LE, an accelerometer, a power button, and a power management chip that charges the battery gently.  Every [feature](../features/README.md) runs on it, including [voice effects](../features/voice-effects.md) in the speaker housing.  Get the bare board, not the -B version that comes in its own case.
 
-**Status: works.**  The housing has been printed and everything works in it.  Since that print, the battery stands upright and the microphones have a sealed cell of their own, which hasn't been printed yet.
+There are two housings for it, both screwing into the voice port of an MSA Millennium mask.  Neither needs any soldering: the battery, and the speaker if there is one, plug straight into the board.
 
-![The speaker housing](../images/speaker_housing_1_75.png)
+| The speaker housing | The low-profile housing |
+|---|---|
+| ![The speaker housing](../images/speaker_housing_1_75.png) | ![The low-profile housing](../images/low_profile_housing_1_75.png) |
+| A speaker in a shallow pod below the display, facing out, for sound and voice effects, and a 2000 mAh battery in a chamber behind.  A turning collar holds it level while it's screwed in.  About 13.5 hours on a charge, and it stands about 33 mm out of the mask. | No speaker, and a flat 700-850 mAh battery in a shallow chamber, with the thread fixed to the back.  Fewer parts and screws, about 4.5-5.5 hours on a charge, and it stands about 23 mm out of the mask.  For images, the voice displays, Lovense control and the phone remote. |
+| **Status: works.**  Printed, worn, and everything works in it. | **Status: designed, not printed yet.** |
 
-The housing screws into the voice port of an MSA Millennium mask, with a speaker in a shallow pod below the display that faces out, and a 2000 mAh battery in a chamber behind.  Below the voice port is the mask's filter mount, so the pod stays in front of it, and a sloped chin behind the pod clears it (by about 4.7 mm, measured from a 3D scan of a mask).  A turning collar holds the housing level while it's screwed in.
-
-The board's own amplifier, speaker socket and microphones are used, so there are no other boards to wire in: the speaker and the battery plug straight into the board.
+Below the voice port is the mask's filter mount.  The speaker housing's pod stays in front of it, and a sloped chin behind the pod clears it (by about 4.7 mm, measured from a 3D scan of a mask).  The low-profile housing is round, and clears it easily.
 
 ## Board notes
 
-- **Power:** the board runs from USB-C or from a 3.7 V LiPo battery on its MX1.25 connector (check the polarity before plugging a battery in), and charges the battery at up to 500 mA, which is gentle on any battery that fits.  The firmware sets that, and also limits what the board draws from USB to 500 mA, which any USB port can supply: while the board's busy, the charger slows down to fit.  A 2000 mAh battery charges from flat in about 4.5 hours, and runs the board for about 13.5 hours.  Press `PWR` to turn it on, and hold it for 2 seconds to turn it off.  While it runs, `BOOT` switches the [voice effect](../features/voice-effects.md) on the speaker off and on.
+- **Power:** the board runs from USB-C or from a 3.7 V LiPo battery on its MX1.25 connector (check the polarity before plugging a battery in), and charges the battery at up to 400 mA, which is gentle on either housing's battery.  The firmware sets that, and also limits what the board draws from USB to 500 mA, which any USB port can supply: while the board's busy, the charger slows down to fit.  The speaker housing's 2000 mAh battery charges from flat in about 5.5 hours, and runs the board for about 13.5 hours.  The low-profile housing's 700-850 mAh battery takes about 2.5 hours and runs it for about 4.5-5.5.  Press `PWR` to turn it on, and hold it for 2 seconds to turn it off.  While it runs, `BOOT` switches the [voice effect](../features/voice-effects.md) on the speaker off and on.
 - **Brightness:** an AMOLED has no backlight, so the Brightness setting dims the screen itself.  Black parts of the picture are truly off.
 - **Microphones:** the two microphones are mixed together.  Their gain is `MIC_GAIN_DB` in the board's `hal_board.c`.
 - **Echo cancelling:** the board's audio chip also hears the speaker's own signal, so the firmware takes the speaker out of what the microphones pick up.  That lets the [voice effect](../features/voice-effects.md) go much louder before it feeds back: in the housing, sealed with plasticine as below, Dalek went to about 95% on the Effect Volume, before the microphones had a cell of their own, where without it it fed back at about 30%.  Leave some room below that, as anything close in front of the mask reflects the speaker back into it.  It's a small adaptive filter, run a sample at a time so it adds no delay (`AEC_` settings in `hal_board.c`).  In the housing, the speaker reaches the microphones most strongly around 1.5 kHz, so that band is turned down a little after the echo canceller (`FEEDBACK_CUT_`), which lets it go a little louder again.
@@ -20,7 +22,9 @@ The board's own amplifier, speaker socket and microphones are used, so there are
 - **Speaker:** the microphones and the speaker share one audio clock, so sound is resampled to 32 kHz for the speaker, which is plenty for a small speaker.  `SPK_VOLUME` in `hal_board.c` sets how loud the board's amplifier goes, on top of the volume setting.
 - **Not used yet:** the clock chip, and the GPS on the -G version.
 
-## Parts to buy
+## The speaker housing
+
+### Parts to buy
 
 - A [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75), the bare board
 - A speaker module, 35 x 25 x 6.5 mm sealed box with an oval cone on the front, 4 ohm, with an MX1.25 2-pin plug (or one crimped on)
@@ -30,13 +34,13 @@ The board's own amplifier, speaker socket and microphones are used, so there are
 - M2 socket head screws: four M2 x 8 for the back, four M2 x 6 for the washer, and four M2 x 8 for the chin
 - Three M2 x 5 countersunk screws for the board
 
-## Printing
+### Printing
 
-The design is [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75/msa_speaker_housing.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/), in [OpenSCAD](https://openscad.org/).  Run `./render.sh` in that folder to make the STL files.  Its README lists the parts, how to print them, and the test prints to check first: the glass's fit (`lens_fit`), the micro SD slot, and the speaker (`pod_test`).
+The design is [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75/msa_speaker_housing.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/), in [OpenSCAD](https://openscad.org/).  Run `./render.sh speaker` in that folder to make the STL files.  Its README lists the parts, how to print them, and the test prints to check first: the glass's fit (`lens_fit`), the micro SD slot, and the speaker (`pod_test`).
 
 **Materials:** print the `gasket` and the `usb_plug` in TPU.  Everything else is PLA or PLA+.
 
-## Wiring
+### Wiring
 
 ```mermaid
 flowchart LR
@@ -46,7 +50,7 @@ flowchart LR
 
 The speaker and battery sockets stand up off the back of the board, so their plugs go in from behind, through openings in the housing's back plate.
 
-## Putting it together
+### Putting it together
 
 1. Push the plungers in from inside the display's pocket.  Cut two small squares of the soft foam, about 4 mm across, poke a hole through the middle of each with a toothpick, and put one over the end of each microphone sleeve on the back plate, lined up with its hole.  They seal the sleeves against the board, so the microphones only hear the voice port.  Then fit the board and screw it to the back plate with the countersunk screws.
 2. Push the speaker's plug through the opening at the inner end of the pocket, into the chamber.  Then stick the speaker into its pocket from the back of the pod, with its wire in the notch in the side of the pocket, and run the wire behind the speaker to the opening.  Spread a thin layer of plasticine (modeling clay that never hardens) over the back of the speaker, so it fills the space between the speaker and the chin, and screw the chin on.
@@ -57,6 +61,33 @@ The speaker and battery sockets stand up off the back of the board, so their plu
 7. Drop each half of the washer in through the threaded end, line its holes up with two posts, and screw it down with the M2 x 6 screws.  Stop when the collar turns firmly but smoothly.
 
 The USB-C port is reachable through a pocket in the right-hand side, for charging and flashing, with a small plug to cover it when it's not in use.
+
+## The low-profile housing
+
+**Status: designed, not printed yet.**  It shares the display's cup, the openings, the plungers and the microphones' sleeves with the speaker housing, which have been checked with a print.  The battery's place, the thread's position and the back are new.
+
+### Parts to buy
+
+- A [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75), the bare board
+- A 603040 LiPo battery, up to 41 x 30.5 x 6.3 mm (about 700-850 mAh), with an MX1.25 2-pin plug.  Check its polarity against the board before plugging it in.
+- Double-sided foam tape, about 0.8 mm, and a scrap of soft foam about 2 mm thick, such as craft foam
+- Four M2 x 8 socket head screws for the back
+- Three M2 x 5 countersunk screws for the board
+
+### Printing
+
+The design is [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75/msa_low_profile_housing.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/).  Run `./render.sh low_profile` in that folder to make the STL files: `lp_body`, `lp_back`, `plungers` and `usb_plug`.  Its README says how to print them, and has the test prints: the glass's fit (`lp_lens_fit`), and `lp_phase_test`, for checking the housing ends up level.
+
+**Materials:** print the `usb_plug` in TPU.  Everything else is PLA or PLA+.
+
+### Putting it together
+
+1. Fit the plungers, the foam rings on the microphone sleeves and the board, as in step 1 for the speaker housing.
+2. Tape the battery to the front of the back with the foam tape, in the outline engraved there, with its leads towards the opening beside it.
+3. Plug the battery into the board's battery socket, through the opening in the back plate, below the middle of the board.  The socket beside it, marked with a speaker, stays empty.  Tuck the wires in beside the battery, below it.
+4. Screw the back on with the M2 x 8 screws.  It only goes on one way round.
+
+Screw the whole housing into the mask by its grip.  It should end up level, with the USB-C port on the right.  If it sits a little crooked, see `lp_phase_test` in the [design's README](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/).
 
 ## Building the firmware
 

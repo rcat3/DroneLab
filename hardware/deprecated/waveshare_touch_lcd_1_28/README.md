@@ -1,8 +1,10 @@
-# MSA Millennium Housing for the RP2040/RP2350-Touch-LCD-1.28
+# MSA Millennium Housing for the RP2040/RP2350-Touch-LCD-1.28 (deprecated)
+
+**This housing is no longer supported.**  The [ESP32-S3-Touch-AMOLED-1.75](../../boards/waveshare_esp32s3_touch_amoled_1_75/) and its housings replace it.  This one needs a switch soldered into the battery's lead, and a tiny resistor on the board changed to charge its small battery safely, where the 1.75" board has a power button and a charger set by the firmware.  The design is kept here for anyone who wants to build it.  The firmware still supports the boards (see [Other Boards](../../../docs/other-boards.md)).
 
 A 3D printable housing that screws the [Waveshare RP2040-Touch-LCD-1.28](https://www.waveshare.com/wiki/RP2040-Touch-LCD-1.28) or [RP2350-Touch-LCD-1.28](https://www.waveshare.com/wiki/RP2350-Touch-LCD-1.28) into the voice port of an MSA Millennium mask, with the battery and a power switch inside.
 
-This README is about the design files.  For the whole build, with the parts to buy, wiring, putting it together and charging, see the [build guide](../../../docs/hardware/waveshare_touch_lcd_1_28.md).
+This README is about the design files.  For the whole build, with the parts to buy, wiring, putting it together and charging, see the [build guide](build_guide.md) in this folder.
 
 **Status: printed and working with the RP2040 board, in PLA+.**  It's modeled from Waveshare's 3D model of the RP2040 board, then adjusted from test prints.  Their model of the RP2350 board leaves out the touch panel and the battery socket, so it's taken to be the same apart from its thicker PCB.  The RP2350 board hasn't been tried in it yet.
 
@@ -36,6 +38,8 @@ The numbers count up clockwise from the arrow, seen from the front.  If you read
 - `board.scad` - The boards' dimensions.  Set `board` to `"rp2040"` or `"rp2350"` here.
 - `render.sh` - Renders all of the parts to STL files in `stl/`.
 - `travel_case/` - A hinged case to carry the housing in, with the board in it.
+- `build_guide.md` - The whole build: the parts to buy, wiring, putting it together, charging and building the firmware.
+- `images/` - The housing's picture, and `render_view.scad`, the view it was rendered from.
 
 ## Parts
 
@@ -62,11 +66,11 @@ These have been checked on a print with the RP2040 board, but printers differ, s
 
 ## Parts to buy, wiring and putting it together
 
-See the [build guide](../../../docs/hardware/waveshare_touch_lcd_1_28.md).
+See the [build guide](build_guide.md).
 
 ## Charge current
 
-The boards charge their battery at 1 A, set by R15 (160k) next to the charger chip, which is several times what a 250-310 mAh battery should take.  Changing R15 to about 560k brings it down to about 0.3 A.  The [build guide](../../../docs/hardware/waveshare_touch_lcd_1_28.md#charging) has the details and other values.
+The boards charge their battery at 1 A, set by R15 (160k) next to the charger chip, which is several times what a 250-310 mAh battery should take.  Changing R15 to about 560k brings it down to about 0.3 A.  The [build guide](build_guide.md#charging) has the details and other values.
 
 ## Travel case
 

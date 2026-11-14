@@ -88,13 +88,15 @@ static const char *TAG = "board";
 #define AXP_ALDO1_3V3       ((3300 - 500) / 100)    // 0.5 V + 0.1 V a step
 // Charging. The board draws up to about 250 mA itself with the screen on, so
 // the most it takes from USB is set to 500 mA, which any USB port can supply;
-// the charger slows down to fit while the board's busy. 500 mA charges a
-// 2000 mAh battery from flat in about 4.5 hours, and keeps it cool in the
-// housing.
+// the charger slows down to fit while the board's busy. It charges at 400 mA,
+// about half the capacity an hour of the low-profile housing's 700-850 mAh
+// battery, the standard rate in LiPo datasheets, and a fifth of the speaker
+// housing's 2000 mAh battery, which it charges from flat in about 5.5 hours.
+// It keeps the battery cool in either housing.
 #define AXP_REG_INPUT_LIMIT 0x16    // bits 2:0: 0 100 mA, 1 500 mA, 2 900 mA, 3 1 A, 4 1.5 A, 5 2 A
 #define AXP_INPUT_LIMIT     1       // 500 mA
 #define AXP_REG_CHARGE_CUR  0x62    // bits 4:0: 25 mA steps to 200 mA (8), then 100 mA steps to 1 A (16)
-#define AXP_CHARGE_CUR      11      // 500 mA
+#define AXP_CHARGE_CUR      10      // 400 mA
 #define AXP_REG_CHARGE_VOLT 0x64    // bits 2:0: 1 4.0 V, 2 4.1 V, 3 4.2 V, 4 4.35 V, 5 4.4 V
 #define AXP_CHARGE_VOLT     3       // 4.2 V, for an ordinary LiPo
 #define AXP_I2C_HZ          400000

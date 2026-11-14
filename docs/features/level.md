@@ -8,4 +8,4 @@ Use it with the [Rotation](settings.md#rotation) setting, which turns the pictur
 
 It can be picked to show when the display turns on, in [Settings](settings.md#startup).
 
-The RP2040 and RP2350 boards have an accelerometer too, but the firmware doesn't support it yet, so the Level is left out of their build.  On the ESP32-S3-Touch-AMOLED-1.75, the accelerometer's directions haven't been checked on a real board yet.
+The RP2040 and RP2350 1.28" boards (see [Other Boards](../other-boards.md)) have an accelerometer too, but the firmware doesn't support it yet, so the Level is left out of their build.

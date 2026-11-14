@@ -1,10 +1,12 @@
-# MSA Millennium Housing for the ESP32-S3-Touch-LCD-1.46
+# MSA Millennium Housing for the ESP32-S3-Touch-LCD-1.46 (deprecated)
+
+**This housing is no longer supported.**  The [ESP32-S3-Touch-AMOLED-1.75](../../boards/waveshare_esp32s3_touch_amoled_1_75/) and its housings replace it: they need no soldering to charge their batteries safely, as the 1.75" board's charger is set by the firmware, where this board's needs a tiny resistor changed.  The design is kept here for anyone who wants to build it.  The firmware still supports the board (see [Other Boards](../../../docs/other-boards.md)).
 
 A 3D printable housing that screws the [Waveshare ESP32-S3-Touch-LCD-1.46](https://docs.waveshare.com/ESP32-S3-Touch-LCD-1.46) into the voice port of an MSA Millennium mask.  It's for the version of the board **with the cover glass** (44.77 mm round lens).  It's one printed part, holding the board and a small battery.
 
-This README is about the design files.  For the whole build, with the parts to buy and putting it together, see the [build guide](../../../docs/hardware/waveshare_esp32s3_touch_lcd_1_46.md).
+This README is about the design files.  For the whole build, with the parts to buy and putting it together, see the [build guide](build_guide.md) in this folder.
 
-There was also a speaker housing for this board, with two speakers and their own amplifiers.  It's no longer supported, and the [ESP32-S3-Touch-AMOLED-1.75](../waveshare_esp32s3_touch_amoled_1_75/) replaces it.  Its design is kept in [`../../deprecated/waveshare_esp32s3_touch_lcd_1_46_speaker_housing`](../../deprecated/waveshare_esp32s3_touch_lcd_1_46_speaker_housing/), and it still uses this folder's `board.scad`.
+There was also a speaker housing for this board, with two speakers and their own amplifiers, in [`../waveshare_esp32s3_touch_lcd_1_46_speaker_housing`](../waveshare_esp32s3_touch_lcd_1_46_speaker_housing/).  It uses this folder's `board.scad`.
 
 ## Making the STL files
 
@@ -59,6 +61,8 @@ You don't need to print these to build a housing: the design's already been chec
 - `board.scad` - The board's dimensions.
 - `render.sh` - Renders the parts to STL files.
 - `travel_case/` - A case to carry the housing in.
+- `build_guide.md` - The whole build: the parts to buy, putting it together and building the firmware.
+- `images/` - The housing's picture, and `render_view.scad`, the view it was rendered from.
 
 The MSA voice port thread and the thread test rings are shared with the other boards' housings, in [`../../masks/msa_millennium`](../../masks/msa_millennium/).
 

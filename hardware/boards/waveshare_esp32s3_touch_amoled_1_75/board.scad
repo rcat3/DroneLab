@@ -56,7 +56,7 @@ header_grow = 0.5;                  // around the pin header
 conn_grow = 0.5;                    // around the speaker and battery sockets
 mic_hole = 2.5;                     // each microphone's sound hole is off to one end of it, by about 0.7 mm, so
                                     // the hole is wide enough to take it wherever it is
-usb_access = true;                  // the firmware sets the board to charge at 500 mA, which is
+usb_access = true;                  // the firmware sets the board to charge at 400 mA, which is
                                     // gentle on any battery that fits, so the port is open
 usb_opening = [12.4, 6.6];          // width, height of the slot for the USB-C plug. The plug's
                                     // overmold has to fit into it to plug in all the way
