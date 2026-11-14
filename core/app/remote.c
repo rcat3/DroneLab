@@ -27,6 +27,9 @@
  *                                     the Terminal feature, and show it there
  *     POST /api/clear                 clear the Terminal
  *     POST /api/termsize?s=<0 to fit, or 1 to 6 for 8 to 48 px>   its letter size
+ *     POST /api/display?[b=<percent>][&rot=<quarter turns>][&start=<startup choice>]
+ *                                     the brightness, rotation and what's
+ *                                     shown at startup, as in Settings
  *     POST /api/ring?[on=<1 or 0>][&c=<color>]   the voice ring
  *     GET  /api/tracks    the sound player's tracks, which don't change
  *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>]   the voice
@@ -46,6 +49,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "app/battery.h"
 #include "app/lovense.h"
 #include "app/message.h"
 #include "app/patterns.h"
@@ -58,6 +62,7 @@
 #include "hal.h"
 #include "lvgl.h"
 #include "ui/ui.h"
+#include "ui/ui_internal.h"
 #include "ui/voice_ring.h"
 
 #if RCAT_HAVE_NETWORK
@@ -417,6 +422,15 @@ static void write_state(json_t *j)
             (unsigned)page, settings_get()->terminal_size, message_scale());
     jstring(j, message_text());
     const settings_t *s = settings_get();
+    jprintf(j, ",\"display\":{\"brightness\":%u,\"rotation\":%u,\"startup\":%d,\"uptime\":%lu",
+            s->brightness, s->rotation, ui_find_startup_choice(s->startup_image), (unsigned long)(now / 1000));
+    battery_status_t battery;
+    if (battery_latest(&battery))
+    {
+        jprintf(j, ",\"battery\":{\"percent\":%u,\"volts\":%.2f,\"charging\":%d}", battery.percent,
+                battery.volts, battery.charging ? 1 : 0);
+    }
+    jprintf(j, "}");
     if (voice_ring_available())
     {
         jprintf(j, ",\"ring\":{\"on\":%u,\"color\":%u}", s->voice_ring, s->voice_ring_color);
@@ -500,6 +514,12 @@ static void write_info(json_t *j)
     {
         jprintf(j, "%s", i ? "," : "");
         jstring(j, voice_fx_preset_name(i));
+    }
+    jprintf(j, "],\"startup_choices\":[");
+    for (size_t i = 0; i < ui_startup_choice_count(); i++)
+    {
+        jprintf(j, "%s", i ? "," : "");
+        jstring(j, ui_startup_choice_label(i));
     }
     jprintf(j, "],\"ring_colors\":[");
     for (uint8_t i = 0; voice_ring_available() && i < voice_ring_color_count(); i++)
@@ -698,6 +718,28 @@ static bool run_command(const char *name, const char *query, const char *body, s
     {
         int size = query_int(query, "s", 0);
         settings_set_terminal_size((uint8_t)(size >= 0 && size <= 6 ? size : 0));
+    }
+    else if (strcmp(name, "display") == 0)
+    {
+        // As the Settings pages do
+        int brightness = query_int(query, "b", -1);
+        if (brightness >= 0)
+        {
+            brightness = brightness < 1 ? 1 : brightness > 100 ? 100 : brightness;
+            rcat_hal_backlight_set((uint8_t)brightness);
+            settings_set_brightness((uint8_t)brightness);
+        }
+        int rotation = query_int(query, "rot", -1);
+        if (rotation >= 0 && rotation <= 3 && rotation != settings_get()->rotation)
+        {
+            rcat_hal_display_set_rotation((uint8_t)rotation);
+            settings_set_rotation((uint8_t)rotation);
+        }
+        int startup = query_int(query, "start", -1);
+        if (startup >= 0 && (size_t)startup < ui_startup_choice_count())
+        {
+            settings_set_startup_image(ui_startup_choice_value((size_t)startup));
+        }
     }
     else if (strcmp(name, "ring") == 0 && voice_ring_available())
     {

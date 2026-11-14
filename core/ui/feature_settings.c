@@ -36,14 +36,19 @@ const ui_feature_def_t feature_settings = {
 
 static lv_obj_t *battery_label;
 static lv_obj_t *brightness_value_label;
+static lv_obj_t *brightness_slider;
+static lv_obj_t *rotation_roller;
+static lv_obj_t *startup_roller;
 static lv_timer_t *rotation_timer;
 static uint8_t pending_rotation;
+static bool rotation_pending;       // chosen, and waiting to be applied
+
+#define SYNC_MS 250     // how often the pages catch up with the phone remote
 
 /* ----- Brightness (and the battery) ----- */
 
 static void brightness_slider_event_cb(lv_event_t *e)
 {
-    lv_obj_t *brightness_slider = lv_event_get_target_obj(e);
     uint8_t brightness = lv_slider_get_value(brightness_slider);
 
     lv_label_set_text_fmt(brightness_value_label, "%d%%", brightness);
@@ -116,7 +121,7 @@ static void add_brightness_page(ui_feature_t *feature)
 {
     lv_obj_t *page = ui_feature_add_page(feature, "Brightness", false);
 
-    lv_obj_t *brightness_slider = lv_slider_create(page);
+    brightness_slider = lv_slider_create(page);
     lv_obj_set_size(brightness_slider, ui_px(180), ui_px(20));   // leaves room for the navigation dots
     lv_slider_set_range(brightness_slider, 1, 100);
     lv_slider_set_value(brightness_slider, settings_get()->brightness, LV_ANIM_OFF);
@@ -152,6 +157,7 @@ static void add_brightness_page(ui_feature_t *feature)
 static void rotation_apply_timer_cb(lv_timer_t *t)
 {
     lv_timer_pause(t);
+    rotation_pending = false;
 
     if (pending_rotation != settings_get()->rotation)
     {
@@ -162,10 +168,9 @@ static void rotation_apply_timer_cb(lv_timer_t *t)
 
 static void rotation_roller_event_cb(lv_event_t *e)
 {
-    lv_obj_t *rotation_roller = lv_event_get_target_obj(e);
-
     // Roller options are 0, 90, 180 and 270 degrees.
     pending_rotation = lv_roller_get_selected(rotation_roller);
+    rotation_pending = true;
 
     if (rotation_timer == NULL)
     {
@@ -179,7 +184,7 @@ static void add_rotation_page(ui_feature_t *feature)
 {
     lv_obj_t *page = ui_feature_add_page(feature, "Rotation", false);
 
-    lv_obj_t *rotation_roller = lv_roller_create(page);
+    rotation_roller = lv_roller_create(page);
     lv_roller_set_options(rotation_roller, "0°\n90°\n180°\n270°", LV_ROLLER_MODE_NORMAL);
     lv_roller_set_visible_row_count(rotation_roller, 3);
     lv_roller_set_selected(rotation_roller, settings_get()->rotation, LV_ANIM_OFF);
@@ -195,7 +200,6 @@ static void add_rotation_page(ui_feature_t *feature)
 
 static void startup_roller_event_cb(lv_event_t *e)
 {
-    lv_obj_t *startup_roller = lv_event_get_target_obj(e);
     settings_set_startup_image(ui_startup_choice_value(lv_roller_get_selected(startup_roller)));
 }
 
@@ -223,7 +227,7 @@ static void add_startup_page(ui_feature_t *feature)
     // Unknown values (e.g. an image that's since been removed) show the first choice.
     int selected = ui_find_startup_choice(settings_get()->startup_image);
 
-    lv_obj_t *startup_roller = lv_roller_create(page);
+    startup_roller = lv_roller_create(page);
     lv_roller_set_options(startup_roller, options, LV_ROLLER_MODE_NORMAL);
     lv_free(options);   // the roller keeps its own copy
     lv_roller_set_visible_row_count(startup_roller, 3);
@@ -538,11 +542,39 @@ static void add_update_page(ui_feature_t *feature)
 
 #endif  // RCAT_HAVE_NETWORK
 
+/* ----- Changes from the phone remote ----- */
+
+/* Show what the phone changed, leaving alone anything that's being touched
+ * or a rotation that's about to be applied. */
+static void sync_timer_cb(lv_timer_t *t)
+{
+    const settings_t *s = settings_get();
+    if (!lv_slider_is_dragged(brightness_slider) && lv_slider_get_value(brightness_slider) != s->brightness)
+    {
+        lv_slider_set_value(brightness_slider, s->brightness, LV_ANIM_OFF);
+        lv_label_set_text_fmt(brightness_value_label, "%d%%", s->brightness);
+        lv_obj_align_to(brightness_value_label, brightness_slider, LV_ALIGN_OUT_BOTTOM_MID, 0, ui_px(10));
+    }
+    if (!rotation_pending && !lv_obj_has_state(rotation_roller, LV_STATE_PRESSED)
+        && lv_roller_get_selected(rotation_roller) != s->rotation)
+    {
+        lv_roller_set_selected(rotation_roller, s->rotation, LV_ANIM_OFF);
+        pending_rotation = s->rotation;
+    }
+    int startup = ui_find_startup_choice(s->startup_image);
+    if (startup >= 0 && !lv_obj_has_state(startup_roller, LV_STATE_PRESSED)
+        && lv_roller_get_selected(startup_roller) != (uint32_t)startup)
+    {
+        lv_roller_set_selected(startup_roller, startup, LV_ANIM_OFF);
+    }
+}
+
 static bool build(ui_feature_t *feature)
 {
     add_brightness_page(feature);
     add_rotation_page(feature);
     add_startup_page(feature);
+    lv_timer_create(sync_timer_cb, SYNC_MS, NULL);
     if (battery_log_available())
     {
         add_log_page(feature);

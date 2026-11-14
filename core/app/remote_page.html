@@ -156,6 +156,23 @@ body:not(.toys) #stop { display: none; }
     <div class="where"><span class="muted" id="now-feature"></span><b id="now-page"></b></div>
     <button id="next" aria-label="Next page">&#9654;</button>
   </div>
+  <h2>Display</h2>
+  <div class="card">
+    <div class="top"><span class="muted" id="battery"></span><span class="muted" id="uptime"></span></div>
+    <div class="motor" style="--c:var(--ok)">
+      <div class="row"><span>Brightness</span><b id="bright-text"></b></div>
+      <div class="vol">
+        <button data-bright-step="-10">&minus;10</button>
+        <input type="range" id="bright" min="1" max="100" step="1">
+        <button data-bright-step="10">+10</button>
+      </div>
+    </div>
+    <div class="muted" style="font-size:13px;margin:10px 0 6px">Rotation</div>
+    <div class="chips" id="rotations"></div>
+    <div class="muted" style="font-size:13px;margin:14px 0 6px">At startup, show</div>
+    <div class="chips" id="startups"></div>
+  </div>
+
   <h2>Show on the display</h2>
   <div id="features"></div>
 </section>
@@ -263,7 +280,8 @@ body:not(.toys) #stop { display: none; }
 "use strict";
 const $ = id => document.getElementById(id);
 const colors = ["var(--m0)", "var(--m1)", "var(--m2)"];
-let info = { patterns: [], modes: [], max_connected: 3, message_max: 600, features: [], presets: [], ring_colors: [] };
+let info = { patterns: [], modes: [], max_connected: 3, message_max: 600, features: [], presets: [], ring_colors: [],
+  startup_choices: [] };
 let tracks = [];
 let state = null;
 let target = -1;                // where patterns play: -1 for every device
@@ -344,6 +362,36 @@ function buildScreen() {
     card.append(chips);
     box.append(card);
   });
+}
+
+["0°", "90°", "180°", "270°"].forEach((name, r) => {
+  const b = el("button", "", name);
+  b.dataset.r = r;
+  b.onclick = () => command("display", { rot: r });
+  $("rotations").append(b);
+});
+
+function buildDisplay() {
+  const box = $("startups");
+  box.replaceChildren();
+  info.startup_choices.forEach((name, i) => {
+    const b = el("button", "", name);
+    b.dataset.i = i;
+    b.onclick = () => command("display", { start: i });
+    box.append(b);
+  });
+}
+
+function showDisplay() {
+  const d = state.display;
+  if (!d) return;
+  const b = d.battery;
+  $("battery").textContent = b ? (b.charging ? "⚡ " : "Battery ") + b.percent + "%  " + b.volts.toFixed(2) + " V" : "No battery";
+  const m = Math.floor(d.uptime / 60), h = Math.floor(m / 60);
+  $("uptime").textContent = "Up " + (h >= 24 ? Math.floor(h / 24) + "d " + (h % 24) + "h" : h + "h " + String(m % 60).padStart(2, "0") + "m");
+  showVolume("bright", "bright-text", d.brightness);
+  for (const x of $("rotations").children) x.classList.toggle("on", +x.dataset.r === d.rotation);
+  for (const x of $("startups").children) x.classList.toggle("on", +x.dataset.i === d.startup);
 }
 
 function showScreen() {
@@ -525,13 +573,13 @@ function clock(ms) {
 }
 
 // A volume slider and its step buttons, sent as they move
-function volume(id, textId, stepAttr, path) {
+function volume(id, textId, stepAttr, path, param) {
   const slider = $(id);
   const set = v => {
-    v = Math.max(0, Math.min(100, Math.round(v)));
+    v = Math.max(+slider.min, Math.min(+slider.max, Math.round(v)));
     slider.value = v; fill(slider);
     $(textId).textContent = v + "%";
-    queue(id, path, { v });
+    queue(id, path, { [param || "v"]: v });
   };
   slider.addEventListener("pointerdown", () => dragging.add(id));
   slider.addEventListener("input", () => { dragging.add(id); set(+slider.value); });
@@ -550,6 +598,7 @@ function showVolume(id, textId, v) {
 }
 volume("fx-vol", "fx-vol-text", "data-fx-step", "voice");
 volume("snd-vol", "snd-vol-text", "data-snd-step", "sound");
+volume("bright", "bright-text", "data-bright-step", "display", "b");
 
 $("speaker").onclick = () => state && state.voice && command("voice", { speaker: state.voice.speaker ? 0 : 1 });
 $("sound-play").onclick = () => state && state.sound && command("sound", { play: state.sound.playing ? 0 : 1 });
@@ -722,6 +771,7 @@ function show(s) {
   state = s;
   if (s.notice) toast(s.notice);
   showScreen();
+  showDisplay();
   showControls();
   showPatterns();
   showModes();
@@ -750,6 +800,7 @@ function build() {
   if (info.modes.length === 0) { $("react-title").hidden = true; }
   $("msg").maxLength = info.message_max;
   buildScreen();
+  buildDisplay();
   buildSound();
   // No Terminal on this board: leave its tab out
   if (!info.features.some(([name]) => name === "Terminal")) {

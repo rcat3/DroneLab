@@ -2,7 +2,7 @@
 
 *Boards with WiFi: the ESP32-S3 boards*
 
-The *Phone Remote* page, the last one in [Settings](settings.md), lets people run the display from a phone's web browser, so nobody has to reach the display in the mask.  They can pick what it shows, control the [Lovense](lovense.md) devices, run the voice ring, the [voice effect](voice-effects.md) and the [sound player](sound.md), and type messages onto the [Terminal](terminal.md).  The phone needs no app.
+The *Phone Remote* page, the last one in [Settings](settings.md), lets people run the display from a phone's web browser, so nobody has to reach the display in the mask.  They can pick what it shows, set its brightness and other settings, control the [Lovense](lovense.md) devices, run the voice ring, the [voice effect](voice-effects.md) and the [sound player](sound.md), and type messages onto the [Terminal](terminal.md).  The phone needs no app.
 
 1. Connect the devices on the display first (the Lovense feature's Devices page).  The phone can connect them too, but the display is quicker.
 2. On the *Phone Remote* page, switch it on.  The board starts a WiFi hotspot of its own, called `DroneLab-` and four letters, and shows a QR code with its name and password under it.
@@ -11,7 +11,7 @@ The *Phone Remote* page, the last one in [Settings](settings.md), lets people ru
 
 The page has four tabs:
 
-- **Screen**: what's on the display now, with arrows to step through every page, and every feature's pages listed to jump straight to one.
+- **Screen**: what's on the display now, with arrows to step through every page.  Then the display's [Settings](settings.md): the battery's charge and how long it's been on, the brightness, the rotation, and what it shows at startup.  Under them, every feature's pages are listed, to jump straight to one.  The Battery Log, the Phone Remote and Firmware Update are only on the display: so nobody can forget the board's battery curve, turn the remote off from under the phones, or send firmware from a phone.
 - **Toys**: a slider for each motor of each connected device, the patterns and their speed, the reactions, a list of devices to connect, and a big **STOP** at the bottom that stops every device the moment it's touched.
 - **Sound**: the [voice ring](kitt-and-voice-ring.md), on or off and its color.  Then the voice effect, with *Play on speaker*, the presets, and *Effect Volume* as a slider with buttons to step it by 1% or 5%.  Under it, the sound player: the track playing, play and pause, the next and last tracks, a bar to move through the track, its volume, the repeat modes, *Play at startup*, and every track, to play one with a tap.
 - **Terminal**: type a message and *Send* it (or press Enter) to show it on the Terminal.  *Switch to it* (on to start with) brings the Terminal on screen when you send.  *Add a line* puts the message under what's there instead of replacing it, dropping the oldest lines when it's full.  *Clear* empties it, and *Letter size* picks how big it's shown.  The last few messages are listed under it, to send again with a tap.

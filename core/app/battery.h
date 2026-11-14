@@ -26,6 +26,11 @@ typedef struct
  * board can't measure its battery. */
 bool battery_update(battery_status_t *status);
 
+/* The last reading battery_update() took, without taking another (the
+ * phone remote shows it). Returns false before the first, or without a
+ * battery to measure. */
+bool battery_latest(battery_status_t *status);
+
 /* The charge in percent for a voltage, from the curve the board's learned, or
  * else its default one. */
 uint8_t battery_percent_from_volts(float volts);

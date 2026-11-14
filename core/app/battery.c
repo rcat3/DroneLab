@@ -24,6 +24,7 @@ static const rcat_battery_point_t typical_curve[] = {
 
 static float smoothed;
 static bool have_reading;
+static battery_status_t latest;
 
 size_t battery_default_curve(const rcat_battery_point_t **curve)
 {
@@ -108,5 +109,12 @@ bool battery_update(battery_status_t *status)
         // charge, so only the charger can say when it's full.
         status->percent = CHARGING_MAX_PERCENT;
     }
+    latest = *status;
     return true;
+}
+
+bool battery_latest(battery_status_t *status)
+{
+    *status = latest;
+    return have_reading;
 }
