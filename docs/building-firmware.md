@@ -148,5 +148,5 @@ A feature that needs hardware the board doesn't have (a microphone, a speaker, a
 
 Two more settings are fixed when the firmware is built:
 
-- `RCAT_SPEAKER`, in `platforms/esp-idf/features.cmake`, picks where the ESP32-S3-Touch-LCD-1.46's sound goes: `BUILT_IN` for the board's own speaker, or `EXTERNAL` for the amplifiers in its [speaker housing](hardware/waveshare_esp32s3_touch_lcd_1_46.md#the-speaker-housing).
+- `RCAT_VOICE_FX`, in each ESP32 board's `board.cmake`, picks whether [voice effects](features/voice-effects.md) are built in.  They're on for the ESP32-S3-Touch-AMOLED-1.75, whose echo canceller lets them play on the speaker without feeding back, and off for the ESP32-S3-Touch-LCD-1.46.
 - `RCAT_LARGE_IMAGES`, in each board's `.cmake` file, picks whether full screen animated GIFs are built in (see [Animated GIF memory use](features/images.md#animated-gif-memory-use)).

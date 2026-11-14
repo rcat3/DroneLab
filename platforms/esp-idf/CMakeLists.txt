@@ -15,7 +15,7 @@ if(NOT EXISTS ${BOARD_DIR}/board.cmake)
     file(GLOB KNOWN_BOARDS RELATIVE ${CMAKE_CURRENT_LIST_DIR}/boards ${CMAKE_CURRENT_LIST_DIR}/boards/*)
     message(FATAL_ERROR "Unknown BOARD '${BOARD}'. Choose one of: ${KNOWN_BOARDS}")
 endif()
-include(${BOARD_DIR}/board.cmake)      # sets IDF_TARGET, RCAT_IMAGE_SIZE and RCAT_LARGE_IMAGES
+include(${BOARD_DIR}/board.cmake)      # sets IDF_TARGET, RCAT_IMAGE_SIZE, RCAT_LARGE_IMAGES and RCAT_VOICE_FX
 message(STATUS "Building for board ${BOARD}")
 
 # Keep the generated configuration in the build folder, so each board's build
@@ -38,6 +38,9 @@ idf_build_set_property(RCAT_BOARD_COMPONENT ${BOARD})
 # Images are converted for the board's screen size (see core/media/images.cmake).
 idf_build_set_property(RCAT_IMAGE_SIZE ${RCAT_IMAGE_SIZE})
 idf_build_set_property(RCAT_LARGE_IMAGES "${RCAT_LARGE_IMAGES}")
+
+# Voice effects, on boards whose speaker can play them (see board.cmake).
+idf_build_set_property(RCAT_VOICE_FX "${RCAT_VOICE_FX}")
 
 # lv_conf.h lives in config/ (LVGL finds it with LV_CONF_INCLUDE_SIMPLE).
 idf_build_set_property(COMPILE_OPTIONS "-I${CMAKE_CURRENT_LIST_DIR}/config" APPEND)

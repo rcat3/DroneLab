@@ -3,3 +3,4 @@
 set(IDF_TARGET esp32s3)
 set(RCAT_IMAGE_SIZE 412)     # 412x412 round display
 set(RCAT_LARGE_IMAGES OFF)   # big GIFs take a lot of flash at this size; put them on the SD card
+set(RCAT_VOICE_FX OFF)       # no voice effects: the built-in speaker faces into the mask and feeds back

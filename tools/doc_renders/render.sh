@@ -10,7 +10,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 OUT=../../docs/images
-SCENES=(housing_1_28 housing_1_46 speaker_housing_1_46 speaker_housing_1_75)
+SCENES=(housing_1_28 housing_1_46 speaker_housing_1_75)
 mkdir -p "$OUT" lineup
 
 for scene in "${SCENES[@]}"; do

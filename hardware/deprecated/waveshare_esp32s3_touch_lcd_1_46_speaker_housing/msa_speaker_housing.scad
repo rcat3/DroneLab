@@ -42,7 +42,7 @@
 // The board is turned a quarter turn from its usual way up, so its buttons
 // are at the top, clear of the pods. The firmware turns the picture to match.
 //
-// The board's dimensions are in board.scad, and the coordinates are the
+// The board's dimensions are in the board folder's board.scad, and the coordinates are the
 // same: the front of the glass is at z = 0 and the body extends towards -z.
 // The thread and the collar are in hardware/masks/msa_millennium.
 //
@@ -52,7 +52,7 @@
 part = "preview";           // "preview", "body", "back", "collar", "washer", "gasket", "plungers", "plunger_test",
                             // "spacers", "pod_test" or "layout"
 
-include <board.scad>
+include <../../boards/waveshare_esp32s3_touch_lcd_1_46/board.scad>
 include <header_adapter/header_adapter.scad>
 include <../../masks/msa_millennium/turning_collar.scad>
 

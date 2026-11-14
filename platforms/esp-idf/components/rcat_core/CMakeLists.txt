@@ -49,6 +49,12 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     if(large_images)
         target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_LARGE_IMAGES=1)
     endif()
+
+    # Voice effects, on boards whose speaker can play them (see board.cmake)
+    idf_build_get_property(voice_fx RCAT_VOICE_FX)
+    if(voice_fx)
+        target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_VOICE_FX=1)
+    endif()
 endif()
 
 # Images and sounds can be loaded from the SD card

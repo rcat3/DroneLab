@@ -5,7 +5,8 @@
 #
 # The including project must define an `lvgl` library target first, and set
 # RCAT_IMAGE_SIZE to the board's screen size (images are converted for it),
-# and RCAT_LARGE_IMAGES ON if the board has room for the bigger animated GIFs.
+# RCAT_LARGE_IMAGES ON if the board has room for the bigger animated GIFs, and
+# RCAT_VOICE_FX ON if its speaker can play the voice effects.
 # It sets RCAT_FEATURE_<NAME> to choose the optional features (see features.cmake).
 # RCAT_PYTHON can be set to pick the Python used for the image converter.
 
@@ -34,5 +35,8 @@ target_include_directories(rcat_core
 target_compile_definitions(rcat_core PRIVATE ${RCAT_FEATURE_DEFINITIONS})
 if(RCAT_LARGE_IMAGES)
     target_compile_definitions(rcat_core PRIVATE RCAT_LARGE_IMAGES=1)
+endif()
+if(RCAT_VOICE_FX)
+    target_compile_definitions(rcat_core PRIVATE RCAT_VOICE_FX=1)
 endif()
 target_link_libraries(rcat_core PUBLIC lvgl)

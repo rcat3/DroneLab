@@ -17,7 +17,7 @@ The board has its own amplifier, speaker socket, microphones and battery charger
 - The chamber behind the board holds a 2000 mAh battery, standing upright and taped to the back.  The back's four screws are either side of it.  The board's speaker and battery sockets stand up off the back of the board, and their plugs go in through openings in the back plate, from the chamber.  The two sockets look the same, and the plate hides their labels, so a speaker and a battery are engraved in the plate beside them (`socket_marks`).
 - The microphones are on the back of the board, near its USB-C edge, and listen backwards, so in the housing they're on the right.  They have a cell of their own (`mic_cell`): the strip of the chamber beside the battery, walled off from the rest of it by ribs on the back plate, and closed by the battery's side.  The voice port opens straight into it, through an opening in the back beside the battery.  The sockets, their plugs and the speaker's wire are all on the other side of the ribs.  In front of the battery, the ribs stop 0.5 mm short of it, for foam tape that seals them against it.
 - The board sits on its standoffs 3.5 mm in front of the back plate, so the gap behind it reaches the USB-C and micro SD openings, and the sockets' openings into the chamber.  A sleeve around each microphone's hole reaches up to 1.5 mm short of the board, and a small foam ring on it seals it against the board, so the microphones hear the cell and nothing else.
-- The voice port thread is on a collar that turns freely on the back, so the housing can be held level while the collar is screwed in.  It's the same collar as the 1.46" speaker housing's, from [`../../masks/msa_millennium`](../../masks/msa_millennium/).
+- The voice port thread is on a collar that turns freely on the back, so the housing can be held level while the collar is screwed in.  It's the same collar the 1.46" board's [deprecated speaker housing](../../deprecated/waveshare_esp32s3_touch_lcd_1_46_speaker_housing/) used, from [`../../masks/msa_millennium`](../../masks/msa_millennium/).
 
 ## Files
 
@@ -31,10 +31,10 @@ Run `./render.sh` in this folder to render all of the housing's parts to the `st
 
 **Materials:** print the `gasket` and the `usb_plug` in TPU.  Everything else is PLA or PLA+.
 
-- **`body`** - The display cup and the speaker pod.  Like the 1.46" body, it'll probably print best standing on one of its sides with tree supports.  The microphone cell's ribs hang off the back plate in front of the battery, so they need supports too.
+- **`body`** - The display cup and the speaker pod.  Like the 1.46" speaker housing's body, it'll probably print best standing on one of its sides with tree supports.  The microphone cell's ribs hang off the back plate in front of the battery, so they need supports too.
 - **`chin`** - Closes the back of the pod and slopes back to the body.  It prints on the flat face that meets the pod, with no supports.
 - **`back`** - Closes the chamber, with the posts the collar turns on.  Use 4 or more walls so the posts are solid.
-- **`collar`**, **`washer`** and **`gasket`** - The turning collar, as on the 1.46" speaker housing.  The gasket is TPU, or cut from 1 mm rubber or craft foam.
+- **`collar`**, **`washer`** and **`gasket`** - The turning collar, as on the 1.46" board's deprecated speaker housing.  The gasket is TPU, or cut from 1 mm rubber or craft foam.
 - **`plungers`** - Two pins that press the board's side buttons through the wall.  Behind each one, a small mark is engraved in the side wall (`button_marks`): a power symbol for PWR, the lower one, nearer the pod, and a download arrow for BOOT, which is held down to flash the board.
 - **`usb_plug`** - Covers the USB-C port when it's not in use, flush with the outside of the housing.  A tongue on its back pushes into the slot for the plug, and the notch at its top edge is for a fingernail to pull it out.  It's a tight push fit, best printed in TPU.  In PLA or PETG, loosen it with the second number in `usb_tongue` if it's too tight.
 ### Test prints
@@ -71,7 +71,7 @@ See the [build guide](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75
 
 ## Credits and License
 
-The housing is based on the 1.46" speaker housing in this repository, which in turn is based on [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa) by whyrlpool.
+The housing is based on the 1.46" board's speaker housing, now in [`../../deprecated`](../../deprecated/waveshare_esp32s3_touch_lcd_1_46_speaker_housing/), which in turn is based on [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa) by whyrlpool.
 
 Like the designs it's based on, everything in this folder is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).  This is separate from the license of the rest of the repository.
 

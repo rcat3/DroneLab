@@ -16,7 +16,7 @@
 // The PCB itself is the KiCad project in this folder, and the
 // numbers here match it.
 //
-// Everything here is in the board's coordinates (see ../board.scad).
+// Everything here is in the board's coordinates (see hardware/boards/waveshare_esp32s3_touch_lcd_1_46/board.scad).
 
 header_pin_tip = -12.95;            // where the header's pins end
 header_pin_length = 3.4;            // how far they stand out of the header's plastic (measured)
