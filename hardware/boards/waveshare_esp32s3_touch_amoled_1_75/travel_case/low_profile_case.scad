@@ -7,8 +7,8 @@
 
 include <../msa_low_profile_housing.scad>
 
-part = "lp_case_closed";    // "lp_case_closed", "lp_case_bottom" or "lp_case_lid". Set after the
-                            // housing's design, whose own part setting it replaces
+part = "lp_case_closed";    // "lp_case_closed", "lp_case_bottom", "lp_case_lid" or "lp_case_clasp".
+                            // Set after the housing's design, whose own part setting it replaces
 
 /* [Fit] */
 case_clear = 0.5;           // around the housing
@@ -55,3 +55,4 @@ if (part == "lp_case_closed")
 }
 else if (part == "lp_case_bottom") case_bottom_print();
 else if (part == "lp_case_lid") case_lid_print();
+else if (part == "lp_case_clasp") case_clasp_print();
