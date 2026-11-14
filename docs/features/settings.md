@@ -4,6 +4,8 @@
 
 Settings that apply to the whole display, one per page.  Settings that belong to a single feature, like the [Voice Ring](kitt-and-voice-ring.md#voice-ring)'s color or the [Sound](sound.md) volume, are on that feature's own pages.
 
+The [Phone Remote](phone-remote.md) can set the brightness, rotation and startup page too, and shows the battery and uptime.
+
 Settings are saved about two seconds after you change them, and are restored when the display is powered back on.  They also survive flashing new firmware.
 
 ## Brightness
