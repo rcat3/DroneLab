@@ -1,0 +1,20 @@
+# A Mumble voice server for the comm channel.  See README.md.
+# The passwords come from .env (copy .env.example and fill it in).
+services:
+  mumble-server:
+    image: mumblevoip/mumble-server:v1.6.870-5
+    container_name: mumble-server
+    hostname: mumble-server
+    restart: unless-stopped
+    ports:
+      - "64738:64738/tcp"
+      - "64738:64738/udp"
+    volumes:
+      - ./data:/data
+    environment:
+      MUMBLE_SUPERUSER_PASSWORD: ${MUMBLE_SUPERUSER_PASSWORD}
+      MUMBLE_CONFIG_SERVERPASSWORD: ${MUMBLE_SERVER_PASSWORD}
+      MUMBLE_CONFIG_REGISTERNAME: "DroneLab Comms"
+      MUMBLE_CONFIG_WELCOMETEXT: "DroneLab comm channel"
+      MUMBLE_CONFIG_USERS: "20"
+      MUMBLE_CONFIG_OPUSTHRESHOLD: "0"

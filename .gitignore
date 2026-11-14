@@ -32,3 +32,7 @@ hardware/deprecated/*/stl/
 
 # Front views the documentation renders are put together from
 tools/doc_renders/lineup/
+
+# The Mumble server's passwords and data
+tools/mumble/.env
+tools/mumble/data/
