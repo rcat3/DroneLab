@@ -185,3 +185,18 @@ uint8_t voice_ring_color_count(void)
 {
     return COLOR_COUNT;
 }
+
+const char *voice_ring_color_name(uint8_t index)
+{
+    return index < COLOR_COUNT ? colors[index].name : "";
+}
+
+uint32_t voice_ring_color_rgb(uint8_t index)
+{
+    return index < COLOR_COUNT ? colors[index].rgb : 0;
+}
+
+bool voice_ring_available(void)
+{
+    return ring != NULL;
+}

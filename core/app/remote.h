@@ -5,7 +5,7 @@
  * Phone remote: the board runs a WiFi hotspot of its own, and a phone that
  * joins it gets a web page that runs the display: which page it shows, the
  * Lovense devices (their motors, patterns, reactions and Stop), the voice
- * effect and the sound player, and messages for the Terminal. It's switched on in Settings.
+ * ring, the voice effect and the sound player, and messages for the Terminal. It's switched on in Settings.
  *
  * Joining is meant to be easy: the screen shows a QR code that a phone's
  * camera turns into "join this network", and once it's joined, the phone
