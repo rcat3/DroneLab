@@ -93,6 +93,7 @@ static bool load(settings_t *out)
         out->voice_volume = SETTINGS_DEFAULT_VOICE_VOLUME;
     }
     out->lovense_release_to_zero = out->lovense_release_to_zero ? 1 : 0;
+    out->remote_autostart = out->remote_autostart ? 1 : 0;
     for (int k = 0; k < SETTINGS_CURVE_POINTS && out->battery_curve_runs > 0; k++)
     {
         uint16_t mv = out->battery_curve_mv[k];
@@ -227,6 +228,12 @@ void settings_set_remote(const char *ssid, const char *password)
     current.remote_ssid[SETTINGS_REMOTE_LEN - 1] = '\0';
     strncpy(current.remote_password, password, SETTINGS_REMOTE_LEN - 1);
     current.remote_password[SETTINGS_REMOTE_LEN - 1] = '\0';
+    schedule_save();
+}
+
+void settings_set_remote_autostart(uint8_t enabled)
+{
+    current.remote_autostart = enabled ? 1 : 0;
     schedule_save();
 }
 

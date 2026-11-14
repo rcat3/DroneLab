@@ -2,8 +2,9 @@
  * Settings feature: settings that apply to the whole display, one per page.
  * Settings that belong to a single feature live with that feature instead.
  *
- * On boards with WiFi, the last page is the phone remote (see app/remote.h):
- * a switch for its hotspot, the QR code that joins it, and a new password.
+ * On boards with WiFi, the page after Brightness is the phone remote (see
+ * app/remote.h): a switch for its hotspot, the QR code that joins it, a new
+ * password, and whether it switches itself on at power-up.
  */
 #include <stdio.h>
 #include <string.h>
@@ -340,6 +341,8 @@ static lv_obj_t *remote_hint;
 static lv_obj_t *remote_name;
 static lv_obj_t *remote_pass;
 static lv_obj_t *remote_new;    // new password, while it's off
+static lv_obj_t *remote_auto;   // start at power-up, while it's off
+static lv_obj_t *remote_auto_switch;
 static int shown_phones = -1;
 static int shown_remote = -1;
 static char shown_join[80];
@@ -356,7 +359,14 @@ static void show_remote(void)
         lv_obj_set_hidden(remote_pass, !on);
         lv_obj_set_hidden(remote_hint, on);
         lv_obj_set_hidden(remote_new, on);
+        lv_obj_set_hidden(remote_auto, on);
         shown_phones = -1;
+    }
+    // The phone can change it too
+    bool autostart = settings_get()->remote_autostart != 0;
+    if (lv_obj_has_state(remote_auto_switch, LV_STATE_CHECKED) != autostart)
+    {
+        lv_obj_set_state(remote_auto_switch, LV_STATE_CHECKED, autostart);
     }
     if (on && strcmp(remote_join_text(), shown_join) != 0)
     {
@@ -401,6 +411,11 @@ static void remote_switch_event_cb(lv_event_t *e)
     show_remote();
 }
 
+static void remote_auto_event_cb(lv_event_t *e)
+{
+    settings_set_remote_autostart(lv_obj_has_state(remote_auto_switch, LV_STATE_CHECKED));
+}
+
 static void new_password_event_cb(lv_event_t *e)
 {
     remote_new_password();
@@ -443,17 +458,34 @@ static void add_remote_page(ui_feature_t *feature)
     lv_label_set_text(remote_hint, "Control the display\nfrom a phone");
     lv_obj_set_style_text_align(remote_hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(remote_hint, COLOR_MUTED, 0);
-    lv_obj_align(remote_hint, LV_ALIGN_CENTER, 0, ui_px(0));
+    lv_obj_align(remote_hint, LV_ALIGN_CENTER, 0, ui_px(-10));
 
     // Shuts out anyone who had the old one
     remote_new = lv_button_create(remote_page);
     lv_obj_set_size(remote_new, ui_px(130), ui_px(32));
     lv_obj_set_style_radius(remote_new, LV_RADIUS_CIRCLE, 0);
-    lv_obj_align(remote_new, LV_ALIGN_CENTER, 0, ui_px(52));
+    lv_obj_align(remote_new, LV_ALIGN_CENTER, 0, ui_px(30));
     lv_obj_add_event_cb(remote_new, new_password_event_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *text = lv_label_create(remote_new);
     lv_label_set_text(text, "New password");
     lv_obj_center(text);
+
+    // Switch it on by itself at power-up, a label and a small switch in a row
+    remote_auto = lv_obj_create(remote_page);
+    lv_obj_remove_style_all(remote_auto);
+    lv_obj_set_size(remote_auto, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(remote_auto, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(remote_auto, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(remote_auto, ui_px(8), 0);
+    lv_obj_set_scrollable(remote_auto, false);
+    lv_obj_align(remote_auto, LV_ALIGN_CENTER, 0, ui_px(70));
+    lv_obj_t *auto_label = lv_label_create(remote_auto);
+    lv_label_set_text(auto_label, "At power-up");
+    lv_obj_set_style_text_color(auto_label, COLOR_MUTED, 0);
+    remote_auto_switch = lv_switch_create(remote_auto);
+    lv_obj_set_size(remote_auto_switch, ui_px(44), ui_px(22));
+    lv_obj_set_state(remote_auto_switch, LV_STATE_CHECKED, settings_get()->remote_autostart != 0);
+    lv_obj_add_event_cb(remote_auto_switch, remote_auto_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     remote_name = lv_label_create(remote_page);
     lv_label_set_text(remote_name, "");
@@ -464,6 +496,10 @@ static void add_remote_page(ui_feature_t *feature)
     lv_obj_set_style_text_color(remote_pass, COLOR_MUTED, 0);
     lv_obj_align(remote_pass, LV_ALIGN_CENTER, 0, ui_px(84));
 
+    if (settings_get()->remote_autostart && !remote_start())
+    {
+        lv_label_set_text(remote_hint, "WiFi didn't start");
+    }
     show_remote();
     lv_timer_create(remote_timer_cb, REMOTE_POLL_MS, NULL);
 }
@@ -572,6 +608,12 @@ static void sync_timer_cb(lv_timer_t *t)
 static bool build(ui_feature_t *feature)
 {
     add_brightness_page(feature);
+#if RCAT_HAVE_NETWORK
+    if (remote_available())
+    {
+        add_remote_page(feature);
+    }
+#endif
     add_rotation_page(feature);
     add_startup_page(feature);
     lv_timer_create(sync_timer_cb, SYNC_MS, NULL);
@@ -580,10 +622,6 @@ static bool build(ui_feature_t *feature)
         add_log_page(feature);
     }
 #if RCAT_HAVE_NETWORK
-    if (remote_available())
-    {
-        add_remote_page(feature);
-    }
     if (updater_available())
     {
         add_update_page(feature);

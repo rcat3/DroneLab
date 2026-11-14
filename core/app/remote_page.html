@@ -23,9 +23,10 @@ h1 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); 
 h1 .dot.off { background: var(--stop); }
 h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase;
   letter-spacing: .08em; margin: 24px 0 8px; }
-.tabs { display: flex; gap: 6px; background: var(--surface); border: 1px solid var(--outline);
+.tabs { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--outline);
   border-radius: 999px; padding: 4px; }
-.tabs button { flex: 1; min-height: 40px; border: 0; background: transparent; color: var(--muted); padding: 8px; }
+.tabs button { flex: 1; min-width: 0; min-height: 40px; border: 0; background: transparent; color: var(--muted);
+  padding: 8px 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tabs button.on { background: var(--outline); color: var(--text); }
 .tab { display: none; }
 .tab.on { display: block; }
@@ -147,6 +148,7 @@ body:not(.toys) #stop { display: none; }
     <button data-tab="toys">Toys</button>
     <button data-tab="sound">Sound</button>
     <button data-tab="term">Terminal</button>
+    <button data-tab="setup">Setup</button>
   </div>
 </header>
 
@@ -156,23 +158,6 @@ body:not(.toys) #stop { display: none; }
     <div class="where"><span class="muted" id="now-feature"></span><b id="now-page"></b></div>
     <button id="next" aria-label="Next page">&#9654;</button>
   </div>
-  <h2>Display</h2>
-  <div class="card">
-    <div class="top"><span class="muted" id="battery"></span><span class="muted" id="uptime"></span></div>
-    <div class="motor" style="--c:var(--ok)">
-      <div class="row"><span>Brightness</span><b id="bright-text"></b></div>
-      <div class="vol">
-        <button data-bright-step="-10">&minus;10</button>
-        <input type="range" id="bright" min="1" max="100" step="1">
-        <button data-bright-step="10">+10</button>
-      </div>
-    </div>
-    <div class="muted" style="font-size:13px;margin:10px 0 6px">Rotation</div>
-    <div class="chips" id="rotations"></div>
-    <div class="muted" style="font-size:13px;margin:14px 0 6px">At startup, show</div>
-    <div class="chips" id="startups"></div>
-  </div>
-
   <h2>Show on the display</h2>
   <div id="features"></div>
 </section>
@@ -199,14 +184,6 @@ body:not(.toys) #stop { display: none; }
 </section>
 
 <section class="tab" id="tab-sound">
-  <div id="ring-box" hidden>
-    <h2>Voice ring</h2>
-    <div class="card">
-      <button class="wide" id="ring-on">Show the voice ring</button>
-      <div class="chips" id="ring-colors" style="margin-top:10px"></div>
-    </div>
-  </div>
-
   <div id="voice-box">
     <h2>Voice effect</h2>
     <div class="card">
@@ -222,6 +199,14 @@ body:not(.toys) #stop { display: none; }
       <div class="muted" style="font-size:13px">If it feeds back, turn it down.</div>
     </div>
     <div class="grid" id="presets"></div>
+  </div>
+
+  <div id="ring-box" hidden>
+    <h2>Voice ring</h2>
+    <div class="card">
+      <button class="wide" id="ring-on">Show the voice ring</button>
+      <div class="chips" id="ring-colors" style="margin-top:10px"></div>
+    </div>
   </div>
 
   <div id="sound-box">
@@ -271,6 +256,36 @@ body:not(.toys) #stop { display: none; }
   <div class="muted" id="size-note" style="margin-top:8px;font-size:13px"></div>
   <h2>Sent</h2>
   <div class="history" id="history"></div>
+</section>
+
+<!-- Always the last tab -->
+<section class="tab" id="tab-setup">
+  <h2>Battery</h2>
+  <div class="card">
+    <div class="top" style="margin:0"><span class="name" id="battery"></span><span class="muted" id="uptime"></span></div>
+  </div>
+
+  <h2>Display</h2>
+  <div class="card">
+    <div class="motor" style="--c:var(--ok);margin-top:0">
+      <div class="row"><span>Brightness</span><b id="bright-text"></b></div>
+      <div class="vol">
+        <button data-bright-step="-10">&minus;10</button>
+        <input type="range" id="bright" min="1" max="100" step="1">
+        <button data-bright-step="10">+10</button>
+      </div>
+    </div>
+    <div class="muted" style="font-size:13px;margin:10px 0 6px">Rotation</div>
+    <div class="chips" id="rotations"></div>
+    <div class="muted" style="font-size:13px;margin:14px 0 6px">At startup, show</div>
+    <div class="chips" id="startups"></div>
+  </div>
+
+  <h2>Phone remote</h2>
+  <div class="card">
+    <button class="wide" id="remote-auto">Start at power-up</button>
+    <div class="muted" style="font-size:13px;margin-top:8px">Switches the remote on as the display starts, so phones that have joined before join again by themselves.</div>
+  </div>
 </section>
 
 <button id="stop">STOP</button>
@@ -332,8 +347,8 @@ function el(tag, cls, text) {
 
 /* ----- Tabs ----- */
 
-// The tab from the address (#screen, #toys, #sound or #term), or the last one used
-let tab = ["screen", "toys", "sound", "term"].includes(location.hash.slice(1)) ? location.hash.slice(1) : load("tab", "toys");
+// The tab from the address (#screen, #toys, #sound, #term or #setup), or the last one used
+let tab = ["screen", "toys", "sound", "term", "setup"].includes(location.hash.slice(1)) ? location.hash.slice(1) : load("tab", "toys");
 function showTab(name) {
   tab = name;
   save("tab", name);
@@ -392,7 +407,10 @@ function showDisplay() {
   showVolume("bright", "bright-text", d.brightness);
   for (const x of $("rotations").children) x.classList.toggle("on", +x.dataset.r === d.rotation);
   for (const x of $("startups").children) x.classList.toggle("on", +x.dataset.i === d.startup);
+  $("remote-auto").classList.toggle("on", !!d.remote_auto);
+  $("remote-auto").textContent = d.remote_auto ? "✓ Start at power-up" : "Start at power-up";
 }
+$("remote-auto").onclick = () => state && state.display && command("display", { remote: state.display.remote_auto ? 0 : 1 });
 
 function showScreen() {
   const [f, p] = state.screen;

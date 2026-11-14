@@ -28,8 +28,9 @@
  *     POST /api/clear                 clear the Terminal
  *     POST /api/termsize?s=<0 to fit, or 1 to 6 for 8 to 48 px>   its letter size
  *     POST /api/display?[b=<percent>][&rot=<quarter turns>][&start=<startup choice>]
- *                                     the brightness, rotation and what's
- *                                     shown at startup, as in Settings
+ *                       [&remote=<1 or 0>]   the brightness, rotation, what's
+ *                                     shown at startup, and whether the
+ *                                     remote starts at power-up, as in Settings
  *     POST /api/ring?[on=<1 or 0>][&c=<color>]   the voice ring
  *     GET  /api/tracks    the sound player's tracks, which don't change
  *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>]   the voice
@@ -422,8 +423,9 @@ static void write_state(json_t *j)
             (unsigned)page, settings_get()->terminal_size, message_scale());
     jstring(j, message_text());
     const settings_t *s = settings_get();
-    jprintf(j, ",\"display\":{\"brightness\":%u,\"rotation\":%u,\"startup\":%d,\"uptime\":%lu",
-            s->brightness, s->rotation, ui_find_startup_choice(s->startup_image), (unsigned long)(now / 1000));
+    jprintf(j, ",\"display\":{\"brightness\":%u,\"rotation\":%u,\"startup\":%d,\"remote_auto\":%u,\"uptime\":%lu",
+            s->brightness, s->rotation, ui_find_startup_choice(s->startup_image), s->remote_autostart,
+            (unsigned long)(now / 1000));
     battery_status_t battery;
     if (battery_latest(&battery))
     {
@@ -739,6 +741,11 @@ static bool run_command(const char *name, const char *query, const char *body, s
         if (startup >= 0 && (size_t)startup < ui_startup_choice_count())
         {
             settings_set_startup_image(ui_startup_choice_value((size_t)startup));
+        }
+        int autostart = query_int(query, "remote", -1);
+        if (autostart >= 0)
+        {
+            settings_set_remote_autostart(autostart != 0);
         }
     }
     else if (strcmp(name, "ring") == 0 && voice_ring_available())

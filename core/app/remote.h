@@ -6,7 +6,8 @@
  * joins it gets a web page that runs the display: which page it shows, its
  * brightness, rotation and startup page, the Lovense devices (their motors,
  * patterns, reactions and Stop), the voice ring, the voice effect and the
- * sound player, and messages for the Terminal. It's switched on in Settings.
+ * sound player, and messages for the Terminal. It's switched on in Settings,
+ * or at power-up if settings_t's remote_autostart is set.
  *
  * Joining is meant to be easy: the screen shows a QR code that a phone's
  * camera turns into "join this network", and once it's joined, the phone
