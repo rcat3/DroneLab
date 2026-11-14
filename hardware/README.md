@@ -8,7 +8,7 @@ This is the design side.  To build one, start with the [build guide](../docs/har
 
 | Board | Firmware | Housings for the MSA Millennium | Other hardware |
 |---|---|---|---|
-| [Waveshare ESP32-S3-Touch-AMOLED-1.75](boards/waveshare_esp32s3_touch_amoled_1_75/) | Yes | Speaker housing with one speaker below the display; low-profile housing without a speaker (designed, not printed yet) | |
+| [Waveshare ESP32-S3-Touch-AMOLED-1.75](boards/waveshare_esp32s3_touch_amoled_1_75/) | Yes | Speaker housing with one speaker below the display; low-profile housing without a speaker (designed, not printed yet) | Travel cases for both housings (designed, not printed yet) |
 
 The housings for the 1.28" and 1.46" boards are [deprecated](#deprecated-designs).
 
@@ -21,7 +21,8 @@ hardware/
   masks/<mask>/         what every housing for one mask shares: the thread,
                         the turning collar, and the shape of the mask around
                         the port
-  common/               shape helpers and the render script the boards share
+  common/               shape helpers, the render script and the travel case
+                        generator the boards share
   deprecated/<design>/  designs that are no longer supported, kept for anyone
                         who wants to build them or bring them back
 ```
@@ -52,4 +53,4 @@ Make `masks/<mask>/` with its port's thread and the shape of the mask around the
 
 ## Licenses
 
-The housings are based on whyrlpool's RP2040-LCD-1.28-MSA design, and like it, everything here is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/), unless its folder says otherwise.  The travel cases are under the [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/).  Both are separate from the license of the rest of the repository.
+The housings are based on whyrlpool's RP2040-LCD-1.28-MSA design, and like it, everything here is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/), unless its folder says otherwise.  The 1.75" housings' travel cases, and the generator in `common/travel_case.scad`, are an original design under the same license as the housings.  The deprecated boards' travel cases are under the [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/), like the design they're based on.  All of these are separate from the license of the rest of the repository.

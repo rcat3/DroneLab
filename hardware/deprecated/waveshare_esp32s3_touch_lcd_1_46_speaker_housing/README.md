@@ -126,7 +126,7 @@ The board charges its battery at up to 2 A, set by R8 (82k) next to its charger 
 
 The charging current also goes through the header adapter's SH socket, which shares it over two pins each way, at about 1 A a pin.  At 2 A that's right at their rating, so 0.9 A leaves plenty of margin.
 
-R8 is a tiny 0201 part, so changing it is fine soldering work.  Measure the charge current with a USB meter afterwards.
+R8 is an 0201 surface mount part, 0.6 x 0.3 mm, so changing it isn't for the faint of heart: it takes a microscope, a capable soldering station with a fine tip (or hot air), and advanced soldering skills.  Measure the charge current with a USB meter afterwards.
 
 ## Test prints
 
