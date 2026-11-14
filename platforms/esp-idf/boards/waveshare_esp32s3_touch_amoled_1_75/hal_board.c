@@ -129,8 +129,15 @@ static const char *TAG = "board";
 // sound takes through the housing.
 #define AEC_ENABLED         1
 #define AEC_TAPS            128     // 8 ms at 16 kHz
-#define AEC_STEP            0.2f
+#define AEC_STEP            0.5f
 #define AEC_NEAR_WEIGHT     1.0f    // slows the learning while your voice is louder than the echo
+// Music and voices have much less in the treble than lower down, so the
+// filter learns the treble slowly, and barely cancels it while the echo
+// changes (something moving in front of the mask). Tilting both toward the
+// treble first, and back afterwards, evens that out: in a recording with a
+// book moved in front of the mask, the strongest band left after the EQ was
+// 8 dB weaker. 0 turns it off.
+#define AEC_PREEMPHASIS     0.75f
 // In the speaker housing, the speaker reaches the microphones about 20 dB
 // more strongly around 1.5 kHz than at other frequencies, so that's where it
 // feeds back first. Cutting that band after the echo canceller lets the voice
@@ -627,10 +634,18 @@ typedef struct
     float x_power;          // the sum of the squares of the samples in x
     float e_power;          // a running average of the square of the result
     uint32_t count;
+    float last_mic, last_ref, last_out;     // for the treble tilt
 } aec_t;
 
 static float aec_sample(aec_t *a, float mic, float ref)
 {
+    float raw_mic = mic;
+    mic -= AEC_PREEMPHASIS * a->last_mic;
+    a->last_mic = raw_mic;
+    float raw_ref = ref;
+    ref -= AEC_PREEMPHASIS * a->last_ref;
+    a->last_ref = raw_ref;
+
     float old = a->x[a->pos];
     a->x[a->pos] = ref;
     a->x[a->pos + AEC_TAPS] = ref;
@@ -672,9 +687,11 @@ static float aec_sample(aec_t *a, float mic, float ref)
     if (!isfinite(e))
     {
         memset(a, 0, sizeof(*a));
-        return mic;
+        return raw_mic;
     }
-    return e;
+    // Tilted back
+    a->last_out = e + AEC_PREEMPHASIS * a->last_out;
+    return a->last_out;
 }
 
 #if AUDIO_CAPTURE

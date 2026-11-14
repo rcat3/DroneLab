@@ -74,8 +74,10 @@ typedef struct
     uint8_t count;
     fx_step_t steps[MAX_STEPS];
     // dB on the speaker only, so that each one starts to feed back at about
-    // the same Effect Volume: 100% with the 1.75" board in its housing,
-    // facing open air
+    // the same Effect Volume: just above 100% with the 1.75" board in its
+    // housing, facing open air. Set before the echo canceller learned the
+    // treble faster; since then, they all hold at 100% with a mirror in
+    // front of the mask.
     float speaker_db;
 } fx_preset_t;
 
@@ -87,7 +89,7 @@ static const fx_preset_t presets[] = {
     { "Natural", 3, { GATE, { FX_HIGHPASS, { 200 } }, { FX_LOWPASS, { 5000 } } }, -10 },
     // Your own voice raised to around 180 Hz from a typical male voice, and
     // kept to the middle of the voice's range
-    { "Female", 5, { GATE, { FX_SHIFT, { 1.9f, 1.2f, 0 } }, { FX_HIGHPASS, { 250 } }, { FX_LOWPASS, { 4500 } }, { FX_GAIN, { 2 } } }, -2.5f },
+    { "Female", 5, { GATE, { FX_SHIFT, { 1.9f, 1.2f, 0 } }, { FX_HIGHPASS, { 250 } }, { FX_LOWPASS, { 4500 } }, { FX_GAIN, { 2 } } }, -5 },
     // Female snapped to notes, with a faint metallic ring, a little digital
     // grit and a flanger
     { "Fembot", 8, { GATE, { FX_SHIFT, { 1.9f, 1.2f, 1 } }, { FX_RING, { 300, 0.2f } }, { FX_CRUSH, { 10, 1 } },
