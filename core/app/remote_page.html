@@ -84,6 +84,9 @@ button.ok { border-color: var(--ok); color: var(--ok); }
 .times { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: -6px; }
 .track { font-weight: 600; font-size: 18px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 button.wide { width: 100%; margin-top: 4px; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; vertical-align: -2px;
+  background: var(--sw); box-shadow: 0 0 6px var(--sw); }
+#ring-colors button.on { border-color: var(--sw); color: var(--text); }
 .tracks button { display: block; width: 100%; text-align: left; margin-bottom: 6px; border-radius: 12px; min-height: 42px;
   font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -179,6 +182,14 @@ body:not(.toys) #stop { display: none; }
 </section>
 
 <section class="tab" id="tab-sound">
+  <div id="ring-box" hidden>
+    <h2>Voice ring</h2>
+    <div class="card">
+      <button class="wide" id="ring-on">Show the voice ring</button>
+      <div class="chips" id="ring-colors" style="margin-top:10px"></div>
+    </div>
+  </div>
+
   <div id="voice-box">
     <h2>Voice effect</h2>
     <div class="card">
@@ -223,7 +234,7 @@ body:not(.toys) #stop { display: none; }
     <h2>Tracks</h2>
     <div class="tracks" id="tracks"></div>
   </div>
-  <div class="empty" id="sound-none" hidden>This board has no speaker.</div>
+  <div class="empty" id="sound-none" hidden>This board has no microphone or speaker.</div>
 </section>
 
 <section class="tab term" id="tab-term">
@@ -252,7 +263,7 @@ body:not(.toys) #stop { display: none; }
 "use strict";
 const $ = id => document.getElementById(id);
 const colors = ["var(--m0)", "var(--m1)", "var(--m2)"];
-let info = { patterns: [], modes: [], max_connected: 3, message_max: 600, features: [], presets: [] };
+let info = { patterns: [], modes: [], max_connected: 3, message_max: 600, features: [], presets: [], ring_colors: [] };
 let tracks = [];
 let state = null;
 let target = -1;                // where patterns play: -1 for every device
@@ -574,7 +585,19 @@ function showTimes(position, length) {
   $("remaining").textContent = length ? "-" + clock(Math.floor(length / 1000) * 1000 - Math.floor(position / 1000) * 1000) : "";
 }
 
+$("ring-on").onclick = () => state && state.ring && command("ring", { on: state.ring.on ? 0 : 1 });
+
 function buildSound() {
+  const colors = $("ring-colors");
+  colors.replaceChildren();
+  info.ring_colors.forEach(([name, rgb], c) => {
+    const b = el("button");
+    b.dataset.c = c;
+    b.style.setProperty("--sw", rgb);
+    b.append(el("span", "swatch"), name);
+    b.onclick = () => command("ring", { c, on: 1 });
+    colors.append(b);
+  });
   const box = $("presets");
   box.replaceChildren();
   info.presets.forEach((name, p) => {
@@ -594,10 +617,16 @@ function buildSound() {
 }
 
 function showSound() {
-  const v = state.voice, s = state.sound;
+  const v = state.voice, s = state.sound, ring = state.ring;
+  $("ring-box").hidden = !ring;
+  if (ring) {
+    $("ring-on").classList.toggle("on", !!ring.on);
+    $("ring-on").textContent = ring.on ? "✓ Showing the voice ring" : "Show the voice ring";
+    for (const b of $("ring-colors").children) b.classList.toggle("on", +b.dataset.c === ring.color);
+  }
   $("voice-box").hidden = !v;
   $("sound-box").hidden = !s;
-  $("sound-none").hidden = !!(v || s);
+  $("sound-none").hidden = !!(v || s || ring);
   if (v) {
     $("speaker").classList.toggle("on", !!v.speaker);
     $("speaker").textContent = v.speaker ? "✓ Playing on speaker" : "Play on speaker";

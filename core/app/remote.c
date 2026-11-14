@@ -27,6 +27,7 @@
  *                                     the Terminal feature, and show it there
  *     POST /api/clear                 clear the Terminal
  *     POST /api/termsize?s=<0 to fit, or 1 to 6 for 8 to 48 px>   its letter size
+ *     POST /api/ring?[on=<1 or 0>][&c=<color>]   the voice ring
  *     GET  /api/tracks    the sound player's tracks, which don't change
  *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>]   the voice
  *                                     effect, Play on speaker and Effect Volume
@@ -57,6 +58,7 @@
 #include "hal.h"
 #include "lvgl.h"
 #include "ui/ui.h"
+#include "ui/voice_ring.h"
 
 #if RCAT_HAVE_NETWORK
 
@@ -76,7 +78,7 @@
 #endif
 #define MAX_CLIENTS         4
 #define REQUEST_MAX         2048        // headers and body
-#define BODY_MAX            4096
+#define BODY_MAX            8192        // the longest answer: /api/info, with every page's name
 #define CLIENT_TIMEOUT_MS   5000
 #define SCAN_MS             30000       // a search from the page runs this long
 #define MAX_KNOWN           8           // phones that have opened the page
@@ -415,6 +417,10 @@ static void write_state(json_t *j)
             (unsigned)page, settings_get()->terminal_size, message_scale());
     jstring(j, message_text());
     const settings_t *s = settings_get();
+    if (voice_ring_available())
+    {
+        jprintf(j, ",\"ring\":{\"on\":%u,\"color\":%u}", s->voice_ring, s->voice_ring_color);
+    }
     if (voice_fx_available())
     {
         jprintf(j, ",\"voice\":{\"preset\":%u,\"speaker\":%d,\"volume\":%u}", s->voice_effect,
@@ -494,6 +500,13 @@ static void write_info(json_t *j)
     {
         jprintf(j, "%s", i ? "," : "");
         jstring(j, voice_fx_preset_name(i));
+    }
+    jprintf(j, "],\"ring_colors\":[");
+    for (uint8_t i = 0; voice_ring_available() && i < voice_ring_color_count(); i++)
+    {
+        jprintf(j, "%s[", i ? "," : "");
+        jstring(j, voice_ring_color_name(i));
+        jprintf(j, ",\"#%06lx\"]", (unsigned long)voice_ring_color_rgb(i));
     }
     jprintf(j, "]}");
 }
@@ -685,6 +698,18 @@ static bool run_command(const char *name, const char *query, const char *body, s
     {
         int size = query_int(query, "s", 0);
         settings_set_terminal_size((uint8_t)(size >= 0 && size <= 6 ? size : 0));
+    }
+    else if (strcmp(name, "ring") == 0 && voice_ring_available())
+    {
+        // As the Voice Ring page does; the page catches up and shows it
+        const settings_t *s = settings_get();
+        int on = query_int(query, "on", s->voice_ring);
+        int color = query_int(query, "c", s->voice_ring_color);
+        if (color < 0 || color >= voice_ring_color_count())
+        {
+            color = s->voice_ring_color;
+        }
+        settings_set_voice_ring(on != 0, (uint8_t)color);
     }
     else if (strcmp(name, "voice") == 0 && voice_fx_available())
     {

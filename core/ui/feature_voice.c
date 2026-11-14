@@ -72,7 +72,10 @@ static void add_ring_settings_page(ui_feature_t *feature)
     lv_label_set_text(title, "Voice Ring");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(32));
 
+    // Big, so it's easy to hit with a gloved finger
     ring_switch = lv_switch_create(ring_page);
+    lv_obj_set_size(ring_switch, ui_px(76), ui_px(38));
+    lv_obj_set_ext_click_area(ring_switch, ui_px(8));
     if (settings_get()->voice_ring)
     {
         lv_obj_add_state(ring_switch, LV_STATE_CHECKED);
@@ -89,7 +92,7 @@ static void add_ring_settings_page(ui_feature_t *feature)
     lv_roller_set_options(ring_roller, voice_ring_color_options(), LV_ROLLER_MODE_NORMAL);
     lv_roller_set_visible_row_count(ring_roller, 3);
     lv_roller_set_selected(ring_roller, color, LV_ANIM_OFF);
-    lv_obj_align(ring_roller, LV_ALIGN_CENTER, 0, ui_px(28));
+    lv_obj_align(ring_roller, LV_ALIGN_CENTER, 0, ui_px(38));      // below the big switch
     lv_obj_add_event_cb(ring_roller, ring_settings_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 }
 
@@ -195,8 +198,37 @@ static void add_volume_page(ui_feature_t *feature)
 
 /* Show what the phone remote changed, leaving alone anything that's being
  * touched. */
-static void effect_sync_timer_cb(lv_timer_t *t)
+static void ring_sync(void)
 {
+    const settings_t *s = settings_get();
+    bool changed = false;
+    if (lv_obj_has_state(ring_switch, LV_STATE_CHECKED) != (s->voice_ring != 0))
+    {
+        if (s->voice_ring)
+        {
+            lv_obj_add_state(ring_switch, LV_STATE_CHECKED);
+        }
+        else
+        {
+            lv_obj_remove_state(ring_switch, LV_STATE_CHECKED);
+        }
+        changed = true;
+    }
+    if (!lv_obj_has_state(ring_roller, LV_STATE_PRESSED) && s->voice_ring_color < voice_ring_color_count()
+        && lv_roller_get_selected(ring_roller) != s->voice_ring_color)
+    {
+        lv_roller_set_selected(ring_roller, s->voice_ring_color, LV_ANIM_OFF);
+        changed = true;
+    }
+    if (changed)
+    {
+        on_navigate();
+    }
+}
+
+static void sync_timer_cb(lv_timer_t *t)
+{
+    ring_sync();
     const settings_t *s = settings_get();
     if (effect_roller != NULL && !lv_obj_has_state(effect_roller, LV_STATE_PRESSED)
         && s->voice_effect < voice_fx_preset_count() && lv_roller_get_selected(effect_roller) != s->voice_effect)
@@ -229,7 +261,7 @@ static void button_timer_cb(lv_timer_t *t)
     if (rcat_hal_button_pressed())
     {
         voice_fx_set_speaker(!voice_fx_speaker_on());
-        effect_sync_timer_cb(NULL);
+        sync_timer_cb(NULL);
     }
 }
 
@@ -326,9 +358,9 @@ static bool build(ui_feature_t *feature)
     {
         add_effect_page(feature);
         add_volume_page(feature);
-        lv_timer_create(effect_sync_timer_cb, SYNC_MS, NULL);
         lv_timer_create(button_timer_cb, BUTTON_MS, NULL);
     }
+    lv_timer_create(sync_timer_cb, SYNC_MS, NULL);
     if (voice_lab_available())
     {
         add_lab_page(feature);
