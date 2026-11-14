@@ -15,3 +15,11 @@ CONFIG_LV_USE_LIBJPEG_TURBO=y
 # After an update over WiFi, go back to the old firmware if the new one
 # doesn't get as far as confirming it works (see core/app/updater.h)
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# If a task stops (the audio task is watched, as well as each core's idle
+# task), restart the board after 5 seconds rather than leaving it stuck, and
+# save a core dump to the coredump partition first: what every task was doing,
+# for `idf.py coredump-info` over USB afterwards (see docs/building-firmware.md).
+CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y

@@ -76,6 +76,31 @@ A few ideas run through it:
 
 The UI runs on a single loop, which just runs LVGL's timers (see `app_run()` in [`core/app/app.c`](../../core/app/app.c)).  Anything a feature does regularly, like updating KITT's bars or polling the Lovense devices, is an LVGL timer (`lv_timer_create()`), so it runs on that loop and can use LVGL freely.  The microphone and speaker callbacks run on the board's audio tasks, and Bluetooth on its own task, so they mustn't call LVGL.  They leave their results where the UI's timers pick them up.
 
+## Crashes and hangs
+
+On the ESP32-S3 boards, the task watchdog watches each core's idle task, and on the 1.75" board the audio task as well.  If one of them goes 5 seconds without checking in, the board restarts rather than carrying on half stuck.  An idle task misses its check-in when something on its core keeps the core busy, like a loop that never ends.  The audio task misses its check-in when it stops for any reason, whether it's busy or blocked: the sound stops and KITT's bars freeze, but the display still works.
+
+Before restarting, after a crash as well as a watchdog restart, the board:
+
+- prints what went wrong and a backtrace to the USB serial port, which only helps if `idf.py monitor` is running at the time
+- saves a core dump, the state and stack of every task, to the `coredump` partition (128 KB, at `0xe13000`, after the battery log)
+
+When it starts up again, the log says why it restarted (task watchdog, interrupt watchdog, crash or brownout) and whether there's a core dump (see `report_last_reset()` in [`platforms/esp-idf/main/main.c`](../../platforms/esp-idf/main/main.c)).  To read the core dump, connect the board over USB and run:
+
+```
+idf.py -C platforms/esp-idf -B build-s3-175 -p /dev/ttyACM0 coredump-info
+```
+
+Use the build folder of the firmware that's on the board, so the addresses match its code.  It prints why the board stopped, the backtrace of the task that was running, and every other task's state and backtrace.  For a watchdog restart, look for the task that was meant to check in, such as `audio`, and where it was stuck.
+
+Things to know:
+
+- **Only the latest one is kept.**  Each core dump erases the partition and replaces the last one.  It can't spill past the end: one too big for the partition isn't saved.  A core dump stays until the next crash replaces it.
+- **The partition is only made when flashing over USB.**  An update over WiFi doesn't change the partition table, so a board that has only ever had updates over WiFi since this was added has no `coredump` partition.  It still restarts, without the core dump.
+- **A new task that runs all the time should be watched too.**  Call `esp_task_wdt_add(NULL)` when it starts and `esp_task_wdt_reset()` each time round its loop, as `audio_task()` in the 1.75" board's `hal_board.c` does.  And don't keep a core busy for seconds at a time without blocking, or its idle task misses its check-in and the board restarts.
+- **The settings are in [`platforms/esp-idf/sdkconfig.defaults`](../../platforms/esp-idf/sdkconfig.defaults)** (`CONFIG_ESP_TASK_WDT_PANIC` and `CONFIG_ESP_COREDUMP_*`).  An existing build folder keeps its old configuration, so build in a new one after changing them.
+- **The RP2040 and RP2350 boards don't have any of this.**
+
 ## Checking a change
 
 Build every platform the change touches, as described in [Building the Firmware](../building-firmware.md).  A change to `core/` or `hal.h` touches all of them: the RP2040, the RP2350 and both ESP32-S3 boards.  Every build should finish without warnings.  It's also worth building once with the new feature switched off.

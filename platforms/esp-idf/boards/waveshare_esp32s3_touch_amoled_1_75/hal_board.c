@@ -34,6 +34,7 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_touch_cst9217.h"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 #include "esp_timer.h"
 
 #include "hal.h"
@@ -849,8 +850,15 @@ static void audio_task(void *arg)
     int64_t window_start = esp_timer_get_time();
 #endif
 
+    // Watched, so that if it ever stops (stuck in a loop, or waiting on the
+    // microphones for ever) the board restarts after a few seconds, with a
+    // core dump saying where it was, rather than sitting there silent with
+    // KITT frozen (see sdkconfig.defaults).
+    esp_task_wdt_add(NULL);
+
     while (1)
     {
+        esp_task_wdt_reset();
         if (esp_codec_dev_read(mic_dev, raw, frames * AUDIO_SLOTS * sizeof(int16_t)) != ESP_CODEC_DEV_OK)
         {
             rcat_hal_delay_ms(AUDIO_BLOCK_MS);

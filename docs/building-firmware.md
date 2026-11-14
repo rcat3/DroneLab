@@ -71,6 +71,7 @@ A few things that can come up:
 - **The board isn't found when flashing.**  Hold the `BOOT` button while plugging in the USB cable, then try again.
 - **Watching the log without flashing:** `idf.py -C platforms/esp-idf -B build-s3-175 -p /dev/ttyACM0 monitor`
 - **After updating the code, a setting doesn't seem to take effect.**  ESP-IDF keeps its configuration in the build folder and doesn't apply new defaults to an existing one.  Delete the build folder and build again.
+- **The board restarted by itself.**  If a task stops, for example the audio task (the sound stops and KITT's bars freeze), the watchdog restarts the board after 5 seconds and saves a core dump: what every task was doing at the time.  The log says why it restarted the next time it starts up.  To read the core dump, connect it over USB and run `idf.py -C platforms/esp-idf -B build-s3-175 -p /dev/ttyACM0 coredump-info`, with the build folder of the firmware that's on the board.  The core dump goes in its own part of the flash, which is only set up when the board is flashed over USB, not by an update over WiFi.
 
 ### Updating over WiFi
 

@@ -1,2 +1,2 @@
 idf_component_register(SRCS main.c
-                       REQUIRES rcat_core)
+                       REQUIRES rcat_core espcoredump)

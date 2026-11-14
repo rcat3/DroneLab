@@ -19,7 +19,7 @@ Add `platforms/esp-idf/boards/<board>/`, named after the board, with:
 - `hal_board.c` - The board's own HAL: display, touch, audio, battery, accelerometer axes and the SD card's pins.  Everything else is in `components/rcat_esp32/` already.
 - `idf_component.yml` - The drivers it needs from Espressif's component registry.  The first build makes `dependencies.lock`, which pins their versions; commit it.
 - `sdkconfig.defaults` - Its flash size, PSRAM and partition table, starting from another board's.
-- `partitions.csv`
+- `partitions.csv` - Start from another board's, and keep its `coredump` partition, where the board saves a core dump when it crashes or the watchdog restarts it (see [Crashes and hangs](README.md#crashes-and-hangs)).
 
 Build it with `-DBOARD=<board>` and its own build folder.  The [ESP32-S3-Touch-AMOLED-1.75](../../platforms/esp-idf/boards/waveshare_esp32s3_touch_amoled_1_75/) is a recent example of all of this.
 

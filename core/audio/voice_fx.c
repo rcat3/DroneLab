@@ -327,8 +327,10 @@ static void chorus_process(chorus_t *c, float *x, int n)
 #define PITCH_DECIMATE      4
 #define PITCH_FS            (FS / PITCH_DECIMATE)
 #define PITCH_SIZE          (PITCH_HISTORY / PITCH_DECIMATE)
-#define PITCH_MIN_LAG       (PITCH_FS / 500)
-#define PITCH_MAX_LAG       (PITCH_FS / 60)
+#define PITCH_MIN_HZ        60
+#define PITCH_MAX_HZ        500
+#define PITCH_MIN_LAG       (PITCH_FS / PITCH_MAX_HZ)
+#define PITCH_MAX_LAG       (PITCH_FS / PITCH_MIN_HZ)
 #define PITCH_VOICED        0.5f
 
 typedef struct
@@ -416,10 +418,21 @@ static float detect_pitch(const float *in)
     {
         return 0;
     }
-    // Refine the peak between samples.
+    // Only a real peak counts. At either end of the range a neighbour just
+    // outside it can be higher, and a parabola through three points that
+    // aren't a peak can land anywhere: far off, below zero, or a tiny lag
+    // (an enormous pitch), which used to hang shift_add_marks.
     float a = r[best_lag - 1], b = r[best_lag], c = r[best_lag + 1];
-    float lag = best_lag + 0.5f * (a - c) / (a - 2 * b + c + 1e-12f);
-    return PITCH_FS / lag;
+    if (a > b || c > b)
+    {
+        return 0;
+    }
+    // Refine the peak between samples: within half a sample for a real peak,
+    // but kept to one in case rounding says otherwise.
+    float offset = 0.5f * (a - c) / (a - 2 * b + c - 1e-12f);
+    float lag = best_lag + fmaxf(-1.0f, fminf(1.0f, offset));
+    float f0 = PITCH_FS / lag;
+    return (f0 >= PITCH_MIN_HZ && f0 <= PITCH_MAX_HZ) ? f0 : 0;
 }
 
 static float carrier_hz(resynth_t *r)
@@ -738,6 +751,13 @@ static void shift_add_marks(shift_t *s)
             // The first of a voiced run starts at a peak, and the rest follow it.
             int64_t guess = s->last_mark + (int)(p + 0.5f);
             pos = after_voiced ? shift_refine(s, guess, p) : shift_peak(s, guess, p);
+            // Always move on, so a bad period can't keep this loop going for
+            // ever (detect_pitch keeps it in range, but this is the loop the
+            // audio task hung in).
+            if (pos <= s->last_mark)
+            {
+                pos = s->last_mark + 1;
+            }
         }
         else
         {
