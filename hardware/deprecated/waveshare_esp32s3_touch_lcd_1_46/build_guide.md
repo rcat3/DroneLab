@@ -15,7 +15,7 @@ There was also a speaker housing for this board, with two speakers and their own
 ## Board notes
 
 - **Power:** the board runs from USB-C or from a 3.7 V LiPo battery on its 2-pin MX1.25 connector (check the polarity before plugging a battery in).  On battery, press the `PWR` button on the side to turn it on.  The firmware keeps the power switched on after you let go.  Hold `PWR` for 2 seconds to turn it off.
-- **Charging:** the board charges its battery at up to 2 A, set by R8 (82k), which is far more than the housing's small battery should take.  The housing covers the USB-C port so it can't be plugged in by accident.  It's worth changing R8 to about 390k, which charges the 702030 battery at about 0.4 A.  The charge current is roughly 165 kΩ·A divided by R8.  R8 is a tiny 0201 part, so it's fine soldering work; measure the current with a USB meter afterwards.
+- **Charging:** the board charges its battery at up to 2 A, set by R8 (82k), which is far more than the housing's small battery should take.  The housing covers the USB-C port so it can't be plugged in by accident.  It's worth changing R8 to about 390k, which charges the 702030 battery at about 0.4 A.  The charge current is roughly 165 kΩ·A divided by R8.  **R8 is an 0201 surface mount part, 0.6 x 0.3 mm.**  Changing it isn't for the faint of heart: it takes a microscope, a capable soldering station with a fine tip (or hot air), and advanced soldering skills.  Measure the current with a USB meter afterwards.
 - **Rotation:** the display controller can't rotate the picture by 90 degrees itself, so the ESP32 rotates it while drawing.  It's fast enough that you shouldn't notice.
 - **Not used yet:** the clock chip.
 

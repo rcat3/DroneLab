@@ -45,7 +45,7 @@ The STL files go in the `stl/` folder, turned the right way up to print.  A sing
 
 The board charges its battery at up to 2 A, set by R8 (82k) next to its charger chip.  That's far more than the housing's 702030 battery, about 400 mAh, should take, so it's worth changing R8 to about 390k, which charges at about 0.4 A.  The charge current is roughly 165 kΩ·A divided by R8.
 
-R8 is a tiny 0201 part, so changing it is fine soldering work.  Measure the charge current with a USB meter afterwards.
+R8 is an 0201 surface mount part, 0.6 x 0.3 mm, so changing it isn't for the faint of heart: it takes a microscope, a capable soldering station with a fine tip (or hot air), and advanced soldering skills.  Measure the charge current with a USB meter afterwards.
 
 ## Test prints
 

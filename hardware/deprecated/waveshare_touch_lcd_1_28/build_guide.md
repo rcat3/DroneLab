@@ -56,6 +56,8 @@ The USB-C port is reachable through a pocket in the right-hand side of the housi
 
 To charge more gently, change R15 on the board.  Its charger (an ETA6096, U6) sets the charge current from R15, which goes from its ISET pin to ground, at roughly 165 kΩ·A divided by its resistance.  On the back of the RP2040 board, with the USB-C port at the bottom, R15 is right of center, just above the charger and the inductor beside it, with capacitor C27 to its right and the battery socket further right.  Waveshare's [schematic and silkscreen map](https://files.waveshare.com/wiki/RP2350-Touch-LCD-1.28/RP2040-Touch-LCD-1.28.pdf) shows where it is.  The board's silkscreen may not label it, as the parts are tiny, so check it reads about 160k before taking it off.
 
+**R15 is an 0201 surface mount part, 0.6 x 0.3 mm.**  Changing it isn't for the faint of heart: it takes a microscope, a capable soldering station with a fine tip (or hot air), and advanced soldering skills.  If that's not you, charge the battery with a separate small LiPo charger instead.
+
 | R15 | Charge current |
 |---|---|
 | 160k (as fitted) | 1 A |

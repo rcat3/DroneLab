@@ -43,12 +43,12 @@ The ESP32-S3-Touch-LCD-1.46 has no voice effects: it can't hear what its speaker
 ### RP2040-Touch-LCD-1.28 and RP2350-Touch-LCD-1.28
 
 - **Power:** they have no power button.  They run from USB-C, or from a 3.7 V LiPo on their JST 1.25 mm battery socket, and are switched on and off by connecting the battery, so a switch in its lead is the usual way.  Check the battery's polarity against the board before plugging it in: many batteries are wired the other way.
-- **Charging:** they charge their battery at 1 A, set by R15 (160k) next to the charger chip, and the firmware can't change it.  That's too much for a small battery, so change R15 (560k gives about 0.3 A), or charge the battery separately.  The [1.28" build guide](../hardware/deprecated/waveshare_touch_lcd_1_28/build_guide.md#charging) has the details.
+- **Charging:** they charge their battery at 1 A, set by R15 (160k) next to the charger chip, and the firmware can't change it.  That's too much for a small battery, so change R15 (560k gives about 0.3 A), or charge the battery separately.  R15 is an 0201 surface mount part, 0.6 x 0.3 mm: changing it takes a microscope, a capable soldering station and advanced soldering skills.  The [1.28" build guide](../hardware/deprecated/waveshare_touch_lcd_1_28/build_guide.md#charging) has the details.
 - **Flashing:** see [Building the Firmware](building-firmware.md#rp2040-and-rp2350-boards).  The images are built into the firmware, so changing them means rebuilding it.
 
 ### ESP32-S3-Touch-LCD-1.46
 
 - **Power:** it runs from USB-C or from a 3.7 V LiPo on its MX1.25 socket (check the polarity first).  Press `PWR` to turn it on, and hold it for 2 seconds to turn it off.
-- **Charging:** it charges its battery at up to 2 A, set by R8 (82k) next to the charger chip, and the firmware can't change it.  That's too much for most small batteries, so change R8 (390k gives about 0.4 A).  The [1.46" build guide](../hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46/build_guide.md#board-notes) has the details.
+- **Charging:** it charges its battery at up to 2 A, set by R8 (82k) next to the charger chip, and the firmware can't change it.  That's too much for most small batteries, so change R8 (390k gives about 0.4 A).  R8 is an 0201 surface mount part, 0.6 x 0.3 mm: changing it takes a microscope, a capable soldering station and advanced soldering skills.  The [1.46" build guide](../hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46/build_guide.md#board-notes) has the details.
 - **Speaker:** the small round trimmer on the back of the board sets the built-in speaker's volume, on top of the volume setting.
 - **Flashing:** see [Building the Firmware](building-firmware.md#esp32-s3-boards), with `build-s3-146` and `-DBOARD=waveshare_esp32s3_touch_lcd_1_46`.  Images for this board are 412 pixels across.

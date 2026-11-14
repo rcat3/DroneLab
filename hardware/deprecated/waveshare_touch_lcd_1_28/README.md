@@ -70,7 +70,7 @@ See the [build guide](build_guide.md).
 
 ## Charge current
 
-The boards charge their battery at 1 A, set by R15 (160k) next to the charger chip, which is several times what a 250-310 mAh battery should take.  Changing R15 to about 560k brings it down to about 0.3 A.  The [build guide](build_guide.md#charging) has the details and other values.
+The boards charge their battery at 1 A, set by R15 (160k) next to the charger chip, which is several times what a 250-310 mAh battery should take.  Changing R15 to about 560k brings it down to about 0.3 A.  R15 is an 0201 surface mount part, 0.6 x 0.3 mm, so changing it isn't for the faint of heart: it takes a microscope, a capable soldering station with a fine tip (or hot air), and advanced soldering skills.  The [build guide](build_guide.md#charging) has the details and other values.
 
 ## Travel case
 

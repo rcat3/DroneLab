@@ -109,10 +109,15 @@ These come from the 3D model, not from a print, so check them with test prints:
 - `housing_parts.scad` - What the two housings share: the chamber's layout, the microphones' cell and sleeves, the plungers, the USB-C plug and the engraved marks, and their settings.
 - `board.scad` - The board's dimensions, measured from Waveshare's 3D model.
 - `render.sh` - Renders the parts to STL files.
+- `travel_case/` - A hinged travel case for each housing, shaped to fit it.
 
 ## Making the STL files
 
 Run `./render.sh` in this folder to render both housings' parts to the `stl/` folder.  It needs [OpenSCAD](https://openscad.org/).  `./render.sh speaker` or `./render.sh low_profile` renders one housing, `./render.sh tests` the test prints, and `./render.sh body chin` just those parts.  The low-profile housing's own parts are named `lp_body` and so on, so their files don't mix with the speaker housing's.  A single part can also be rendered by hand with, for example, `openscad -D 'part="body"' -o body.stl msa_speaker_housing.scad`.  The parts are all turned the right way up to print.
+
+## Travel cases
+
+There's a hinged case to carry each housing in, with the board in it, in [`travel_case`](travel_case/).  Each is made from its housing's design, so it fits it closely.
 
 ## Parts to buy, wiring and putting it together
 

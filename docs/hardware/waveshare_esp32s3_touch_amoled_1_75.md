@@ -89,6 +89,10 @@ The design is [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75/msa_low_prof
 
 Screw the whole housing into the mask by its grip.  It should end up level, with the USB-C port on the right.  If it sits a little crooked, see `lp_phase_test` in the [design's README](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/).
 
+## Travel case
+
+There's a hinged case to carry either housing in, with the board in it, in [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case/).  Each is shaped to its housing, and prints in two parts with no supports, joined by a length of 1.75 mm filament as the hinge pin.  They're designed, but not printed yet.
+
 ## Building the firmware
 
 Set up ESP-IDF as described in [Building the Firmware](../building-firmware.md#esp32-s3-boards), then from the top of the repo:

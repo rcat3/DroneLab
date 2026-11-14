@@ -22,6 +22,7 @@ managed_components/
 # Rendered housing parts (made from the .scad files)
 hardware/boards/*/*.stl
 hardware/boards/*/stl/
+hardware/**/stl/
 hardware/deprecated/*/*.stl
 hardware/deprecated/*/stl/
 
