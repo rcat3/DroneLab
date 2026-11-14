@@ -52,7 +52,8 @@ header_plug = [16.9, 3.1, 4.1];    // a ribbon cable's plug: length with the cli
 header_plug_side = 1;               // the notch faces the center of the board (1) or away from it (-1)
 header_plug_clear = 0.3;
 header_adapter = false;             // a small PCB soldered onto the header in place of a ribbon cable
-                                    // (header_adapter/header_adapter.scad, which has to be included too)
+                                    // (the deprecated speaker housing's header_adapter/header_adapter.scad,
+                                    // in hardware/deprecated, which has to be included too)
 usb_access = false;                 // the wall covers the USB-C port, so a battery can't be charged
                                     // at the board's 2 A by accident. Take the board out to use USB
 usb_opening = [12.4, 6.6];          // width, height of the slot for the USB-C plug. The port sits

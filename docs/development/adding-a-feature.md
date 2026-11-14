@@ -15,7 +15,7 @@ A feature is one of the sections you swipe up and down between, like Images or L
 ## Settings and build options
 
 - **Something people change on the display** goes in `settings_t` in [`core/app/settings.h`](../../core/app/settings.h).  Add new fields only at the end, so settings saved by older firmware still load.  Give the field a default in `set_defaults()`, check it in `load()`, and add a setter in [`core/app/settings.c`](../../core/app/settings.c).  Settings that belong to one feature go on that feature's own pages, not in the Settings feature.
-- **Something fixed for a build**, like which speaker the ESP32-S3-Touch-LCD-1.46 uses, goes in the platform's `features.cmake`, or in the board's `.cmake` file if it depends on the board.  The build passes it to the code as a compile definition.
+- **Something fixed for a build**, like whether a board has voice effects (`RCAT_VOICE_FX`), goes in the platform's `features.cmake`, or in the board's `.cmake` file if it depends on the board.  The build passes it to the code as a compile definition.
 
 ## Things that run in the background
 

@@ -1210,6 +1210,11 @@ static bool started;
 
 bool voice_fx_start(void)
 {
+#if !RCAT_VOICE_FX
+    // Not on this board: its speaker can't play them without feeding back
+    // (RCAT_VOICE_FX, in the board's .cmake file).
+    return false;
+#endif
     if (!started && mic_start())
     {
         make_decimator();

@@ -1,6 +1,6 @@
 # Voice Effects
 
-*Boards with a microphone: the ESP32-S3 boards*
+*The ESP32-S3-Touch-AMOLED-1.75*
 
 The *Voice Effect* page, in the Voice feature, runs your voice through an effect on the board itself:
 
@@ -23,7 +23,9 @@ The *Effect Volume* page, next to it, sets how loud the effect is on the speaker
 
 The board's **BOOT** button switches *Play on speaker* off and on, to stop feedback quickly.  (BOOT only matters at startup: held while the board starts, it waits for new firmware over USB.)  The [Phone Remote](phone-remote.md) has all of these too, with the volume in exact steps.
 
-*Play on speaker* is always off at startup: with the speaker facing into the mask, it feeds back.  A speaker facing away from the mask works much better, like the ones in the speaker housings (see [Hardware](../../README.md#hardware)).  Even then, some of the speaker reaches the microphones, so too much volume feeds back.  The ESP32-S3-Touch-AMOLED-1.75 cancels most of that, because its audio chip hears what the speaker is playing (see its [board notes](../hardware/waveshare_esp32s3_touch_amoled_1_75.md#board-notes)), so it can go much louder before it does.
+*Play on speaker* is always off at startup, in case it feeds back.  The speaker in the board's housing faces away from the mask, but some of it still reaches the microphones.  The board cancels most of that, because its audio chip hears what the speaker is playing (see its [board notes](../hardware/waveshare_esp32s3_touch_amoled_1_75.md#board-notes)), so it can go much louder before it feeds back.
+
+The ESP32-S3-Touch-LCD-1.46 doesn't have voice effects.  Its built-in speaker faces into the mask, and it can't cancel the speaker out of its microphone, so it would feed back long before the effect was loud enough to hear.
 
 The presets are the same as the effects in `tools/voice_monitor.py`, so they can be tried and tuned on a computer first.  The pitch-following presets add about 15-20 ms of delay, the others less.
 

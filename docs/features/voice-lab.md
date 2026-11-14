@@ -17,7 +17,7 @@ Some things to try:
 
 - `--effect robot` (or `deep`, `dalek`, `drone`, `android`) plays the microphone through an effect.  Effects can be chained, like `--effect gate:-45,pitch:0.8,ring:40`.  Run with `--help` for the list.
 - `--record take1.wav` saves the microphone as it is.  Then `--input take1.wav --effect robot` tries effects on the recording, without the board.
-- `--listen effect` plays the board's own voice effect instead of the microphone.
+- `--listen effect` plays the board's own voice effect instead of the microphone, on a board with [voice effects](voice-effects.md).
 - `--meter` prints the microphone level every second.  Play something on the speaker (the [Sound](sound.md) feature) to measure how much the microphone picks up.
 
 WiFi adds a delay of around a tenth of a second, which is fine for judging an effect but odd if you listen to yourself live.  It's easier to have someone else listen, or to record and play back.

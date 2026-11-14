@@ -22,6 +22,8 @@ managed_components/
 # Rendered housing parts (made from the .scad files)
 hardware/boards/*/*.stl
 hardware/boards/*/stl/
+hardware/deprecated/*/*.stl
+hardware/deprecated/*/stl/
 
 # KiCad local settings and backups
 *.kicad_prl

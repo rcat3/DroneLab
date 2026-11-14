@@ -2,7 +2,7 @@
 
 A small PCB that solders onto the 2x10, 1.27 mm pin header (J9) on the back of the Waveshare ESP32-S3-Touch-LCD-1.46. It replaces the ribbon cable in the speaker housing (`../msa_speaker_housing.scad`). All the wiring to the back of the housing plugs into one 10-pin JST SH socket on it. To take the board out for a firmware update, you unplug that socket and the battery, and nothing has to be cut or desoldered.
 
-It's used in the 1.46" speaker housing: see the [build guide](../../../../docs/hardware/waveshare_esp32s3_touch_lcd_1_46.md#the-speaker-housing) for the rest of the wiring.
+It's used in the 1.46" speaker housing, which is no longer supported: see [its README](../#wiring) for the rest of the wiring.
 
 **Status: not built yet.**  The layout passes KiCad's design rules check. It hasn't been fitted.
 

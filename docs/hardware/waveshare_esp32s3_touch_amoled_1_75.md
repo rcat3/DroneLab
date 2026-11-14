@@ -1,6 +1,6 @@
 # Building with the ESP32-S3-Touch-AMOLED-1.75
 
-The [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75) is a 1.75" round AMOLED touch screen (466x466) on an ESP32-S3 with 8 MB of PSRAM.  It has everything the 1.46" board has, plus two microphones, a speaker amplifier with its own socket, and a power management chip that charges the battery gently.  Every [feature](../features/README.md) runs on it.  Get the bare board, not the -B version that comes in its own case.
+The [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75) is a 1.75" round AMOLED touch screen (466x466) on an ESP32-S3 with 8 MB of PSRAM.  It has everything the 1.46" board has, plus two microphones, a speaker amplifier with its own socket, and a power management chip that charges the battery gently.  Every [feature](../features/README.md) runs on it, and it's the only board with [voice effects](../features/voice-effects.md).  It's the standard build.  Get the bare board, not the -B version that comes in its own case.
 
 **Status: works.**  The housing has been printed and everything works in it.  Since that print, the battery stands upright and the microphones have a sealed cell of their own, which hasn't been printed yet.
 

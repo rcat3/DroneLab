@@ -15,7 +15,8 @@
  */
 #define VOICE_FX_SAMPLE_RATE 16000
 
-/* Start listening to the microphone. Returns false without one. */
+/* Start listening to the microphone. Returns false without one, or on a
+ * board built without voice effects (RCAT_VOICE_FX). */
 bool voice_fx_start(void);
 
 /* True once voice_fx_start() has succeeded. */

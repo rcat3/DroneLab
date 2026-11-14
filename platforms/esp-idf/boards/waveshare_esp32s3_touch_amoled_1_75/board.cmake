@@ -3,3 +3,4 @@
 set(IDF_TARGET esp32s3)
 set(RCAT_IMAGE_SIZE 466)     # 466x466 round AMOLED
 set(RCAT_LARGE_IMAGES OFF)   # big GIFs take a lot of flash at this size; put them on the SD card
+set(RCAT_VOICE_FX ON)        # voice effects: its echo canceller keeps the speaker from feeding back

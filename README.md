@@ -2,11 +2,11 @@
 
 This project features firmware and 3D printable housings for small round Waveshare touch displays.  While primarily intended to screw into the voice port on the front of an MSA Millennium gas mask, this ecosystem was designed to be flexible.  The immediate audience will be "latex drones" desiring slick high-tech accessories for their gas mask.  Though cosplayers and other costume designers might find the project suits their needs as well.  
 
-What started as a simple application to display images on Waveshare displays has grown into a small platform.  The same firmware runs on several displays, and the bigger ones can also light up with your voice, change it, play sound, control Lovense devices and be run from a phone.
+What started as a simple application to display images on Waveshare displays has grown into a small platform.  The same firmware runs on several displays, and the bigger ones can also light up with your voice, play sound, control Lovense devices and be run from a phone.  The biggest can change your voice too.
 
 ![The housings, to scale](docs/images/housings_to_scale.png)
 
-*The housings, to scale.  From left: the 1.28" housing (RP2040 or RP2350), the 1.46" simple housing, the 1.46" speaker housing, and the 1.75" speaker housing.*
+*The housings, to scale.  From left: the 1.28" housing (RP2040 or RP2350), the 1.46" housing, and the 1.75" speaker housing.*
 
 ## What it does
 
@@ -48,7 +48,7 @@ Which features each one runs:
 | [Full screen animated GIFs](docs/features/images.md#animated-gif-memory-use) | | Yes | From the SD card | From the SD card |
 | [Images from the SD card](docs/features/images.md#images-on-the-sd-card) | | | Yes | Yes |
 | [KITT and the Voice Ring](docs/features/kitt-and-voice-ring.md) | | | Yes | Yes |
-| [Voice Effects](docs/features/voice-effects.md) | | | Yes | Yes |
+| [Voice Effects](docs/features/voice-effects.md) | | | | Yes |
 | [Voice Lab](docs/features/voice-lab.md) | | | Yes | Yes |
 | [Sound](docs/features/sound.md) | | | Yes | Yes |
 | [Lovense](docs/features/lovense.md) | | | Yes | Yes |
@@ -62,11 +62,10 @@ Which features each one runs:
 | | |
 |---|---|
 | ![The 1.28" housing](docs/images/housing_1_28.png) | **[RP2040 or RP2350, 1.28"](docs/hardware/waveshare_touch_lcd_1_28.md)**: the simplest, smallest and cheapest build, for showing images.  Two printed parts and no screws, with the battery and a power switch inside, standing about 12 mm out of the mask.  Get the RP2350: it costs the same as the RP2040 and has room for full screen animated GIFs. |
-| ![The 1.46" simple housing](docs/images/housing_1_46.png) | **[ESP32-S3, 1.46", simple housing](docs/hardware/waveshare_esp32s3_touch_lcd_1_46.md#the-simple-housing)**: every feature, in one printed part with no soldering.  The board's built-in speaker faces into the mask, so it's best for images, voice displays, Lovense control and the phone remote, rather than for sound. |
-| ![The 1.46" speaker housing](docs/images/speaker_housing_1_46.png) | **[ESP32-S3, 1.46", speaker housing](docs/hardware/waveshare_esp32s3_touch_lcd_1_46.md#the-speaker-housing)**: every feature, with two speakers facing out for sound and voice effects, a 2000 mAh battery and its own USB-C charging port.  The most involved build: two amplifier boards and a small adapter PCB to solder. |
-| ![The 1.75" speaker housing](docs/images/speaker_housing_1_75.png) | **[ESP32-S3, 1.75" AMOLED](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md)**: every feature on the biggest, sharpest screen, with true blacks, two microphones, a speaker below the display and a 2000 mAh battery.  The board has its own amplifier, so there's nothing to solder but the speaker's plug, and it runs about 13.5 hours on a charge. |
+| ![The 1.46" housing](docs/images/housing_1_46.png) | **[ESP32-S3, 1.46"](docs/hardware/waveshare_esp32s3_touch_lcd_1_46.md)**: every feature but the voice effects, in one printed part with no soldering.  The board's built-in speaker faces into the mask, so it's best for images, voice displays, Lovense control and the phone remote, rather than for sound. |
+| ![The 1.75" speaker housing](docs/images/speaker_housing_1_75.png) | **[ESP32-S3, 1.75" AMOLED](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md)**: the standard build, with every feature, including voice effects, on the biggest, sharpest screen.  True blacks, two microphones, a speaker below the display that faces out, and a 2000 mAh battery.  The board has its own amplifier, so there's nothing to solder but the speaker's plug, and it runs about 13.5 hours on a charge. |
 
-The housings' designs are in [`hardware/`](hardware/), in [OpenSCAD](https://openscad.org/), organized by board.
+The housings' designs are in [`hardware/`](hardware/), in [OpenSCAD](https://openscad.org/), organized by board.  The 1.46" board's speaker housing, with two speakers, is no longer supported; its design is kept in [`hardware/deprecated`](hardware/deprecated/).
 
 ## How the software is put together
 
