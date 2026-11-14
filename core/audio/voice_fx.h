@@ -18,6 +18,9 @@
 /* Start listening to the microphone. Returns false without one. */
 bool voice_fx_start(void);
 
+/* True once voice_fx_start() has succeeded. */
+bool voice_fx_available(void);
+
 /* The presets. 0 is "Natural", your own voice. */
 size_t voice_fx_preset_count(void);
 const char *voice_fx_preset_name(size_t index);

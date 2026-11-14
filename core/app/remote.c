@@ -27,6 +27,14 @@
  *                                     the Terminal feature, and show it there
  *     POST /api/clear                 clear the Terminal
  *     POST /api/termsize?s=<0 to fit, or 1 to 6 for 8 to 48 px>   its letter size
+ *     GET  /api/tracks    the sound player's tracks, which don't change
+ *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>]   the voice
+ *                                     effect, Play on speaker and Effect Volume
+ *     POST /api/sound?[play=<1 or 0>][&skip=<1 or -1>][&t=<track>][&seek=<ms>]
+ *                     [&v=<percent>][&r=<audio_repeat_t>][&auto=<1 or 0>]   the
+ *                                     sound player: play or pause, the next or
+ *                                     last track, play a track, move in it,
+ *                                     and its options
  *
  *   The POSTs answer with the state, so the page shows the change at once.
  *   Each request has its own connection ("Connection: close"), which keeps
@@ -43,6 +51,8 @@
 #include "app/reactive.h"
 #include "app/remote.h"
 #include "app/settings.h"
+#include "audio/audio_player.h"
+#include "audio/voice_fx.h"
 #include "audio/voice_lab.h"
 #include "hal.h"
 #include "lvgl.h"
@@ -404,6 +414,21 @@ static void write_state(json_t *j)
     jprintf(j, ",\"screen\":[%u,%u],\"term_size\":%d,\"term_scale\":%d,\"message\":", (unsigned)feature,
             (unsigned)page, settings_get()->terminal_size, message_scale());
     jstring(j, message_text());
+    const settings_t *s = settings_get();
+    if (voice_fx_available())
+    {
+        jprintf(j, ",\"voice\":{\"preset\":%u,\"speaker\":%d,\"volume\":%u}", s->voice_effect,
+                voice_fx_speaker_on() ? 1 : 0, s->voice_volume);
+    }
+    if (audio_player_available())
+    {
+        uint32_t position, length;
+        audio_player_progress(&position, &length);
+        jprintf(j, ",\"sound\":{\"track\":%u,\"playing\":%d,\"position\":%lu,\"length\":%lu,\"volume\":%u,"
+                   "\"repeat\":%u,\"autoplay\":%u}",
+                (unsigned)audio_player_current(), audio_player_is_playing() ? 1 : 0, (unsigned long)position,
+                (unsigned long)length, s->sound_volume, s->sound_repeat, s->sound_autoplay);
+    }
     jprintf(j, ",\"devices\":[");
     bool first = true;
     for (size_t i = 0; i < LOVENSE_MAX_DEVICES; i++)
@@ -464,7 +489,33 @@ static void write_info(json_t *j)
         }
         jprintf(j, "]]");
     }
+    jprintf(j, "],\"presets\":[");
+    for (size_t i = 0; voice_fx_available() && i < voice_fx_preset_count(); i++)
+    {
+        jprintf(j, "%s", i ? "," : "");
+        jstring(j, voice_fx_preset_name(i));
+    }
     jprintf(j, "]}");
+}
+
+/* As many track names as fit, so it's always whole JSON */
+static void write_tracks(json_t *j)
+{
+    jprintf(j, "{\"tracks\":[");
+    size_t count = audio_player_available() ? audio_player_track_count() : 0;
+    size_t i = 0;
+    for (; i < count; i++)
+    {
+        const char *name = audio_player_track_name(i);
+        // Room for this one escaped, at worst, and the end
+        if (j->len + 6 * strlen(name) + 32 > j->cap)
+        {
+            break;
+        }
+        jprintf(j, "%s", i ? "," : "");
+        jstring(j, name);
+    }
+    jprintf(j, "],\"more\":%d}", i < count ? 1 : 0);
 }
 
 /* ----- Requests ----- */
@@ -635,6 +686,83 @@ static bool run_command(const char *name, const char *query, const char *body, s
         int size = query_int(query, "s", 0);
         settings_set_terminal_size((uint8_t)(size >= 0 && size <= 6 ? size : 0));
     }
+    else if (strcmp(name, "voice") == 0 && voice_fx_available())
+    {
+        // As the Voice Effect and Effect Volume pages do
+        int preset = query_int(query, "p", -1);
+        if (preset >= 0 && (size_t)preset < voice_fx_preset_count())
+        {
+            voice_fx_set_preset((size_t)preset);
+            settings_set_voice_effect((uint8_t)preset);
+        }
+        int speaker = query_int(query, "speaker", -1);
+        if (speaker >= 0)
+        {
+            voice_fx_set_speaker(speaker != 0);
+        }
+        int volume = query_int(query, "v", -1);
+        if (volume >= 0)
+        {
+            volume = volume > 100 ? 100 : volume;
+            voice_fx_set_volume((uint8_t)volume);
+            settings_set_voice_volume((uint8_t)volume);
+        }
+    }
+    else if (strcmp(name, "sound") == 0 && audio_player_available())
+    {
+        // As the Sound feature's pages do
+        size_t count = audio_player_track_count();
+        int track = query_int(query, "t", -1);
+        int skip = query_int(query, "skip", 0);
+        if (track >= 0 && (size_t)track < count)
+        {
+            audio_player_play((size_t)track);
+        }
+        else if (skip != 0 && count > 0)
+        {
+            size_t index = (audio_player_current() + count + (skip > 0 ? 1 : count - 1)) % count;
+            if (audio_player_is_playing())
+            {
+                audio_player_play(index);
+            }
+            else
+            {
+                audio_player_cue(index);
+            }
+        }
+        int play = query_int(query, "play", -1);
+        if (play == 1 && count > 0)
+        {
+            audio_player_resume();
+        }
+        else if (play == 0)
+        {
+            audio_player_pause();
+        }
+        int seek = query_int(query, "seek", -1);
+        if (seek >= 0)
+        {
+            audio_player_seek((uint32_t)seek);
+        }
+        int volume = query_int(query, "v", -1);
+        if (volume >= 0)
+        {
+            volume = volume > 100 ? 100 : volume;
+            audio_player_set_volume((uint8_t)volume);
+            settings_set_sound_volume((uint8_t)volume);
+        }
+        int repeat = query_int(query, "r", -1);
+        if (repeat >= 0 && repeat < AUDIO_REPEAT_COUNT)
+        {
+            audio_player_set_repeat((audio_repeat_t)repeat);
+            settings_set_sound_repeat((uint8_t)repeat);
+        }
+        int autoplay = query_int(query, "auto", -1);
+        if (autoplay >= 0)
+        {
+            settings_set_sound_autoplay(autoplay != 0);
+        }
+    }
     else
     {
         return false;
@@ -769,6 +897,10 @@ static void handle_request(client_t *c)
     else if (strcmp(target, "/api/state") == 0)
     {
         respond_json(c, write_state);
+    }
+    else if (strcmp(target, "/api/tracks") == 0)
+    {
+        respond_json(c, write_tracks);
     }
     else if (strncmp(target, "/api/", 5) == 0 && strcmp(method, "POST") == 0 && run_command(target + 5, query, c->request_body, c->request_body_len))
     {

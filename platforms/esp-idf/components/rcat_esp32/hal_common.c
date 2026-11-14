@@ -5,8 +5,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "driver/gpio.h"
 #include "driver/sdmmc_host.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_vfs_fat.h"
 
 #include "hal.h"
@@ -56,4 +58,52 @@ void rcat_hal_delay_ms(uint32_t ms)
 {
     TickType_t ticks = pdMS_TO_TICKS(ms);
     vTaskDelay(ticks > 0 ? ticks : 1);
+}
+
+/* The BOOT button, on GPIO0 on every ESP32-S3 board. It only matters at reset
+ * (held then, the board waits for new firmware over USB), so once it's
+ * running it's free. It has a pull-up on the board and reads low while it's
+ * pressed. */
+#define BUTTON_GPIO         GPIO_NUM_0
+#define BUTTON_SETTLE_US    30000       // a press or release has to last this long, for the contacts' bounce
+
+bool rcat_hal_button_pressed(void)
+{
+    static bool ready;
+    static bool down;           // what it's settled at
+    static int64_t changed_us;  // when it last read differently from that
+
+    if (!ready)
+    {
+        const gpio_config_t config = {
+            .pin_bit_mask = 1ULL << BUTTON_GPIO,
+            .mode = GPIO_MODE_INPUT,
+            .pull_up_en = GPIO_PULLUP_ENABLE,
+        };
+        gpio_config(&config);
+        // Held from startup doesn't count as a press.
+        down = gpio_get_level(BUTTON_GPIO) == 0;
+        ready = true;
+        return false;
+    }
+
+    bool now_down = gpio_get_level(BUTTON_GPIO) == 0;
+    int64_t now = esp_timer_get_time();
+    if (now_down == down)
+    {
+        changed_us = 0;
+        return false;
+    }
+    if (changed_us == 0)
+    {
+        changed_us = now;
+        return false;
+    }
+    if (now - changed_us < BUTTON_SETTLE_US)
+    {
+        return false;
+    }
+    down = now_down;
+    changed_us = 0;
+    return down;
 }

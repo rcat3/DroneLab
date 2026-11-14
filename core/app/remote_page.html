@@ -74,6 +74,19 @@ button.ok { border-color: var(--ok); color: var(--ok); }
 .now .where b { display: block; font-size: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .feature .name { margin-bottom: 10px; display: block; }
 
+/* Sound */
+.vol { display: flex; align-items: center; gap: 8px; }
+.vol input { flex: 1; }
+.vol button { flex: none; min-height: 40px; min-width: 48px; padding: 6px 10px; font-size: 14px; }
+.player { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 10px 0 4px; }
+.player button { width: 56px; height: 56px; padding: 0; font-size: 20px; }
+.player button.big { width: 72px; height: 72px; font-size: 26px; }
+.times { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: -6px; }
+.track { font-weight: 600; font-size: 18px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.wide { width: 100%; margin-top: 4px; }
+.tracks button { display: block; width: 100%; text-align: left; margin-bottom: 6px; border-radius: 12px; min-height: 42px;
+  font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Terminal */
 .term, .term * { font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace; }
 .crt { position: relative; margin-top: 16px; background: #020602; border: 1px solid #143814;
@@ -129,6 +142,7 @@ body:not(.toys) #stop { display: none; }
   <div class="tabs">
     <button data-tab="screen">Screen</button>
     <button data-tab="toys">Toys</button>
+    <button data-tab="sound">Sound</button>
     <button data-tab="term">Terminal</button>
   </div>
 </header>
@@ -164,6 +178,54 @@ body:not(.toys) #stop { display: none; }
   <button id="search" style="width:100%">Search</button>
 </section>
 
+<section class="tab" id="tab-sound">
+  <div id="voice-box">
+    <h2>Voice effect</h2>
+    <div class="card">
+      <button class="wide" id="speaker">Play on speaker</button>
+      <div class="motor" style="--c:var(--accent)">
+        <div class="row"><span>Effect Volume</span><b id="fx-vol-text"></b></div>
+        <div class="vol">
+          <button data-fx-step="-5">&minus;5</button><button data-fx-step="-1">&minus;1</button>
+          <input type="range" id="fx-vol" min="0" max="100" step="1">
+          <button data-fx-step="1">+1</button><button data-fx-step="5">+5</button>
+        </div>
+      </div>
+      <div class="muted" style="font-size:13px">If it feeds back, turn it down.</div>
+    </div>
+    <div class="grid" id="presets"></div>
+  </div>
+
+  <div id="sound-box">
+    <h2>Sound player</h2>
+    <div class="card">
+      <div class="track" id="track"></div>
+      <div class="muted" style="text-align:center" id="track-pos"></div>
+      <div class="player">
+        <button id="sound-prev" aria-label="Previous track">&#9198;</button>
+        <button class="big" id="sound-play" aria-label="Play or pause">&#9654;</button>
+        <button id="sound-next" aria-label="Next track">&#9197;</button>
+      </div>
+      <div style="--c:var(--m2)"><input type="range" id="seek" min="0" max="1000" step="1"></div>
+      <div class="times"><span id="elapsed"></span><span id="remaining"></span></div>
+      <div class="muted" id="sound-note" style="font-size:13px;text-align:center;margin-top:6px"></div>
+      <div class="motor" style="--c:var(--m2)">
+        <div class="row"><span>Volume</span><b id="snd-vol-text"></b></div>
+        <div class="vol">
+          <button data-snd-step="-5">&minus;5</button>
+          <input type="range" id="snd-vol" min="0" max="100" step="1">
+          <button data-snd-step="5">+5</button>
+        </div>
+      </div>
+      <div class="chips" id="repeats" style="margin-top:8px"></div>
+      <button class="wide" id="autoplay" style="margin-top:10px">Play at startup</button>
+    </div>
+    <h2>Tracks</h2>
+    <div class="tracks" id="tracks"></div>
+  </div>
+  <div class="empty" id="sound-none" hidden>This board has no speaker.</div>
+</section>
+
 <section class="tab term" id="tab-term">
   <div class="crt"><div class="label" id="crt-label">ON THE DISPLAY</div><span id="crt-text"></span><span class="caret"></span></div>
   <textarea id="msg" placeholder="&gt; type a message" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false"></textarea>
@@ -190,12 +252,13 @@ body:not(.toys) #stop { display: none; }
 "use strict";
 const $ = id => document.getElementById(id);
 const colors = ["var(--m0)", "var(--m1)", "var(--m2)"];
-let info = { patterns: [], modes: [], max_connected: 3, message_max: 600, features: [] };
+let info = { patterns: [], modes: [], max_connected: 3, message_max: 600, features: [], presets: [] };
+let tracks = [];
 let state = null;
 let target = -1;                // where patterns play: -1 for every device
 let online = true;
 const dragging = new Set();     // sliders under a finger: the page leaves them alone
-const pending = new Map();      // levels waiting to go out, newest only
+const pending = new Map();      // levels and volumes waiting to go out, newest only
 let sending = false;
 
 // Things remembered on this phone only
@@ -240,8 +303,8 @@ function el(tag, cls, text) {
 
 /* ----- Tabs ----- */
 
-// The tab from the address (#screen, #toys or #term), or the last one used
-let tab = ["screen", "toys", "term"].includes(location.hash.slice(1)) ? location.hash.slice(1) : load("tab", "toys");
+// The tab from the address (#screen, #toys, #sound or #term), or the last one used
+let tab = ["screen", "toys", "sound", "term"].includes(location.hash.slice(1)) ? location.hash.slice(1) : load("tab", "toys");
 function showTab(name) {
   tab = name;
   save("tab", name);
@@ -294,20 +357,23 @@ $("next").onclick = () => step(1);
 
 /* ----- Toys ----- */
 
-// One level request at a time, sending the newest value for each motor,
+// One slider request at a time, sending the newest value for each slider,
 // so a fast drag doesn't pile requests up.
-function sendLevels() {
+function sendPending() {
   if (sending || pending.size === 0) return;
-  const [key, params] = pending.entries().next().value;
+  const [key, [path, params]] = pending.entries().next().value;
   pending.delete(key);
   sending = true;
-  api("level", params, true).then(show).catch(() => {}).finally(() => { sending = false; sendLevels(); });
+  api(path, params, true).then(show).catch(() => {}).finally(() => { sending = false; sendPending(); });
+}
+function queue(key, path, params) {
+  pending.set(key, [path, params]);
+  sendPending();
 }
 function setLevel(d, m, v, release) {
   const params = { d, m, v };
   if (release) params.release = 1;
-  pending.set(d + "." + m, params);
-  sendLevels();
+  queue(d + "." + m, "level", params);
 }
 
 const connected = () => state ? state.devices.filter(d => d.state === "connected") : [];
@@ -439,6 +505,123 @@ function showDevices() {
   $("search").classList.toggle("on", !!state.scan);
 }
 
+/* ----- Sound ----- */
+
+function clock(ms) {
+  const s = Math.floor(ms / 1000);
+  const mm = Math.floor(s / 60) % 60, ss = String(s % 60).padStart(2, "0");
+  return s >= 3600 ? Math.floor(s / 3600) + ":" + String(mm).padStart(2, "0") + ":" + ss : mm + ":" + ss;
+}
+
+// A volume slider and its step buttons, sent as they move
+function volume(id, textId, stepAttr, path) {
+  const slider = $(id);
+  const set = v => {
+    v = Math.max(0, Math.min(100, Math.round(v)));
+    slider.value = v; fill(slider);
+    $(textId).textContent = v + "%";
+    queue(id, path, { v });
+  };
+  slider.addEventListener("pointerdown", () => dragging.add(id));
+  slider.addEventListener("input", () => { dragging.add(id); set(+slider.value); });
+  const release = () => dragging.delete(id);
+  slider.addEventListener("change", release);
+  slider.addEventListener("pointerup", release);
+  slider.addEventListener("pointercancel", release);
+  for (const b of document.querySelectorAll("[" + stepAttr + "]")) {
+    b.onclick = () => set(+slider.value + +b.getAttribute(stepAttr));
+  }
+}
+function showVolume(id, textId, v) {
+  if (dragging.has(id) || pending.has(id)) return;
+  $(id).value = v; fill($(id));
+  $(textId).textContent = v + "%";
+}
+volume("fx-vol", "fx-vol-text", "data-fx-step", "voice");
+volume("snd-vol", "snd-vol-text", "data-snd-step", "sound");
+
+$("speaker").onclick = () => state && state.voice && command("voice", { speaker: state.voice.speaker ? 0 : 1 });
+$("sound-play").onclick = () => state && state.sound && command("sound", { play: state.sound.playing ? 0 : 1 });
+$("sound-prev").onclick = () => command("sound", { skip: -1 });
+$("sound-next").onclick = () => command("sound", { skip: 1 });
+$("autoplay").onclick = () => state && state.sound && command("sound", { auto: state.sound.autoplay ? 0 : 1 });
+
+const repeats = ["Repeat all", "Repeat one", "Play once"];
+repeats.forEach((name, r) => {
+  const b = el("button", "", name);
+  b.dataset.r = r;
+  b.onclick = () => command("sound", { r });
+  $("repeats").append(b);
+});
+
+// Moving in the track: the times follow the finger, and it's sent on letting go
+const seek = $("seek");
+seek.addEventListener("pointerdown", () => dragging.add("seek"));
+seek.addEventListener("input", () => {
+  dragging.add("seek"); fill(seek);
+  if (state && state.sound && state.sound.length) showTimes(seek.value * state.sound.length / 1000, state.sound.length);
+});
+let seekSettle = 0;
+seek.addEventListener("change", () => {
+  dragging.delete("seek");
+  if (state && state.sound && state.sound.length) {
+    command("sound", { seek: Math.round(seek.value * state.sound.length / 1000) });
+    seekSettle = Date.now() + 1000;
+  }
+});
+function showTimes(position, length) {
+  $("elapsed").textContent = clock(position);
+  $("remaining").textContent = length ? "-" + clock(Math.floor(length / 1000) * 1000 - Math.floor(position / 1000) * 1000) : "";
+}
+
+function buildSound() {
+  const box = $("presets");
+  box.replaceChildren();
+  info.presets.forEach((name, p) => {
+    const b = el("button", "", name);
+    b.dataset.p = p;
+    b.onclick = () => command("voice", { p });
+    box.append(b);
+  });
+  const list = $("tracks");
+  list.replaceChildren();
+  tracks.forEach((name, t) => {
+    const b = el("button", "", name);
+    b.dataset.t = t;
+    b.onclick = () => command("sound", { t });
+    list.append(b);
+  });
+}
+
+function showSound() {
+  const v = state.voice, s = state.sound;
+  $("voice-box").hidden = !v;
+  $("sound-box").hidden = !s;
+  $("sound-none").hidden = !!(v || s);
+  if (v) {
+    $("speaker").classList.toggle("on", !!v.speaker);
+    $("speaker").textContent = v.speaker ? "✓ Playing on speaker" : "Play on speaker";
+    for (const b of $("presets").children) b.classList.toggle("on", +b.dataset.p === v.preset);
+    showVolume("fx-vol", "fx-vol-text", v.volume);
+  }
+  if (s) {
+    $("track").textContent = tracks[s.track] || (tracks.length ? "" : "No sound files on the SD card");
+    $("track-pos").textContent = tracks.length ? (s.track + 1) + " / " + tracks.length : "";
+    $("sound-play").innerHTML = s.playing ? "&#10074;&#10074;" : "&#9654;";
+    if (!dragging.has("seek") && Date.now() > seekSettle) {
+      seek.value = s.length ? Math.round(1000 * s.position / s.length) : 0; fill(seek);
+      showTimes(s.position, s.length);
+    }
+    seek.disabled = !s.length;
+    $("sound-note").textContent = v && v.speaker ? "The player waits while the voice effect is on the speaker." : "";
+    showVolume("snd-vol", "snd-vol-text", s.volume);
+    for (const b of $("repeats").children) b.classList.toggle("on", +b.dataset.r === s.repeat);
+    $("autoplay").classList.toggle("on", !!s.autoplay);
+    $("autoplay").textContent = s.autoplay ? "✓ Play at startup" : "Play at startup";
+    for (const b of $("tracks").children) b.classList.toggle("on", +b.dataset.t === s.track);
+  }
+}
+
 /* ----- Terminal ----- */
 
 let append = load("append", false);
@@ -514,6 +697,7 @@ function show(s) {
   showPatterns();
   showModes();
   showDevices();
+  showSound();
   showTerminal();
 }
 
@@ -537,6 +721,7 @@ function build() {
   if (info.modes.length === 0) { $("react-title").hidden = true; }
   $("msg").maxLength = info.message_max;
   buildScreen();
+  buildSound();
   // No Terminal on this board: leave its tab out
   if (!info.features.some(([name]) => name === "Terminal")) {
     document.querySelector('.tabs button[data-tab="term"]').hidden = true;
@@ -560,7 +745,9 @@ function poll() {
 showToggles();
 showHistory();
 showCount();
-api("info").then(i => { info = i; build(); showCount(); }).catch(() => {}).finally(() => {
+api("info")
+  .then(i => { info = i; return api("tracks").then(t => { tracks = t.tracks; }).catch(() => {}); })
+  .then(() => { build(); showCount(); }).catch(() => {}).finally(() => {
   poll();
   setInterval(poll, 400);
 });
