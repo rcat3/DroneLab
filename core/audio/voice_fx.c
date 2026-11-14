@@ -12,6 +12,7 @@
  * - gain, highpass, lowpass, ring (ring modulator), crush (fewer bits)
  * - drive: soft clipping above a level, for a harsh, compressed edge
  * - pitch: two delay taps sweeping through a short window, cross faded
+ * - voices: three pitch shifters at once, mixed, for a crowd in unison
  * - shift: PSOLA, your own voice raised or lowered, with the formants moved
  *   separately (see shift_process)
  * - chorus: two delayed copies, their delays swept by slow sine waves
@@ -54,6 +55,7 @@ typedef enum
     FX_LOWPASS,     // Hz
     FX_DRIVE,       // dB below full scale where it starts to clip
     FX_PITCH,       // ratio
+    FX_VOICES,      // three ratios
     FX_RING,        // Hz, mix
     FX_TUNE,        // ratio, formant, snap
     FX_SHIFT,       // ratio, formant, snap
@@ -90,10 +92,6 @@ static const fx_preset_t presets[] = {
     // Your own voice raised to around 180 Hz from a typical male voice, and
     // kept to the middle of the voice's range
     { "Female", 5, { GATE, { FX_SHIFT, { 1.9f, 1.2f, 0 } }, { FX_HIGHPASS, { 250 } }, { FX_LOWPASS, { 4500 } }, { FX_GAIN, { 2 } } }, -5 },
-    // Female snapped to notes, with a faint metallic ring, a little digital
-    // grit and a flanger
-    { "Fembot", 8, { GATE, { FX_SHIFT, { 1.9f, 1.2f, 1 } }, { FX_RING, { 300, 0.2f } }, { FX_CRUSH, { 10, 1 } },
-                     { FX_CHORUS, { 2, 1.5f, 0.5f } }, { FX_HIGHPASS, { 250 } }, { FX_LOWPASS, { 4500 } }, { FX_GAIN, { 8 } } }, 2.5f },
     { "Synthetic", 4, { GATE, { FX_TUNE, { 1.7f, 1.2f, 1 } }, { FX_RING, { 500, 0.15f } }, { FX_CRUSH, { 12, 1 } } }, -5 },
     { "Android", 3, { GATE, { FX_VOCODER, { 220, 1.18f } }, { FX_CHORUS, { 0.4f, 4, 0.3f } } }, 0 },
     { "AI", 4, { GATE, { FX_HIGHPASS, { 250 } }, { FX_TUNE, { 1.75f, 1.22f, 1 } }, { FX_CHORUS, { 1.5f, 2, 0.4f } } }, -2.5f },
@@ -104,6 +102,10 @@ static const fx_preset_t presets[] = {
     { "Dalek", 7, { GATE, { FX_HIGHPASS, { 400 } }, { FX_PITCH, { 1.26f } }, { FX_DRIVE, { 24 } }, { FX_RING, { 30, 1 } },
                     { FX_LOWPASS, { 3500 } }, { FX_GAIN, { 8 } } }, 2.5f },
     { "Drone", 4, { GATE, { FX_PITCH, { 0.85f } }, { FX_RING, { 60, 0.6f } }, { FX_CRUSH, { 10, 1 } } }, 2.5f },
+    // The Borg: a crowd speaking in unison, one voice a little higher than
+    // yours and two lower, with a slow flanger for a hollow, metallic sheen
+    { "Borg", 6, { GATE, { FX_VOICES, { 0.94f, 0.8f, 1.19f } }, { FX_CHORUS, { 0.3f, 2, 0.5f } }, { FX_HIGHPASS, { 100 } },
+                   { FX_LOWPASS, { 4000 } }, { FX_GAIN, { 4 } } }, 0 },
 };
 #define PRESET_COUNT (sizeof(presets) / sizeof(presets[0]))
 
@@ -281,6 +283,36 @@ static void pitch_process(pitch_t *p, float *x, int n)
             out += delay_read(&p->line, ph * p->window + 1.0f) * (1.0f - fabsf(2.0f * ph - 1.0f));
         }
         x[i] = out;
+    }
+}
+
+#define VOICES 3
+
+// A crowd: VOICES pitch shifters, each with its own window and starting
+// phase, so they drift slightly out of step like different people.
+typedef struct
+{
+    pitch_t pitch[VOICES];
+} voices_t;
+
+static void voices_process(voices_t *v, float *x, int n)
+{
+    float in[MAX_BLOCK];
+    float sum[MAX_BLOCK] = { 0 };
+    memcpy(in, x, n * sizeof(float));
+    for (int k = 0; k < VOICES; k++)
+    {
+        memcpy(x, in, n * sizeof(float));
+        pitch_process(&v->pitch[k], x, n);
+        for (int i = 0; i < n; i++)
+        {
+            sum[i] += x[i];
+        }
+    }
+    const float scale = 1.0f / sqrtf(VOICES);
+    for (int i = 0; i < n; i++)
+    {
+        x[i] = sum[i] * scale;
     }
 }
 
@@ -904,6 +936,7 @@ typedef struct
         ring_t ring;
         crush_t crush;
         pitch_t *pitch;
+        voices_t *voices;
         shift_t *shift;
         chorus_t *chorus;
         resynth_t *resynth;
@@ -923,6 +956,9 @@ static void free_chain(void)
         {
             case FX_PITCH:
                 free(chain[i].u.pitch);
+                break;
+            case FX_VOICES:
+                free(chain[i].u.voices);
                 break;
             case FX_SHIFT:
                 free(chain[i].u.shift);
@@ -984,6 +1020,20 @@ static void build_chain(int index)
                 }
                 s->u.pitch->ratio = step->p[0];
                 s->u.pitch->window = FS * 0.020f;   // 20 ms: long enough for a deep voice, short enough not to add much delay
+                break;
+            case FX_VOICES:
+                s->u.voices = calloc(1, sizeof(voices_t));
+                if (s->u.voices == NULL)
+                {
+                    continue;
+                }
+                for (int k = 0; k < VOICES; k++)
+                {
+                    pitch_t *p = &s->u.voices->pitch[k];
+                    p->ratio = step->p[k];
+                    p->window = FS * (0.020f + 0.004f * k);     // 20, 24 and 28 ms
+                    p->phase = (float)k / VOICES;
+                }
                 break;
             case FX_SHIFT:
                 s->u.shift = malloc(sizeof(shift_t));
@@ -1050,6 +1100,9 @@ static void run_chain(float *x, int n)
                 break;
             case FX_PITCH:
                 pitch_process(s->u.pitch, x, n);
+                break;
+            case FX_VOICES:
+                voices_process(s->u.voices, x, n);
                 break;
             case FX_SHIFT:
                 shift_process(s->u.shift, x, n);

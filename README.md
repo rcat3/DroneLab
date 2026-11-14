@@ -14,7 +14,7 @@ You swipe up and down between features, and left and right between each feature'
 
 - **[Images](docs/features/images.md)**: still images and animated GIFs, built into the firmware or from an SD card.
 - **[KITT and the Voice Ring](docs/features/kitt-and-voice-ring.md)**: red bars like KITT's voice box, or a glowing ring around the edge, that light up as you talk.
-- **[Voice Effects](docs/features/voice-effects.md)**: changes your voice on the board itself, from a natural female voice to a robot or a Dalek.
+- **[Voice Effects](docs/features/voice-effects.md)**: changes your voice on the board itself, from a natural female voice to a robot, a Dalek or the Borg.
 - **[Voice Lab](docs/features/voice-lab.md)**: streams the microphone to a computer, for trying out voice effects.
 - **[Sound](docs/features/sound.md)**: plays WAV, MP3 and FLAC files from the SD card.
 - **[Lovense](docs/features/lovense.md)**: controls up to three Lovense devices over Bluetooth, with patterns and reactions to your voice and movement.

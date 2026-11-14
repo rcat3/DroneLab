@@ -7,7 +7,7 @@ The display is organized into features.  You swipe up and down to move between t
 | [Images](images.md) | Shows still images and animated GIFs that you swipe through |
 | [Images on the SD card](images.md#images-on-the-sd-card) | Adds images from a micro SD card, without rebuilding the firmware |
 | [KITT and the Voice Ring](kitt-and-voice-ring.md) | Bars or a glowing ring that light up with your voice |
-| [Voice Effects](voice-effects.md) | Changes your voice: female, robot, Dalek and more.  Needs the speaker housing |
+| [Voice Effects](voice-effects.md) | Changes your voice: female, robot, Dalek, Borg and more.  Needs the speaker housing |
 | [Voice Lab](voice-lab.md) | Streams the microphone to a computer, for trying out voice effects |
 | [Sound](sound.md) | Plays sound files from the SD card.  Needs the speaker housing |
 | [Lovense](lovense.md) | Controls up to three Lovense devices over Bluetooth |

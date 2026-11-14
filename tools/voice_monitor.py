@@ -119,6 +119,24 @@ class Pitch:
         return out
 
 
+class Voices:
+    """voices:<ratio>:<ratio>:<ratio> - a crowd speaking in unison: three
+    copies of the voice at these pitches, mixed. Each has its own pitch
+    shifter with a different window, so they drift slightly out of step
+    with each other, like different people. Your own voice isn't in it."""
+
+    def __init__(self, fs, *ratios):
+        ratios = [float(r) for r in ratios] or [0.94, 0.8, 1.19]
+        self.voices = []
+        for k, ratio in enumerate(ratios):
+            p = Pitch(fs, ratio, 20.0 + 4.0 * k)
+            p.phase = k / len(ratios)
+            self.voices.append(p)
+
+    def process(self, x):
+        return sum(v.process(x) for v in self.voices) / math.sqrt(len(self.voices))
+
+
 class Ring:
     """ring:<Hz> - ring modulator. Around 30 Hz is the classic Dalek, higher
     sounds more metallic."""
@@ -589,7 +607,7 @@ class Crush:
         return out
 
 
-EFFECTS = {"gain": Gain, "gate": Gate, "pitch": Pitch, "ring": Ring, "vocoder": Vocoder, "tune": Tune, "shift": Shift,
+EFFECTS = {"gain": Gain, "gate": Gate, "pitch": Pitch, "voices": Voices, "ring": Ring, "vocoder": Vocoder, "tune": Tune, "shift": Shift,
            "chorus": Chorus, "highpass": Highpass, "lowpass": Lowpass, "drive": Drive, "crush": Crush}
 
 # Named combinations to start from.
@@ -601,11 +619,13 @@ PRESETS = {
     "deep": "gate:-45,pitch:0.75",
     "dalek": "gate:-45,highpass:400,pitch:1.26,drive:24,ring:30,lowpass:3500,gain:8",
     "drone": "gate:-45,pitch:0.85,ring:60:0.6,crush:10:1",
+    # The Borg: a crowd in unison, one a little higher and two lower, with a
+    # slow flanger
+    "borg": "gate:-45,voices:0.94:0.8:1.19,chorus:0.3:2:0.5,highpass:100,lowpass:4000,gain:4",
     # Higher, toward a female voice. Your own pitch, raised, with the vowels
     # moved up less than the pitch so it doesn't sound like a chipmunk. Female
-    # and Fembot keep your own voice (shift); the others rebuild it (tune).
+    # keeps your own voice (shift); the others rebuild it (tune).
     "female": "gate:-45,shift:1.9:1.2,highpass:250,lowpass:4500,gain:2",
-    "fembot": "gate:-45,shift:1.9:1.2:1,ring:300:0.2,crush:10:1,chorus:2:1.5:0.5,highpass:250,lowpass:4500,gain:8",
     "synthetic": "gate:-45,tune:1.7:1.2:1,ring:500:0.15,crush:12:1",
     "android": "gate:-45,vocoder:220:1.18,chorus:0.4:4:0.3",
     "ai": "gate:-45,highpass:250,tune:1.75:1.22:1,chorus:1.5:2:0.4",

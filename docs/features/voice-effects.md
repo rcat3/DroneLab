@@ -8,7 +8,6 @@ The *Voice Effect* page, in the Voice feature, runs your voice through an effect
 |---|---|
 | Natural | Your own voice, like a mask's voice amplifier, with just the boom below it and the hiss above it taken out |
 | Female | Your own voice, raised in pitch to around 180 Hz, with the vowels raised less, kept to the middle of the voice's range |
-| Fembot | Female, snapped to musical notes, with a faint metallic ring, a little digital grit and a flanger |
 | Synthetic | Snapped pitch, a faint metallic ring and slight digital grit |
 | Android | A monotone female robot |
 | AI | Thinner, higher and snapped, with a quick shimmer |
@@ -16,6 +15,7 @@ The *Voice Effect* page, in the Voice feature, runs your voice through an effect
 | Deep | Your voice, lower |
 | Dalek | Higher, thinner and harsh, ring modulated at 30 Hz like the Daleks in Doctor Who |
 | Drone | Lower, ring modulated and slightly crushed |
+| Borg | Your voice as a crowd speaking in unison, one a little higher and two lower, with a hollow, metallic sheen, like the Borg collective in Star Trek: The Next Generation |
 
 The effect goes to the [Voice Lab](voice-lab.md) stream (`voice_monitor.py --listen effect` plays it) and, with *Play on speaker* switched on, to the board's speaker.  While it's on the speaker, the [sound player](sound.md) waits.
 
