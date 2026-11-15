@@ -7,6 +7,9 @@
 /// [targetMs] + [maxExtraMs] builds up, as when a burst arrives after a
 /// stall, the oldest is dropped, so the delay stays put. Lost packets are
 /// filled in by Opus, from the next packet's error correction if it has it.
+/// If it runs dry partway through, Opus makes up what's missing, for up to
+/// [Speaker.maxConcealMs], rather than going quiet and waiting for the whole
+/// [targetMs] again; what comes late after that is dropped.
 ///
 /// The mixer adds everyone together, softly limited, a block at a time, as
 /// the headphones ask for it.
@@ -47,6 +50,12 @@ class Speaker {
   int lost = 0;
   int underruns = 0;
   int dropped = 0;        // samples dropped to keep the delay down
+  int concealed = 0;      // 10 ms frames made up while it ran dry
+
+  /// How long Opus makes up sound for while nothing comes, before it stops
+  /// and waits for the buffer to fill again.
+  static const maxConcealMs = 100;
+  int _concealRun = 0;    // ms made up since the last real packet
 
   Speaker(this.session, this.sampleRate, this._decoder, {int targetMs = 60, int maxExtraMs = 120})
       : targetSamples = sampleRate * targetMs ~/ 1000,
@@ -78,6 +87,7 @@ class Speaker {
       }
       final pcm = _decoder.decode(opus);
       _add(pcm);
+      _concealRun = 0;
       _expectedSeq = seq + math.max(1, pcm.length ~/ _samplesPerSeq);
     }
     if (last) _ended = true;
@@ -134,6 +144,22 @@ class Speaker {
         _offset = 0;
       }
     }
+    // Ran dry partway through: make up a little rather than go quiet
+    while (i < out.length && !_ended && _expectedSeq != null && _concealRun < maxConcealMs) {
+      final pcm = _decoder.decode(null, lossMs: 20);
+      if (pcm.isEmpty) break;
+      _concealRun += 20;
+      concealed += 2;
+      _expectedSeq = _expectedSeq! + 2;
+      final n = math.min(out.length - i, pcm.length);
+      for (var k = 0; k < n; k++) {
+        out[i + k] += pcm[k];
+      }
+      if (n < pcm.length) {
+        _add(Int16List.sublistView(pcm, n));    // the rest, for next time
+      }
+      i += n;
+    }
     if (i < out.length) {
       // Ran out: wait for enough again, unless that was the end
       _playing = false;
@@ -186,9 +212,11 @@ class Mixer {
 
   Mixer({required this.sampleRate, required this.newDecoder, this.targetMs = 60});
 
-  void receive(int session, int seq, Uint8List opus, bool last, int nowMs) {
+  /// [extraMs] waits that much longer for this speaker's voice, for one that
+  /// comes less evenly (direct comms' repeats can come 40 ms late).
+  void receive(int session, int seq, Uint8List opus, bool last, int nowMs, {int extraMs = 0}) {
     final s = speakers.putIfAbsent(
-        session, () => Speaker(session, sampleRate, newDecoder(), targetMs: targetMs));
+        session, () => Speaker(session, sampleRate, newDecoder(), targetMs: targetMs + extraMs));
     s.receive(seq, opus, last, nowMs);
   }
 

@@ -29,10 +29,46 @@ Future<void> loadOpus() async {
 class OpusVoiceDecoder implements VoiceDecoder {
   final SimpleOpusDecoder _decoder = SimpleOpusDecoder(sampleRate: outputRate, channels: 1);
 
+  /// The most Opus makes up in one go.
+  static const _maxLossMs = 120;
+
   @override
   Int16List decode(Uint8List? packet, {bool fec = false, int? lossMs}) {
     try {
-      return _decoder.decode(input: packet, fec: fec, loss: lossMs);
+      if (packet == null || fec) {
+        // opus_dart's `loss` goes to Opus as the frame size, in samples,
+        // despite saying it's in ms: asking for 20 got 20 samples, which Opus
+        // turns down, and the sound came out missing. So it's in samples
+        // here, and no more than Opus makes up at once: anything before the
+        // last 20 ms is made up first, then that last part comes from this
+        // packet's error correction.
+        var ms = (lossMs ?? 20) - (lossMs ?? 20) % 10;
+        if (ms <= 0) ms = 20;
+        final parts = <Int16List>[];
+        if (fec && ms > 20) {
+          var made = ms - 20;
+          while (made > 0) {
+            final n = made > _maxLossMs ? _maxLossMs : made;
+            parts.add(_decoder.decode(input: null, loss: outputRate * n ~/ 1000));
+            made -= n;
+          }
+          ms = 20;
+        }
+        while (ms > 0) {
+          final n = ms > _maxLossMs ? _maxLossMs : ms;
+          parts.add(_decoder.decode(input: packet, fec: fec, loss: outputRate * n ~/ 1000));
+          ms -= n;
+        }
+        if (parts.length == 1) return parts.first;
+        final out = Int16List(parts.fold(0, (a, p) => a + p.length));
+        var at = 0;
+        for (final p in parts) {
+          out.setAll(at, p);
+          at += p.length;
+        }
+        return out;
+      }
+      return _decoder.decode(input: packet);
     } on OpusException {
       return Int16List(0);
     }
@@ -49,8 +85,17 @@ class AudioOut {
 
   AudioOut(this.mixer);
 
-  Future<void> start() async {
-    if (_running) return;
+  Future<void>? _starting;
+
+  /// Start playing. Called again while it's starting, it waits for the same
+  /// start: the server and direct comms can both ask at once, and setting the
+  /// player up twice leaves it silent.
+  Future<void> start() {
+    if (_running) return Future.value();
+    return _starting ??= _start().whenComplete(() => _starting = null);
+  }
+
+  Future<void> _start() async {
     await FlutterPcmSound.setLogLevel(LogLevel.error);
     await FlutterPcmSound.setup(
         sampleRate: outputRate,
@@ -77,6 +122,7 @@ class AudioOut {
   }
 
   Future<void> stop() async {
+    await _starting;
     if (!_running) return;
     _running = false;
     FlutterPcmSound.setFeedCallback(null);
