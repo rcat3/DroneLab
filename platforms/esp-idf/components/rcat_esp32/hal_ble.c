@@ -437,6 +437,9 @@ static bool ble_start(void)
         return false;
     }
     esp_err_t err = nimble_port_init();
+    // NimBLE logs every notification at info level, which buries everything
+    // else while the comm channel sends 50 a second.
+    esp_log_level_set("NimBLE", ESP_LOG_WARN);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "Bluetooth didn't start (%s)", esp_err_to_name(err));

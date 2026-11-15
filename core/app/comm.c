@@ -37,9 +37,18 @@
 #define RING                16384               // about 1 s; a power of two
 #define RING_MASK           (RING - 1)
 
-// The voice effect's output is at the microphone's level, which is on the
-// quiet side for listening to on headphones. Turned up, with soft limiting.
-#define GAIN_DB             6.0f
+// The voice effect's output is at the microphone's level, a voice peaking
+// around -22 dBFS, which is quiet on headphones, and each effect comes out
+// at a different level. So an automatic gain turns it up, while the voice is
+// heard, until its loud parts reach AGC_TARGET_DB, between AGC_MIN_DB and
+// AGC_MAX_DB. It comes down quickly and goes up slowly, and soft limiting
+// rounds off what's left over. It starts at AGC_START_DB.
+#define AGC_TARGET_DB       -18.0f  // 20 ms level, before limiting
+#define AGC_START_DB        16.0f
+#define AGC_MIN_DB          0.0f
+#define AGC_MAX_DB          26.0f
+#define AGC_UP_DB           0.06f   // per 20 ms frame: 3 dB/s
+#define AGC_DOWN_DB         1.0f    // per 20 ms frame, at most
 
 // Opus: speech, 24 kb/s, which sounds good at 16 kHz, and in-band error
 // correction for the internet's lost packets. Complexity 3 of 10 keeps it
@@ -60,12 +69,15 @@
 #define STATUS_HEARD        0x02
 #define STATUS_EVERY_MS     5000
 
-// Voice mode: speech is louder than VOX_DB (in dB below full scale) above
-// 300 Hz, which leaves out most rumble, for VOX_ATTACK frames in a row. It
-// keeps talking for VOX_HANG_MS after the voice stops, so it doesn't cut out
-// between words, and starts VOX_PREROLL_MS before it heard the voice, so the
-// start of the first word isn't lost.
-#define VOX_DB              -38.0f
+// Voice mode: the voice effect's output is louder than VOX_DB (in dB below
+// full scale, before the automatic gain) above 200 Hz, which leaves out most
+// rumble, for VOX_ATTACK frames in a row. Every effect starts with a gate at
+// -45 dB on the microphone, so between words it's silent but for the gate
+// closing, which reached -52 dB in the mask, and speech is around -30 dB. It keeps talking for
+// VOX_HANG_MS after the voice stops, so it doesn't cut out between words,
+// and starts VOX_PREROLL_MS before it heard the voice, so the start of the
+// first word isn't lost.
+#define VOX_DB              -46.0f
 #define VOX_ATTACK          2
 #define VOX_HANG_MS         800
 #define VOX_PREROLL_MS      150
@@ -97,27 +109,35 @@ static int16_t *ring;
 static uint32_t ring_write;             // samples written since it started, published atomically
 static volatile bool voice_heard;
 static volatile uint32_t voice_until;   // ring_write at which voice mode's hang ends
-static float hp_x, hp_y;                // the 300 Hz high pass
+static float hp_x, hp_y;                // the 200 Hz high pass
 static float frame_energy;
+static float frame_full_energy;         // without the high pass, for the gain
+static float agc_db = AGC_START_DB;
+static float agc_gain;                  // agc_db as a factor, smoothed per sample
 static int frame_count;
 static int loud_frames;
 #if COMM_DEBUG
 static volatile float debug_peak;
-static volatile float debug_level_db;
+static volatile float debug_level_db = -120;    // the loudest frame
 #endif
 
 /* ----- The microphone's task ----- */
 
 static void voice_cb(const int16_t *samples, size_t count, void *user_data)
 {
-    const float gain = powf(10.0f, GAIN_DB / 20.0f);
-    // One pole high pass at 300 Hz, for hearing speech
-    const float hp_a = 1.0f / (1.0f + 2.0f * (float)M_PI * 300.0f / FS);
+    // One pole high pass at 200 Hz, for hearing speech
+    const float hp_a = 1.0f / (1.0f + 2.0f * (float)M_PI * 200.0f / FS);
+    const float gain_target = powf(10.0f, agc_db / 20.0f);
+    if (agc_gain == 0)
+    {
+        agc_gain = gain_target;
+    }
     uint32_t w = ring_write;
     for (size_t i = 0; i < count; i++)
     {
         float x = samples[i] / 32768.0f;
-        float v = tanhf(x * gain);  // rounds peaks off instead of clipping them
+        agc_gain += (gain_target - agc_gain) * 0.002f;     // about 30 ms
+        float v = tanhf(x * agc_gain);  // rounds peaks off instead of clipping them
         ring[w++ & RING_MASK] = (int16_t)(v * 32767.0f);
 #if COMM_DEBUG
         if (fabsf(v) > debug_peak)
@@ -130,18 +150,34 @@ static void voice_cb(const int16_t *samples, size_t count, void *user_data)
         hp_x = x;
         hp_y = y;
         frame_energy += y * y;
+        frame_full_energy += x * x;
         if (++frame_count == FRAME)
         {
             float db = 10.0f * log10f(frame_energy / FRAME + 1e-12f);
+            float full_db = 10.0f * log10f(frame_full_energy / FRAME + 1e-12f);
 #if COMM_DEBUG
-            debug_level_db = db;
+            if (full_db > debug_level_db)
+            {
+                debug_level_db = full_db;
+            }
 #endif
             loud_frames = db > VOX_DB ? loud_frames + 1 : 0;
             if (loud_frames >= VOX_ATTACK)
             {
                 voice_until = w + MS_TO_SAMPLES(VOX_HANG_MS);
             }
+            // Only the voice moves the gain, not the silence between words.
+            // Frames well below the loud parts leave it alone too, so it
+            // settles on the loud parts.
+            float out_db = full_db + agc_db;
+            if (loud_frames > 0 && out_db > AGC_TARGET_DB - 12.0f)
+            {
+                float error = AGC_TARGET_DB - out_db;
+                agc_db += error > 0 ? fminf(error, AGC_UP_DB) : fmaxf(error, -AGC_DOWN_DB);
+                agc_db = fmaxf(AGC_MIN_DB, fminf(AGC_MAX_DB, agc_db));
+            }
             frame_energy = 0;
+            frame_full_energy = 0;
             frame_count = 0;
         }
     }
@@ -335,13 +371,14 @@ static void encoder_task(void *arg)
 
 #if COMM_DEBUG
         debug_ms += TASK_BUSY_MS;
-        if (debug_ms >= 5000)
+        if (debug_ms >= 2000)
         {
-            printf("comm: level %.0f dB, peak %.2f, %lu frames (%lu dropped), %lu bytes, encoding %.1f%% of a core\n",
-                   debug_level_db, debug_peak, (unsigned long)debug_frames, (unsigned long)debug_dropped,
+            printf("comm: loudest %.0f dB, gain %.1f dB, peak %.2f, %lu frames (%lu dropped), %lu bytes, encoding %.1f%% of a core\n",
+                   debug_level_db, agc_db, debug_peak, (unsigned long)debug_frames, (unsigned long)debug_dropped,
                    (unsigned long)debug_bytes,
                    debug_frames ? 100.0 * debug_encode / CLOCKS_PER_SEC / (debug_frames * 0.020) : 0.0);
             debug_peak = 0;
+            debug_level_db = -120;
             debug_ms = debug_frames = debug_dropped = debug_bytes = 0;
             debug_encode = 0;
         }
