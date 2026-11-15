@@ -1,8 +1,8 @@
 # Comm
 
-*The ESP32-S3-Touch-AMOLED-1.75.  In development: the board's side works, and the Android app is being tried out.*
+*The ESP32-S3-Touch-AMOLED-1.75, with the DroneLab app on an Android phone.  New: it works end to end, and is still being tried out.*
 
-The comm channel lets a group talk to each other, like a radio.  The board sends the wearer's voice, through the [voice effect](voice-effects.md), to their phone over Bluetooth, and the phone passes it on to a [Mumble](https://www.mumble.info) server on the internet that everyone's on.  What the others say comes back through the phone, to the wearer's headphones.  People without a display can join from the Mumble app.
+The comm channel lets a group talk to each other, like a radio.  The board sends the wearer's voice, through the [voice effect](voice-effects.md), to their phone over Bluetooth, and the phone passes it on to a [Mumble](https://www.mumble.info) server on the internet that everyone's on.  What the others say comes back through the phone, to the wearer's headphones.  People without a display join from a Mumble app: [Mumla](https://mumla-app.gitlab.io/) on Android, or Mumble on a computer.
 
 The board only sends while the wearer talks: in *Push to talk*, while the talk button is held, and in *Voice*, whenever it hears them speak.
 
@@ -19,9 +19,9 @@ flowchart LR
 
 The *Phone App* page is in [Settings](settings.md), after Brightness.
 
-1. Switch it on.  The board starts advertising over Bluetooth for a phone to connect, under the phone remote's name (`DroneLab-` and four letters), shown at the bottom of the page.
+1. Switch it on.  The board starts advertising over Bluetooth for the app to connect, under the board's name (`DroneLab-` and four letters, the same as its WiFi hotspot's), shown at the bottom of the page, with the app's version once it's connected.
 2. Pick *Push to talk* or *Voice*.
-3. The title shows what it's doing: waiting for a phone, connected, or talking.  *Hold to talk* is for trying it out with the display in hand.  In the mask, the phone, or a button paired with it, does the talking.
+3. The title shows what it's doing: waiting for a phone, connected, or talking.  *Hold to talk* is for trying it out with the display in hand.  In the mask, the app, the headphones' button or the talk button does the talking.
 
 It stays on, or off, from one startup to the next.  The voice effect has to run the whole time it's on, so it uses more battery than with the voice effect off.
 

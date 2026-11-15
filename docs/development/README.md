@@ -48,7 +48,7 @@ A few ideas run through it:
 - `core/` - The application itself.  This code doesn't depend on any particular board.
   - `core/include/hal.h` - The functions each board has to provide.
   - `core/ui/` - The features (`feature_<name>.c`), the navigation between them, and shared UI parts.
-  - `core/app/` - Settings, the Lovense devices and patterns, the phone remote and its web page, messages for the Terminal.
+  - `core/app/` - Settings, the Lovense devices and patterns, the WiFi hotspot remote and its web page, the comm channel and its talk button, messages for the Terminal.
   - `core/audio/` - The microphone level, voice effects, the Voice Lab stream, and the sound player and its decoders.
   - `core/media/` - The built-in images and the SD card's images.
   - `core/features.cmake` - The list of optional features.  Each platform's `features.cmake` picks which ones to build.
@@ -57,6 +57,7 @@ A few ideas run through it:
 - `hardware/` - The 3D printable housings, PCBs and cases, by board (see [its README](../../hardware/)).
 - `third_party/lvgl/` - The [LVGL](https://lvgl.io) graphics library (git submodule).
 - `third_party/dr_libs/` - The [dr_libs](https://github.com/mackron/dr_libs) WAV, MP3 and FLAC decoders (git submodule).
+- `app/` - The DroneLab phone app, in Flutter: the [comm channel](../features/comm.md) and the remote, over Bluetooth (see [its README](../../app/README.md)).
 - `imgs/` - The built-in images.
 - `docs/` - This documentation.
 - `tools/` - Scripts, below.
@@ -66,11 +67,14 @@ A few ideas run through it:
 - `tools/img2c.py` - Converts an image or GIF into a C file for a screen size.  The build runs it for every image in `imgs/`.
 - `tools/prepare_sd.py` - Resizes and re-encodes images for an SD card (see [Images on the SD card](../features/images.md#images-on-the-sd-card)).
 - `tools/voice_monitor.py` - Plays and records the microphone stream from the [Voice Lab](../features/voice-lab.md), with voice effects.
-- `tools/gen_remote_page.py` - Turns `core/app/remote_page.html`, the [WiFi Hotspot Remote](../features/phone-remote.md)'s page, into the C file that's built in.  Run it after changing the page.
+- `tools/gen_remote_page.py` - Turns `core/app/remote_page.html`, the [WiFi Hotspot Remote](../features/phone-remote.md)'s page, into the C file that's built in, and copies it into the app.  Run it after changing the page.
+- `tools/comm_bridge.py` - Stands in for the phone app on a computer, for trying the [comm channel](../features/comm.md): plays or saves what the board sends, or passes it on to a Mumble server.
+- `tools/mumble/` - Runs the comm channel's [Mumble](https://www.mumble.info) server with Docker.
 - `tools/gen_terminal_font.py` - Makes the [Terminal](../features/terminal.md)'s font, `core/ui/terminal_font.c`.
 - `tools/gen_lv_conf.py` - Generates the platforms' `lv_conf.h` files (LVGL's settings) from LVGL's template.  Run it after updating the LVGL submodule.
 - `tools/doc_renders/render.sh` - Renders the pictures of the housings in `docs/images/`.  Run it after changing a housing's design.
 - `tools/gen_logo.py` - Draws the DroneLab logo shown at startup, `core/ui/assets/dronelab_logo.png`, and prints where its blinking cursor goes (`SPLASH_CURSOR` in `core/app/app.c`).  It needs two free fonts from Google Fonts, listed at its top.
+- `tools/gen_app_icon.py` - Draws the app's icon from the logo, for Android and the iPhone.  It needs the same fonts.
 
 ## Threads
 
