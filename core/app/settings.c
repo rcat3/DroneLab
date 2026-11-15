@@ -10,7 +10,8 @@
 #define SAVE_DELAY_MS       2000
 
 // What actually goes into storage. `size` records how much of settings_t was
-// saved, so firmware with more fields can still read older settings.
+// saved, so firmware with more fields can still read older settings, and
+// older firmware can read newer ones, keeping the fields it knows.
 typedef struct
 {
     uint32_t magic;
@@ -19,6 +20,11 @@ typedef struct
     uint32_t checksum;      // over the first `size` bytes of values
     settings_t values;
 } settings_record_t;
+
+#define STORAGE_MAX         256     // what the board can store (see hal.h)
+#define HEADER_SIZE         offsetof(settings_record_t, values)
+
+_Static_assert(sizeof(settings_record_t) <= STORAGE_MAX, "settings_t has outgrown the board's storage");
 
 static settings_t current;
 static settings_t saved;
@@ -55,21 +61,29 @@ static uint32_t checksum(const void *data, size_t len)
 
 static bool load(settings_t *out)
 {
-    settings_record_t rec;
+    // Read all there could be, as newer firmware may have saved more than
+    // this firmware's settings_t, to check its checksum.
+    static union
+    {
+        settings_record_t rec;
+        uint8_t bytes[STORAGE_MAX];
+    } stored;
+    const settings_record_t *rec = &stored.rec;
 
-    if (!rcat_hal_settings_read(&rec, sizeof(rec))
-        || rec.magic != SETTINGS_MAGIC
-        || rec.version != SETTINGS_VERSION
-        || rec.size == 0
-        || rec.size > sizeof(settings_t)
-        || rec.checksum != checksum(&rec.values, rec.size))
+    if (!rcat_hal_settings_read(stored.bytes, sizeof(stored.bytes))
+        || rec->magic != SETTINGS_MAGIC
+        || rec->version != SETTINGS_VERSION
+        || rec->size == 0
+        || rec->size > STORAGE_MAX - HEADER_SIZE
+        || rec->checksum != checksum(stored.bytes + HEADER_SIZE, rec->size))
     {
         return false;
     }
 
-    // Start from the defaults so fields newer than the saved data keep them.
+    // Start from the defaults so fields newer than the saved data keep them,
+    // and leave out any fields this firmware doesn't have.
     set_defaults(out);
-    memcpy(out, &rec.values, rec.size);
+    memcpy(out, stored.bytes + HEADER_SIZE, rec->size < sizeof(settings_t) ? rec->size : sizeof(settings_t));
 
     // Sanity check each field on its own, so one bad value doesn't lose the rest.
     if (out->brightness < 1 || out->brightness > 100)
