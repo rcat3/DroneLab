@@ -26,11 +26,28 @@ quickest way to compare them:
 --meter prints the microphone level every second, for measuring how much of
 the speaker the microphone picks up.
 
+For video, record the board's voice effect, and the microphone as it is in
+case you want a different effect later, with a sync beep at the start and
+the end (and whenever you press Enter):
+
+    python3 tools/voice_monitor.py --take scene1 --beep --gain 12
+
+That writes scene1-effect.wav and scene1-mic.wav, or scene1-effect-2.wav and
+so on if they're taken. Clap or beep on camera, line the beeps up, and the
+voice lines up with the picture.
+
+To use the voice effect as a microphone in a video call, play it into a
+virtual audio cable (see docs/features/voice-lab.md):
+
+    python3 tools/voice_monitor.py --listen effect --gain 12 --device "CABLE Input"
+    python3 tools/voice_monitor.py --list-devices
+
 Needs numpy and sounddevice (pip install numpy sounddevice).
 """
 
 import argparse
 import math
+import os
 import queue
 import socket
 import struct
@@ -43,6 +60,8 @@ import numpy as np
 
 BOARD_PORT = 5005
 HELLO = b"RCAT-HELLO"
+BEEP = b"RCAT-BEEP"         # asks the board for a sync beep
+SPEAKER_BEEP_LEAD_MS = 30   # as in core/audio/speaker.h
 HELLO_INTERVAL_S = 1.0
 HEADER = struct.Struct("<IIIHH")
 PACKET_MAGIC = 0x31564352  # "RCV1"
@@ -684,6 +703,7 @@ def read_wav(path):
 
 def process_file(args):
     x, fs = read_wav(args.input)
+    x = np.clip(x * 10 ** (args.gain / 20), -1.0, 1.0)
     chain = build_chain(args.effect, fs)
     block = fs // 100
     y = np.concatenate([run_chain(chain, x[i:i + block]) for i in range(0, len(x), block)])
@@ -705,14 +725,15 @@ class Player:
     """Plays blocks as they arrive, keeping a little in hand to ride out
     WiFi hiccups."""
 
-    def __init__(self, fs, latency_ms):
+    def __init__(self, fs, latency_ms, device=None):
         import sounddevice as sd
         self.target = int(fs * latency_ms / 1000)
         self.buffer = np.zeros(0, dtype=np.float32)
         self.lock = threading.Lock()
         self.priming = True
         self.underruns = 0
-        self.stream = sd.OutputStream(samplerate=fs, channels=1, dtype="float32", callback=self._callback)
+        self.stream = sd.OutputStream(samplerate=fs, channels=1, dtype="float32", callback=self._callback,
+                                     device=device)
         self.stream.start()
 
     def add(self, x):
@@ -736,93 +757,214 @@ class Player:
             self.buffer = self.buffer[frames:]
 
 
+def unique_path(path):
+    """path, or path with -2, -3... before the extension if it's taken, so a
+    good take is never written over."""
+    if not os.path.exists(path):
+        return path
+    base, ext = os.path.splitext(path)
+    n = 2
+    while os.path.exists(f"{base}-{n}{ext}"):
+        n += 1
+    return f"{base}-{n}{ext}"
+
+
+class Track:
+    """A WAV file being recorded, that remembers how loud it got."""
+
+    def __init__(self, path):
+        self.path = unique_path(path)
+        self.file = None
+        self.peak = 0.0
+        self.clipped = 0
+        self.samples = 0
+        self.fs = None
+
+    def write(self, x, fs):
+        if self.file is None:
+            self.fs = fs
+            self.file = WavWriter(self.path, fs)
+            print(f"Recording {self.path} at {fs} Hz")
+        if len(x):
+            self.peak = max(self.peak, float(np.max(np.abs(x))))
+            self.clipped += int(np.count_nonzero(np.abs(x) >= 1.0))
+        self.samples += len(x)
+        self.file.write(x)
+
+    def close(self):
+        if self.file is None:
+            return
+        self.file.close()
+        peak_db = 20 * math.log10(self.peak + 1e-12)
+        note = f", {self.clipped} samples clipped: use less --gain" if self.clipped else ""
+        print(f"{self.path}: {self.samples / self.fs:.1f} s, peak {peak_db:.1f} dBFS{note}")
+
+
+class Stream:
+    """One of the board's two streams, the microphone or its voice effect."""
+
+    def __init__(self):
+        self.fs = None
+        self.last_seq = None
+        self.received = 0
+        self.lost = 0
+
+    def receive(self, seq, x):
+        """Returns x with any lost packets before it filled with silence, so
+        the timing stays right."""
+        if self.last_seq is not None:
+            gap = (seq - self.last_seq - 1) & 0xFFFFFFFF
+            if 0 < gap < 50:
+                self.lost += gap
+                x = np.concatenate([np.zeros(gap * len(x), dtype=np.float32), x])
+        self.last_seq = seq
+        self.received += 1
+        return x
+
+
+def read_keys(beep_requests):
+    """Enter asks for a beep. Runs on its own thread."""
+    for _ in sys.stdin:
+        beep_requests.put(True)
+
+
 def stream(args):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     sock.bind(("", 0))
     sock.settimeout(0.2)
     target = (args.board or "255.255.255.255", BOARD_PORT)
+    gain = 10 ** (args.gain / 20)
+
+    # What's recorded: the stream being listened to (before and after the
+    # computer's --effect), and the microphone as it is.
+    record, record_effect, record_mic = args.record, args.record_effect, args.record_mic
+    if args.take:
+        record = record or f"{args.take}-{args.listen}.wav"
+        if args.listen != "mic":
+            record_mic = record_mic or f"{args.take}-mic.wav"
+    tracks = {"listen": Track(record) if record else None,
+              "effect": Track(record_effect) if record_effect else None,
+              "mic": Track(record_mic) if record_mic else None}
+    recording = any(tracks.values())
 
     print(f"Looking for the board{' at ' + args.board if args.board else ''}... (Ctrl+C to stop)")
-    last_hello = 0.0
-    fs = None
+    streams = {kind: Stream() for kind in KINDS.values()}
+    listen = KINDS[args.listen]
     chain = []
     player = None
-    raw_file = out_file = None
-    last_seq = None
-    received = lost = 0
+    last_hello = 0.0
+    board = None
     meter_sum = 0.0
     meter_peak = 0.0
     meter_count = 0
     last_report = time.time()
 
+    beep_requests = queue.Queue()
+    beeps = 0
+    start_beep_at = None
+    if sys.stdin.isatty():
+        threading.Thread(target=read_keys, args=(beep_requests,), daemon=True).start()
+
+    def beep():
+        nonlocal beeps
+        if board:
+            sock.sendto(BEEP, board)
+            beeps += 1
+            print(f"Beep {beeps}")
+
+    stop_at = None
     try:
-        while True:
-            now = time.time()
-            if now - last_hello >= HELLO_INTERVAL_S:
-                sock.sendto(HELLO, target)
-                last_hello = now
-
+        while stop_at is None or time.time() < stop_at:
             try:
-                data, sender = sock.recvfrom(2048)
-            except socket.timeout:
-                continue
-            if len(data) < HEADER.size:
-                continue
-            magic, seq, rate, kind, count = HEADER.unpack_from(data)
-            if magic != PACKET_MAGIC or len(data) < HEADER.size + 2 * count or kind != KINDS[args.listen]:
-                continue
-            x = np.frombuffer(data, dtype="<i2", count=count, offset=HEADER.size).astype(np.float32) / 32768
+                now = time.time()
+                if now - last_hello >= HELLO_INTERVAL_S:
+                    sock.sendto(HELLO, target)
+                    last_hello = now
+                if start_beep_at is not None and now >= start_beep_at:
+                    start_beep_at = None
+                    beep()
+                while not beep_requests.empty():
+                    beep_requests.get()
+                    beep()
 
-            if fs != rate:
-                fs = rate
-                print(f"Streaming from {sender[0]} at {fs} Hz")
-                chain = build_chain(args.effect, fs)
-                if not args.no_play:
-                    player = Player(fs, args.latency)
-                if args.record:
-                    raw_file = WavWriter(args.record, fs)
-                if args.record_effect:
-                    out_file = WavWriter(args.record_effect, fs)
+                try:
+                    data, sender = sock.recvfrom(2048)
+                except socket.timeout:
+                    continue
+                if len(data) < HEADER.size:
+                    continue
+                magic, seq, rate, kind, count = HEADER.unpack_from(data)
+                if magic != PACKET_MAGIC or len(data) < HEADER.size + 2 * count or kind not in streams:
+                    continue
+                if board is None:
+                    board = (sender[0], BOARD_PORT)
+                    print(f"Streaming from {sender[0]}")
+                    if sys.stdin.isatty():
+                        print("Enter: a sync beep.")
+                    if args.beep:
+                        # Once both streams have had a moment to start
+                        start_beep_at = time.time() + 1.0
+                s = streams[kind]
+                x = np.frombuffer(data, dtype="<i2", count=count, offset=HEADER.size).astype(np.float32) / 32768
+                if s.fs != rate:
+                    s.fs = rate
+                    if kind == listen:
+                        chain = build_chain(args.effect, rate)
+                        if not args.no_play:
+                            player = Player(rate, args.latency, args.device)
+                x = np.clip(s.receive(seq, x) * gain, -1.0, 1.0)
 
-            # Fill lost packets with silence, so the timing stays right.
-            if last_seq is not None:
-                gap = (seq - last_seq - 1) & 0xFFFFFFFF
-                if 0 < gap < 50:
-                    lost += gap
-                    x = np.concatenate([np.zeros(gap * count, dtype=np.float32), x])
-            last_seq = seq
-            received += 1
+                if kind == KINDS["mic"] and tracks["mic"]:
+                    tracks["mic"].write(x, rate)
+                if kind != listen:
+                    continue
+                if tracks["listen"]:
+                    tracks["listen"].write(x, rate)
+                y = run_chain(chain, x)
+                if tracks["effect"]:
+                    tracks["effect"].write(y, rate)
+                if player:
+                    player.add(y)
 
-            if raw_file:
-                raw_file.write(x)
-            y = run_chain(chain, x)
-            if out_file:
-                out_file.write(y)
-            if player:
-                player.add(y)
-
-            meter_sum += float(np.sum(x * x))
-            meter_peak = max(meter_peak, float(np.max(np.abs(x))))
-            meter_count += len(x)
-            if now - last_report >= 1.0:
-                if args.meter and meter_count:
-                    rms_db = 10 * math.log10(meter_sum / meter_count + 1e-12)
-                    peak_db = 20 * math.log10(meter_peak + 1e-12)
-                    print(f"level {rms_db:6.1f} dBFS   peak {peak_db:6.1f} dBFS   "
-                          f"lost {100 * lost / max(1, received + lost):.1f}%")
-                meter_sum = meter_peak = 0.0
-                meter_count = 0
-                last_report = now
-    except KeyboardInterrupt:
-        pass
+                meter_sum += float(np.sum(x * x))
+                meter_peak = max(meter_peak, float(np.max(np.abs(x))))
+                meter_count += len(x)
+                if now - last_report >= 1.0:
+                    if args.meter and meter_count:
+                        rms_db = 10 * math.log10(meter_sum / meter_count + 1e-12)
+                        peak_db = 20 * math.log10(meter_peak + 1e-12)
+                        print(f"level {rms_db:6.1f} dBFS   peak {peak_db:6.1f} dBFS   "
+                              f"lost {100 * s.lost / max(1, s.received + s.lost):.1f}%")
+                    meter_sum = meter_peak = 0.0
+                    meter_count = 0
+                    last_report = now
+            except KeyboardInterrupt:
+                if stop_at is not None:
+                    break       # a second Ctrl+C: stop now
+                if args.beep and recording and board:
+                    # A beep at the end too, so a long take can be stretched
+                    # to match the video if the clocks drift apart.
+                    beep()
+                    stop_at = time.time() + (SPEAKER_BEEP_LEAD_MS + 25 + 150 + 400) / 1000
+                    print("Recording the last beep...")
+                else:
+                    break
     finally:
-        for f in (raw_file, out_file):
-            if f:
-                f.close()
-        if received:
-            print(f"\n{received} packets, {lost} lost"
-                  + (f", {player.underruns} gaps in playback" if player else ""))
+        print()
+        for t in tracks.values():
+            if t:
+                t.close()
+        for name, kind in KINDS.items():
+            s = streams[kind]
+            if s.received:
+                print(f"{name}: {s.received} packets, {s.lost} lost"
+                      + (f", {player.underruns} gaps in playback" if player and kind == listen else ""))
+
+
+def list_devices():
+    import sounddevice as sd
+    print(sd.query_devices())
 
 
 def main():
@@ -834,14 +976,33 @@ def main():
                         help="mic: the microphone, as it is (default). effect: the board's own voice effect")
     parser.add_argument("--record", help="save what's received, before --effect, to this WAV file")
     parser.add_argument("--record-effect", help="save the sound after the effect to this WAV file")
+    parser.add_argument("--record-mic", help="save the microphone, as it is, to this WAV file, "
+                        "whatever's being listened to")
+    parser.add_argument("--take", metavar="NAME",
+                        help="for video: listen to the board's voice effect and record it to NAME-effect.wav, "
+                        "and the microphone to NAME-mic.wav")
+    parser.add_argument("--beep", action="store_true",
+                        help="the board beeps when recording starts and stops, in the room and in the "
+                        "recordings, for lining them up with video")
+    parser.add_argument("--gain", type=float, default=0,
+                        help="turn what's received up (or down) by this many dB, before anything else")
     parser.add_argument("--input", help="process this WAV file instead of listening to the board")
     parser.add_argument("--output", help="with --input, save the result to this WAV file")
     parser.add_argument("--no-play", action="store_true", help="don't play anything")
     parser.add_argument("--meter", action="store_true", help="print the microphone level every second")
     parser.add_argument("--latency", type=float, default=80, help="playback buffer in ms (default 80)")
+    parser.add_argument("--device", help="play to this sound device, by number or part of its name, "
+                        "e.g. a virtual cable, to use the voice in a video call")
+    parser.add_argument("--list-devices", action="store_true", help="list the sound devices and stop")
     args = parser.parse_args()
 
-    if args.input:
+    if args.device is not None and args.device.isdigit():
+        args.device = int(args.device)
+    if args.take and not args.record and args.listen == "mic":
+        args.listen = "effect"
+    if args.list_devices:
+        list_devices()
+    elif args.input:
         process_file(args)
     else:
         stream(args)

@@ -12,12 +12,21 @@
  * hello went to makes the stream a reply, which routers and firewalls between
  * network segments let through. ESP-IDF's lwIP allows one task to send while
  * another receives on the same socket.
+ *
+ * The monitor can also ask for a sync beep, for lining a recording up with
+ * a video: the speaker plays it, for the camera to hear, and the same tone
+ * is added to both streams as it sounds. The echo canceller takes most of
+ * the speaker out of the microphone, so the streams can't rely on hearing
+ * it.
  */
 #include <stdio.h>
 #include <string.h>
 
 #include "app/remote.h"
+#include <math.h>
+
 #include "audio/mic.h"
+#include "audio/speaker.h"
 #include "audio/voice_lab.h"
 #include "hal.h"
 
@@ -31,6 +40,11 @@
 
 #define WIFI_FILE           "wifi.txt"
 #define HELLO               "RCAT-HELLO"
+#define BEEP                "RCAT-BEEP"
+// The beep comes out of the speaker about this long after the speaker's
+// task makes it: a block of sound, and the DMA buffers behind it. Worked out
+// from their sizes, not measured; it's well under a video frame either way.
+#define BEEP_OUT_DELAY_MS   25
 #define HELLO_TIMEOUT_MS    5000
 #define MAX_BLOCK_SAMPLES   (MIC_SAMPLE_RATE / 100)
 
@@ -60,6 +74,42 @@ static uint32_t last_hello_ms;
 
 static packet_t packets[KIND_COUNT];    // only used by the microphone's task
 
+// The beep in each stream, only used by the microphone's task
+typedef struct
+{
+    uint32_t seen;          // speaker_beep_count() last time
+    bool on;
+    uint32_t pos;           // samples since the speaker made it
+} stream_beep_t;
+static stream_beep_t stream_beeps[KIND_COUNT];
+
+static void add_beep(stream_beep_t *b, uint32_t sample_rate, int16_t *samples, size_t count)
+{
+    uint32_t n = speaker_beep_count();
+    if (n != b->seen)
+    {
+        b->seen = n;
+        b->on = true;
+        b->pos = 0;
+    }
+    if (!b->on)
+    {
+        return;
+    }
+    uint32_t start = sample_rate * BEEP_OUT_DELAY_MS / 1000;
+    uint32_t end = start + sample_rate * SPEAKER_BEEP_MS / 1000;
+    const float step = 2.0f * (float)M_PI * SPEAKER_BEEP_HZ / sample_rate;
+    for (size_t i = 0; i < count && b->pos < end; i++, b->pos++)
+    {
+        if (b->pos >= start)
+        {
+            int32_t v = samples[i] + (int32_t)(sinf(step * (b->pos - start)) * SPEAKER_BEEP_LEVEL * 32767.0f);
+            samples[i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+        }
+    }
+    b->on = b->pos < end;
+}
+
 // Counted by the microphone's task, reported by the UI loop.
 static volatile uint32_t sent_count;
 static volatile uint32_t failed_count;
@@ -82,6 +132,7 @@ void voice_lab_send(uint16_t kind, uint32_t sample_rate, const int16_t *samples,
     packet->kind = kind;
     packet->count = (uint16_t)count;
     memcpy(packet->samples, samples, count * sizeof(int16_t));
+    add_beep(&stream_beeps[kind], sample_rate, packet->samples, count);
 
     struct sockaddr_in to = { 0 };
     to.sin_family = AF_INET;
@@ -235,6 +286,12 @@ void voice_lab_poll(uint32_t now_ms)
             }
             __atomic_store_n(&destination, dest, __ATOMIC_RELEASE);
             last_hello_ms = now_ms;
+        }
+        else if (len >= (int)strlen(BEEP) && memcmp(buf, BEEP, strlen(BEEP)) == 0 &&
+                 (((uint64_t)from.sin_addr.s_addr << 16) | from.sin_port) == destination)
+        {
+            printf("voice lab: sync beep\n");
+            speaker_beep();
         }
         from_len = sizeof(from);
     }

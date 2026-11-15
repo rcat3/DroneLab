@@ -15,7 +15,12 @@
  *
  * The monitor broadcasts a hello on VOICE_LAB_PORT about once a second, and
  * the board streams to whoever said hello last. The stream stops a few
- * seconds after the hellos do.
+ * seconds after the hellos do. Both streams, the microphone and the voice
+ * effect, are sent whenever there's a monitor.
+ *
+ * The monitor it's streaming to can send "RCAT-BEEP" for a sync beep: the
+ * speaker beeps, and the same beep is added to both streams at the moment
+ * it sounds (see speaker.h).
  */
 #define VOICE_LAB_PORT 5005
 
