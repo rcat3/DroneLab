@@ -34,7 +34,8 @@
  *                  UTF-8. When any of it changes, and when the board's
  *                  status first comes.
  *     0x05 hearing: 05, then for each of those talking on the channel, in
- *                  the order they started: their avatar's slot, and their
+ *                  the order they started: their avatar's slot, how they're
+ *                  heard (comm_transport_t: the server or direct), and their
  *                  name, in UTF-8, ending in a newline. The app cuts them
  *                  down to fit, and ends with a "+3" (slot COMM_AVATAR_NONE)
  *                  for three more that didn't. Just 05 when nobody is. When
@@ -61,6 +62,10 @@
  *     0x08 direct peer: 08, a board's id (32), how strong it's heard (dBm,
  *                  signed), flags (bit 0 talking), then its name: each board
  *                  heard over direct comms, every couple of seconds.
+ *     0x09 direct group: 09, a group's id (4 bytes), how strong it's heard
+ *                  (dBm, signed), how many boards are in it, then its name:
+ *                  each group heard about over direct comms, from their
+ *                  beacons, every couple of seconds.
  *
  *   Both ways: the phone remote's requests (see remote.h), so the app can
  *   show the remote's page without joining the board's hotspot
@@ -143,6 +148,26 @@ bool comm_running(void);
 comm_mode_t comm_mode(void);
 void comm_set_mode(comm_mode_t mode);
 
+/* Where talking goes: to the server, through the phone, or board to board
+ * over direct comms (direct.h); never both. It's the one chosen, unless
+ * nobody's there to hear it and someone's on the other, decided as each
+ * transmission starts. */
+typedef enum
+{
+    COMM_TALK_SERVER,
+    COMM_TALK_DIRECT,
+    COMM_TALK_COUNT,
+} comm_transport_t;
+void comm_set_talk_on(comm_transport_t transport);
+comm_transport_t comm_talk_on(void);            // as chosen
+comm_transport_t comm_talk_now(void);           // where talking would go now, or is going
+bool comm_talk_switched(void);                  // comm_talk_now() isn't the one chosen
+
+/* The voice effect for what's sent: -1 for the same as the speaker's, else a
+ * voice effect preset. Remembered. */
+void comm_set_voice_effect(int preset);
+int comm_voice_effect(void);
+
 /* Push to talk from the screen, in either mode. */
 void comm_set_talk(bool talk);
 
@@ -171,6 +196,7 @@ const char *comm_server_channel(void);  // its name, or ""
 int comm_hearing_count(void);
 const char *comm_hearing_name(int index);
 int comm_hearing_avatar(int index);     // its slot, or COMM_AVATAR_NONE
+int comm_hearing_transport(int index);  // comm_transport_t: how they're heard
 
 /* Avatars. The UI says how big it shows them, in pixels, before the phone
  * connects; 0, as it starts, means it doesn't, and the phone sends none. */

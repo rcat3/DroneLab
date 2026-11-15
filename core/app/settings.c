@@ -315,6 +315,18 @@ void settings_set_comm(uint8_t on, uint8_t mode)
     schedule_save();
 }
 
+void settings_set_comm_talk_on(uint8_t transport)
+{
+    current.comm_talk_on = transport;
+    schedule_save();
+}
+
+void settings_set_comm_voice_effect(int preset)
+{
+    current.comm_voice_effect = preset < 0 ? 0 : (uint8_t)(preset + 1);
+    schedule_save();
+}
+
 void settings_set_direct(uint8_t on)
 {
     current.direct_on = on ? 1 : 0;

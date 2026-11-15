@@ -4,8 +4,12 @@ import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
+import 'groups_page.dart';
 import 'server_page.dart';
+import 'settings_page.dart';
 
+/// The comm channel at a glance: what's connected, talking, and who's about.
+/// What's set once is in [CommSettingsPage], behind the gear.
 class CommPage extends StatelessWidget {
   final CommController comm;
   const CommPage({super.key, required this.comm});
@@ -14,100 +18,132 @@ class CommPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: comm,
-      builder: (context, _) => Scaffold(
-        appBar: AppBar(
-          title: const Text('DroneLab Comm'),
-          actions: [
-            IconButton(
-              tooltip: 'Server',
-              icon: const Icon(Icons.settings),
-              onPressed: () => Navigator.of(context)
-                  .push(MaterialPageRoute(builder: (_) => ServerPage(comm: comm))),
-            ),
-          ],
-        ),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _ServerCard(comm: comm),
-            const SizedBox(height: 12),
-            _BoardCard(comm: comm),
-            const SizedBox(height: 12),
-            _TalkButton(comm: comm),
-            const SizedBox(height: 12),
-            _PeopleCard(comm: comm),
-            if (comm.board.state == BoardState.connected && comm.boardSettings?.direct != null) ...[
-              const SizedBox(height: 12),
-              _DirectCard(comm: comm),
+      builder: (context, _) {
+        final direct = comm.boardSettings?.direct;
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('DroneLab Comm'),
+            actions: [
+              IconButton(
+                tooltip: 'Settings',
+                icon: const Icon(Icons.settings),
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => CommSettingsPage(comm: comm))),
+              ),
             ],
-            if (comm.texts.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _MessagesCard(comm: comm),
+          ),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _LinksCard(comm: comm),
+              const SizedBox(height: 16),
+              if (direct != null && comm.board.state == BoardState.connected) ...[
+                _TalkOn(comm: comm),
+                const SizedBox(height: 12),
+              ],
+              _TalkButton(comm: comm),
+              if (comm.board.state == BoardState.connected && comm.mumble?.state == MumbleState.connected)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                      comm.headsetTalking
+                          ? "Talking from the headphones' button: press it again to stop"
+                          : "Or press the headphones' play/pause button to talk, and again to stop",
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall),
+                ),
+              const SizedBox(height: 16),
+              _PeopleCard(comm: comm),
+              if (direct != null && comm.board.state == BoardState.connected) ...[
+                const SizedBox(height: 12),
+                _DirectCard(comm: comm),
+              ],
+              if (comm.texts.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _MessagesCard(comm: comm),
+              ],
             ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
-class _ServerCard extends StatelessWidget {
+/// The board, the server and direct comms, one line each, with what to do
+/// next.
+class _LinksCard extends StatelessWidget {
   final CommController comm;
-  const _ServerCard({required this.comm});
+  const _LinksCard({required this.comm});
 
   @override
   Widget build(BuildContext context) {
+    final b = comm.board;
+    final st = b.status;
+    final connected = b.state == BoardState.connected;
+
+    String boardStatus;
+    switch (b.state) {
+      case BoardState.off:
+      case BoardState.scanning:
+        boardStatus = b.error ?? "Not connected. Switch on the Phone App in the board's Settings";
+      case BoardState.connecting:
+        boardStatus = b.error == null ? 'Connecting...' : '${b.error}. Trying again...';
+      case BoardState.connected:
+        boardStatus = st == null
+            ? 'Pairing: type in the code the board shows. A new phone can only pair while the board '
+                'says so: in its Settings, Paired Phones, tap Pair a phone'
+            : [
+                st.sending ? 'Sending your voice' : st.mode == BoardMode.voice ? 'Voice mode' : 'Push to talk',
+                if (st.buttonConnected) 'talk button connected',
+              ].join(', ');
+    }
+
     final m = comm.mumble;
     final s = comm.server;
-    String status;
-    IconData icon;
+    String serverStatus;
     if (!s.complete) {
-      status = 'Set up the server first';
-      icon = Icons.cloud_off;
+      serverStatus = 'Not set up yet';
     } else if (m?.state == MumbleState.connected) {
-      final n = m!.channelUsers.length;
-      status = 'Connected as ${s.username}, ${n == 0 ? 'nobody else here' : n == 1 ? '1 other here' : '$n others here'}.\n'
-          '${m.udpActive ? 'Voice over UDP' : 'Voice over TCP (UDP isn\'t getting through)'}';
-      icon = Icons.cloud_done;
+      serverStatus = 'Connected as ${s.username}';
     } else if (comm.serverWanted) {
-      status = comm.serverError == null ? 'Connecting...' : '${comm.serverError}. Trying again...';
-      icon = Icons.cloud_sync;
+      serverStatus = comm.serverError == null ? 'Connecting...' : '${comm.serverError}. Trying again...';
     } else {
-      status = comm.serverError ?? 'Not connected';
-      icon = Icons.cloud_off;
+      serverStatus = comm.serverError ?? 'Not connected';
     }
     final certChanged = (comm.serverError ?? '').contains('certificate');
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Icon(icon),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(s.host.isEmpty ? 'Server' : '${s.host}:${s.port}',
-                    style: Theme.of(context).textTheme.titleMedium),
-              ),
-            ]),
-            const SizedBox(height: 8),
-            Text(status),
-            const SizedBox(height: 12),
-            Wrap(spacing: 8, children: [
-              if (!s.complete)
-                FilledButton(
-                  onPressed: () => Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => ServerPage(comm: comm))),
-                  child: const Text('Set up'),
-                )
-              else if (comm.serverWanted)
-                OutlinedButton(onPressed: comm.disconnectServer, child: const Text('Disconnect'))
-              else
-                FilledButton(onPressed: comm.connectServer, child: const Text('Connect')),
-              if (certChanged)
-                TextButton(
+      child: Column(
+        children: [
+          ListTile(
+            leading: Icon(connected ? Icons.bluetooth_connected : Icons.bluetooth),
+            title: Text(b.name ?? 'Board'),
+            subtitle: Text(boardStatus),
+            trailing: b.state == BoardState.off || b.state == BoardState.scanning
+                ? FilledButton(onPressed: () => _pickBoard(context), child: const Text('Find'))
+                : TextButton(onPressed: comm.disconnectBoard, child: const Text('Disconnect')),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: Icon(m?.state == MumbleState.connected ? Icons.cloud_done : Icons.cloud_off),
+            title: Text(s.host.isEmpty ? 'Server' : s.host),
+            subtitle: Text(serverStatus),
+            trailing: !s.complete
+                ? FilledButton(
+                    onPressed: () => Navigator.of(context)
+                        .push(MaterialPageRoute(builder: (_) => ServerPage(comm: comm))),
+                    child: const Text('Set up'))
+                : comm.serverWanted
+                    ? TextButton(onPressed: comm.disconnectServer, child: const Text('Disconnect'))
+                    : FilledButton(onPressed: comm.connectServer, child: const Text('Connect')),
+          ),
+          if (certChanged)
+            Padding(
+              padding: const EdgeInsets.only(left: 72, bottom: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
                   onPressed: () async {
                     final ok = await _confirmNewCertificate(context);
                     if (ok == true) {
@@ -117,135 +153,9 @@ class _ServerCard extends StatelessWidget {
                   },
                   child: const Text('Trust the new certificate'),
                 ),
-            ]),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<bool?> _confirmNewCertificate(BuildContext context) => showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('New certificate'),
-          content: const Text("The server's certificate isn't the one it had before. That's expected if "
-              'the server was set up again, but it could also be someone pretending to be the server. '
-              'Trust it only if you know the server changed.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Trust it')),
-          ],
-        ),
-      );
-}
-
-class _BoardCard extends StatelessWidget {
-  final CommController comm;
-  const _BoardCard({required this.comm});
-
-  @override
-  Widget build(BuildContext context) {
-    final b = comm.board;
-    final st = b.status;
-    String status;
-    switch (b.state) {
-      case BoardState.off:
-      case BoardState.scanning:
-        status = b.error ?? 'Not connected. Switch on the Phone App in the board\'s Settings.';
-      case BoardState.connecting:
-        status = b.error == null ? 'Connecting...' : '${b.error}. Trying again...';
-      case BoardState.connected:
-        status = st == null
-            ? 'Pairing: type in the code the board shows. A new phone can only pair while the board says so: '
-                'in its Settings, Paired Phones, tap Pair a phone'
-            : st.sending
-                ? 'Sending your voice${comm.sendingToServer ? ' to the server' : ''}'
-                : st.mode == BoardMode.voice
-                    ? (st.hearsVoice ? 'Hears you' : 'Listening for your voice')
-                    : 'Ready';
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Icon(b.state == BoardState.connected ? Icons.bluetooth_connected : Icons.bluetooth),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(b.name ?? 'Board', style: Theme.of(context).textTheme.titleMedium),
               ),
-            ]),
-            const SizedBox(height: 8),
-            Text(status),
-            if (b.firmware != null) ...[
-              const SizedBox(height: 4),
-              Text('Firmware ${b.firmware}, app ${b.appVersion}',
-                  style: Theme.of(context).textTheme.bodySmall),
-            ],
-            if (st != null && st.buttonConnected) ...[
-              const SizedBox(height: 4),
-              const Row(children: [
-                Icon(Icons.radio_button_checked, size: 16),
-                SizedBox(width: 6),
-                Text('Talk button connected'),
-              ]),
-            ],
-            if (b.state == BoardState.connected && comm.mumble?.state == MumbleState.connected) ...[
-              const SizedBox(height: 4),
-              Text(
-                  comm.headsetTalking
-                      ? "Talking from the headphones' button: press it again to stop"
-                      : "Or press the headphones' play/pause button to start talking, and again to stop",
-                  style: Theme.of(context).textTheme.bodySmall),
-            ],
-            if (b.state == BoardState.connected) ...[
-              const SizedBox(height: 12),
-              SegmentedButton<BoardMode>(
-                segments: const [
-                  ButtonSegment(value: BoardMode.pushToTalk, label: Text('Push to talk'), icon: Icon(Icons.touch_app)),
-                  ButtonSegment(value: BoardMode.voice, label: Text('Voice'), icon: Icon(Icons.graphic_eq)),
-                ],
-                selected: {st?.mode ?? BoardMode.pushToTalk},
-                onSelectionChanged: (sel) => b.setMode(sel.first),
-              ),
-            ],
-            if (b.state == BoardState.connected && comm.boardSettings != null) ...[
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Speaker off while talking'),
-                subtitle: const Text("So those nearby don't hear what goes to the group"),
-                value: comm.boardSettings!.muteSpeaker,
-                onChanged: (on) => comm.setBoardSettings(muteSpeaker: on),
-              ),
-              Text('Show the Comm screen while', style: Theme.of(context).textTheme.bodyMedium),
-              const SizedBox(height: 8),
-              SegmentedButton<int>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: 0, label: Text('Off')),
-                  ButtonSegment(value: 1, label: Text('Talk')),
-                  ButtonSegment(value: 2, label: Text('Hear')),
-                  ButtonSegment(value: 3, label: Text('Both')),
-                ],
-                selected: {comm.boardSettings!.show},
-                onSelectionChanged: (sel) => comm.setBoardSettings(show: sel.first),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Wrap(spacing: 8, children: [
-              if (b.state == BoardState.off || b.state == BoardState.scanning)
-                FilledButton(
-                  onPressed: () => _pickBoard(context),
-                  child: const Text('Find the board'),
-                )
-              else
-                OutlinedButton(onPressed: comm.disconnectBoard, child: const Text('Disconnect')),
-            ]),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -281,6 +191,20 @@ class _BoardCard extends StatelessWidget {
     await comm.board.stopScan();
     if (picked != null) await comm.connectBoard(picked.id, picked.name);
   }
+
+  Future<bool?> _confirmNewCertificate(BuildContext context) => showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('New certificate'),
+          content: const Text("The server's certificate isn't the one it had before. That's expected if "
+              'the server was set up again, but it could also be someone pretending to be the server. '
+              'Trust it only if you know the server changed.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Trust it')),
+          ],
+        ),
+      );
 }
 
 class _TalkButton extends StatefulWidget {
@@ -416,46 +340,55 @@ class _PeopleCard extends StatelessWidget {
   }
 }
 
-/// Direct comms: board to board over the radio, for where there's no signal.
-class _DirectCard extends StatelessWidget {
+/// Where talking goes: the server or direct comms, and when it's going the
+/// other way, why.
+class _TalkOn extends StatelessWidget {
   final CommController comm;
-  const _DirectCard({required this.comm});
+  const _TalkOn({required this.comm});
 
   @override
   Widget build(BuildContext context) {
-    final d = comm.boardSettings!.direct!;
-    final boards = comm.nearby.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi));
-    return Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SwitchListTile(
-            secondary: const Icon(Icons.settings_input_antenna),
-            title: Text('Direct comms', style: Theme.of(context).textTheme.titleMedium),
-            subtitle: const Text('Board to board over the radio, for where there\'s no signal. '
-                'Works with or without the server.'),
-            value: d.on,
-            onChanged: comm.setDirect,
-          ),
-          ListTile(
-            leading: Icon(d.keyed ? Icons.lock : Icons.lock_open),
-            title: Text(d.keyed ? 'Group: ${d.group}' : 'The open group'),
-            subtitle: Text(d.keyed
-                ? 'Only boards given the same group name and passphrase hear it. Seen as ${d.name}'
-                : 'Any board nearby can hear it. Set a group to keep it to yours. Seen as ${d.name}'),
-            trailing: TextButton(onPressed: () => _setGroup(context), child: const Text('Set group')),
-          ),
-          if (d.on && boards.isEmpty) const ListTile(title: Text('No boards heard yet')),
-          for (final b in boards)
-            ListTile(
-              leading: Icon(b.talking ? Icons.record_voice_over : _signal(b.rssi)),
-              title: Text(b.name),
-              subtitle: Text('${b.rssi} dBm${b.talking ? ', talking' : ''}'),
-            ),
-        ],
-      ),
+    final chosen = comm.boardSettings!.talkOn;
+    final now = comm.talkNow;
+    final direct = comm.boardSettings!.direct!;
+    final group = direct.keyed ? direct.group : 'the open group';
+    final channel = comm.mumble?.channels[comm.mumble!.myChannel];
+    String note;
+    if (now == chosen) {
+      note = now == CommController.talkDirect
+          ? 'Talking to the boards nearby in $group'
+          : 'Talking to the server${channel == null ? '' : ', in $channel'}';
+    } else {
+      note = now == CommController.talkDirect
+          ? "Nobody's on the server, so talking to the boards nearby in $group"
+          : "Nobody's nearby, so talking to the server${channel == null ? '' : ', in $channel'}";
+    }
+    return Column(
+      children: [
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(value: CommController.talkServer, label: Text('Server'), icon: Icon(Icons.cloud)),
+            ButtonSegment(
+                value: CommController.talkDirect, label: Text('Direct'), icon: Icon(Icons.settings_input_antenna)),
+          ],
+          selected: {chosen},
+          onSelectionChanged: (sel) => comm.setTalkOn(sel.first),
+        ),
+        const SizedBox(height: 6),
+        Text(note,
+            textAlign: TextAlign.center,
+            style: now == chosen
+                ? Theme.of(context).textTheme.bodySmall
+                : Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.tertiary)),
+      ],
     );
   }
+}
+
+/// Direct comms: on or off, the group, and the boards heard.
+class _DirectCard extends StatelessWidget {
+  final CommController comm;
+  const _DirectCard({required this.comm});
 
   static IconData _signal(int rssi) => rssi > -60
       ? Icons.signal_cellular_4_bar
@@ -463,29 +396,105 @@ class _DirectCard extends StatelessWidget {
           ? Icons.network_cell
           : Icons.signal_cellular_0_bar;
 
-  Future<void> _setGroup(BuildContext context) async {
-    final group = TextEditingController(text: comm.directGroup);
-    final passphrase = TextEditingController(text: comm.directPassphrase);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Direct comms group'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Everyone in the group types the same name and passphrase. '
-                'Leave the passphrase empty for the open group.'),
-            TextField(controller: group, decoration: const InputDecoration(labelText: 'Group name'), maxLength: 15),
-            TextField(controller: passphrase, decoration: const InputDecoration(labelText: 'Passphrase')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Set')),
+  @override
+  Widget build(BuildContext context) {
+    final direct = comm.boardSettings!.direct!;
+    final boards = comm.nearby.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi));
+
+    // The groups to pick from: the open group, those kept here, and those
+    // heard nearby, each once
+    final saved = comm.groups.toList()..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final savedIds = {for (final g in saved) g.id};
+    final heard = comm.heardGroups.values.where((h) => !savedIds.contains(h.id)).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final current = !direct.keyed ? 'open' : 'group:${direct.id}';
+    final known = current == 'open' || savedIds.contains(direct.id) || heard.any((h) => h.id == direct.id);
+    Widget item(IconData icon, String text) => Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 8),
+          Flexible(child: Text(text, overflow: TextOverflow.ellipsis)),
+        ]);
+
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            secondary: const Icon(Icons.settings_input_antenna),
+            title: Text('Direct', style: Theme.of(context).textTheme.titleMedium),
+            subtitle: Text(!direct.on
+                ? "Board to board, for where there's no signal"
+                : boards.isEmpty
+                    ? 'No boards heard yet'
+                    : '${boards.length} ${boards.length == 1 ? 'board' : 'boards'} nearby'),
+            value: direct.on,
+            onChanged: comm.setDirect,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: current,
+                    onChanged: (v) => _pick(context, v),
+                    items: [
+                      DropdownMenuItem(value: 'open', child: item(Icons.lock_open, 'Open group')),
+                      for (final g in saved)
+                        DropdownMenuItem(value: 'group:${g.id}', child: item(Icons.lock, g.name)),
+                      for (final h in heard)
+                        DropdownMenuItem(
+                            value: 'group:${h.id}', child: item(Icons.lock_outline, '${h.name} (nearby, ${h.boards})')),
+                      if (!known)
+                        DropdownMenuItem(value: current, child: item(Icons.lock, direct.group)),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupsPage(comm: comm))),
+                  child: const Text('Manage'),
+                ),
+              ],
+            ),
+          ),
+          if (direct.on)
+            for (final b in boards)
+              ListTile(
+                leading: Icon(b.talking ? Icons.record_voice_over : _signal(b.rssi)),
+                title: Text(b.name),
+                subtitle: Text(comm.isMuted(b.name)
+                    ? 'Muted by you'
+                    : b.talking
+                        ? 'Talking'
+                        : '${b.rssi} dBm'),
+                trailing: IconButton(
+                  tooltip: comm.isMuted(b.name) ? 'Hear them' : 'Mute them, here only',
+                  icon: Icon(comm.isMuted(b.name) ? Icons.volume_off : Icons.volume_up),
+                  color: comm.isMuted(b.name) ? Theme.of(context).colorScheme.error : null,
+                  onPressed: () => comm.setMuted(b.name, !comm.isMuted(b.name)),
+                ),
+              ),
         ],
       ),
     );
-    if (ok == true) await comm.setDirectGroup(group.text, passphrase.text);
+  }
+
+  /// A group picked: the open group, one kept here, or one heard nearby,
+  /// which needs its passphrase.
+  Future<void> _pick(BuildContext context, String? value) async {
+    if (value == null) return;
+    if (value == 'open') {
+      await comm.joinOpenGroup();
+      return;
+    }
+    final id = value.substring('group:'.length);
+    for (final g in comm.groups) {
+      if (g.id == id) return joinSavedGroup(context, comm, g);
+    }
+    final h = comm.heardGroups[id];
+    if (h != null) await joinHeardGroup(context, comm, h);
   }
 }
 

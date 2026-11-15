@@ -490,15 +490,25 @@ static void write_state(json_t *j)
 static void write_comm(json_t *j)
 {
     const settings_t *s = settings_get();
-    jprintf(j, "{\"available\":%d,\"mode\":%d,\"mute\":%u,\"show\":%u", comm_available() ? 1 : 0,
-            (int)comm_mode(), s->comm_mute_speaker, s->comm_auto_show);
+    jprintf(j, "{\"available\":%d,\"mode\":%d,\"mute\":%u,\"show\":%u,\"voice\":%d,\"talk\":%d,\"talk_now\":%d,"
+               "\"voices\":[",
+            comm_available() ? 1 : 0, (int)comm_mode(), s->comm_mute_speaker, s->comm_auto_show, comm_voice_effect(),
+            (int)comm_talk_on(), (int)comm_talk_now());
+    for (size_t i = 0; i < voice_fx_preset_count(); i++)
+    {
+        jprintf(j, "%s", i ? "," : "");
+        jstring(j, voice_fx_preset_name(i));
+    }
+    jprintf(j, "]");
     if (direct_available())
     {
         jprintf(j, ",\"direct\":{\"on\":%d,\"keyed\":%u,\"group\":", direct_running() ? 1 : 0, s->direct_keyed);
         jstring(j, direct_group_name());
         jprintf(j, ",\"name\":");
         jstring(j, direct_own_name());
-        jprintf(j, "}");
+        uint8_t id[4];
+        direct_group_id(id);
+        jprintf(j, ",\"id\":\"%02x%02x%02x%02x\"}", id[0], id[1], id[2], id[3]);
     }
     jprintf(j, "}");
 }
@@ -668,6 +678,16 @@ static void set_comm(const char *query)
     if (mode >= 0 && mode < COMM_MODE_COUNT)
     {
         comm_set_mode((comm_mode_t)mode);
+    }
+    int talk = query_int(query, "talk", -1);
+    if (talk >= 0 && talk < COMM_TALK_COUNT)
+    {
+        comm_set_talk_on((comm_transport_t)talk);
+    }
+    int voice = query_int(query, "voice", -2);
+    if (voice >= -1)
+    {
+        comm_set_voice_effect(voice);
     }
     int mute = query_int(query, "mute", s->comm_mute_speaker);
     int show = query_int(query, "show", s->comm_auto_show);

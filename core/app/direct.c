@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "mbedtls/gcm.h"
+#include "mbedtls/pkcs5.h"
 #include "mbedtls/sha256.h"
 
 #include "app/comm.h"
@@ -24,9 +25,12 @@
 
 // 1 for a board that only echoes back what it hears, as itself, for trying
 // direct comms with one board that can send (set by -DRCAT_DIRECT_ECHO=1).
+// It's in a group of its own, for trying joining one heard over the air.
 #ifndef RCAT_DIRECT_ECHO
 #define RCAT_DIRECT_ECHO    0
 #endif
+#define ECHO_GROUP          "Echo Test"
+#define ECHO_PASSPHRASE     "dronelab"
 
 // 1 to print what was sent, heard and dropped every couple of seconds.
 #define DIRECT_DEBUG        0
@@ -36,6 +40,7 @@
 #define TAG_LEN             8
 #define TYPE_VOICE          0x01
 #define TYPE_HELLO          0x02
+#define BEACON              'G'         // a group says it's here, not encrypted
 #define HELLO_TALKING       0x01
 #define MAX_OPUS            160
 
@@ -86,6 +91,23 @@ static char own_name[DIRECT_NAME_MAX];
 static peer_t peers[DIRECT_PEERS_MAX];
 static volatile uint32_t peers_seq;
 
+// Groups heard about over the air, from their beacons; as peers, only the
+// task writes, and others copy it whole
+#define GROUP_SENDERS       8
+typedef struct
+{
+    uint8_t id[4];
+    char name[DIRECT_NAME_MAX];
+    uint32_t heard_ms;
+    int8_t rssi;
+    uint32_t senders[GROUP_SENDERS];    // the boards heard in it
+    uint32_t sender_ms[GROUP_SENDERS];
+    bool used;
+} group_t;
+static group_t groups[DIRECT_GROUPS_MAX];
+static volatile uint32_t groups_seq;
+static bool keyed;                      // in a group with a key, so it says so
+
 // The wearer's voice: one writer (the comm channel's encoder), one reader
 static voice_t *voice_queue;
 static volatile uint32_t voice_write, voice_read;
@@ -131,6 +153,7 @@ static void use_group(void)
     mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 128);
     memset(key, 0, sizeof(key));
     snprintf(group_name, sizeof(group_name), "%s", s->direct_keyed ? s->direct_group : "Open");
+    keyed = s->direct_keyed;
     if (RCAT_DIRECT_ECHO)
     {
         snprintf(own_name, sizeof(own_name), "ECHO-%04lX", (unsigned long)(own_id & 0xFFFF));
@@ -179,6 +202,79 @@ static void send_sealed(const uint8_t *plain, size_t len)
         DBG(ok ? dbg_sent++ : dbg_send_fail++);
         (void)ok;
     }
+}
+
+/* Say the group's here, for boards that aren't in it to see it and ask to
+ * join: its id and name, and this board's id, not encrypted. */
+static void send_beacon(void)
+{
+    uint8_t msg[10 + DIRECT_NAME_MAX];
+    msg[0] = BEACON;
+    msg[1] = DIRECT_VERSION;
+    memcpy(msg + 2, group_id, 4);
+    memcpy(msg + 6, &own_id, 4);
+    size_t n = strlen(group_name);
+    memcpy(msg + 10, group_name, n);
+    rcat_hal_direct_send(msg, 10 + n);
+}
+
+static void heard_beacon(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
+{
+    if (len < 10 || msg[1] != DIRECT_VERSION)
+    {
+        return;
+    }
+    uint32_t sender;
+    memcpy(&sender, msg + 6, 4);
+    if (sender == own_id)
+    {
+        return;
+    }
+    __atomic_add_fetch(&groups_seq, 1, __ATOMIC_SEQ_CST);
+    group_t *g = NULL, *spare = NULL;
+    for (int i = 0; i < DIRECT_GROUPS_MAX; i++)
+    {
+        if (groups[i].used && memcmp(groups[i].id, msg + 2, 4) == 0)
+        {
+            g = &groups[i];
+        }
+        else if (spare == NULL && (!groups[i].used || now - groups[i].heard_ms > PEER_GONE_MS))
+        {
+            spare = &groups[i];
+        }
+    }
+    if (g == NULL && spare != NULL)
+    {
+        g = spare;
+        memset(g, 0, sizeof(*g));
+        memcpy(g->id, msg + 2, 4);
+        g->used = true;
+    }
+    if (g != NULL)
+    {
+        size_t n = len - 10 < DIRECT_NAME_MAX - 1 ? len - 10 : DIRECT_NAME_MAX - 1;
+        memcpy(g->name, msg + 10, n);
+        g->name[n] = '\0';
+        g->rssi = now - g->heard_ms > HELLO_EVERY_MS * 2 || rssi > g->rssi ? rssi : g->rssi;
+        g->heard_ms = now;
+        // Which boards are in it: this one, in its place or the oldest's
+        int at = 0;
+        for (int i = 0; i < GROUP_SENDERS; i++)
+        {
+            if (g->senders[i] == sender)
+            {
+                at = i;
+                break;
+            }
+            if (g->sender_ms[i] < g->sender_ms[at])
+            {
+                at = i;
+            }
+        }
+        g->senders[at] = sender;
+        g->sender_ms[at] = now;
+    }
+    __atomic_add_fetch(&groups_seq, 1, __ATOMIC_SEQ_CST);
 }
 
 static void send_hello(void)
@@ -277,6 +373,11 @@ static void deliver(uint32_t id, uint16_t seq, uint8_t flags, const uint8_t *opu
 static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
 {
     DBG(dbg_heard++);
+    if (len > 0 && msg[0] == BEACON)
+    {
+        heard_beacon(msg, len, rssi, now);
+        return;
+    }
     if (len < HEADER_LEN + 1 + TAG_LEN || msg[0] != MAGIC || msg[1] != DIRECT_VERSION ||
         memcmp(msg + 2, group_id, 4) != 0)
     {
@@ -395,6 +496,10 @@ static void direct_task(void *arg)
         {
             hello_ms = now;
             send_hello();
+            if (keyed)
+            {
+                send_beacon();
+            }
 #if DIRECT_DEBUG
             printf("direct: sent %lu (%lu failed), voice queued %lu (%lu full); heard %lu: %lu not ours, %lu bad, "
                    "%lu replayed, %lu voice, %lu recovered\n",
@@ -410,6 +515,14 @@ static void direct_task(void *arg)
     }
 }
 
+void direct_key(const char *group, const char *passphrase, uint8_t key[DIRECT_KEY_LEN])
+{
+    char salt[32 + DIRECT_NAME_MAX];
+    int n = snprintf(salt, sizeof(salt), "dronelab-direct\n%s", group);
+    mbedtls_pkcs5_pbkdf2_hmac_ext(MBEDTLS_MD_SHA256, (const unsigned char *)passphrase, strlen(passphrase),
+                                  (const unsigned char *)salt, (size_t)n, DIRECT_KEY_ROUNDS, DIRECT_KEY_LEN, key);
+}
+
 void direct_init(void)
 {
     own_id = rcat_hal_random();
@@ -421,6 +534,12 @@ void direct_init(void)
         return;
     }
     started = true;
+    if (RCAT_DIRECT_ECHO && !s->direct_keyed)
+    {
+        uint8_t key[DIRECT_KEY_LEN];
+        direct_key(ECHO_GROUP, ECHO_PASSPHRASE, key);
+        settings_set_direct_group(key, ECHO_GROUP, "");
+    }
     if (s->direct_on || RCAT_DIRECT_ECHO)
     {
         direct_start();
@@ -507,6 +626,42 @@ void direct_set_voice_cb(direct_voice_cb_t cb, void *user_data)
     voice_cb = cb;
 }
 
+void direct_group_id(uint8_t out[4])
+{
+    memcpy(out, group_id, 4);
+}
+
+int direct_groups(direct_group_t *out, int max)
+{
+    group_t copy[DIRECT_GROUPS_MAX];
+    uint32_t seq;
+    do
+    {
+        seq = __atomic_load_n(&groups_seq, __ATOMIC_SEQ_CST);
+        memcpy(copy, groups, sizeof(copy));
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    } while ((seq & 1) || seq != __atomic_load_n(&groups_seq, __ATOMIC_SEQ_CST));
+
+    uint32_t now = rcat_hal_millis();
+    int n = 0;
+    for (int i = 0; i < DIRECT_GROUPS_MAX && n < max; i++)
+    {
+        if (!copy[i].used || now - copy[i].heard_ms > PEER_GONE_MS)
+        {
+            continue;
+        }
+        direct_group_t g = { .rssi = copy[i].rssi };
+        memcpy(g.id, copy[i].id, 4);
+        memcpy(g.name, copy[i].name, sizeof(g.name));
+        for (int k = 0; k < GROUP_SENDERS; k++)
+        {
+            g.boards += copy[i].senders[k] != 0 && now - copy[i].sender_ms[k] <= PEER_GONE_MS;
+        }
+        out[n++] = g;
+    }
+    return n;
+}
+
 int direct_peers(direct_peer_t *out, int max)
 {
     peer_t copy[DIRECT_PEERS_MAX];
@@ -588,9 +743,24 @@ void direct_set_voice_cb(direct_voice_cb_t cb, void *user_data)
 {
 }
 
+void direct_group_id(uint8_t out[4])
+{
+    memset(out, 0, 4);
+}
+
+int direct_groups(direct_group_t *out, int max)
+{
+    return 0;
+}
+
 int direct_peers(direct_peer_t *out, int max)
 {
     return 0;
+}
+
+void direct_key(const char *group, const char *passphrase, uint8_t key[DIRECT_KEY_LEN])
+{
+    memset(key, 0, DIRECT_KEY_LEN);
 }
 
 #endif

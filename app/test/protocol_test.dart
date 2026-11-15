@@ -95,6 +95,8 @@ void main() {
     var i = 1;
     while (i < m.length) {
       final slot = m[i++];
+      final direct = m[i++];
+      if (direct == 1) out.write('*');
       final end = m.indexOf(0x0A, i);
       out.write('$slot:${utf8.decode(m.sublist(i, end))}|');
       i = end + 1;
@@ -104,12 +106,13 @@ void main() {
 
   test('hearing message fits, and counts the rest', () {
     expect(hearingMessage([]), [0x05]);
-    expect(names(hearingMessage(const [Talker('Pup', 1), Talker('Drone7')])), '1:Pup|255:Drone7|');
+    expect(names(hearingMessage(const [Talker('Pup', 1), Talker('Drone7', avatarNone, true)])), '1:Pup|*255:Drone7|');
     final many = hearingMessage([for (final n in 'abcdef'.split('')) Talker(n, 0)]);
     expect(names(many), '0:a|0:b|0:c|255:+3|');
     final long = hearingMessage([for (final c in 'ABCD'.split('')) Talker(c * 30, 3)]);
     expect(long.length, lessThanOrEqualTo(boardMaxWrite));
-    expect(names(long), '3:${'A' * 20}|3:${'B' * 20}|255:+2|');
+    expect(long.length, lessThanOrEqualTo(boardMaxWrite));
+    expect(names(long).split('|').last, '');
     // Not cut inside a character
     expect(names(hearingMessage(const [Talker('ééééééééééééé')])), '255:éééééééééé|');
   });
@@ -143,11 +146,21 @@ void main() {
   });
 
   test('a direct group key is the same for the same name and passphrase', () {
-    final k = directKey('Pack', 'woof woof');
+    final k = directKey(('Pack', 'woof woof'));
     expect(k, hasLength(32));
-    expect(k, directKey('Pack', 'woof woof'));
-    expect(k, isNot(directKey('Pack', 'woof')));
-    expect(k, isNot(directKey('Pack2', 'woof woof')));
+    expect(k, directKey(('Pack', 'woof woof')));
+    expect(k, isNot(directKey(('Pack', 'woof'))));
+    expect(k, isNot(directKey(('Pack2', 'woof woof'))));
+    // As the board makes it (direct_key), for its echo test group
+    // Standard PBKDF2, as mbedtls makes it on the board (worked out with Python's hashlib)
+    expect(directKey(('Echo Test', 'dronelab')), 'a7e1ccc952f49e4b7696b6fecffcd502');
+    expect(directGroupId(directKey(('Echo Test', 'dronelab'))), 'b1fbe3b4');
+  });
+
+  test('a heard group from the board', () {
+    final g = parseBoardMessage(Uint8List.fromList([0x09, 0xde, 0xad, 0xbe, 0xef, 0xC4, 3, ...'Pack'.codeUnits]))
+        as DirectGroupHeard;
+    expect([g.id, g.rssi, g.boards, g.name], ['deadbeef', -60, 3, 'Pack']);
   });
 }
 

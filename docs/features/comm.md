@@ -47,6 +47,10 @@ The app fetches everyone's from the server, shrinks them to the board's size, an
 - *Speaker off while talking*: the speaker goes quiet while the board's sending, voice effect and sound files alike, so those nearby don't hear what goes to the group.
 - *Show Comm while*: *Talk*, *Hear* or *Both* comes to the status screen by itself while the board's sending, while someone else is talking, or both, and goes back to the page you were on two seconds after it stops.  If you swipe somewhere else in the meantime, it stays where you went.  It waits while you're touching the screen.
 
+### Comm Voice
+
+The voice effect for what the others hear: *Same as speaker*, or any of the [voice effects](voice-effects.md), so you can sound natural on the channel and like a robot out loud, or the other way round.  With two different effects the voice runs through both, which takes more of the board's processor: the heaviest two together take about 70% of one of its cores.
+
 ### The talk button
 
 A Bluetooth camera shutter remote can be the talk button: hold it to talk, in either mode.  It has to be a Bluetooth LE one, which shows up as a keyboard (the ATUMTEK one does); the cheapest ones are often older Bluetooth only, which the board can't use.
@@ -58,7 +62,7 @@ The board remembers it.  The remote goes to sleep after a minute or so; pressing
 
 ## The app
 
-The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now.  Set up the server (the gear at the top: its address, your name and the server password), connect to it, then *Find the board* and pick yours.  The app passes the board's voice on to the server and plays the others to your headphones, and tells the board who's talking, for its status screen.  It has its own *Hold to talk*, and the board's [Comm Setup](#comm-setup) can be changed from it too: the mode, *Speaker off while talking*, and when to show the Comm screen.
+The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now.  The Comm tab shows the board, the server and direct comms, one line each, with the talk button, the channel's people and the boards nearby; what's set once is in *Comm Settings*, behind the gear.  Set up the server there (its address, your name, the server password and your avatar), connect to it, then *Find* the board and pick yours.  The app passes the board's voice on to the server and plays the others to your headphones, and tells the board who's talking, for its status screen.  It has its own *Hold to talk*, and the board's settings can be changed in *Comm Settings* too: the mode, the [Comm Voice](#comm-voice), *Speaker off while talking*, when to show the Comm screen, and [direct comms](direct.md) and its group.
 
 The server can have channels, so that several groups can share it: only those in the same channel hear each other.  *Change*, by the channel's name in the app, moves you to another, and the app goes back to it each time it connects.  Channels are made on the server, from Mumble on a computer, logged in as its SuperUser, or as someone it lets make them.
 

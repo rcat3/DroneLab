@@ -30,6 +30,11 @@ const char *voice_fx_preset_name(size_t index);
 /* Choose a preset. Safe to call from the UI loop. */
 void voice_fx_set_preset(size_t index);
 
+/* The comm channel's own preset, for what it sends (the listener), or -1 for
+ * the same as the speaker's. While it's different and there's a listener,
+ * the voice runs through both, which takes more of the processor. */
+void voice_fx_set_comm_preset(int index);
+
 /* How loud it is on the speaker, in percent: 50 is 10 dB up from the
  * microphone, and each step 0.5 dB more or less, with a limiter. 0 is silent. */
 void voice_fx_set_volume(uint8_t percent);

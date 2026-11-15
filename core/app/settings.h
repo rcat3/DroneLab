@@ -56,6 +56,8 @@ typedef struct
     uint8_t direct_key[SETTINGS_DIRECT_KEY_LEN];
     char direct_group[SETTINGS_DIRECT_NAME_LEN];    // the group's name, to show
     char direct_name[SETTINGS_DIRECT_NAME_LEN];     // what the others see this board as; empty for its own name
+    uint8_t comm_voice_effect;              // the comm channel's own voice effect: 0 the speaker's, else its preset + 1
+    uint8_t comm_talk_on;                   // comm_transport_t: where talking goes, by choice
 } settings_t;
 
 /* comm_auto_show: switch to the comm channel's status screen while it's
@@ -89,6 +91,9 @@ void settings_set_visualizer(uint8_t index);
 void settings_set_comm(uint8_t on, uint8_t mode);
 void settings_set_comm_options(uint8_t mute_speaker, uint8_t auto_show);
 void settings_set_direct(uint8_t on);
+/* The comm channel's voice effect: -1 for the speaker's, else a preset. */
+void settings_set_comm_voice_effect(int preset);
+void settings_set_comm_talk_on(uint8_t transport);
 /* Direct comms' group: its key (NULL for the open group) and name, and this
  * board's name in it. */
 void settings_set_direct_group(const uint8_t *key, const char *group, const char *name);

@@ -64,10 +64,14 @@ const char *remote_page_html(size_t *len);
  *
  * Besides the page's own, GET /api/comm answers the comm channel's settings,
  * {"available", "mode", "mute" (the speaker while it sends), "show" (when to
- * come to the Comm screen: SETTINGS_SHOW_* bits)}, and POST /api/comm?m=&mute=
- * &show= changes any of them and answers the same. With direct comms (see
+ * come to the Comm screen: SETTINGS_SHOW_* bits), "voice" (its own voice
+ * effect, -1 for the speaker's), "voices" (the effects' names), "talk"
+ * (comm_transport_t, as chosen), "talk_now" (where talking goes now)}, and
+ * POST /api/comm?m=&mute=&show=&voice=&talk= changes any of them and answers
+ * the same. With direct comms (see
  * direct.h), the answer has "direct": {"on", "keyed" (1 for a group with a
- * key, 0 for the open group), "group" (its name), "name" (this board's)},
+ * key, 0 for the open group), "group" (its name), "name" (this board's),
+ * "id" (the group's id, 8 hex digits)},
  * and POST takes direct=0 or 1, and key= (32 hex digits, or empty for the
  * open group) with group= and name=. */
 int remote_api(const char *method, const char *target, const char *body, size_t body_len, char *out, size_t cap);

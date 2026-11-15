@@ -943,48 +943,58 @@ typedef struct
     } u;
 } fx_state_t;
 
-static fx_state_t chain[MAX_STEPS];
-static int chain_count;
-static int chain_preset = -1;       // the preset the chain was built for, or -1 for none
-static volatile int wanted_preset;  // set by the UI loop
-
-static void free_chain(void)
+// Two chains: one for the speaker (and the voice lab), and one for the comm
+// channel, which can have an effect of its own. While they're the same, only
+// the speaker's runs.
+typedef struct
 {
-    for (int i = 0; i < chain_count; i++)
+    fx_state_t steps[MAX_STEPS];
+    int count;
+    int preset;                     // the preset it was built for, or -1 for none
+} chain_t;
+
+static chain_t speaker_chain = { .preset = -1 };
+static chain_t comm_chain = { .preset = -1 };
+static volatile int wanted_preset;          // set by the UI loop
+static volatile int wanted_comm_preset = -1;    // -1 for the speaker's
+
+static void free_chain(chain_t *c)
+{
+    for (int i = 0; i < c->count; i++)
     {
-        switch (chain[i].type)
+        switch (c->steps[i].type)
         {
             case FX_PITCH:
-                free(chain[i].u.pitch);
+                free(c->steps[i].u.pitch);
                 break;
             case FX_VOICES:
-                free(chain[i].u.voices);
+                free(c->steps[i].u.voices);
                 break;
             case FX_SHIFT:
-                free(chain[i].u.shift);
+                free(c->steps[i].u.shift);
                 break;
             case FX_CHORUS:
-                free(chain[i].u.chorus);
+                free(c->steps[i].u.chorus);
                 break;
             case FX_TUNE:
             case FX_VOCODER:
-                free(chain[i].u.resynth);
+                free(c->steps[i].u.resynth);
                 break;
             default:
                 break;
         }
     }
-    chain_count = 0;
+    c->count = 0;
 }
 
-static void build_chain(int index)
+static void build_chain(chain_t *c, int index)
 {
-    free_chain();
+    free_chain(c);
     const fx_preset_t *preset = &presets[index];
     for (int i = 0; i < preset->count; i++)
     {
         const fx_step_t *step = &preset->steps[i];
-        fx_state_t *s = &chain[chain_count];
+        fx_state_t *s = &c->steps[c->count];
         memset(s, 0, sizeof(*s));
         s->type = step->type;
         switch (step->type)
@@ -1064,16 +1074,16 @@ static void build_chain(int index)
                 resynth_init(s->u.resynth, step->type == FX_TUNE, step->p[0], step->p[1], step->p[2] != 0);
                 break;
         }
-        chain_count++;
+        c->count++;
     }
-    chain_preset = index;
+    c->preset = index;
 }
 
-static void run_chain(float *x, int n)
+static void run_chain(chain_t *c, float *x, int n)
 {
-    for (int i = 0; i < chain_count; i++)
+    for (int i = 0; i < c->count; i++)
     {
-        fx_state_t *s = &chain[i];
+        fx_state_t *s = &c->steps[i];
         switch (s->type)
         {
             case FX_GAIN:
@@ -1205,6 +1215,15 @@ static void make_decimator(void)
 static voice_fx_listener_t listener_cb;
 static void *listener_user_data;
 
+static void to_pcm(const float *x, int16_t *out, int n)
+{
+    for (int i = 0; i < n; i++)
+    {
+        float v = fmaxf(-1.0f, fminf(1.0f, x[i]));
+        out[i] = (int16_t)(v * 32767.0f);
+    }
+}
+
 static void mic_cb(const int16_t *samples, size_t count, void *user_data)
 {
     // Only run while something's listening: the speaker, the voice lab or a
@@ -1212,17 +1231,35 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     // comes out.
     if (!speaker_on && !voice_lab_running() && __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE) == NULL)
     {
-        if (chain_preset >= 0)
+        if (speaker_chain.preset >= 0)
         {
-            free_chain();
-            chain_preset = -1;
+            free_chain(&speaker_chain);
+            speaker_chain.preset = -1;
+        }
+        if (comm_chain.preset >= 0)
+        {
+            free_chain(&comm_chain);
+            comm_chain.preset = -1;
         }
         return;
     }
     int preset = wanted_preset;
-    if (preset != chain_preset)
+    if (preset != speaker_chain.preset)
     {
-        build_chain(preset);
+        build_chain(&speaker_chain, preset);
+    }
+    // The comm channel's own effect, if it has one and something's listening
+    int comm_preset = wanted_comm_preset;
+    bool own_comm = comm_preset >= 0 && comm_preset != preset &&
+                    __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE) != NULL;
+    if (own_comm && comm_preset != comm_chain.preset)
+    {
+        build_chain(&comm_chain, comm_preset);
+    }
+    else if (!own_comm && comm_chain.preset >= 0)
+    {
+        free_chain(&comm_chain);
+        comm_chain.preset = -1;
     }
     if (count > MAX_IN_BLOCK || count % 2 != 0)
     {
@@ -1255,23 +1292,28 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     // Keep the last few samples for the next block's filter.
     memmove(h, h + count, (DECIMATE_TAPS - 1) * sizeof(float));
 
-    run_chain(x, n);
-
+    // The comm channel's effect first, on its own copy of the voice
     int16_t out[MAX_BLOCK];
-    for (int i = 0; i < n; i++)
+    int16_t comm_out[MAX_BLOCK];
+    if (own_comm)
     {
-        float v = fmaxf(-1.0f, fminf(1.0f, x[i]));
-        out[i] = (int16_t)(v * 32767.0f);
+        float y[MAX_BLOCK];
+        memcpy(y, x, (size_t)n * sizeof(float));
+        run_chain(&comm_chain, y, n);
+        to_pcm(y, comm_out, n);
     }
+    run_chain(&speaker_chain, x, n);
+    to_pcm(x, out, n);
+
     voice_lab_send(VOICE_LAB_KIND_EFFECT, FS, out, n);
     voice_fx_listener_t cb = __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE);
     if (cb != NULL)
     {
-        cb(out, n, listener_user_data);
+        cb(own_comm ? comm_out : out, n, listener_user_data);
     }
     if (speaker_on)
     {
-        speaker_push(x, n, chain_preset >= 0 ? presets[chain_preset].speaker_db : 0);
+        speaker_push(x, n, speaker_chain.preset >= 0 ? presets[speaker_chain.preset].speaker_db : 0);
     }
 
 #if VOICE_FX_DEBUG
@@ -1280,7 +1322,8 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     processed += n;
     if (++blocks == DEBUG_BLOCKS)
     {
-        printf("voice fx: %s takes %.1f%% of a core\n", presets[preset].name,
+        printf("voice fx: %s%s%s takes %.1f%% of a core\n", presets[preset].name, own_comm ? " + comm " : "",
+               own_comm ? presets[comm_preset].name : "",
                100.0 * busy / CLOCKS_PER_SEC / ((float)processed / FS));
         processed = 0;
         busy = 0;
@@ -1326,6 +1369,11 @@ const char *voice_fx_preset_name(size_t index)
 void voice_fx_set_preset(size_t index)
 {
     wanted_preset = (index < PRESET_COUNT) ? (int)index : 0;
+}
+
+void voice_fx_set_comm_preset(int index)
+{
+    wanted_comm_preset = (index >= 0 && (size_t)index < PRESET_COUNT) ? index : -1;
 }
 
 void voice_fx_set_speaker(bool on)

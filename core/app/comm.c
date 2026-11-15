@@ -74,6 +74,7 @@
 #define MSG_AVATAR          0x06    // both ways: a piece of it, and the ack
 #define MSG_DIRECT_SOUND    0x07    // to the phone: what's heard over direct comms
 #define MSG_DIRECT_PEER     0x08    // to the phone: a board that's about
+#define MSG_DIRECT_GROUP    0x09    // to the phone: a group heard about
 #define DIRECT_PEERS_EVERY_MS 2000
 #define AVATAR_FIRST        0x01
 #define AVATAR_LAST         0x02
@@ -146,10 +147,13 @@ static char server_channel[COMM_NAME_MAX];
 static int phone_hearing_count;
 static char phone_hearing[COMM_HEARING_MAX][COMM_NAME_MAX];
 static uint8_t phone_hearing_avatar[COMM_HEARING_MAX];
+static uint8_t phone_hearing_transport[COMM_HEARING_MAX];
 static int hearing_count;
 static char hearing[COMM_HEARING_MAX][COMM_NAME_MAX];
 static uint8_t hearing_avatar[COMM_HEARING_MAX];
+static uint8_t hearing_transport[COMM_HEARING_MAX];
 static bool audio_on;               // the voice is listened to, and the talk button used
+static volatile comm_transport_t tx_transport;  // where the transmission going out goes
 static uint32_t direct_peers_ms;
 
 static void direct_voice(uint32_t sender, uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len, void *arg);
@@ -281,6 +285,28 @@ static void send_status(void)
     send_retrying(msg, sizeof(msg));
 }
 
+/* Where talking goes now: the one chosen, unless nobody's on it to hear and
+ * someone's on the other. From any task: what it reads is set whole. */
+static comm_transport_t choose_transport(void)
+{
+    comm_transport_t pref = settings_get()->comm_talk_on < COMM_TALK_COUNT ?
+                            (comm_transport_t)settings_get()->comm_talk_on : COMM_TALK_SERVER;
+    // The server, through the phone; an app that doesn't say, as if it's there
+    bool server_up = running && rcat_hal_ble_peer_connected() &&
+                     (server_state == COMM_SERVER_CONNECTED || server_state == COMM_SERVER_UNKNOWN);
+    bool server_heard = server_up && (server_state == COMM_SERVER_UNKNOWN || server_others > 0);
+    bool direct_up = direct_running();
+    direct_peer_t peers[DIRECT_PEERS_MAX];
+    bool direct_heard = direct_up && direct_peers(peers, DIRECT_PEERS_MAX) > 0;
+    if (pref == COMM_TALK_SERVER)
+    {
+        return server_up && (server_heard || !direct_heard) ? COMM_TALK_SERVER :
+               direct_up                                    ? COMM_TALK_DIRECT : COMM_TALK_SERVER;
+    }
+    return direct_up && (direct_heard || !server_heard) ? COMM_TALK_DIRECT :
+           server_up                                    ? COMM_TALK_SERVER : COMM_TALK_DIRECT;
+}
+
 static bool talking(void)
 {
     return screen_talk || phone_talk || talk_button_held() || (mode == COMM_VOICE && voice_heard);
@@ -349,6 +375,7 @@ static void encoder_task(void *arg)
                 pre = w;
             }
             read = w - pre;
+            tx_transport = choose_transport();  // one way, for the whole transmission
             sending = true;
             releasing = false;
             first = true;
@@ -404,11 +431,11 @@ static void encoder_task(void *arg)
             packet[3] = first ? FLAG_FIRST : 0;
             seq++;
             first = false;
-            if (direct)
+            if (direct && tx_transport == COMM_TALK_DIRECT)
             {
                 direct_send_voice((uint16_t)(seq - 1), packet[3], packet + HEADER_BYTES, (size_t)n);
             }
-            if (phone && !send_retrying(packet, HEADER_BYTES + n))
+            if (phone && tx_transport == COMM_TALK_SERVER && !send_retrying(packet, HEADER_BYTES + n))
             {
 #if COMM_DEBUG
                 debug_dropped++;
@@ -426,11 +453,11 @@ static void encoder_task(void *arg)
             packet[2] = seq >> 8;
             packet[3] = FLAG_LAST | (first ? FLAG_FIRST : 0);
             seq++;
-            if (direct)
+            if (direct && tx_transport == COMM_TALK_DIRECT)
             {
                 direct_send_voice((uint16_t)(seq - 1), packet[3], NULL, 0);
             }
-            if (phone)
+            if (phone && tx_transport == COMM_TALK_SERVER)
             {
                 send_retrying(packet, HEADER_BYTES);
             }
@@ -516,6 +543,7 @@ void comm_init(void)
     {
         return;     // nothing to send
     }
+    voice_fx_set_comm_preset(comm_voice_effect());
     request = malloc(REQUEST_MAX + 1 + ANSWER_MAX);     // big enough to go in PSRAM
     answer = request != NULL ? request + REQUEST_MAX + 1 : NULL;
     ring = calloc(RING, sizeof(ring[0]));
@@ -594,6 +622,46 @@ void comm_set_talk(bool talk)
     screen_talk = talk;
 }
 
+void comm_set_talk_on(comm_transport_t transport)
+{
+    if (transport < COMM_TALK_COUNT)
+    {
+        settings_set_comm_talk_on((uint8_t)transport);
+    }
+}
+
+comm_transport_t comm_talk_on(void)
+{
+    uint8_t t = settings_get()->comm_talk_on;
+    return t < COMM_TALK_COUNT ? (comm_transport_t)t : COMM_TALK_SERVER;
+}
+
+comm_transport_t comm_talk_now(void)
+{
+    return sending ? tx_transport : choose_transport();
+}
+
+bool comm_talk_switched(void)
+{
+    return comm_talk_now() != comm_talk_on();
+}
+
+void comm_set_voice_effect(int preset)
+{
+    if (preset >= (int)voice_fx_preset_count())
+    {
+        preset = -1;
+    }
+    voice_fx_set_comm_preset(preset);
+    settings_set_comm_voice_effect(preset);
+}
+
+int comm_voice_effect(void)
+{
+    int v = settings_get()->comm_voice_effect;
+    return v > 0 && v <= (int)voice_fx_preset_count() ? v - 1 : -1;
+}
+
 bool comm_phone_connected(void)
 {
     return running && rcat_hal_ble_peer_connected();
@@ -657,6 +725,11 @@ const char *comm_hearing_name(int index)
 int comm_hearing_avatar(int index)
 {
     return index >= 0 && index < hearing_count ? hearing_avatar[index] : COMM_AVATAR_NONE;
+}
+
+int comm_hearing_transport(int index)
+{
+    return index >= 0 && index < hearing_count ? hearing_transport[index] : COMM_TALK_SERVER;
 }
 
 void comm_set_avatar_size(int px)
@@ -893,9 +966,10 @@ static void receive_hearing(const uint8_t *msg, size_t len)
 {
     phone_hearing_count = 0;
     size_t at = 1;
-    while (at + 1 < len && phone_hearing_count < COMM_HEARING_MAX)
+    while (at + 2 < len && phone_hearing_count < COMM_HEARING_MAX)
     {
         uint8_t slot = msg[at++];
+        uint8_t transport = msg[at++];
         size_t end = at;
         while (end < len && msg[end] != '\n')
         {
@@ -904,6 +978,7 @@ static void receive_hearing(const uint8_t *msg, size_t len)
         if (end > at)
         {
             phone_hearing_avatar[phone_hearing_count] = slot;
+            phone_hearing_transport[phone_hearing_count] = transport < COMM_TALK_COUNT ? transport : COMM_TALK_SERVER;
             copy_name(phone_hearing[phone_hearing_count++], msg + at, end - at);
         }
         at = end + 1;
@@ -1006,6 +1081,7 @@ static void merge_hearing(void)
     for (int i = 0; i < phone_hearing_count; i++)
     {
         memcpy(hearing[hearing_count], phone_hearing[i], COMM_NAME_MAX);
+        hearing_transport[hearing_count] = phone_hearing_transport[i];
         hearing_avatar[hearing_count++] = phone_hearing_avatar[i];
     }
     if (!direct_running())
@@ -1024,6 +1100,7 @@ static void merge_hearing(void)
         if (peers[i].talking && !named)
         {
             copy_name(hearing[hearing_count], (const uint8_t *)peers[i].name, strlen(peers[i].name));
+            hearing_transport[hearing_count] = COMM_TALK_DIRECT;
             hearing_avatar[hearing_count++] = COMM_AVATAR_NONE;
         }
     }
@@ -1048,6 +1125,19 @@ static void send_direct_peers(uint32_t now_ms)
         msg[5] = (uint8_t)peers[i].rssi;
         msg[6] = peers[i].talking ? 1 : 0;
         memcpy(msg + 7, peers[i].name, len);
+        rcat_hal_ble_peer_send(msg, 7 + len);
+    }
+    direct_group_t groups[DIRECT_GROUPS_MAX];
+    n = direct_groups(groups, DIRECT_GROUPS_MAX);
+    for (int i = 0; i < n; i++)
+    {
+        uint8_t msg[7 + DIRECT_NAME_MAX];
+        size_t len = strlen(groups[i].name);
+        msg[0] = MSG_DIRECT_GROUP;
+        memcpy(msg + 1, groups[i].id, 4);
+        msg[5] = (uint8_t)groups[i].rssi;
+        msg[6] = (uint8_t)groups[i].boards;
+        memcpy(msg + 7, groups[i].name, len);
         rcat_hal_ble_peer_send(msg, 7 + len);
     }
 }
@@ -1189,6 +1279,34 @@ void comm_set_talk(bool talk)
 {
 }
 
+void comm_set_voice_effect(int preset)
+{
+}
+
+void comm_set_talk_on(comm_transport_t transport)
+{
+}
+
+comm_transport_t comm_talk_on(void)
+{
+    return COMM_TALK_SERVER;
+}
+
+comm_transport_t comm_talk_now(void)
+{
+    return COMM_TALK_SERVER;
+}
+
+bool comm_talk_switched(void)
+{
+    return false;
+}
+
+int comm_voice_effect(void)
+{
+    return -1;
+}
+
 bool comm_phone_connected(void)
 {
     return false;
@@ -1261,6 +1379,11 @@ const char *comm_hearing_name(int index)
 int comm_hearing_avatar(int index)
 {
     return COMM_AVATAR_NONE;
+}
+
+int comm_hearing_transport(int index)
+{
+    return COMM_TALK_SERVER;
 }
 
 void comm_set_avatar_size(int px)

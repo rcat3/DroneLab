@@ -30,6 +30,7 @@
 #include "app/direct.h"
 #include "app/settings.h"
 #include "app/talk_button.h"
+#include "audio/voice_fx.h"
 #include "ui/ui.h"
 #include "ui/ui_internal.h"
 
@@ -135,6 +136,53 @@ typedef enum
 } antenna_t;
 
 static lv_image_dsc_t antenna_icons[ANTENNA_COUNT];
+
+// Where talking goes, by the name while it's sent: the server (a cloud), or
+// direct comms (a handheld radio)
+static const char *const cloud_art[] = {
+    ".....###.....",
+    "....#####....",
+    "..#########..",
+    ".###########.",
+    "#############",
+    "#############",
+    ".###########.",
+};
+static const char *const radio_art[] = {
+    "#........",
+    "#........",
+    "#........",
+    "#########",
+    "#.......#",
+    "#.#####.#",
+    "#.#####.#",
+    "#.......#",
+    "#.#.#.#.#",
+    "#.......#",
+    "#.#.#.#.#",
+    "#.......#",
+    "#########",
+};
+static lv_image_dsc_t transport_icons[COMM_TALK_COUNT];
+
+/* An A8 picture of '#'s in art, scale screen pixels to each of its own. */
+static void make_icon(lv_image_dsc_t *dsc, const char *const *art, int w, int h, int scale)
+{
+    int pw = w * scale, ph = h * scale;
+    uint8_t *px = lv_malloc_zeroed((size_t)pw * ph);
+    for (int y = 0; y < ph; y++)
+    {
+        for (int x = 0; x < pw; x++)
+        {
+            px[y * pw + x] = art[y / scale][x / scale] == '#' ? 0xFF : 0;
+        }
+    }
+    *dsc = (lv_image_dsc_t){
+        .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_A8, .w = pw, .h = ph, .stride = pw },
+        .data_size = (uint32_t)(pw * ph),
+        .data = px,
+    };
+}
 
 /* An A8 picture of the antenna, scale screen pixels to each of its own,
  * drawn in whatever color its image is given. */
@@ -264,6 +312,7 @@ static lv_obj_t *frame;             // round the avatar; holding it talks
 static lv_obj_t *brackets[4];
 static lv_obj_t *tag;               // TX, RX, or the mode
 static lv_obj_t *name_label;
+static lv_obj_t *transport_icon;    // by the name, while it sends
 static lv_font_t name_font;         // the pixel font, with the theme's for what it hasn't got
 static look_t look = (look_t)-1;
 static antenna_t antenna_state = ANTENNA_COUNT;
@@ -322,9 +371,23 @@ static void show_status(void)
     set_label(tag, l == LOOK_TX ? "TX" : l == LOOK_RX ? "RX" : l == LOOK_OFF ? "OFF" :
                    comm_mode() == COMM_VOICE ? "VOX" : "PTT");
 
-    // Under it: who's talking, or how things are
+    // Under it: where it's sending, who's talking, or how things are
     char text[64];
-    if (hearing > 0)
+    // The icon: where it's sending, or how the one talking is heard
+    bool show_icon = tx || hearing > 0;
+    int transport = tx ? (int)comm_talk_now() : comm_hearing_transport(0);
+    if (show_icon && lv_image_get_src(transport_icon) != &transport_icons[transport])
+    {
+        lv_image_set_src(transport_icon, &transport_icons[transport]);
+    }
+    if (tx)
+    {
+        // Where it's going: the server's channel, or the direct group
+        const char *channel = comm_server_channel();
+        snprintf(text, sizeof(text), "%s",
+                 transport == COMM_TALK_DIRECT ? direct_group_name() : channel[0] ? channel : "SERVER");
+    }
+    else if (hearing > 0)
     {
         // The first, and how many more: the last may be "+2" for more still
         int more = hearing - 1;
@@ -334,10 +397,6 @@ static void show_status(void)
             more += atoi(last + 1) - 1;
         }
         snprintf(text, sizeof(text), more > 0 ? "%s +%d" : "%s", comm_hearing_name(0), more);
-    }
-    else if (tx)
-    {
-        snprintf(text, sizeof(text), "ON AIR");
     }
     else if (!on)
     {
@@ -366,6 +425,19 @@ static void show_status(void)
     {
         int others = comm_server_others();
         snprintf(text, sizeof(text), others == 0 ? "ALONE" : "%d ONLINE", others);
+    }
+    if (lv_obj_is_hidden(transport_icon) == show_icon)
+    {
+        lv_obj_set_hidden(transport_icon, !show_icon);
+        // Narrower with the icon, to keep inside the round screen
+        lv_obj_set_style_max_width(name_label, show_icon ? ui_px(112) : ui_px(140), 0);
+    }
+    // The icon's color, as the line's: white-hot for TX, phosphor for RX
+    static int icon_tx = -1;
+    if (icon_tx != (int)tx)
+    {
+        icon_tx = tx;
+        lv_obj_set_style_image_recolor(transport_icon, tx ? COLOR_HOT : COLOR_PHOSPHOR, 0);
     }
     set_label(name_label, text);
 }
@@ -491,13 +563,31 @@ static void add_status_page(ui_feature_t *feature)
 
     name_font = terminal_font_3;
     name_font.fallback = LV_FONT_DEFAULT;
-    name_label = lv_label_create(status_page);
+    // The name line: an icon for where it's sending, then the text
+    lv_obj_t *row = lv_obj_create(status_page);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, ui_px(6), 0);
+    lv_obj_set_clickable(row, false);
+    lv_obj_align(row, LV_ALIGN_CENTER, 0, ui_px(80));
+    int icon_scale = LV_MAX(1, ui_px(3) / 2);
+    make_icon(&transport_icons[COMM_TALK_SERVER], cloud_art, 13, 7, icon_scale);
+    make_icon(&transport_icons[COMM_TALK_DIRECT], radio_art, 9, 13, icon_scale);
+    transport_icon = lv_image_create(row);
+    lv_image_set_src(transport_icon, &transport_icons[COMM_TALK_SERVER]);
+    lv_obj_set_style_image_recolor(transport_icon, COLOR_HOT, 0);
+    lv_obj_set_style_image_recolor_opa(transport_icon, LV_OPA_COVER, 0);
+    lv_obj_set_hidden(transport_icon, true);
+
+    name_label = lv_label_create(row);
     lv_obj_set_style_text_font(name_label, &name_font, 0);
+    // As wide as its text, up to what fits, and cut short with dots beyond
     lv_label_set_long_mode(name_label, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_set_width(name_label, ui_px(150));
-    lv_obj_set_style_text_align(name_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(name_label, LV_SIZE_CONTENT);
+    lv_obj_set_style_max_width(name_label, ui_px(140), 0);
     lv_label_set_text(name_label, "");
-    lv_obj_align(name_label, LV_ALIGN_CENTER, 0, ui_px(84));
 
     show_status();
     ui_add_startup_choice(feature, status_page, "Comm", "comm");
@@ -637,17 +727,77 @@ static void add_setup_page(ui_feature_t *feature)
     show_setup();
 }
 
+/* ----- The comm channel's own voice effect ----- */
+
+static lv_obj_t *voice_page;
+static lv_obj_t *voice_roller;
+
+static void show_voice(void)
+{
+    // The first is the speaker's own; the rest are the presets
+    uint32_t want = (uint32_t)(comm_voice_effect() + 1);
+    if (!lv_obj_has_state(voice_roller, LV_STATE_PRESSED) && lv_roller_get_selected(voice_roller) != want)
+    {
+        lv_roller_set_selected(voice_roller, want, LV_ANIM_OFF);
+    }
+}
+
+static void voice_roller_cb(lv_event_t *e)
+{
+    comm_set_voice_effect((int)lv_roller_get_selected(voice_roller) - 1);
+}
+
+static void add_voice_page(ui_feature_t *feature)
+{
+    voice_page = ui_feature_add_page(feature, "Comm Voice", false);
+    lv_obj_set_scrollable(voice_page, false);
+
+    lv_obj_t *t = lv_label_create(voice_page);
+    lv_label_set_text(t, "Comm Voice");
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, ui_px(28));
+
+    size_t len = 32;
+    for (size_t i = 0; i < voice_fx_preset_count(); i++)
+    {
+        len += strlen(voice_fx_preset_name(i)) + 1;
+    }
+    char *options = lv_malloc(len);
+    snprintf(options, len, "Same as speaker");
+    for (size_t i = 0; i < voice_fx_preset_count(); i++)
+    {
+        strcat(options, "\n");
+        strcat(options, voice_fx_preset_name(i));
+    }
+    voice_roller = lv_roller_create(voice_page);
+    lv_roller_set_options(voice_roller, options, LV_ROLLER_MODE_NORMAL);
+    lv_free(options);
+    lv_roller_set_visible_row_count(voice_roller, 3);
+    lv_obj_set_width(voice_roller, ui_px(160));
+    lv_obj_align(voice_roller, LV_ALIGN_CENTER, 0, ui_px(-4));
+    lv_obj_add_event_cb(voice_roller, voice_roller_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    lv_obj_t *hint = lv_label_create(voice_page);
+    lv_label_set_text(hint, "What the others hear,\nwhatever the speaker plays");
+    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(hint, COLOR_MUTED, 0);
+    lv_obj_align(hint, LV_ALIGN_CENTER, 0, ui_px(74));
+
+    show_voice();
+}
+
 /* ----- Direct comms ----- */
 
 static lv_obj_t *direct_page;
 static lv_obj_t *direct_switch;
 static lv_obj_t *direct_group_label;
 static lv_obj_t *direct_peers_label;
+static lv_obj_t *talk_on_buttons;
 
 static void show_direct(void)
 {
     bool on = direct_running();
     lv_obj_set_state(direct_switch, LV_STATE_CHECKED, on);
+    check_choice(talk_on_buttons, comm_talk_on());     // the app can change it too
     char text[160];
     snprintf(text, sizeof(text), "Group: %s\nAs: %s", direct_group_name(), direct_own_name());
     set_label(direct_group_label, text);
@@ -665,7 +815,7 @@ static void show_direct(void)
     }
     // The strongest few, with bars for how well they're heard
     size_t at = 0;
-    for (int i = 0; i < n && i < 3; i++)
+    for (int i = 0; i < n && i < 2; i++)
     {
         int r = peers[i].rssi;
         const char *bars = r > -60 ? "||||" : r > -70 ? "|||" : r > -80 ? "||" : "|";
@@ -676,9 +826,9 @@ static void show_direct(void)
             break;
         }
     }
-    if (n > 3 && at < sizeof(text))
+    if (n > 2 && at < sizeof(text))
     {
-        snprintf(text + at, sizeof(text) - at, "\n+%d more", n - 3);
+        snprintf(text + at, sizeof(text) - at, " +%d", n - 2);
     }
     set_label(direct_peers_label, text);
 }
@@ -699,6 +849,15 @@ static void direct_switch_cb(lv_event_t *e)
     show_direct();
 }
 
+static void talk_on_cb(lv_event_t *e)
+{
+    uint32_t selected = lv_buttonmatrix_get_selected_button(talk_on_buttons);
+    if (selected < COMM_TALK_COUNT)
+    {
+        comm_set_talk_on((comm_transport_t)selected);
+    }
+}
+
 static void add_direct_page(ui_feature_t *feature)
 {
     direct_page = ui_feature_add_page(feature, "Direct", false);
@@ -710,19 +869,29 @@ static void add_direct_page(ui_feature_t *feature)
 
     direct_switch = lv_switch_create(direct_page);
     lv_obj_set_size(direct_switch, ui_px(64), ui_px(32));
-    lv_obj_align(direct_switch, LV_ALIGN_CENTER, 0, ui_px(-58));
+    lv_obj_align(direct_switch, LV_ALIGN_CENTER, 0, ui_px(-60));
+
+    // Where talking goes; the other, if nobody's on this one and someone's
+    // on that
+    lv_obj_t *talk_label = lv_label_create(direct_page);
+    lv_label_set_text(talk_label, "Talk on");
+    lv_obj_set_style_text_color(talk_label, COLOR_MUTED, 0);
+    lv_obj_align(talk_label, LV_ALIGN_CENTER, 0, ui_px(-32));
+    static const char *const transports[] = { "Server", "Direct", "" };
+    talk_on_buttons = add_choices(direct_page, transports, ui_px(170), ui_px(30), ui_px(-9));
+    lv_obj_add_event_cb(talk_on_buttons, talk_on_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(direct_switch, direct_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     direct_group_label = lv_label_create(direct_page);
     lv_label_set_text(direct_group_label, "");
     lv_obj_set_style_text_align(direct_group_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(direct_group_label, LV_ALIGN_CENTER, 0, ui_px(-14));
+    lv_obj_align(direct_group_label, LV_ALIGN_CENTER, 0, ui_px(30));
 
     direct_peers_label = lv_label_create(direct_page);
     lv_label_set_text(direct_peers_label, "");
     lv_obj_set_style_text_align(direct_peers_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(direct_peers_label, COLOR_MUTED, 0);
-    lv_obj_align(direct_peers_label, LV_ALIGN_CENTER, 0, ui_px(46));
+    lv_obj_align(direct_peers_label, LV_ALIGN_CENTER, 0, ui_px(72));
 
     show_direct();
 }
@@ -874,6 +1043,10 @@ static void update_timer_cb(lv_timer_t *t)
     {
         show_direct();
     }
+    else if (page != NULL && page == voice_page)
+    {
+        show_voice();
+    }
 }
 
 static void on_navigate(void)
@@ -897,6 +1070,7 @@ static bool build(ui_feature_t *feature)
     }
     add_status_page(feature);
     add_setup_page(feature);
+    add_voice_page(feature);
     if (direct_available())
     {
         add_direct_page(feature);

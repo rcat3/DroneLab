@@ -10,7 +10,7 @@
 ///   server  [0x04][flags][others in the channel][own avatar slot][channel name]
 ///           flags: 1 connected, 2 connecting, 4 voice over UDP
 ///   hearing [0x05] then for each talking, in the order they started:
-///           [avatar slot][name]["\n"]
+///           [avatar slot][how they're heard: 0 the server, 1 direct][name]["\n"]
 ///   avatar  [0x06][slot][flags][piece of the picture, RGB565 LE]
 ///           flags: 1 the first piece, 2 the last, 4 asks for an ack
 /// and back from the board:
@@ -20,6 +20,8 @@
 ///           another board's voice, heard over direct comms (core/app/direct.h)
 ///   direct peer [0x08][id LE32][rssi][flags: 1 talking][name]
 ///           a board heard over direct comms, every couple of seconds
+///   direct group [0x09][group id, 4 bytes][rssi][boards][name]
+///           a group heard about over direct comms, from its beacons
 /// Both ways, the phone remote's requests and their answers, in pieces:
 ///   request [0x03][id][flags][piece of "METHOD /api/...\n" + body]
 ///   answer  [0x03][id][flags][piece of "200\n" + JSON, "304\n" or "404\n"]
@@ -31,6 +33,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:pointycastle/export.dart' show HMac, PBKDF2KeyDerivator, Pbkdf2Parameters, SHA256Digest;
 
 const serviceUuid = 'efe06e1b-a7ff-4823-bfbb-b3a82ea05849';
 const toPhoneUuid = 'efe06e1c-a7ff-4823-bfbb-b3a82ea05849';
@@ -58,6 +61,7 @@ const _msgHearing = 0x05;
 const _msgAvatar = 0x06;
 const _msgDirectSound = 0x07;
 const _msgDirectPeer = 0x08;
+const _msgDirectGroup = 0x09;
 
 /// No avatar, in a slot.
 const avatarNone = 0xFF;
@@ -111,6 +115,14 @@ class DirectPeer {
   DirectPeer(this.id, this.rssi, this.talking, this.name);
 }
 
+class DirectGroupHeard {
+  final String id;          // 8 hex digits
+  final int rssi;
+  final int boards;
+  final String name;
+  DirectGroupHeard(this.id, this.rssi, this.boards, this.name);
+}
+
 class AnswerPiece {
   final int id;
   final bool first;
@@ -139,6 +151,10 @@ Object? parseBoardMessage(Uint8List data) {
   if (data[0] == _msgDirectPeer && data.length >= 7) {
     return DirectPeer(le32(1), data[5].toSigned(8), data[6] & 1 != 0,
         utf8.decode(data.sublist(7), allowMalformed: true));
+  }
+  if (data[0] == _msgDirectGroup && data.length >= 7) {
+    final id = data.sublist(1, 5).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return DirectGroupHeard(id, data[5].toSigned(8), data[6], utf8.decode(data.sublist(7), allowMalformed: true));
   }
   if (data[0] == _msgAvatar && data.length >= 7) {
     final got = data[3] | (data[4] << 8) | (data[5] << 16) | (data[6] << 24);
@@ -195,7 +211,8 @@ Uint8List serverMessage(ServerLink link,
 class Talker {
   final String name;
   final int avatar;   // its slot, or [avatarNone]
-  const Talker(this.name, [this.avatar = avatarNone]);
+  final bool direct;  // heard over direct comms, not the server
+  const Talker(this.name, [this.avatar = avatarNone, this.direct = false]);
 }
 
 /// The longest name the board's sent (it keeps up to 23 bytes), and how
@@ -207,7 +224,7 @@ const hearingMaxNames = 4;
 /// as many as fit, then "+2" and the like for the rest.
 Uint8List hearingMessage(List<Talker> talkers) {
   final out = <int>[_msgHearing];
-  List<int> more(int n) => [avatarNone, ...utf8.encode('+$n\n')];
+  List<int> more(int n) => [avatarNone, 0, ...utf8.encode('+$n\n')];
   for (var i = 0; i < talkers.length; i++) {
     final name = _cut(utf8.encode(talkers[i].name.replaceAll('\n', ' ')), hearingNameMax);
     final rest = talkers.length - i - 1;
@@ -216,12 +233,13 @@ Uint8List hearingMessage(List<Talker> talkers) {
       break;
     }
     // Leave room for the "+n" of those after it
-    final need = 1 + name.length + 1 + (rest > 0 ? more(rest).length : 0);
+    final need = 2 + name.length + 1 + (rest > 0 ? more(rest).length : 0);
     if (out.length + need > boardMaxWrite) {
       out.addAll(more(talkers.length - i));
       break;
     }
     out.add(talkers[i].avatar & 0xFF);
+    out.add(talkers[i].direct ? 1 : 0);
     out.addAll(name);
     out.add(0x0A);
   }
@@ -244,11 +262,27 @@ List<Uint8List> avatarMessages(int slot, Uint8List rgb565, int maxWrite, {int wi
   return out;
 }
 
-/// A direct comms group's key, from its name and passphrase, as 32 hex digits
-/// for the board (POST /api/comm?key=). Everyone in the group types the same
-/// two, and gets the same key.
-String directKey(String group, String passphrase) =>
-    sha256.convert(utf8.encode('dronelab-direct\n$group\n$passphrase')).toString().substring(0, 32);
+/// A direct comms group's key, from its name and passphrase, as 32 hex
+/// digits for the board (POST /api/comm?key=): PBKDF2-HMAC-SHA256, the salt
+/// "dronelab-direct\n" and the name, [directKeyRounds] rounds, 16 bytes, as
+/// direct_key() on the board. Slow on purpose: run it off the UI's isolate.
+const directKeyRounds = 20000;
+
+String directKey((String, String) groupAndPassphrase) {
+  final (group, passphrase) = groupAndPassphrase;
+  final kdf = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64))
+    ..init(Pbkdf2Parameters(Uint8List.fromList(utf8.encode('dronelab-direct\n$group')), directKeyRounds, 16));
+  return _hex(kdf.process(Uint8List.fromList(utf8.encode(passphrase))));
+}
+
+/// A group's id, from its key: the first 4 bytes of the key's SHA-256, as
+/// the board works it out and says in its beacons.
+String directGroupId(String keyHex) {
+  final key = [for (var i = 0; i < keyHex.length; i += 2) int.parse(keyHex.substring(i, i + 2), radix: 16)];
+  return sha256.convert(key).toString().substring(0, 8);
+}
+
+String _hex(List<int> bytes) => bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
 /// FNV-1a, 32 bits: how the board tells whether the app's copy of the
 /// remote's page is the same as its own.
