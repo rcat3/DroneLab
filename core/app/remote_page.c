@@ -278,7 +278,7 @@ const char remote_page[] =
     "<div class=\"muted\" style=\"font-size:13px;margin:14px 0 6px\">At startup, show</div>\n"
     "<div class=\"chips\" id=\"startups\"></div>\n"
     "</div>\n"
-    "<h2>Phone remote</h2>\n"
+    "<h2>WiFi hotspot remote</h2>\n"
     "<div class=\"card\">\n"
     "<button class=\"wide\" id=\"remote-auto\">Start at power-up</button>\n"
     "<div class=\"muted\" style=\"font-size:13px;margin-top:8px\">Switches the remote on as the display starts, so phones that have joined before join again by themselves.</div>\n"

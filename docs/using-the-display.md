@@ -13,7 +13,7 @@ Every page has a dark theme, with pink controls.
 
 Settings are saved about two seconds after you change them, and are restored when the display is turned back on.  They also survive flashing new firmware.  What's shown when the display turns on is picked in [Settings](features/settings.md#startup).
 
-On boards with WiFi, the whole display can also be run from a phone, with the [Phone Remote](features/phone-remote.md).
+On boards with WiFi, the whole display can also be run from a phone, with the [WiFi Hotspot Remote](features/phone-remote.md).
 
 ## Turning it on and off
 

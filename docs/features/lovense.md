@@ -2,7 +2,7 @@
 
 *Boards with Bluetooth: the ESP32-S3 boards*
 
-The Lovense feature controls up to three Lovense devices at once, over Bluetooth.  The connections stay up while you look at other features, so the levels stay as they were set.  Everything here can also be done from a phone, with the [Phone Remote](phone-remote.md).
+The Lovense feature controls up to three Lovense devices at once, over Bluetooth.  The connections stay up while you look at other features, so the levels stay as they were set.  Everything here can also be done from a phone, with the [WiFi Hotspot Remote](phone-remote.md).
 
 Its pages, left to right:
 

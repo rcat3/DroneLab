@@ -425,6 +425,15 @@ int32_t rcat_hal_ble_peer_passkey(void)
     return -1;
 }
 
+int rcat_hal_ble_peer_paired(const rcat_hal_ble_device_t *keep)
+{
+    return -1;
+}
+
+void rcat_hal_ble_peer_forget_all(const rcat_hal_ble_device_t *keep)
+{
+}
+
 bool rcat_hal_ble_button_find(void)
 {
     return false;

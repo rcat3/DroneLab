@@ -2,11 +2,12 @@
  * Settings feature: settings that apply to the whole display, one per page.
  * Settings that belong to a single feature live with that feature instead.
  *
- * On boards with WiFi, the page after Brightness is the phone remote (see
- * app/remote.h): a switch for its hotspot, the QR code that joins it, a new
- * password, and whether it switches itself on at power-up.  After it comes
- * the comm channel (see app/comm.h), on boards that have it.  The last page
- * is firmware updates.
+ * On boards that have the comm channel, the pages after Brightness are the
+ * Phone App (the app's Bluetooth link, see app/comm.h), the phones paired
+ * with it, and the talk button. Then, on boards with WiFi, the WiFi hotspot
+ * remote (see app/remote.h): a switch for its hotspot, the QR code that
+ * joins it, a new password, and whether it switches itself on at power-up.
+ * The last page is firmware updates.
  */
 #include <stdio.h>
 #include <string.h>
@@ -414,7 +415,7 @@ static void show_remote(void)
         shown_phones = phones;
         if (!on)
         {
-            lv_label_set_text(remote_title, "Phone Remote");
+            lv_label_set_text(remote_title, "WiFi Hotspot Remote");
         }
         else if (phones == 0)
         {
@@ -466,11 +467,11 @@ static void remote_timer_cb(lv_timer_t *t)
 
 static void add_remote_page(ui_feature_t *feature)
 {
-    remote_page = ui_feature_add_page(feature, "Phone Remote", false);
+    remote_page = ui_feature_add_page(feature, "WiFi Hotspot Remote", false);
     lv_obj_set_scrollable(remote_page, false);
 
     remote_title = lv_label_create(remote_page);
-    lv_label_set_text(remote_title, "Phone Remote");
+    lv_label_set_text(remote_title, "WiFi Hotspot Remote");
     lv_obj_align(remote_title, LV_ALIGN_TOP_MID, 0, ui_px(28));
 
     remote_switch = lv_switch_create(remote_page);
@@ -579,7 +580,7 @@ static void show_comm(void)
 
     if (!on)
     {
-        set_label(comm_title, "Comm");
+        set_label(comm_title, "Phone App");
     }
     else if (comm_sending())
     {
@@ -606,7 +607,7 @@ static void comm_switch_event_cb(lv_event_t *e)
     else if (!on)
     {
         comm_stop();
-        lv_label_set_text(comm_hint, "Talk to the group\nthrough a phone");
+        lv_label_set_text(comm_hint, "The DroneLab app, over\nBluetooth: the comm channel\nand the remote");
     }
     show_comm();
 }
@@ -635,6 +636,8 @@ static void comm_talk_event_cb(lv_event_t *e)
 
 static lv_obj_t *button_page;
 static void show_button(void);
+static lv_obj_t *paired_page;
+static void show_paired(void);
 
 /* While a phone pairs, its code, over whatever's on screen. */
 static lv_obj_t *pair_panel;
@@ -690,6 +693,10 @@ static void comm_timer_cb(lv_timer_t *t)
     {
         show_button();
     }
+    if (paired_page != NULL && ui_current_page() == paired_page)
+    {
+        show_paired();
+    }
     if (ui_current_page() == comm_page)
     {
         show_comm();
@@ -698,11 +705,11 @@ static void comm_timer_cb(lv_timer_t *t)
 
 static void add_comm_page(ui_feature_t *feature)
 {
-    comm_page = ui_feature_add_page(feature, "Comm", false);
+    comm_page = ui_feature_add_page(feature, "Phone App (Bluetooth)", false);
     lv_obj_set_scrollable(comm_page, false);
 
     comm_title = lv_label_create(comm_page);
-    lv_label_set_text(comm_title, "Comm");
+    lv_label_set_text(comm_title, "Phone App");
     lv_obj_align(comm_title, LV_ALIGN_TOP_MID, 0, ui_px(28));
 
     comm_switch = lv_switch_create(comm_page);
@@ -711,7 +718,7 @@ static void add_comm_page(ui_feature_t *feature)
     lv_obj_add_event_cb(comm_switch, comm_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     comm_hint = lv_label_create(comm_page);
-    lv_label_set_text(comm_hint, "Talk to the group\nthrough a phone");
+    lv_label_set_text(comm_hint, "The DroneLab app, over\nBluetooth: the comm channel\nand the remote");
     lv_obj_set_style_text_align(comm_hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(comm_hint, COLOR_MUTED, 0);
     lv_obj_align(comm_hint, LV_ALIGN_CENTER, 0, ui_px(0));
@@ -884,6 +891,82 @@ static void add_button_page(ui_feature_t *feature)
     show_button();
 }
 
+/* ----- The phones paired with the app's Bluetooth link ----- */
+
+#define FORGET_CONFIRM_MS   4000    // a second tap within this long forgets them
+
+static lv_obj_t *paired_count;
+static lv_obj_t *paired_button_label;
+static uint32_t forget_armed_at;    // when the first tap came, 0 if it hasn't
+
+static void show_paired(void)
+{
+    rcat_hal_ble_device_t button;
+    int n = rcat_hal_ble_peer_paired(talk_button_paired(&button) ? &button : NULL);
+    char text[40];
+    if (n < 0)
+    {
+        snprintf(text, sizeof(text), "Switch the Phone App on\nto see them");
+    }
+    else
+    {
+        snprintf(text, sizeof(text), n == 0 ? "None" : n == 1 ? "1 phone" : "%d phones", n);
+    }
+    set_label(paired_count, text);
+    if (forget_armed_at != 0 && lv_tick_get() - forget_armed_at > FORGET_CONFIRM_MS)
+    {
+        forget_armed_at = 0;
+    }
+    set_label(paired_button_label, forget_armed_at != 0 ? "Tap to confirm" : "Forget them");
+}
+
+static void forget_phones_cb(lv_event_t *e)
+{
+    if (forget_armed_at == 0)
+    {
+        forget_armed_at = lv_tick_get() | 1;    // a second tap forgets them
+    }
+    else
+    {
+        forget_armed_at = 0;
+        rcat_hal_ble_device_t button;
+        rcat_hal_ble_peer_forget_all(talk_button_paired(&button) ? &button : NULL);
+    }
+    show_paired();
+}
+
+static void add_paired_page(ui_feature_t *feature)
+{
+    paired_page = ui_feature_add_page(feature, "Paired Phones", false);
+    lv_obj_set_scrollable(paired_page, false);
+
+    lv_obj_t *title = lv_label_create(paired_page);
+    lv_label_set_text(title, "Paired Phones");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(28));
+
+    paired_count = lv_label_create(paired_page);
+    lv_label_set_text(paired_count, "");
+    lv_obj_set_style_text_align(paired_count, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(paired_count, LV_ALIGN_CENTER, 0, ui_px(-44));
+
+    lv_obj_t *forget = lv_button_create(paired_page);
+    lv_obj_set_size(forget, ui_px(150), ui_px(40));
+    lv_obj_set_style_radius(forget, LV_RADIUS_CIRCLE, 0);
+    lv_obj_align(forget, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_event_cb(forget, forget_phones_cb, LV_EVENT_CLICKED, NULL);
+    paired_button_label = lv_label_create(forget);
+    lv_label_set_text(paired_button_label, "");
+    lv_obj_center(paired_button_label);
+
+    lv_obj_t *hint = lv_label_create(paired_page);
+    lv_label_set_text(hint, "If a phone's lost: they'll\nhave to pair again, with\na code. Keeps the talk button");
+    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(hint, COLOR_MUTED, 0);
+    lv_obj_align(hint, LV_ALIGN_CENTER, 0, ui_px(62));
+
+    show_paired();
+}
+
 /* ----- Firmware update ----- */
 
 static lv_obj_t *update_page;
@@ -989,14 +1072,17 @@ static bool build(ui_feature_t *feature)
 {
     add_brightness_page(feature);
 #if RCAT_HAVE_NETWORK
-    if (remote_available())
-    {
-        add_remote_page(feature);
-    }
+    // The app over Bluetooth first: it leaves the phone on the internet,
+    // which the WiFi hotspot's remote can't
     if (comm_available())
     {
         add_comm_page(feature);
+        add_paired_page(feature);
         add_button_page(feature);
+    }
+    if (remote_available())
+    {
+        add_remote_page(feature);
     }
 #endif
     add_rotation_page(feature);

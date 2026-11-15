@@ -4,7 +4,7 @@
 
 Settings that apply to the whole display, one per page.  Settings that belong to a single feature, like the [Voice Ring](voice-ring.md)'s color or the [Sound](sound.md) volume, are on that feature's own pages.
 
-The [Phone Remote](phone-remote.md)'s Setup tab can set the brightness, rotation and startup page too, and shows the battery and uptime.
+The [WiFi Hotspot Remote](phone-remote.md)'s Setup tab can set the brightness, rotation and startup page too, and shows the battery and uptime.
 
 Settings are saved about two seconds after you change them, and are restored when the display is powered back on.  They also survive flashing new firmware.
 
@@ -14,17 +14,29 @@ How bright the screen is, with the battery's charge above it, in percent and vol
 
 The percentage is worked out from the voltage, along a discharge curve the board learns for itself (see [Battery Log](#battery-log) below), so it reads high while USB is plugged in and charging, and settles back once it's unplugged.  On the ESP32-S3-Touch-AMOLED-1.75, the power chip also says when it's charging, and a lightning bolt shows then; the percentage stays at 99% or below until the charger finishes, and then shows 100%.  That power chip has a fuel gauge too, but it isn't used: without a profile for the battery it read up to 15% high halfway through a run, and reached 0% half an hour before the board switched off.  The voltage is smoothed over about 10 seconds, so the percentage doesn't jump around as the screen's brightness or the speaker changes how much the board draws.
 
-## Phone Remote
-
-*Boards with WiFi*
-
-Runs the display from a phone, without touching it.  While it's off, *At power-up* sets it to switch itself on whenever the display starts.  See [Phone Remote](phone-remote.md).
-
-## Comm
+## Phone App
 
 *The ESP32-S3-Touch-AMOLED-1.75*
 
-Sends your voice to the group through a phone.  See [Comm](comm.md).
+The Bluetooth link to the DroneLab app on a phone: the [comm channel](comm.md), sending your voice to the group, and the remote, run from the app.  The app is the better remote, as the phone stays on the internet.  The page also has the comm channel's *Push to talk* and *Voice* modes.
+
+## Paired Phones
+
+*The ESP32-S3-Touch-AMOLED-1.75*
+
+How many phones are paired with the Phone App's link.  *Forget them* (tap it twice) unpairs them all, for when a phone's been lost: each has to pair again, with a new code.  It keeps the talk button.
+
+## Talk Button
+
+*The ESP32-S3-Touch-AMOLED-1.75*
+
+Pairs a Bluetooth camera remote, to hold to talk.  See [the talk button](comm.md#the-talk-button).
+
+## WiFi Hotspot Remote
+
+*Boards with WiFi*
+
+Runs the display from a phone's web browser, over the board's own WiFi hotspot, for phones without the app.  While it's off, *At power-up* sets it to switch itself on whenever the display starts.  See [WiFi Hotspot Remote](phone-remote.md).
 
 ## Rotation
 

@@ -17,7 +17,7 @@ flowchart LR
 
 ## On the display
 
-The *Comm* page is in [Settings](settings.md), after the Phone Remote.
+The *Phone App* page is in [Settings](settings.md), after Brightness.
 
 1. Switch it on.  The board starts advertising over Bluetooth for a phone to connect, under the phone remote's name (`DroneLab-` and four letters), shown at the bottom of the page.
 2. Pick *Push to talk* or *Voice*.
@@ -29,7 +29,7 @@ It stays on, or off, from one startup to the next.  The voice effect has to run 
 
 A Bluetooth camera shutter remote can be the talk button: hold it to talk, in either mode.  It has to be a Bluetooth LE one, which shows up as a keyboard (the ATUMTEK one does); the cheapest ones are often older Bluetooth only, which the board can't use.
 
-1. On the *Talk Button* page, after *Comm*, tap *Pair a button*.
+1. On the *Talk Button* page, after *Paired Phones*, tap *Pair a button*.
 2. Put the remote in pairing mode: switch it on, or hold its button until it blinks.  The board pairs with the nearest one it finds, and shows its name.
 
 The board remembers it.  The remote goes to sleep after a minute or so; pressing it wakes it, the board connects again, and that press counts, a moment late.  It's only used while Comm is on.  *Forget it* unpairs it.  A remote usually remembers only the last thing it paired with, so pairing it with the board unpairs it from a computer or phone it was used with.
@@ -40,7 +40,7 @@ The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for 
 
 The first time the app connects, the phone asks to pair, and the board shows a 6-digit code over whatever's on its screen: type it into the phone.  The board only talks to a phone that's paired like that, so nobody else nearby can listen in or take over, and the phone and board remember each other after that.
 
-The app's *Remote* tab is the [Phone Remote](phone-remote.md)'s page, run over the same Bluetooth link instead of the board's WiFi hotspot, so the phone keeps its internet for the comm channel.  It needs *Comm* on, like the rest of the app.
+The app's *Remote* tab is the [WiFi Hotspot Remote](phone-remote.md)'s page, run over the same Bluetooth link instead of the board's WiFi hotspot, so the phone keeps its internet for the comm channel.  It needs *Comm* on, like the rest of the app.
 
 It keeps going with the screen off, with a notification while it's on.  It trusts the server's certificate the first time it connects, and if the certificate changes after that it won't connect without asking, as that could be someone pretending to be the server.
 

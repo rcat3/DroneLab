@@ -14,7 +14,7 @@ The display is organized into features.  You swipe up and down to move between t
 | [Terminal](terminal.md) | Shows text typed on a phone, like a green screen terminal |
 | [Lovense](lovense.md) | Controls up to three Lovense devices over Bluetooth |
 | [Level](level.md) | A spirit level, for lining the display up on the mask |
-| [Phone Remote](phone-remote.md) | Runs the display from a phone's web browser |
+| [WiFi Hotspot Remote](phone-remote.md) | Runs the display from a phone's web browser |
 | [Comm](comm.md) | Talks to a group through a phone, like a radio.  In development |
 | [Settings](settings.md) | Brightness, rotation, what's shown at startup, and the battery voltage |
 

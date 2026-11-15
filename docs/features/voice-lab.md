@@ -59,4 +59,4 @@ Turn off the call app's noise suppression if it's cutting into the effect, as so
 
 WiFi adds a delay of around a tenth of a second, which is fine for judging an effect but odd if you listen to yourself live.  It's easier to have someone else listen, or to record and play back.
 
-The Voice Lab is off whenever the board starts, and WiFi is off while it's off.  The Voice Lab and the [Phone Remote](phone-remote.md) both use WiFi, so they can't run at once: switching one on stops the other.
+The Voice Lab is off whenever the board starts, and WiFi is off while it's off.  The Voice Lab and the [WiFi Hotspot Remote](phone-remote.md) both use WiFi, so they can't run at once: switching one on stops the other.

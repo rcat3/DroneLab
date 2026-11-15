@@ -281,6 +281,14 @@ bool rcat_hal_ble_peer_connected(void);
  * -1 when no phone's pairing. */
 int32_t rcat_hal_ble_peer_passkey(void);
 
+/* How many phones are paired, leaving out keep (the talk button), or -1 if
+ * Bluetooth hasn't started yet, so it can't tell. */
+int rcat_hal_ble_peer_paired(const rcat_hal_ble_device_t *keep);
+
+/* Forget every phone's pairing, keeping keep's (the talk button). A phone
+ * that's connected is dropped, and has to pair again with a new code. */
+void rcat_hal_ble_peer_forget_all(const rcat_hal_ble_device_t *keep);
+
 /* The biggest message rcat_hal_ble_peer_send() can take, which depends on
  * what the phone agreed to. 0 while nothing's connected. */
 size_t rcat_hal_ble_peer_max_send(void);

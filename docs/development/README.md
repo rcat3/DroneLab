@@ -66,7 +66,7 @@ A few ideas run through it:
 - `tools/img2c.py` - Converts an image or GIF into a C file for a screen size.  The build runs it for every image in `imgs/`.
 - `tools/prepare_sd.py` - Resizes and re-encodes images for an SD card (see [Images on the SD card](../features/images.md#images-on-the-sd-card)).
 - `tools/voice_monitor.py` - Plays and records the microphone stream from the [Voice Lab](../features/voice-lab.md), with voice effects.
-- `tools/gen_remote_page.py` - Turns `core/app/remote_page.html`, the [Phone Remote](../features/phone-remote.md)'s page, into the C file that's built in.  Run it after changing the page.
+- `tools/gen_remote_page.py` - Turns `core/app/remote_page.html`, the [WiFi Hotspot Remote](../features/phone-remote.md)'s page, into the C file that's built in.  Run it after changing the page.
 - `tools/gen_terminal_font.py` - Makes the [Terminal](../features/terminal.md)'s font, `core/ui/terminal_font.c`.
 - `tools/gen_lv_conf.py` - Generates the platforms' `lv_conf.h` files (LVGL's settings) from LVGL's template.  Run it after updating the LVGL submodule.
 - `tools/doc_renders/render.sh` - Renders the pictures of the housings in `docs/images/`.  Run it after changing a housing's design.

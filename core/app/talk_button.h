@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "hal.h"
+
 /*
  * The comm channel's talk button: a Bluetooth LE remote, like a camera
  * shutter remote, paired with the board. While a key on it is held, the comm
@@ -46,6 +48,10 @@ talk_button_state_t talk_button_state(void);
 
 /* The paired (or pairing) button's name. */
 const char *talk_button_name(void);
+
+/* The paired button, if there is one: for keeping its pairing when the
+ * phones' are forgotten. */
+bool talk_button_paired(rcat_hal_ble_device_t *out);
 
 /* True while a key on it is held. Safe to call from any task. */
 bool talk_button_held(void);

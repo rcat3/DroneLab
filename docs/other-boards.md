@@ -32,7 +32,7 @@ Their housings for the MSA Millennium mask are no longer supported.  They're kep
 | [Lovense](features/lovense.md) | | | Yes |
 | [Level](features/level.md) | | | Yes |
 | [Terminal](features/terminal.md) | | | Yes |
-| [Phone Remote](features/phone-remote.md) | | | Yes |
+| [WiFi Hotspot Remote](features/phone-remote.md) | | | Yes |
 | [Settings](features/settings.md) | Yes | Yes | Yes |
 
 The RP2040 and RP2350 boards have no microphone, speaker, SD card slot, WiFi or Bluetooth, so they show images and settings.  They do have an accelerometer, which the firmware doesn't support yet, so the Level isn't on them.  The RP2350 has twice the RAM of the RP2040, enough for full screen animated GIFs.

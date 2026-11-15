@@ -225,6 +225,11 @@ const char *talk_button_name(void)
     return name;
 }
 
+bool talk_button_paired(rcat_hal_ble_device_t *out)
+{
+    return saved(out);
+}
+
 bool talk_button_held(void)
 {
     return rcat_hal_ble_button_held() != 0;

@@ -1628,6 +1628,74 @@ int32_t rcat_hal_ble_peer_passkey(void)
     return peer_conn != BLE_HS_CONN_HANDLE_NONE ? peer_passkey : -1;
 }
 
+#if CONFIG_BT_NIMBLE_SECURITY_ENABLE
+#define MAX_PAIRED 16
+
+static bool same_addr(const ble_addr_t *a, const rcat_hal_ble_device_t *d)
+{
+    return d != NULL && a->type == d->addr_type && memcmp(a->val, d->addr, 6) == 0;
+}
+
+int rcat_hal_ble_peer_paired(const rcat_hal_ble_device_t *keep)
+{
+    if (!started)
+    {
+        return -1;
+    }
+    ble_addr_t peers[MAX_PAIRED];
+    int count = 0;
+    if (ble_store_util_bonded_peers(peers, &count, MAX_PAIRED) != 0)
+    {
+        return -1;
+    }
+    int phones = 0;
+    for (int i = 0; i < count; i++)
+    {
+        phones += !same_addr(&peers[i], keep);
+    }
+    return phones;
+}
+
+void rcat_hal_ble_peer_forget_all(const rcat_hal_ble_device_t *keep)
+{
+    if (!ble_start())
+    {
+        return;
+    }
+    ble_addr_t peers[MAX_PAIRED];
+    int count = 0;
+    if (ble_store_util_bonded_peers(peers, &count, MAX_PAIRED) != 0)
+    {
+        return;
+    }
+    int forgot = 0;
+    for (int i = 0; i < count; i++)
+    {
+        if (!same_addr(&peers[i], keep))
+        {
+            ble_store_util_delete_peer(&peers[i]);
+            forgot++;
+        }
+    }
+    // A phone that's connected now has to pair again
+    uint16_t conn = peer_conn;
+    if (conn != BLE_HS_CONN_HANDLE_NONE)
+    {
+        ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
+    }
+    ESP_LOGI(TAG, "Forgot %d paired phone%s", forgot, forgot == 1 ? "" : "s");
+}
+#else
+int rcat_hal_ble_peer_paired(const rcat_hal_ble_device_t *keep)
+{
+    return -1;
+}
+
+void rcat_hal_ble_peer_forget_all(const rcat_hal_ble_device_t *keep)
+{
+}
+#endif
+
 size_t rcat_hal_ble_peer_max_send(void)
 {
     uint16_t mtu = peer_mtu;
@@ -1700,6 +1768,15 @@ bool rcat_hal_ble_peer_connected(void)
 int32_t rcat_hal_ble_peer_passkey(void)
 {
     return -1;
+}
+
+int rcat_hal_ble_peer_paired(const rcat_hal_ble_device_t *keep)
+{
+    return -1;
+}
+
+void rcat_hal_ble_peer_forget_all(const rcat_hal_ble_device_t *keep)
+{
 }
 
 size_t rcat_hal_ble_peer_max_send(void)

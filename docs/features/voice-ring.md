@@ -6,7 +6,7 @@ The Voice Ring's settings are the last page of the [Visualizer](visualizer.md), 
 
 ## Voice Ring
 
-A ring around the edge of the screen that glows with your voice while the [Images](images.md) feature is on screen.  Its page switches it on and off and picks its color, from nine, and shows the ring while you choose.  The [Phone Remote](phone-remote.md) can do both too.
+A ring around the edge of the screen that glows with your voice while the [Images](images.md) feature is on screen.  Its page switches it on and off and picks its color, from nine, and shows the ring while you choose.  The [WiFi Hotspot Remote](phone-remote.md) can do both too.
 
 ## How it follows your voice
 

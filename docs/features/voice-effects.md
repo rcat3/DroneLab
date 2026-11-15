@@ -21,7 +21,7 @@ The effect goes to the [Voice Lab](voice-lab.md) stream (`voice_monitor.py --lis
 
 The *Effect Volume* page, next to it, sets how loud the effect is on the speaker, separately from the sound player's volume.  50% is about 10 dB louder than the microphone picks it up, and 100% about 35 dB, with a limiter that rounds off the peaks.  Each preset is set a little louder or quieter on the speaker than that, so that they all start to feed back at about the same setting: just above 100% on the ESP32-S3-Touch-AMOLED-1.75 in its housing.  On that board, every preset holds at 100% even with a mirror held in front of the mask.  Somewhere that reflects more of the sound back, like a corner, brings it down.  If it feeds back, turn it down.
 
-The board's **BOOT** button switches *Play on speaker* off and on, to stop feedback quickly.  (BOOT only matters at startup: held while the board starts, it waits for new firmware over USB.)  The [Phone Remote](phone-remote.md) has all of these too, with the volume in exact steps.
+The board's **BOOT** button switches *Play on speaker* off and on, to stop feedback quickly.  (BOOT only matters at startup: held while the board starts, it waits for new firmware over USB.)  The [WiFi Hotspot Remote](phone-remote.md) has all of these too, with the volume in exact steps.
 
 *Play on speaker* is always off at startup, in case it feeds back.  The speaker in the board's housing faces away from the mask, but some of it still reaches the microphones.  The board cancels most of that, because its audio chip hears what the speaker is playing (see its [board notes](../hardware/waveshare_esp32s3_touch_amoled_1_75.md#board-notes)), so it can go much louder before it feeds back.
 
