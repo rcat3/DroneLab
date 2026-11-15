@@ -106,6 +106,23 @@ static void battery_timer_cb(lv_timer_t *t)
 
 static lv_obj_t *uptime_label;
 
+/* rcat_hal_firmware_built()'s "Nov 15 2026 01:52:12" as "2026-11-15 01:52". */
+static void firmware_built_short(char *out, size_t len)
+{
+    static const char months[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    char mon[4] = "";
+    int day = 0, year = 0, hour = 0, minute = 0;
+    const char *built = rcat_hal_firmware_built();
+    if (sscanf(built, "%3s %d %d %d:%d", mon, &day, &year, &hour, &minute) != 5)
+    {
+        snprintf(out, len, "%s", built);
+        return;
+    }
+    const char *m = strstr(months, mon);
+    int month = m != NULL ? (int)(m - months) / 3 + 1 : 0;
+    snprintf(out, len, "%04d-%02d-%02d %02d:%02d", year % 10000, month % 100, day % 100, hour % 100, minute % 100);
+}
+
 static void uptime_timer_cb(lv_timer_t *t)
 {
     // Since the board started; lv_tick_get wraps after 49 days.
@@ -152,13 +169,15 @@ static void add_brightness_page(ui_feature_t *feature)
     lv_timer_t *uptime_timer = lv_timer_create(uptime_timer_cb, UPTIME_UPDATE_MS, NULL);
     lv_timer_ready(uptime_timer);
 
-    // Which firmware this is, and when it was built (to the minute)
-    const char *built = rcat_hal_firmware_built();
+    // Which firmware this is, and when it was built, to the minute, as
+    // 2026-11-15 01:52: short enough to fit low on a round screen
+    char built[24];
+    firmware_built_short(built, sizeof(built));
     lv_obj_t *version_label = lv_label_create(page);
-    lv_label_set_text_fmt(version_label, "%s\nBuilt %.*s", rcat_hal_firmware_version(), (int)(strlen(built) > 3 ? strlen(built) - 3 : strlen(built)), built);
+    lv_label_set_text_fmt(version_label, "%s\n%s", rcat_hal_firmware_version(), built);
     lv_obj_set_style_text_align(version_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(version_label, COLOR_MUTED, 0);
-    lv_obj_align(version_label, LV_ALIGN_CENTER, 0, ui_px(100));
+    lv_obj_align(version_label, LV_ALIGN_CENTER, 0, ui_px(78));
 
     // Kept up all the time, as on some boards the battery can be plugged in
     // while it's running
