@@ -1,0 +1,49 @@
+// Two clients on a real Mumble server: one talks, the other hears it.
+//   MUMBLE_HOST=192.168.15.200 MUMBLE_PASSWORD=... flutter test test/mumble_test.dart
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:dronelab/comm/mumble_client.dart';
+import 'package:dronelab/comm/voice_packet.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  final host = Platform.environment['MUMBLE_HOST'];
+  final password = Platform.environment['MUMBLE_PASSWORD'] ?? '';
+
+  test('voice goes from one client to another', () async {
+    final a = MumbleClient(host: host!, username: 'test-talker', password: password);
+    final b = MumbleClient(host: host, username: 'test-listener', password: password);
+    String? fp;
+    await a.connect(checkCertificate: (f) {
+      fp = f;
+      return true;
+    });
+    await b.connect(checkCertificate: (f) => f == fp);
+    expect(a.state, MumbleState.connected);
+    await Future.delayed(const Duration(milliseconds: 300));
+    expect(b.channelUsers.map((u) => u.name), contains('test-talker'));
+
+    final heard = <IncomingVoice>[];
+    final sub = b.voice.listen(heard.add);
+    for (var i = 0; i < 25; i++) {
+      a.sendVoice(i * 2, Uint8List.fromList([0xF8, 0xFF, 0xFE, i]), last: i == 24);
+      await Future.delayed(const Duration(milliseconds: 20));
+    }
+    await Future.delayed(const Duration(milliseconds: 500));
+    await sub.cancel();
+    final talker = a.mySession;
+    a.close();
+    b.close();
+
+    expect(heard.length, 25);
+    expect(heard.first.session, talker);
+    expect(heard.map((v) => v.seq), [for (var i = 0; i < 25; i++) i * 2]);
+    expect(heard.last.last, isTrue);
+  }, skip: host == null ? 'set MUMBLE_HOST to run it' : false, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('a wrong password is turned away', () async {
+    final c = MumbleClient(host: host!, username: 'test-wrong', password: 'not-the-password');
+    await expectLater(c.connect(), throwsA(isA<MumbleException>()));
+  }, skip: host == null ? 'set MUMBLE_HOST to run it' : false);
+}

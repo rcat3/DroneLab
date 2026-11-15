@@ -1,6 +1,6 @@
 # Comm
 
-*The ESP32-S3-Touch-AMOLED-1.75.  In development: the board's side works, the phone app doesn't exist yet.*
+*The ESP32-S3-Touch-AMOLED-1.75.  In development: the board's side works, and the Android app is being tried out.*
 
 The comm channel lets a group talk to each other, like a radio.  The board sends the wearer's voice, through the [voice effect](voice-effects.md), to their phone over Bluetooth, and the phone passes it on to a [Mumble](https://www.mumble.info) server on the internet that everyone's on.  What the others say comes back through the phone, to the wearer's headphones.  People without a display can join from the Mumble app.
 
@@ -24,6 +24,16 @@ The *Comm* page is in [Settings](settings.md), after the Phone Remote.
 3. The title shows what it's doing: waiting for a phone, connected, or talking.  *Hold to talk* is for trying it out with the display in hand.  In the mask, the phone, or a button paired with it, does the talking.
 
 It stays on, or off, from one startup to the next.  The voice effect has to run the whole time it's on, so it uses more battery than with the voice effect off.
+
+## The app
+
+The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now.  Set up the server (the gear at the top: its address, your name and the server password), connect to it, then *Find the board* and pick yours.  The app passes the board's voice on to the server and plays the others to your headphones.  It has its own *Hold to talk*, and the board's mode can be changed from it too.
+
+It keeps going with the screen off, with a notification while it's on.  It trusts the server's certificate the first time it connects, and if the certificate changes after that it won't connect without asking, as that could be someone pretending to be the server.
+
+The *Buffer* (in the server settings) is how long the others' voices wait before they play, to ride out an uneven connection: 60 ms to start, more on mobile data.  It doesn't grow by itself, so the delay stays put.
+
+See [`app/README.md`](../../app/README.md) to build it.
 
 ## Trying it without the app
 
