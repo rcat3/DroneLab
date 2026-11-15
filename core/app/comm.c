@@ -25,6 +25,7 @@
 
 #include "app/remote.h"
 #include "app/settings.h"
+#include "app/talk_button.h"
 #include "audio/voice_fx.h"
 #include "hal.h"
 
@@ -67,6 +68,7 @@
 #define FLAG_LAST           0x02
 #define STATUS_SENDING      0x01
 #define STATUS_HEARD        0x02
+#define STATUS_BUTTON       0x04
 #define STATUS_EVERY_MS     5000
 
 // Voice mode: the voice effect's output is louder than VOX_DB (in dB below
@@ -189,7 +191,8 @@ static void voice_cb(const int16_t *samples, size_t count, void *user_data)
 
 static uint8_t status_flags(void)
 {
-    return (sending ? STATUS_SENDING : 0) | (voice_heard ? STATUS_HEARD : 0);
+    return (sending ? STATUS_SENDING : 0) | (voice_heard ? STATUS_HEARD : 0) |
+           (talk_button_state() == TALK_BUTTON_CONNECTED ? STATUS_BUTTON : 0);
 }
 
 static bool send_retrying(const uint8_t *data, size_t len)
@@ -217,7 +220,7 @@ static void send_status(void)
 
 static bool talking(void)
 {
-    return screen_talk || phone_talk || (mode == COMM_VOICE && voice_heard);
+    return screen_talk || phone_talk || talk_button_held() || (mode == COMM_VOICE && voice_heard);
 }
 
 static void encoder_task(void *arg)
@@ -470,6 +473,7 @@ bool comm_start(void)
         }
         voice_fx_set_listener(voice_cb, NULL);
         running = true;
+        talk_button_start();
     }
     settings_set_comm(1, mode);
     return true;
@@ -480,6 +484,7 @@ void comm_stop(void)
     if (running)
     {
         running = false;
+        talk_button_stop();
         voice_fx_set_listener(NULL, NULL);
         rcat_hal_ble_peer_stop();
     }

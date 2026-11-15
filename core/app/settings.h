@@ -9,6 +9,7 @@
 #define SETTINGS_NAME_LEN           24
 #define SETTINGS_REMOTE_LEN         16
 #define SETTINGS_CURVE_POINTS       21      // 100%, 95% ... 0%
+#define SETTINGS_BUTTON_NAME_LEN    20
 
 /* Startup image names that select the blank (black) tile and the Visualizer.
  * Firmware from before the Visualizer saved it as "kitt". */
@@ -42,6 +43,10 @@ typedef struct
     uint8_t visualizer;                     // which visualizer style, 0 for KITT
     uint8_t comm_on;                        // 1 to start the comm channel at startup
     uint8_t comm_mode;                      // comm_mode_t: push to talk, or voice
+    uint8_t button_paired;                  // 1 if the comm channel's talk button is below
+    uint8_t button_addr_type;               // its Bluetooth address
+    uint8_t button_addr[6];
+    char button_name[SETTINGS_BUTTON_NAME_LEN];
 } settings_t;
 
 /* Load the saved settings, or the defaults if nothing valid has been saved. */
@@ -68,6 +73,8 @@ void settings_set_remote_autostart(uint8_t enabled);
 void settings_set_terminal_size(uint8_t size);
 void settings_set_visualizer(uint8_t index);
 void settings_set_comm(uint8_t on, uint8_t mode);
+/* The talk button, or none with addr NULL. */
+void settings_set_button(const uint8_t *addr, uint8_t addr_type, const char *name);
 /* Keep a learned battery curve (see app/battery_log.h), or forget it with runs = 0. */
 void settings_set_battery_curve(const uint16_t *mv, uint8_t runs, uint32_t last_run);
 

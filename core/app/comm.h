@@ -18,7 +18,8 @@
  *                  transmission, bit 1 the last; the last one has no Opus
  *                  data, and only says it's over.
  *     0x02 status: 02, version (COMM_VERSION), mode (comm_mode_t), flags
- *                  (bit 0 sending, bit 1 voice heard), when the phone turns
+ *                  (bit 0 sending, bit 1 voice heard, bit 2 the talk button
+ *                  is connected; see talk_button.h), when the phone turns
  *                  notifications on, when any of it changes, and every few
  *                  seconds.
  *

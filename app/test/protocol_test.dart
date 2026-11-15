@@ -49,10 +49,11 @@ void main() {
     expect(sound.first, isTrue);
     expect(sound.last, isFalse);
     expect(sound.opus, [9, 8]);
-    final status = parseBoardMessage(Uint8List.fromList([2, 1, 1, 3])) as BoardStatus;
+    final status = parseBoardMessage(Uint8List.fromList([2, 1, 1, 7])) as BoardStatus;
     expect(status.mode, BoardMode.voice);
     expect(status.sending, isTrue);
     expect(status.hearsVoice, isTrue);
+    expect(status.buttonConnected, isTrue);
     expect(talkMessage(true), [1, 1]);
     expect(modeMessage(BoardMode.pushToTalk), [2, 0]);
   });

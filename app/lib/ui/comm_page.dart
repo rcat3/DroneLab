@@ -174,6 +174,14 @@ class _BoardCard extends StatelessWidget {
             ]),
             const SizedBox(height: 8),
             Text(status),
+            if (st != null && st.buttonConnected) ...[
+              const SizedBox(height: 4),
+              const Row(children: [
+                Icon(Icons.radio_button_checked, size: 16),
+                SizedBox(width: 6),
+                Text('Talk button connected'),
+              ]),
+            ],
             if (b.state == BoardState.connected) ...[
               const SizedBox(height: 12),
               SegmentedButton<BoardMode>(

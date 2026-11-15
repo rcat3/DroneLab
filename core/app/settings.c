@@ -115,6 +115,8 @@ static bool load(settings_t *out)
     out->remote_autostart = out->remote_autostart ? 1 : 0;
     // visualizer is checked against the list of styles by the UI
     out->comm_on = out->comm_on ? 1 : 0;
+    out->button_paired = out->button_paired ? 1 : 0;
+    out->button_name[SETTINGS_BUTTON_NAME_LEN - 1] = '\0';
     // comm_mode is checked by the comm channel
     for (int k = 0; k < SETTINGS_CURVE_POINTS && out->battery_curve_runs > 0; k++)
     {
@@ -283,6 +285,20 @@ void settings_set_battery_curve(const uint16_t *mv, uint8_t runs, uint32_t last_
     }
     current.battery_curve_runs = runs;
     current.battery_curve_last_run = last_run;
+    schedule_save();
+}
+
+void settings_set_button(const uint8_t *addr, uint8_t addr_type, const char *name)
+{
+    current.button_paired = addr != NULL;
+    current.button_addr_type = addr != NULL ? addr_type : 0;
+    memset(current.button_addr, 0, sizeof(current.button_addr));
+    memset(current.button_name, 0, sizeof(current.button_name));
+    if (addr != NULL)
+    {
+        memcpy(current.button_addr, addr, sizeof(current.button_addr));
+        strncpy(current.button_name, name, sizeof(current.button_name) - 1);
+    }
     schedule_save();
 }
 

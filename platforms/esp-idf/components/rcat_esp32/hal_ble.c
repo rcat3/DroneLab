@@ -1,7 +1,11 @@
 /*
  * Bluetooth LE for the HAL (see "Bluetooth LE" in hal.h), on ESP-IDF's
- * NimBLE stack as a central with a few links, and as a peripheral that one
- * phone connects to (on boards configured with the peripheral role).
+ * NimBLE stack as a central with a few links, as a peripheral that one
+ * phone connects to (on boards configured with the peripheral role), and as
+ * the host of one paired button, a HID remote (on boards with pairing).
+ *
+ * One scan serves everything that needs one: finding devices for the links,
+ * finding a button to pair, and watching for the paired button to wake up.
  *
  * NimBLE runs on its own task and calls back from there. The UI loop only
  * reads the state and buffers kept here, under ble_lock, and starts NimBLE
@@ -21,6 +25,10 @@
 #if CONFIG_BT_NIMBLE_ROLE_PERIPHERAL
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
+#endif
+#if CONFIG_BT_NIMBLE_SECURITY_ENABLE
+#include "host/ble_store.h"
+void ble_store_config_init(void);   // NimBLE's bonds, kept in NVS
 #endif
 
 #include "hal.h"
@@ -67,6 +75,9 @@ static int scan_event_cb(struct ble_gap_event *event, void *arg);
 static int link_event_cb(struct ble_gap_event *event, void *arg);
 static void peer_register(void);
 static void peer_advertise(void);
+static bool button_finding(void);
+static bool button_watching(void);
+static void button_seen(const struct ble_gap_disc_desc *disc);
 
 static void set_state(ble_link_t *link, rcat_hal_ble_state_t s)
 {
@@ -88,20 +99,66 @@ rcat_hal_ble_state_t rcat_hal_ble_link_state(int link)
 }
 
 /********************************************************************************
-function:	Scanning
+function:	Scanning: in full while looking for devices, or just now and then
+            while only watching for the paired button to wake up
 ********************************************************************************/
-static void scan_begin(void)
+typedef enum
 {
-    if (!synced || !scan_wanted || ble_gap_disc_active() || ble_gap_conn_active())
+    SCAN_NONE,
+    SCAN_WATCH,     // passive, 30 ms in every 200: the button advertises every
+                    // 20 to 30 ms once a press wakes it, so it's seen in 200 ms
+    SCAN_FULL,      // active, all the time, for names in scan responses
+} scan_mode_t;
+
+static volatile scan_mode_t scan_mode_now = SCAN_NONE;
+
+static scan_mode_t scan_mode_wanted(void)
+{
+    if (scan_wanted || button_finding())
     {
-        return;     // a connection in progress restarts it when it's done
+        return SCAN_FULL;
+    }
+    return button_watching() ? SCAN_WATCH : SCAN_NONE;
+}
+
+/* Start, stop or change the scan to suit what's wanted. Safe to call from
+ * any task. NimBLE can't scan while it's connecting, so a connection restarts
+ * it when it's made, or fails. */
+static void scan_update(void)
+{
+    if (!synced)
+    {
+        return;
+    }
+    scan_mode_t want = scan_mode_wanted();
+    if (ble_gap_disc_active())
+    {
+        if (want == scan_mode_now)
+        {
+            return;
+        }
+        ble_gap_disc_cancel();
+    }
+    scan_mode_now = SCAN_NONE;
+    if (want == SCAN_NONE || ble_gap_conn_active())
+    {
+        return;
     }
     struct ble_gap_disc_params params = {
-        .passive = 0,               // ask for scan responses, which often carry the name
+        .passive = want == SCAN_WATCH,
         .filter_duplicates = 0,     // the name can come in a later report than the first
     };
+    if (want == SCAN_WATCH)
+    {
+        params.itvl = 320;          // 200 ms, in 0.625 ms steps
+        params.window = 48;         // 30 ms
+    }
     int rc = ble_gap_disc(own_addr_type, BLE_HS_FOREVER, &params, scan_event_cb, NULL);
-    if (rc != 0)
+    if (rc == 0)
+    {
+        scan_mode_now = want;
+    }
+    else if (rc != BLE_HS_EALREADY)
     {
         ESP_LOGE(TAG, "Scan didn't start (%d)", rc);
     }
@@ -148,7 +205,16 @@ static int scan_event_cb(struct ble_gap_event *event, void *arg)
 {
     if (event->type == BLE_GAP_EVENT_DISC)
     {
-        add_device(&event->disc);
+        if (scan_wanted)
+        {
+            add_device(&event->disc);
+        }
+        button_seen(&event->disc);
+    }
+    else if (event->type == BLE_GAP_EVENT_DISC_COMPLETE)
+    {
+        scan_mode_now = SCAN_NONE;
+        scan_update();
     }
     return 0;
 }
@@ -348,6 +414,8 @@ static int link_event_cb(struct ble_gap_event *event, void *arg)
         {
             ESP_LOGW(TAG, "%s: connection failed (%d)", link->name, event->connect.status);
             set_state(link, RCAT_HAL_BLE_IDLE);
+            scan_update();
+            break;
         }
         else
         {
@@ -359,7 +427,7 @@ static int link_event_cb(struct ble_gap_event *event, void *arg)
                 link_failed(link, "service discovery didn't start", rc);
             }
         }
-        scan_begin();   // carry on scanning, if it was
+        scan_update();  // carry on scanning, if it was
         break;
 
     case BLE_GAP_EVENT_DISCONNECT:
@@ -405,7 +473,7 @@ static void on_sync(void)
     ble_hs_id_infer_auto(0, &own_addr_type);
     synced = true;
     ESP_LOGI(TAG, "Bluetooth ready");
-    scan_begin();
+    scan_update();
     peer_advertise();
 }
 
@@ -451,6 +519,18 @@ static bool ble_start(void)
     }
     ble_hs_cfg.sync_cb = on_sync;
     ble_hs_cfg.reset_cb = on_reset;
+#if CONFIG_BT_NIMBLE_SECURITY_ENABLE
+    // Pairing, for the button: it has no screen or keys, so "just works",
+    // remembered (bonded) so it reconnects without pairing again
+    ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_NO_IO;
+    ble_hs_cfg.sm_bonding = 1;
+    ble_hs_cfg.sm_mitm = 0;
+    ble_hs_cfg.sm_sc = 1;
+    ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
+    ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
+    ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
+    ble_store_config_init();
+#endif
     peer_register();    // services have to be in place before the host starts
     nimble_port_freertos_init(host_task);
     started = true;
@@ -473,16 +553,16 @@ bool rcat_hal_ble_scan_start(void)
     taskEXIT_CRITICAL(&ble_lock);
 
     scan_wanted = true;
-    scan_begin();       // or on_sync does, once the stack is ready
+    scan_update();      // or on_sync does, once the stack is ready
     return true;
 }
 
 void rcat_hal_ble_scan_stop(void)
 {
     scan_wanted = false;
-    if (started && ble_gap_disc_active())
+    if (started)
     {
-        ble_gap_disc_cancel();
+        scan_update();  // stops it, unless the button still needs it
     }
 }
 
@@ -524,6 +604,7 @@ int rcat_hal_ble_connect(const rcat_hal_ble_device_t *device, rcat_hal_ble_servi
     if (ble_gap_disc_active())
     {
         ble_gap_disc_cancel();
+        scan_mode_now = SCAN_NONE;
     }
 
     ble_link_t *link = &links[free_link];
@@ -541,7 +622,7 @@ int rcat_hal_ble_connect(const rcat_hal_ble_device_t *device, rcat_hal_ble_servi
     {
         ESP_LOGE(TAG, "Couldn't connect to %s (%d)", device->name, rc);
         set_state(link, RCAT_HAL_BLE_IDLE);
-        scan_begin();
+        scan_update();
         return -1;
     }
     ESP_LOGI(TAG, "Connecting to %s on link %d", device->name, free_link);
@@ -596,6 +677,614 @@ size_t rcat_hal_ble_receive(int link, void *data, size_t max)
     taskEXIT_CRITICAL(&ble_lock);
     return n;
 }
+
+/********************************************************************************
+function:	The button: a Bluetooth LE HID remote, like a camera shutter
+            remote, paired with the board. It's a keyboard to the board: each
+            of its input reports notifies when a key goes down and again,
+            all zeros, when it comes up.
+
+            Once paired, the board keeps the bond, and whenever the button's
+            wanted and not connected, it watches for the button's advertising.
+            Such buttons sleep after a minute or so, and a press wakes them;
+            the board connects, the bond's encryption comes back without
+            pairing again, and the button sends the press that woke it.
+            The report handles are kept from the first connection, and
+            notifications stay on for a bonded host, so a reconnection is
+            quick.
+********************************************************************************/
+#if CONFIG_BT_NIMBLE_SECURITY_ENABLE
+
+#define BUTTON_MAX_FOUND    8
+#define BUTTON_MAX_REPORTS  8
+#define BUTTON_HID_SERVICE  0x1812
+#define BUTTON_HID_REPORT   0x2A4D
+
+static struct
+{
+    // Set from the UI loop, while the button isn't wanted
+    ble_addr_t addr;
+    char name[32];
+    volatile bool wanted;
+    volatile bool finding;
+
+    // On the NimBLE task, read by the UI loop
+    volatile rcat_hal_ble_button_state_t state;
+    volatile uint16_t conn;
+    volatile uint32_t held;     // a bit for each report with a key down
+
+    // Only on the NimBLE task
+    bool known;                 // the handles below are this button's
+    uint16_t svc_start, svc_end;
+    uint8_t reports;
+    uint16_t report_val[BUTTON_MAX_REPORTS];
+    uint16_t report_end[BUTTON_MAX_REPORTS];
+    uint16_t report_cccd[BUTTON_MAX_REPORTS];
+    uint8_t step;
+} button = { .conn = BLE_HS_CONN_HANDLE_NONE };
+
+// Buttons found while finding, under ble_lock
+static rcat_hal_ble_device_t button_found[BUTTON_MAX_FOUND];
+static size_t button_found_count;
+
+static int button_event_cb(struct ble_gap_event *event, void *arg);
+static void button_subscribe(void);
+
+static bool button_finding(void)
+{
+    return button.finding;
+}
+
+static bool button_watching(void)
+{
+    return button.wanted && button.conn == BLE_HS_CONN_HANDLE_NONE &&
+           button.state != RCAT_HAL_BLE_BUTTON_CONNECTING;
+}
+
+static void button_set_state(rcat_hal_ble_button_state_t s)
+{
+    button.state = s;
+}
+
+/* Does this advertisement come from a HID device: the HID service, or a HID
+ * appearance (0x03C0 to 0x03FF)? */
+static bool is_hid(const struct ble_hs_adv_fields *f)
+{
+    for (int i = 0; i < f->num_uuids16; i++)
+    {
+        if (ble_uuid_u16(&f->uuids16[i].u) == BUTTON_HID_SERVICE)
+        {
+            return true;
+        }
+    }
+    return f->appearance_is_present && (f->appearance >> 6) == (0x03C0 >> 6);
+}
+
+static void button_connect(void)
+{
+    if (ble_gap_conn_active() || !button.wanted)
+    {
+        return;     // another connection's in progress: the next advertisement tries again
+    }
+    if (ble_gap_disc_active())
+    {
+        ble_gap_disc_cancel();
+        scan_mode_now = SCAN_NONE;
+    }
+    button_set_state(RCAT_HAL_BLE_BUTTON_CONNECTING);
+    int rc = ble_gap_connect(own_addr_type, &button.addr, BLE_CONNECT_TIMEOUT_MS, NULL, button_event_cb, NULL);
+    if (rc != 0)
+    {
+        ESP_LOGW(TAG, "Button: couldn't connect (%d)", rc);
+        button_set_state(RCAT_HAL_BLE_BUTTON_WAITING);
+        scan_update();
+    }
+}
+
+/* Every advertisement the scan sees, on the NimBLE task. */
+static void button_seen(const struct ble_gap_disc_desc *disc)
+{
+    if (button_watching() && disc->addr.type == button.addr.type &&
+        memcmp(disc->addr.val, button.addr.val, 6) == 0)
+    {
+        ESP_LOGI(TAG, "Button: awake, connecting");
+        button_connect();
+        return;
+    }
+    if (!button.finding)
+    {
+        return;
+    }
+    struct ble_hs_adv_fields fields;
+    if (ble_hs_adv_parse_fields(&fields, disc->data, disc->length_data) != 0)
+    {
+        return;
+    }
+    taskENTER_CRITICAL(&ble_lock);
+    rcat_hal_ble_device_t *d = NULL;
+    for (size_t i = 0; i < button_found_count; i++)
+    {
+        if (button_found[i].addr_type == disc->addr.type && memcmp(button_found[i].addr, disc->addr.val, 6) == 0)
+        {
+            d = &button_found[i];
+            break;
+        }
+    }
+    // The first advertisement says it's a HID device; a scan response may
+    // only bring its name.
+    if (d == NULL && is_hid(&fields) && button_found_count < BUTTON_MAX_FOUND)
+    {
+        d = &button_found[button_found_count++];
+        memset(d, 0, sizeof(*d));
+        memcpy(d->addr, disc->addr.val, 6);
+        d->addr_type = disc->addr.type;
+        strcpy(d->name, "Button");
+    }
+    if (d != NULL)
+    {
+        d->rssi = disc->rssi;
+        if (fields.name != NULL && fields.name_len > 0)
+        {
+            size_t len = fields.name_len < sizeof(d->name) - 1 ? fields.name_len : sizeof(d->name) - 1;
+            memcpy(d->name, fields.name, len);
+            d->name[len] = '\0';
+        }
+    }
+    taskEXIT_CRITICAL(&ble_lock);
+}
+
+static void button_failed(const char *why, int rc)
+{
+    ESP_LOGW(TAG, "Button: %s (%d), disconnecting", why, rc);
+    ble_gap_terminate(button.conn, BLE_ERR_REM_USER_CONN_TERM);
+}
+
+static void button_ready(void)
+{
+    button.known = true;
+    button_set_state(RCAT_HAL_BLE_BUTTON_CONNECTED);
+    ESP_LOGI(TAG, "Button: ready, %u key report%s", button.reports, button.reports == 1 ? "" : "s");
+}
+
+/* Turn notifications on for each report in turn (step), then it's ready. */
+static int button_cccd_cb(uint16_t conn, const struct ble_gatt_error *error, struct ble_gatt_attr *attr, void *arg)
+{
+    if (error->status != 0)
+    {
+        button_failed("a report's notifications didn't turn on", error->status);
+        return 0;
+    }
+    button.step++;
+    button_subscribe();
+    return 0;
+}
+
+static void button_subscribe(void)
+{
+    while (button.step < button.reports && button.report_cccd[button.step] == 0)
+    {
+        button.step++;      // a report that can't notify
+    }
+    if (button.step >= button.reports)
+    {
+        button_ready();
+        return;
+    }
+    static const uint8_t notify_on[2] = { 1, 0 };
+    int rc = ble_gattc_write_flat(button.conn, button.report_cccd[button.step], notify_on, sizeof(notify_on),
+                                  button_cccd_cb, NULL);
+    if (rc != 0)
+    {
+        button_failed("couldn't turn notifications on", rc);
+    }
+}
+
+/* Find each report's notification descriptor in turn (step). */
+static int button_dsc_cb(uint16_t conn, const struct ble_gatt_error *error, uint16_t chr_val_handle,
+                         const struct ble_gatt_dsc *dsc, void *arg);
+
+static void button_find_descriptors(void)
+{
+    if (button.step >= button.reports)
+    {
+        button.step = 0;
+        button_subscribe();
+        return;
+    }
+    uint16_t start = button.report_val[button.step];
+    uint16_t end = button.report_end[button.step];
+    if (end <= start)
+    {
+        button.step++;      // no room for descriptors
+        button_find_descriptors();
+        return;
+    }
+    int rc = ble_gattc_disc_all_dscs(button.conn, start, end, button_dsc_cb, NULL);
+    if (rc != 0)
+    {
+        button_failed("descriptor discovery didn't start", rc);
+    }
+}
+
+static int button_dsc_cb(uint16_t conn, const struct ble_gatt_error *error, uint16_t chr_val_handle,
+                         const struct ble_gatt_dsc *dsc, void *arg)
+{
+    if (error->status == 0)
+    {
+        if (ble_uuid_cmp(&dsc->uuid.u, BLE_UUID16_DECLARE(BLE_GATT_DSC_CLT_CFG_UUID16)) == 0)
+        {
+            button.report_cccd[button.step] = dsc->handle;
+        }
+        return 0;
+    }
+    if (error->status != BLE_HS_EDONE)
+    {
+        button_failed("descriptor discovery failed", error->status);
+        return 0;
+    }
+    button.step++;
+    button_find_descriptors();
+    return 0;
+}
+
+static int button_chr_cb(uint16_t conn, const struct ble_gatt_error *error, const struct ble_gatt_chr *chr, void *arg)
+{
+    if (error->status == 0)
+    {
+        // The next characteristic ends the last report's descriptors
+        if (button.reports > 0 && button.report_end[button.reports - 1] == 0)
+        {
+            button.report_end[button.reports - 1] = chr->def_handle - 1;
+        }
+        if (ble_uuid_cmp(&chr->uuid.u, BLE_UUID16_DECLARE(BUTTON_HID_REPORT)) == 0 &&
+            (chr->properties & BLE_GATT_CHR_PROP_NOTIFY) && button.reports < BUTTON_MAX_REPORTS)
+        {
+            int i = button.reports++;
+            button.report_val[i] = chr->val_handle;
+            button.report_end[i] = 0;
+            button.report_cccd[i] = 0;
+        }
+        return 0;
+    }
+    if (error->status != BLE_HS_EDONE)
+    {
+        button_failed("characteristic discovery failed", error->status);
+        return 0;
+    }
+    if (button.reports == 0)
+    {
+        button_failed("it has no key reports", 0);
+        return 0;
+    }
+    if (button.report_end[button.reports - 1] == 0)
+    {
+        button.report_end[button.reports - 1] = button.svc_end;
+    }
+    button.step = 0;
+    button_find_descriptors();
+    return 0;
+}
+
+static int button_svc_cb(uint16_t conn, const struct ble_gatt_error *error, const struct ble_gatt_svc *service,
+                         void *arg)
+{
+    if (error->status == 0)
+    {
+        if (button.svc_start == 0)
+        {
+            button.svc_start = service->start_handle;
+            button.svc_end = service->end_handle;
+        }
+        return 0;
+    }
+    if (error->status != BLE_HS_EDONE)
+    {
+        button_failed("service discovery failed", error->status);
+        return 0;
+    }
+    if (button.svc_start == 0)
+    {
+        button_failed("it isn't a HID device", 0);
+        return 0;
+    }
+    int rc = ble_gattc_disc_all_chrs(conn, button.svc_start, button.svc_end, button_chr_cb, NULL);
+    if (rc != 0)
+    {
+        button_failed("characteristic discovery didn't start", rc);
+    }
+    return 0;
+}
+
+/* Encrypted: find the reports, or, knowing them, just make sure they notify. */
+static void button_encrypted(void)
+{
+    if (button.known)
+    {
+        button.step = 0;
+        button_subscribe();
+        return;
+    }
+    button.svc_start = button.svc_end = 0;
+    button.reports = 0;
+    int rc = ble_gattc_disc_svc_by_uuid(button.conn, BLE_UUID16_DECLARE(BUTTON_HID_SERVICE), button_svc_cb, NULL);
+    if (rc != 0)
+    {
+        button_failed("service discovery didn't start", rc);
+    }
+}
+
+static int button_event_cb(struct ble_gap_event *event, void *arg)
+{
+    switch (event->type)
+    {
+    case BLE_GAP_EVENT_CONNECT:
+        if (event->connect.status != 0)
+        {
+            ESP_LOGW(TAG, "Button: connection failed (%d)", event->connect.status);
+            button_set_state(button.wanted ? RCAT_HAL_BLE_BUTTON_WAITING : RCAT_HAL_BLE_BUTTON_OFF);
+            scan_update();
+            break;
+        }
+        button.conn = event->connect.conn_handle;
+        if (!button.wanted)
+        {
+            ble_gap_terminate(button.conn, BLE_ERR_REM_USER_CONN_TERM);
+            break;
+        }
+        // Encryption comes first: the bond's, or pairing if there's none.
+        ESP_LOGI(TAG, "Button: connected, securing the link");
+        {
+            int rc = ble_gap_security_initiate(button.conn);
+            if (rc != 0)
+            {
+                button_failed("couldn't secure the link", rc);
+            }
+        }
+        scan_update();
+        break;
+
+    case BLE_GAP_EVENT_ENC_CHANGE:
+        if (event->enc_change.status == 0)
+        {
+            ESP_LOGI(TAG, "Button: link secured");
+            button_encrypted();
+        }
+        else
+        {
+            // Most likely the button forgot the board, or paired with
+            // something else since: forget its old keys, so the next time
+            // it's in pairing mode it pairs afresh.
+            ESP_LOGW(TAG, "Button: securing the link failed (%d), forgetting its keys",
+                     event->enc_change.status);
+            struct ble_gap_conn_desc desc;
+            if (ble_gap_conn_find(event->enc_change.conn_handle, &desc) == 0)
+            {
+                ble_store_util_delete_peer(&desc.peer_id_addr);
+            }
+            button.known = false;
+            ble_gap_terminate(event->enc_change.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+        }
+        break;
+
+    case BLE_GAP_EVENT_REPEAT_PAIRING:
+    {
+        // It's pairing again with keys the board already has: drop the old ones.
+        struct ble_gap_conn_desc desc;
+        if (ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc) == 0)
+        {
+            ble_store_util_delete_peer(&desc.peer_id_addr);
+        }
+        button.known = false;
+        return BLE_GAP_REPEAT_PAIRING_RETRY;
+    }
+
+    case BLE_GAP_EVENT_NOTIFY_RX:
+        for (int i = 0; i < button.reports; i++)
+        {
+            if (event->notify_rx.attr_handle == button.report_val[i])
+            {
+                struct os_mbuf *om = event->notify_rx.om;
+                uint8_t data[16];
+                uint16_t len = OS_MBUF_PKTLEN(om);
+                if (len > sizeof(data))
+                {
+                    len = sizeof(data);
+                }
+                os_mbuf_copydata(om, 0, len, data);
+                bool down = false;
+                for (int k = 0; k < len; k++)
+                {
+                    down |= data[k] != 0;
+                }
+                uint32_t held = button.held;
+                button.held = down ? held | (1u << i) : held & ~(1u << i);
+                break;
+            }
+        }
+        break;
+
+    case BLE_GAP_EVENT_DISCONNECT:
+        ESP_LOGI(TAG, "Button: disconnected (reason %d)", event->disconnect.reason);
+        button.conn = BLE_HS_CONN_HANDLE_NONE;
+        button.held = 0;
+        button_set_state(button.wanted ? RCAT_HAL_BLE_BUTTON_WAITING : RCAT_HAL_BLE_BUTTON_OFF);
+        scan_update();
+        break;
+
+    default:
+        break;
+    }
+    return 0;
+}
+
+bool rcat_hal_ble_button_find(void)
+{
+    if (!ble_start())
+    {
+        return false;
+    }
+    taskENTER_CRITICAL(&ble_lock);
+    button_found_count = 0;
+    taskEXIT_CRITICAL(&ble_lock);
+    button.finding = true;
+    scan_update();
+    return true;
+}
+
+void rcat_hal_ble_button_find_stop(void)
+{
+    button.finding = false;
+    if (started)
+    {
+        scan_update();
+    }
+}
+
+size_t rcat_hal_ble_button_found(rcat_hal_ble_device_t *devices, size_t max)
+{
+    taskENTER_CRITICAL(&ble_lock);
+    size_t n = button_found_count < max ? button_found_count : max;
+    memcpy(devices, button_found, n * sizeof(button_found[0]));
+    taskEXIT_CRITICAL(&ble_lock);
+    return n;
+}
+
+bool rcat_hal_ble_button_use(const rcat_hal_ble_device_t *device, bool connect_now)
+{
+    if (!ble_start())
+    {
+        return false;
+    }
+    bool same = button.addr.type == device->addr_type && memcmp(button.addr.val, device->addr, 6) == 0;
+    if (button.wanted && same)
+    {
+        return true;
+    }
+    rcat_hal_ble_button_stop();
+    if (!same)
+    {
+        button.known = false;
+    }
+    button.addr.type = device->addr_type;
+    memcpy(button.addr.val, device->addr, 6);
+    snprintf(button.name, sizeof(button.name), "%s", device->name);
+    button_set_state(RCAT_HAL_BLE_BUTTON_WAITING);
+    button.wanted = true;
+    if (connect_now && synced)
+    {
+        button_connect();   // it's advertising right now
+    }
+    else
+    {
+        scan_update();      // watch for it
+    }
+    return true;
+}
+
+void rcat_hal_ble_button_stop(void)
+{
+    button.wanted = false;
+    button.held = 0;
+    if (!started)
+    {
+        return;
+    }
+    uint16_t conn = button.conn;
+    if (conn != BLE_HS_CONN_HANDLE_NONE)
+    {
+        ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
+    }
+    else if (button.state == RCAT_HAL_BLE_BUTTON_CONNECTING && ble_gap_conn_active())
+    {
+        ble_gap_conn_cancel();
+    }
+    else
+    {
+        button_set_state(RCAT_HAL_BLE_BUTTON_OFF);
+    }
+    scan_update();
+}
+
+void rcat_hal_ble_button_forget(const rcat_hal_ble_device_t *device)
+{
+    if (!ble_start())
+    {
+        return;
+    }
+    if (button.addr.type == device->addr_type && memcmp(button.addr.val, device->addr, 6) == 0)
+    {
+        rcat_hal_ble_button_stop();
+        button.known = false;
+    }
+    ble_addr_t addr = { .type = device->addr_type };
+    memcpy(addr.val, device->addr, 6);
+    ble_store_util_delete_peer(&addr);
+}
+
+rcat_hal_ble_button_state_t rcat_hal_ble_button_state(void)
+{
+    return button.state;
+}
+
+uint32_t rcat_hal_ble_button_held(void)
+{
+    return button.held;
+}
+
+#else   // no pairing on this board, so no button
+
+static bool button_finding(void)
+{
+    return false;
+}
+
+static bool button_watching(void)
+{
+    return false;
+}
+
+static void button_seen(const struct ble_gap_disc_desc *disc)
+{
+}
+
+bool rcat_hal_ble_button_find(void)
+{
+    return false;
+}
+
+void rcat_hal_ble_button_find_stop(void)
+{
+}
+
+size_t rcat_hal_ble_button_found(rcat_hal_ble_device_t *devices, size_t max)
+{
+    return 0;
+}
+
+bool rcat_hal_ble_button_use(const rcat_hal_ble_device_t *device, bool connect_now)
+{
+    return false;
+}
+
+void rcat_hal_ble_button_stop(void)
+{
+}
+
+void rcat_hal_ble_button_forget(const rcat_hal_ble_device_t *device)
+{
+}
+
+rcat_hal_ble_button_state_t rcat_hal_ble_button_state(void)
+{
+    return RCAT_HAL_BLE_BUTTON_OFF;
+}
+
+uint32_t rcat_hal_ble_button_held(void)
+{
+    return 0;
+}
+
+#endif
 
 /********************************************************************************
 function:	The peripheral: one service that a phone connects to

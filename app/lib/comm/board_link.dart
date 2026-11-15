@@ -150,7 +150,8 @@ class BoardLink extends ChangeNotifier {
       if (old == null ||
           old.mode != msg.mode ||
           old.sending != msg.sending ||
-          old.hearsVoice != msg.hearsVoice) {
+          old.hearsVoice != msg.hearsVoice ||
+          old.buttonConnected != msg.buttonConnected) {
         notifyListeners();
       }
     }

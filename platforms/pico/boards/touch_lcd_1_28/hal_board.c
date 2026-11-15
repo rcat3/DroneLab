@@ -410,6 +410,43 @@ size_t rcat_hal_ble_receive(int link, void *data, size_t max)
     return 0;
 }
 
+bool rcat_hal_ble_button_find(void)
+{
+    return false;
+}
+
+void rcat_hal_ble_button_find_stop(void)
+{
+}
+
+size_t rcat_hal_ble_button_found(rcat_hal_ble_device_t *devices, size_t max)
+{
+    return 0;
+}
+
+bool rcat_hal_ble_button_use(const rcat_hal_ble_device_t *device, bool connect_now)
+{
+    return false;
+}
+
+void rcat_hal_ble_button_stop(void)
+{
+}
+
+void rcat_hal_ble_button_forget(const rcat_hal_ble_device_t *device)
+{
+}
+
+rcat_hal_ble_button_state_t rcat_hal_ble_button_state(void)
+{
+    return RCAT_HAL_BLE_BUTTON_OFF;
+}
+
+uint32_t rcat_hal_ble_button_held(void)
+{
+    return 0;
+}
+
 void rcat_hal_ble_peer_setup(const rcat_hal_ble_peer_service_t *service)
 {
 }

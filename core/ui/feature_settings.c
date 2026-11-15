@@ -16,6 +16,7 @@
 #include "app/comm.h"
 #include "app/remote.h"
 #include "app/settings.h"
+#include "app/talk_button.h"
 #include "app/updater.h"
 #include "hal.h"
 #include "ui/ui_internal.h"
@@ -601,10 +602,19 @@ static void comm_talk_event_cb(lv_event_t *e)
     }
 }
 
-/* The channel answers the phone from here, whatever's on screen. */
+static lv_obj_t *button_page;
+static void show_button(void);
+
+/* The channel answers the phone from here, whatever's on screen, and
+ * pairing a talk button goes on. */
 static void comm_timer_cb(lv_timer_t *t)
 {
     comm_poll(lv_tick_get());
+    talk_button_poll(lv_tick_get());
+    if (button_page != NULL && ui_current_page() == button_page)
+    {
+        show_button();
+    }
     if (ui_current_page() == comm_page)
     {
         show_comm();
@@ -676,6 +686,127 @@ static void add_comm_page(ui_feature_t *feature)
 
     show_comm();
     lv_timer_create(comm_timer_cb, COMM_POLL_MS, NULL);
+}
+
+/* ----- The comm channel's talk button ----- */
+
+static lv_obj_t *button_title;
+static lv_obj_t *button_status;
+static lv_obj_t *button_action;
+static lv_obj_t *button_action_label;
+static lv_obj_t *button_hint;
+
+static void show_button(void)
+{
+    talk_button_state_t st = talk_button_state();
+    const char *status = "";
+    const char *action = "Pair a button";
+    const char *hint = "A Bluetooth camera remote,\nto hold to talk";
+    switch (st)
+    {
+    case TALK_BUTTON_NONE:
+        break;
+    case TALK_BUTTON_OFF:
+        status = "Works while Comm is on";
+        action = "Forget it";
+        hint = "";
+        break;
+    case TALK_BUTTON_WAITING:
+        status = "Asleep: press it to wake it";
+        action = "Forget it";
+        hint = "";
+        break;
+    case TALK_BUTTON_CONNECTING:
+        status = "Connecting...";
+        action = "Forget it";
+        hint = "";
+        break;
+    case TALK_BUTTON_CONNECTED:
+        status = talk_button_held() ? LV_SYMBOL_AUDIO "  Pressed" : LV_SYMBOL_BLUETOOTH "  Connected";
+        action = "Forget it";
+        hint = "Hold it to talk";
+        break;
+    case TALK_BUTTON_FINDING:
+        status = "Looking...";
+        action = "Cancel";
+        hint = "Put the button in pairing mode:\nswitch it on, or hold it down";
+        break;
+    case TALK_BUTTON_PAIRING:
+        status = "Pairing...";
+        action = "Cancel";
+        hint = "";
+        break;
+    case TALK_BUTTON_NOT_FOUND:
+        status = "No button found";
+        action = "OK";
+        hint = "Is it in pairing mode?";
+        break;
+    case TALK_BUTTON_FAILED:
+        status = "Pairing didn't work";
+        action = "OK";
+        hint = "Try it again from pairing mode";
+        break;
+    }
+    bool named = st != TALK_BUTTON_NONE && st != TALK_BUTTON_FINDING && st != TALK_BUTTON_NOT_FOUND;
+    set_label(button_title, named ? talk_button_name() : "Talk Button");
+    set_label(button_status, status);
+    set_label(button_action_label, action);
+    set_label(button_hint, hint);
+}
+
+static void button_action_cb(lv_event_t *e)
+{
+    switch (talk_button_state())
+    {
+    case TALK_BUTTON_NONE:
+        if (!talk_button_pair())
+        {
+            set_label(button_hint, "Bluetooth didn't start");
+            return;
+        }
+        break;
+    case TALK_BUTTON_FINDING:
+    case TALK_BUTTON_PAIRING:
+    case TALK_BUTTON_NOT_FOUND:
+    case TALK_BUTTON_FAILED:
+        talk_button_cancel();
+        break;
+    default:
+        talk_button_forget();
+        break;
+    }
+    show_button();
+}
+
+static void add_button_page(ui_feature_t *feature)
+{
+    button_page = ui_feature_add_page(feature, "Talk Button", false);
+    lv_obj_set_scrollable(button_page, false);
+
+    button_title = lv_label_create(button_page);
+    lv_label_set_text(button_title, "Talk Button");
+    lv_obj_align(button_title, LV_ALIGN_TOP_MID, 0, ui_px(28));
+
+    button_status = lv_label_create(button_page);
+    lv_label_set_text(button_status, "");
+    lv_obj_align(button_status, LV_ALIGN_CENTER, 0, ui_px(-50));
+
+    button_action = lv_button_create(button_page);
+    lv_obj_set_size(button_action, ui_px(150), ui_px(40));
+    lv_obj_set_style_radius(button_action, LV_RADIUS_CIRCLE, 0);
+    lv_obj_align(button_action, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_event_cb(button_action, button_action_cb, LV_EVENT_CLICKED, NULL);
+    button_action_label = lv_label_create(button_action);
+    lv_label_set_text(button_action_label, "");
+    lv_obj_center(button_action_label);
+
+    button_hint = lv_label_create(button_page);
+    lv_label_set_text(button_hint, "");
+    lv_obj_set_style_text_align(button_hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(button_hint, COLOR_MUTED, 0);
+    lv_obj_align(button_hint, LV_ALIGN_CENTER, 0, ui_px(60));
+
+    show_button();
 }
 
 /* ----- Firmware update ----- */
@@ -790,6 +921,7 @@ static bool build(ui_feature_t *feature)
     if (comm_available())
     {
         add_comm_page(feature);
+        add_button_page(feature);
     }
 #endif
     add_rotation_page(feature);

@@ -203,6 +203,42 @@ bool rcat_hal_ble_send(int link, const void *data, size_t len);
 size_t rcat_hal_ble_receive(int link, void *data, size_t max);
 
 /*
+ * A Bluetooth LE button: a HID remote, like a camera shutter remote, paired
+ * with the board. To the board it's a keyboard, and any key held down counts.
+ * Once it's in use, the board connects whenever the button's awake (a press
+ * wakes it), and keeps the pairing from one startup to the next. Safe to call
+ * from the UI loop; everything returns straight away.
+ */
+typedef enum
+{
+    RCAT_HAL_BLE_BUTTON_OFF,            // not in use
+    RCAT_HAL_BLE_BUTTON_WAITING,        // in use, waiting for it to wake up
+    RCAT_HAL_BLE_BUTTON_CONNECTING,     // connecting, pairing or finding its keys
+    RCAT_HAL_BLE_BUTTON_CONNECTED,
+} rcat_hal_ble_button_state_t;
+
+/* Look for HID devices in pairing mode, forgetting those found before.
+ * Returns false if the board has no Bluetooth, or can't pair. */
+bool rcat_hal_ble_button_find(void);
+void rcat_hal_ble_button_find_stop(void);
+size_t rcat_hal_ble_button_found(rcat_hal_ble_device_t *devices, size_t max);
+
+/* Use this button: pair with it the first time, then connect whenever it's
+ * awake, until rcat_hal_ble_button_stop(). connect_now, for one that's just
+ * been found, connects without waiting to see it advertise. */
+bool rcat_hal_ble_button_use(const rcat_hal_ble_device_t *device, bool connect_now);
+void rcat_hal_ble_button_stop(void);
+
+/* Forget a button's pairing, stopping it if it's in use. */
+void rcat_hal_ble_button_forget(const rcat_hal_ble_device_t *device);
+
+rcat_hal_ble_button_state_t rcat_hal_ble_button_state(void);
+
+/* A bit for each of the button's reports with a key down: 0 when nothing's
+ * held. Safe to call from any task. */
+uint32_t rcat_hal_ble_button_held(void);
+
+/*
  * Bluetooth LE, as a peripheral that one phone connects to, alongside the
  * central links above. The board offers one service with two
  * characteristics: one it notifies the phone on, and one the phone writes

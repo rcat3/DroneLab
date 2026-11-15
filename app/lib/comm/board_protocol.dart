@@ -2,7 +2,8 @@
 ///
 /// Board to phone, notified on [toPhoneUuid]:
 ///   sound   [0x01][seq LE16][flags][opus]   flags: 1 first, 2 last (no opus)
-///   status  [0x02][version][mode][flags]    flags: 1 sending, 2 hears the voice
+///   status  [0x02][version][mode][flags]    flags: 1 sending, 2 hears the voice,
+///                                           4 the talk button is connected
 /// Phone to board, written to [fromPhoneUuid]:
 ///   talk    [0x01][0 or 1]
 ///   mode    [0x02][mode]
@@ -40,7 +41,8 @@ class BoardStatus {
   final BoardMode mode;
   final bool sending;
   final bool hearsVoice;
-  BoardStatus(this.version, this.mode, this.sending, this.hearsVoice);
+  final bool buttonConnected;
+  BoardStatus(this.version, this.mode, this.sending, this.hearsVoice, this.buttonConnected);
 }
 
 /// A notification from the board: a [BoardSound], a [BoardStatus], or null.
@@ -52,7 +54,7 @@ Object? parseBoardMessage(Uint8List data) {
           Uint8List.sublistView(data, 4));
     case _msgStatus:
       final mode = data[2] < BoardMode.values.length ? BoardMode.values[data[2]] : BoardMode.pushToTalk;
-      return BoardStatus(data[1], mode, data[3] & 1 != 0, data[3] & 2 != 0);
+      return BoardStatus(data[1], mode, data[3] & 1 != 0, data[3] & 2 != 0, data[3] & 4 != 0);
   }
   return null;
 }
