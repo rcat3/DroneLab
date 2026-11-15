@@ -57,6 +57,13 @@ void main() {
     expect(String.fromCharCodes(piece.data), '200\n');
   });
 
+  test("the page's hash matches the board's", () {
+    // FNV-1a test vectors
+    expect(fnv1a([]), 0x811c9dc5);
+    expect(fnv1a('a'.codeUnits), 0xe40c292c);
+    expect(fnv1a('foobar'.codeUnits), 0xbf9cf968);
+  });
+
   test('board messages', () {
     final sound = parseBoardMessage(Uint8List.fromList([1, 0x34, 0x12, 1, 9, 8])) as BoardSound;
     expect(sound.seq, 0x1234);

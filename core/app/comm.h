@@ -36,6 +36,12 @@
  *     0x03 answer: 03, the request's id, flags as above, then a piece of
  *                  "200\n" and the JSON, "304\n" for a GET /api/state that's
  *                  the same as the last one sent, or "404\n".
+ *   GET /version?app=<the app's version> tells the board the app's version
+ *   (see comm_app_version), and answers {"firmware": rcat_hal_firmware_version,
+ *   "built": rcat_hal_firmware_built, "comm": COMM_VERSION}.
+ *   GET /remote.html?h=<hash> answers with the page itself (remote_page.html),
+ *   so the app shows the board's own version, or "304\n" if <hash>, eight
+ *   hex digits of the page's 32-bit FNV-1a hash, says the app has it already.
  *
  * The link has to be paired, with the 6-digit code the board shows, before
  * any of it goes through (see rcat_hal_ble_peer_passkey in hal.h).
@@ -50,7 +56,12 @@
 #define COMM_SERVICE_UUID       "efe06e1b-a7ff-4823-bfbb-b3a82ea05849"
 #define COMM_TO_PHONE_UUID      "efe06e1c-a7ff-4823-bfbb-b3a82ea05849"
 #define COMM_FROM_PHONE_UUID    "efe06e1d-a7ff-4823-bfbb-b3a82ea05849"
-#define COMM_VERSION            1
+/* The version of the messages here, in the status message, for the app to
+ * tell what the board can do. Goes up by one with each change.
+ *   1  sound, status, talk and mode
+ *   2  the phone remote's requests (0x03), GET /version, and pairing with a
+ *      code; the status's bit 2, the talk button */
+#define COMM_VERSION            2
 
 typedef enum
 {
@@ -96,6 +107,9 @@ bool comm_voice_heard(void);
 
 /* The name it advertises. */
 const char *comm_name(void);
+
+/* The connected app's version, as it said, or "" if it hasn't. */
+const char *comm_app_version(void);
 
 /* Answer the phone. Call it every 50 ms or so, from the UI loop. */
 void comm_poll(uint32_t now_ms);

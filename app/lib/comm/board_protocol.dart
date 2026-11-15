@@ -20,7 +20,12 @@ const serviceUuid = 'efe06e1b-a7ff-4823-bfbb-b3a82ea05849';
 const toPhoneUuid = 'efe06e1c-a7ff-4823-bfbb-b3a82ea05849';
 const fromPhoneUuid = 'efe06e1d-a7ff-4823-bfbb-b3a82ea05849';
 
-const commVersion = 1;
+/// The board's message versions (COMM_VERSION in comm.h), in its status:
+///   1  sound, status, talk and mode
+///   2  the phone remote's requests, GET /version, pairing with a code, and
+///      the status's talk button bit
+const commVersion = 2;
+const commVersionRemote = 2;
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -96,3 +101,13 @@ List<Uint8List> requestMessages(int id, Uint8List request) {
 
 Uint8List talkMessage(bool talk) => Uint8List.fromList([_msgTalk, talk ? 1 : 0]);
 Uint8List modeMessage(BoardMode mode) => Uint8List.fromList([_msgMode, mode.index]);
+
+/// FNV-1a, 32 bits: how the board tells whether the app's copy of the
+/// remote's page is the same as its own.
+int fnv1a(List<int> bytes) {
+  var h = 0x811c9dc5;
+  for (final b in bytes) {
+    h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF;
+  }
+  return h;
+}

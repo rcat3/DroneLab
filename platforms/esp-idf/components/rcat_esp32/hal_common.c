@@ -8,6 +8,7 @@
 
 #include "driver/gpio.h"
 #include "driver/sdmmc_host.h"
+#include "esp_app_desc.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -128,4 +129,21 @@ bool rcat_hal_button_pressed(void)
     down = now_down;
     changed_us = 0;
     return down;
+}
+
+const char *rcat_hal_firmware_version(void)
+{
+    // ESP-IDF builds `git describe` into the firmware
+    return esp_app_get_description()->version;
+}
+
+const char *rcat_hal_firmware_built(void)
+{
+    static char built[40];  // the date and time fields are 16 bytes each
+    if (built[0] == '\0')
+    {
+        const esp_app_desc_t *d = esp_app_get_description();
+        snprintf(built, sizeof(built), "%s %s", d->date, d->time);
+    }
+    return built;
 }

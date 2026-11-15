@@ -51,6 +51,16 @@ set(BOARD_SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/boards/${BOARD_DIR})
 file(GLOB BOARD_SOURCES CONFIGURE_DEPENDS ${BOARD_SRC_DIR}/*.c)
 add_library(board STATIC ${BOARD_SOURCES})
 target_include_directories(board PUBLIC ${BOARD_SRC_DIR})
+# The firmware's version, as ESP-IDF does it: where in git's history it's from
+execute_process(COMMAND git describe --tags --always --dirty
+                WORKING_DIRECTORY ${REPO_ROOT}
+                OUTPUT_VARIABLE RCAT_FIRMWARE_VERSION
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET)
+if (NOT RCAT_FIRMWARE_VERSION)
+    set(RCAT_FIRMWARE_VERSION "unknown")
+endif()
+target_compile_definitions(board PRIVATE RCAT_FIRMWARE_VERSION="${RCAT_FIRMWARE_VERSION}")
 target_link_libraries(board PUBLIC
     rcat_core
     lvgl

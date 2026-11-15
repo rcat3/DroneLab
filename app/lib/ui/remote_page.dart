@@ -2,15 +2,22 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../comm/board_link.dart';
+import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 
 /// The phone remote: the board's own remote page (core/app/remote_page.html),
 /// with its requests going to the board over Bluetooth instead of the
 /// board's WiFi hotspot, so the phone keeps its internet for the comm
 /// channel.
+///
+/// The page comes from the board, as soon as it connects, so it always
+/// matches the board's firmware, however old the app is. The last one is
+/// kept, and only sent again when it changes. The copy built into the app is
+/// for a board too old to send it.
 class RemotePage extends StatefulWidget {
   final CommController comm;
   const RemotePage({super.key, required this.comm});
@@ -26,6 +33,7 @@ const _bridge = r'''
 (function () {
   const pending = new Map();
   let next = 1;
+  window.droneLabApp = "APP_VERSION";
   window.__droneLabAnswer = function (id, status, text) {
     const p = pending.get(id);
     if (!p) return;
@@ -56,6 +64,7 @@ class _RemotePageState extends State<RemotePage> {
   WebViewController? _web;
   String? _lastState; // the board says "304" when the state hasn't changed
   bool _wasConnected = false;
+  bool _tooOld = false;    // the board's firmware can't do the remote over Bluetooth
 
   BoardLink get _board => widget.comm.board;
 
@@ -76,14 +85,35 @@ class _RemotePageState extends State<RemotePage> {
   /// board's lists again.
   void _onBoard() {
     final connected = _board.state == BoardState.connected && _board.status != null;
-    if (connected && !_wasConnected) _load();
+    if (connected && !_wasConnected) {
+      _tooOld = _board.status!.version < commVersionRemote;
+      if (!_tooOld) _load();
+    }
     if (connected != _wasConnected) setState(() => _wasConnected = connected);
   }
 
+  /// The page: the board's, or the one kept from last time if the board says
+  /// it's the same, or the app's own.
+  Future<String> _page() async {
+    final prefs = await SharedPreferences.getInstance();
+    final kept = prefs.getString('remotePage');
+    final keptHash = kept == null ? '' : fnv1a(utf8.encode(kept)).toRadixString(16).padLeft(8, '0');
+    try {
+      final a = await _board.request('GET', '/remote.html?h=$keptHash', '', const Duration(seconds: 30));
+      if (a.status == 304 && kept != null) return kept;
+      if (a.status == 200 && a.body.isNotEmpty) {
+        await prefs.setString('remotePage', a.body);
+        return a.body;
+      }
+    } catch (_) {}
+    return kept ?? await rootBundle.loadString('assets/remote_page.html');
+  }
+
   Future<void> _load() async {
-    var html = await rootBundle.loadString('assets/remote_page.html');
+    var html = await _page();
     final head = html.indexOf('<head>');
-    html = head < 0 ? _bridge + html : html.replaceRange(head + 6, head + 6, _bridge);
+    final bridge = _bridge.replaceFirst('APP_VERSION', _board.appVersion.replaceAll('"', ''));
+    html = head < 0 ? bridge + html : html.replaceRange(head + 6, head + 6, bridge);
     _lastState = null;
     final web = _web ??= WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -122,7 +152,18 @@ class _RemotePageState extends State<RemotePage> {
     final web = _web;
     return Scaffold(
       appBar: AppBar(title: const Text('DroneLab Remote')),
-      body: _wasConnected && web != null
+      body: _wasConnected && _tooOld
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: Text(
+                  "The board's firmware is too old for the remote in the app. Update the board, "
+                  'or use its WiFi remote (Settings, Phone Remote).',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          : _wasConnected && web != null
           ? WebViewWidget(controller: web)
           : const Center(
               child: Padding(

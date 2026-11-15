@@ -274,6 +274,8 @@ transition: opacity .2s; pointer-events: none; white-space: nowrap; z-index: 4; 
 <button class="wide" id="remote-auto">Start at power-up</button>
 <div class="muted" style="font-size:13px;margin-top:8px">Switches the remote on as the display starts, so phones that have joined before join again by themselves.</div>
 </div>
+<h2>Firmware</h2>
+<div class="card muted" id="firmware" style="font-size:14px"></div>
 </section>
 <button id="stop">STOP</button>
 <div id="toast"></div>
@@ -372,6 +374,10 @@ $("rotations").append(b);
 function buildDisplay() {
 const box = $("startups");
 box.replaceChildren();
+// Which firmware, when it was built, and the app's version if it's in the app
+$("firmware").textContent = (info.firmware || "unknown version") +
+(info.built ? ", built " + info.built.slice(0, -3) : "") +
+(window.droneLabApp ? ". App " + window.droneLabApp : "");
 info.startup_choices.forEach((name, i) => {
 const b = el("button", "", name);
 b.dataset.i = i;

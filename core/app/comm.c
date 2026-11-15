@@ -112,10 +112,13 @@ static char *answer;
 static size_t request_len;
 static uint8_t request_id;
 static bool request_open;           // its first piece came, and not its last
-static size_t answer_len, answer_sent;
+static char answer_head[4];         // "200\n" and the like
+static const char *answer_body;     // the JSON in answer, or the page in flash
+static size_t answer_len, answer_sent;  // of the head and body together
 static uint8_t answer_id;
 static bool answering;
-static uint32_t last_state_hash;    // of the last /api/state sent, to say "unchanged" 
+static uint32_t last_state_hash;    // of the last /api/state sent, to say "unchanged"
+static char app_version[24];        // what the app said it is
 static bool available;
 static volatile bool running;
 static volatile comm_mode_t mode;
@@ -563,6 +566,11 @@ const char *comm_name(void)
     return remote_ssid();   // the same name as the phone remote's hotspot
 }
 
+const char *comm_app_version(void)
+{
+    return app_version;
+}
+
 static uint32_t hash(const char *data, size_t len)
 {
     uint32_t h = 2166136261u;   // FNV-1a
@@ -587,9 +595,49 @@ static void answer_request(void)
     char method[8], target[200];
     int status = 404;
     int len = -1;
+    answer_body = answer + 4;
     if (sscanf(request, "%7s %199s", method, target) == 2)
     {
-        len = remote_api(method, target, body, body_len, answer + 4, ANSWER_MAX - 4);
+        if (strncmp(target, "/version", 8) == 0)
+        {
+            const char *v = strstr(target, "app=");
+            if (v != NULL)
+            {
+                size_t n = strcspn(v + 4, "&");
+                n = n < sizeof(app_version) - 1 ? n : sizeof(app_version) - 1;
+                memcpy(app_version, v + 4, n);
+                app_version[n] = '\0';
+                printf("comm: app version %s\n", app_version);
+            }
+            len = snprintf(answer + 4, ANSWER_MAX - 4, "{\"firmware\":\"%s\",\"built\":\"%s\",\"comm\":%d}",
+                           rcat_hal_firmware_version(), rcat_hal_firmware_built(), COMM_VERSION);
+        }
+        else if (strncmp(target, "/remote.html", 12) == 0)
+        {
+            // The remote's page itself, so the app shows the board's own
+            // version. ?h= is the hash of the copy the app has: if it's the
+            // same, there's no need to send it.
+            size_t page_len;
+            const char *page = remote_page_html(&page_len);
+            const char *have = strstr(target, "h=");
+            if (page != NULL)
+            {
+                char hex[12];
+                snprintf(hex, sizeof(hex), "%08lx", (unsigned long)hash(page, page_len));
+                bool same = have != NULL && strncmp(have + 2, hex, 8) == 0;
+                memcpy(answer_head, same ? "304\n" : "200\n", 4);
+                answer_body = page;
+                answer_len = 4 + (same ? 0 : page_len);
+                answer_sent = 0;
+                answer_id = request_id;
+                answering = true;
+                return;
+            }
+        }
+        else
+        {
+            len = remote_api(method, target, body, body_len, answer + 4, ANSWER_MAX - 4);
+        }
     }
     if (len >= 0)
     {
@@ -614,7 +662,7 @@ static void answer_request(void)
     {
         len = 0;
     }
-    memcpy(answer, status == 200 ? "200\n" : status == 304 ? "304\n" : "404\n", 4);
+    memcpy(answer_head, status == 200 ? "200\n" : status == 304 ? "304\n" : "404\n", 4);
     answer_len = 4 + len;
     answer_sent = 0;
     answer_id = request_id;
@@ -669,7 +717,11 @@ static void send_answer(void)
         msg[0] = MSG_REQUEST;
         msg[1] = answer_id;
         msg[2] = (answer_sent == 0 ? REQ_FIRST : 0) | (answer_sent + n == answer_len ? REQ_LAST : 0);
-        memcpy(msg + 3, answer + answer_sent, n);
+        for (size_t k = 0; k < n; k++)
+        {
+            size_t at = answer_sent + k;
+            msg[3 + k] = at < 4 ? answer_head[at] : answer_body[at - 4];
+        }
         if (!rcat_hal_ble_peer_send(msg, 3 + n))
         {
             return;     // no room just now: carry on next time
@@ -691,6 +743,7 @@ void comm_poll(uint32_t now_ms)
     if (!rcat_hal_ble_peer_connected())
     {
         phone_talk = false;     // so a phone that's gone doesn't leave it talking
+        app_version[0] = '\0';
         answering = false;
         request_open = false;
         last_state_hash = 0;
@@ -775,6 +828,11 @@ bool comm_voice_heard(void)
 }
 
 const char *comm_name(void)
+{
+    return "";
+}
+
+const char *comm_app_version(void)
 {
     return "";
 }

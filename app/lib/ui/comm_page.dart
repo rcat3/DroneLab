@@ -174,6 +174,11 @@ class _BoardCard extends StatelessWidget {
             ]),
             const SizedBox(height: 8),
             Text(status),
+            if (b.firmware != null) ...[
+              const SizedBox(height: 4),
+              Text('Firmware ${b.firmware}, app ${b.appVersion}',
+                  style: Theme.of(context).textTheme.bodySmall),
+            ],
             if (st != null && st.buttonConnected) ...[
               const SizedBox(height: 4),
               const Row(children: [

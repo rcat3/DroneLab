@@ -152,6 +152,14 @@ static void add_brightness_page(ui_feature_t *feature)
     lv_timer_t *uptime_timer = lv_timer_create(uptime_timer_cb, UPTIME_UPDATE_MS, NULL);
     lv_timer_ready(uptime_timer);
 
+    // Which firmware this is, and when it was built (to the minute)
+    const char *built = rcat_hal_firmware_built();
+    lv_obj_t *version_label = lv_label_create(page);
+    lv_label_set_text_fmt(version_label, "%s\nBuilt %.*s", rcat_hal_firmware_version(), (int)(strlen(built) > 3 ? strlen(built) - 3 : strlen(built)), built);
+    lv_obj_set_style_text_align(version_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(version_label, COLOR_MUTED, 0);
+    lv_obj_align(version_label, LV_ALIGN_CENTER, 0, ui_px(100));
+
     // Kept up all the time, as on some boards the battery can be plugged in
     // while it's running
     lv_timer_t *timer = lv_timer_create(battery_timer_cb, BATTERY_UPDATE_MS, NULL);
@@ -543,7 +551,11 @@ static void show_comm(void)
         {
             lv_buttonmatrix_set_button_ctrl(comm_modes, comm_mode(), LV_BUTTONMATRIX_CTRL_CHECKED);
         }
-        set_label(comm_name_label, comm_name());
+        // The board's name, and the app's version once it's said
+        char text[64];
+        const char *app = comm_app_version();
+        snprintf(text, sizeof(text), app[0] ? "%s, app %s" : "%s%s", comm_name(), app);
+        set_label(comm_name_label, text);
     }
 
     if (!on)

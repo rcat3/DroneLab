@@ -354,6 +354,16 @@ int rcat_hal_hotspot_clients(void)
     return 0;
 }
 
+const char *rcat_hal_firmware_built(void)
+{
+    return __DATE__ " " __TIME__;
+}
+
+const char *rcat_hal_firmware_version(void)
+{
+    return RCAT_FIRMWARE_VERSION;   // from `git describe`, in CMakeLists.txt
+}
+
 uint32_t rcat_hal_random(void)
 {
     // Only used for hotspot passwords, which this board doesn't have

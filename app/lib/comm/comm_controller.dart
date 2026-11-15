@@ -6,6 +6,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'audio_out.dart';
@@ -52,6 +53,7 @@ class CommController extends ChangeNotifier {
   SharedPreferences? _prefs;
 
   Future<void> init() async {
+    board.appVersion = (await PackageInfo.fromPlatform()).version;
     final p = _prefs = await SharedPreferences.getInstance();
     server = ServerSettings(
       host: p.getString('host') ?? '',

@@ -51,6 +51,10 @@ int remote_phones(void);
 /* Answer the phones. Call every 50 ms or so with a millisecond clock. */
 void remote_poll(uint32_t now_ms);
 
+/* The page itself, for the app to show (see comm.h). NULL on boards without
+ * the remote. */
+const char *remote_page_html(size_t *len);
+
 /* Answer one of the page's API requests, from somewhere other than the
  * hotspot: the app, over the comm channel's Bluetooth link (see comm.h).
  * method is "GET" or "POST", and target the path and query, like

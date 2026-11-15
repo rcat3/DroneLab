@@ -29,6 +29,12 @@ class RemoteAnswer {
 }
 
 class BoardLink extends ChangeNotifier {
+  /// The app's version, told to the board when it connects.
+  String appVersion = '';
+
+  /// The board's firmware version (rcat_hal_firmware_version), once it's said.
+  String? firmware;
+
   BoardState state = BoardState.off;
   String? error;
   String? deviceId;
@@ -149,6 +155,7 @@ class BoardLink extends ChangeNotifier {
     state = _wanted ? BoardState.connecting : BoardState.off;
     error = why;
     status = null;
+    firmware = null;
     notifyListeners();
     _retry?.cancel();
     if (_wanted) {
@@ -165,6 +172,16 @@ class BoardLink extends ChangeNotifier {
     } else if (msg is BoardStatus) {
       final old = status;
       status = msg;
+      if (old == null && msg.version >= commVersionRemote) {
+        // Paired and talking: swap versions
+        request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}').then((a) {
+          if (a.status == 200) {
+            final v = jsonDecode(a.body) as Map<String, dynamic>;
+            firmware = v['firmware'] as String?;
+            notifyListeners();
+          }
+        }).catchError((_) {});
+      }
       if (old == null ||
           old.mode != msg.mode ||
           old.sending != msg.sending ||
@@ -200,11 +217,12 @@ class BoardLink extends ChangeNotifier {
 
   /// Ask the board what the phone remote's page would, over Bluetooth:
   /// [target] like "/api/voice?p=3". One request goes at a time.
-  Future<RemoteAnswer> request(String method, String target, [String body = '']) {
+  Future<RemoteAnswer> request(String method, String target,
+      [String body = '', Duration timeout = const Duration(seconds: 5)]) {
     final result = Completer<RemoteAnswer>();
     _requestChain = _requestChain.then((_) async {
       try {
-        result.complete(await _send(method, target, body));
+        result.complete(await _send(method, target, body, timeout));
       } catch (e) {
         result.completeError(e);
       }
@@ -212,7 +230,7 @@ class BoardLink extends ChangeNotifier {
     return result.future;
   }
 
-  Future<RemoteAnswer> _send(String method, String target, String body) async {
+  Future<RemoteAnswer> _send(String method, String target, String body, Duration timeout) async {
     final id = deviceId;
     if (id == null || state != BoardState.connected) {
       throw StateError('The board is not connected');
@@ -226,7 +244,7 @@ class BoardLink extends ChangeNotifier {
       await UniversalBle.write(id, serviceUuid, fromPhoneUuid, m);
     }
     try {
-      return await answer.future.timeout(const Duration(seconds: 5));
+      return await answer.future.timeout(timeout);
     } finally {
       _answer = null;
     }
@@ -250,6 +268,7 @@ class BoardLink extends ChangeNotifier {
     }
     state = BoardState.off;
     status = null;
+    firmware = null;
     notifyListeners();
   }
 }

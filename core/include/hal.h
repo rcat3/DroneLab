@@ -139,6 +139,14 @@ int rcat_hal_hotspot_clients(void);
 /* A random number, as good as the board can make, for passwords. */
 uint32_t rcat_hal_random(void);
 
+/* The firmware's version: where in the code's history it was built from, as
+ * `git describe` puts it, like "v0.2-96-g9881203" (96 commits after the v0.2
+ * tag, at commit 9881203), with "-dirty" if it had changes not committed. */
+const char *rcat_hal_firmware_version(void);
+
+/* When the firmware was built, as the compiler puts it: "Nov 15 2026 01:30:12". */
+const char *rcat_hal_firmware_built(void);
+
 /* Mount removable storage (the SD card). On success, *path is set to where
  * it's mounted, e.g. "/sdcard", for use with fopen() and friends. Returns
  * false if the board has no card slot or no readable card. */

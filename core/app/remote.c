@@ -486,7 +486,11 @@ static void write_state(json_t *j)
 
 static void write_info(json_t *j)
 {
-    jprintf(j, "{\"patterns\":[");
+    jprintf(j, "{\"firmware\":");
+    jstring(j, rcat_hal_firmware_version());
+    jprintf(j, ",\"built\":");
+    jstring(j, rcat_hal_firmware_built());
+    jprintf(j, ",\"patterns\":[");
     for (size_t i = 0; i < patterns_count(); i++)
     {
         jprintf(j, "%s", i ? "," : "");
@@ -898,6 +902,12 @@ static void respond_json(client_t *c, void (*write)(json_t *))
     json_t j = { c->json, 0, sizeof(c->json) };
     write(&j);
     respond(c, "200 OK", "application/json", c->json, j.len, NULL);
+}
+
+const char *remote_page_html(size_t *len)
+{
+    *len = remote_page_len;
+    return remote_page;
 }
 
 int remote_api(const char *method, const char *target, const char *body, size_t body_len, char *out, size_t cap)
@@ -1316,6 +1326,11 @@ void remote_poll(uint32_t now_ms) { (void)now_ms; }
 int remote_api(const char *method, const char *target, const char *body, size_t body_len, char *out, size_t cap)
 {
     return -1;
+}
+const char *remote_page_html(size_t *len)
+{
+    *len = 0;
+    return NULL;
 }
 
 #endif
