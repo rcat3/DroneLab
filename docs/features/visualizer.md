@@ -2,7 +2,7 @@
 
 *Boards with a microphone: the ESP32-S3 boards*
 
-The Visualizer fills the screen with a moving picture of your voice, and of whatever the speaker is playing while it's on: the [voice effect](voice-effects.md) or a [sound](sound.md) file.  It has two pages: the visualizer itself, and a page to choose which one.  Tapping the visualizer also moves on to the next one.  The choice is saved, and the visualizer can be picked to show when the display turns on, in [Settings](settings.md#startup).  The [Phone Remote](phone-remote.md) lists them on its Screen tab, and shows the one you tap.
+The Visualizer fills the screen with a moving picture of your voice, and of whatever the speaker is playing while it's on: the [voice effect](voice-effects.md) or a [sound](sound.md) file.  Its pages, left to right, are the visualizer itself, a page to choose which one, and the [Voice Ring](voice-ring.md)'s settings, as the ring is a picture of your voice too.  Tapping the visualizer also moves on to the next one.  The choice is saved, and the visualizer can be picked to show when the display turns on, in [Settings](settings.md#startup).  The [Phone Remote](phone-remote.md) lists them on its Screen tab, and shows the one you tap.
 
 | Visualizer | What it shows |
 |---|---|

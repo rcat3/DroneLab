@@ -1,7 +1,10 @@
 /*
- * Voice feature (boards with a microphone): the settings page for the voice
- * ring, the voice effect, and the voice lab (boards with WiFi). Pictures of
- * the voice are in the Visualizer feature.
+ * Voice feature (boards with a microphone): the voice effect and its volume,
+ * and the voice lab (boards with WiFi).
+ *
+ * The voice ring's settings page is here too, but on boards with the
+ * Visualizer, it's the last of the Visualizer's pages instead, as the ring
+ * is a picture of the voice too (feature_voice_add_ring_page).
  *
  * The voice ring itself is drawn over the images feature, and over its own
  * settings page so the color can be previewed.
@@ -338,6 +341,28 @@ static void add_lab_page(ui_feature_t *feature)
     lv_obj_align(lab_status_label, LV_ALIGN_CENTER, 0, ui_px(40));
 }
 
+static bool ring_added;
+
+bool feature_voice_add_ring_page(ui_feature_t *feature)
+{
+    if (ring_added || !audio_level_available())
+    {
+        return false;
+    }
+    voice_ring_create();
+    add_ring_settings_page(feature);
+    ring_added = true;
+    return true;
+}
+
+void feature_voice_on_navigate(void)
+{
+    if (ring_added)
+    {
+        on_navigate();
+    }
+}
+
 static bool build(ui_feature_t *feature)
 {
     if (!audio_level_available())
@@ -345,11 +370,10 @@ static bool build(ui_feature_t *feature)
         return false;
     }
 
-    voice_ring_create();
-
-    add_ring_settings_page(feature);
+    bool any = feature_voice_add_ring_page(feature);   // unless the Visualizer has it
     if (voice_fx_start())
     {
+        any = true;
         add_effect_page(feature);
         add_volume_page(feature);
         lv_timer_create(button_timer_cb, BUTTON_MS, NULL);
@@ -358,6 +382,7 @@ static bool build(ui_feature_t *feature)
     if (voice_lab_available())
     {
         add_lab_page(feature);
+        any = true;
     }
-    return true;
+    return any;     // left out if the Visualizer has the ring and there's nothing else
 }

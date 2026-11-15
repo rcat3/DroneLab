@@ -2,7 +2,7 @@
 
 *Boards with a microphone: the ESP32-S3 boards*
 
-The Voice feature's pages, left to right, are the Voice Ring's settings, the [Voice Effect](voice-effects.md) and its volume (on the ESP32-S3-Touch-AMOLED-1.75), and the [Voice Lab](voice-lab.md).  Pictures of your voice that fill the screen, KITT among them, are in the [Visualizer](visualizer.md).
+The Voice Ring's settings are the last page of the [Visualizer](visualizer.md), with the other pictures of your voice.  (On boards without the Visualizer, they're the first page of the Voice feature.)  The Voice feature has the [Voice Effect](voice-effects.md) and its volume (on the ESP32-S3-Touch-AMOLED-1.75), and the [Voice Lab](voice-lab.md).
 
 ## Voice Ring
 

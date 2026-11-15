@@ -30,6 +30,12 @@ typedef struct
     void (*on_navigate)(void);
 } ui_feature_def_t;
 
+/* The voice ring's settings page (feature_voice.c), for the Visualizer to
+ * take as its own. Returns false if it's elsewhere already, or the board has
+ * no microphone. The Visualizer then calls feature_voice_on_navigate. */
+bool feature_voice_add_ring_page(ui_feature_t *feature);
+void feature_voice_on_navigate(void);
+
 /* Scale a size or offset from the 240x240 design to this screen. */
 int32_t ui_px(int32_t design_px);
 
