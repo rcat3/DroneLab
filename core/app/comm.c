@@ -43,10 +43,10 @@
 // heard, until its loud parts reach AGC_TARGET_DB, between AGC_MIN_DB and
 // AGC_MAX_DB. It comes down quickly and goes up slowly, and soft limiting
 // rounds off what's left over. It starts at AGC_START_DB.
-#define AGC_TARGET_DB       -18.0f  // 20 ms level, before limiting
-#define AGC_START_DB        16.0f
+#define AGC_TARGET_DB       -12.0f  // 20 ms level, before limiting; -18 was quiet next to other Mumble users
+#define AGC_START_DB        20.0f
 #define AGC_MIN_DB          0.0f
-#define AGC_MAX_DB          26.0f
+#define AGC_MAX_DB          30.0f
 #define AGC_UP_DB           0.06f   // per 20 ms frame: 3 dB/s
 #define AGC_DOWN_DB         1.0f    // per 20 ms frame, at most
 
