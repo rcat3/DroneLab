@@ -551,7 +551,8 @@ static void show_comm(void)
     }
     else if (comm_sending())
     {
-        set_label(comm_title, LV_SYMBOL_AUDIO "  Talking");
+        // Say when it's the phone, which keeps talking until it says stop
+        set_label(comm_title, comm_phone_talking() ? LV_SYMBOL_AUDIO "  Phone talking" : LV_SYMBOL_AUDIO "  Talking");
     }
     else if (!comm_phone_connected())
     {
@@ -630,12 +631,28 @@ static void add_comm_page(ui_feature_t *feature)
     lv_obj_set_style_text_color(comm_hint, COLOR_MUTED, 0);
     lv_obj_align(comm_hint, LV_ALIGN_CENTER, 0, ui_px(0));
 
-    // Push to talk, or talk whenever it hears you
+    // Push to talk, or talk whenever it hears you. It changes when the
+    // finger lifts (CLICK_TRIG), not when it lands, so that swiping to the
+    // next page from here doesn't change it.
     static const char *const modes[] = { "Push to talk", "Voice", "" };
     comm_modes = lv_buttonmatrix_create(comm_page);
     lv_buttonmatrix_set_map(comm_modes, modes);
-    lv_buttonmatrix_set_button_ctrl_all(comm_modes, LV_BUTTONMATRIX_CTRL_CHECKABLE);
+    lv_buttonmatrix_set_button_ctrl_all(comm_modes, LV_BUTTONMATRIX_CTRL_CHECKABLE | LV_BUTTONMATRIX_CTRL_CLICK_TRIG);
     lv_buttonmatrix_set_one_checked(comm_modes, true);
+    // The chosen one is filled in, and the other dark: told apart by how
+    // bright they are, not only by their color.
+    lv_obj_set_style_bg_opa(comm_modes, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(comm_modes, 0, 0);
+    lv_obj_set_style_pad_all(comm_modes, 0, 0);
+    lv_obj_set_style_pad_column(comm_modes, ui_px(6), 0);
+    lv_obj_set_style_radius(comm_modes, ui_px(10), LV_PART_ITEMS);
+    lv_obj_set_style_border_width(comm_modes, 0, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(comm_modes, 0, LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(comm_modes, LV_OPA_COVER, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(comm_modes, lv_color_hex(0x2a2a2a), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(comm_modes, lv_color_hex(0x909090), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(comm_modes, lv_palette_main(LV_PALETTE_PINK), LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(comm_modes, lv_color_white(), LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_buttonmatrix_set_button_ctrl(comm_modes, comm_mode(), LV_BUTTONMATRIX_CTRL_CHECKED);
     lv_obj_set_size(comm_modes, ui_px(190), ui_px(40));
     lv_obj_align(comm_modes, LV_ALIGN_CENTER, 0, ui_px(-12));

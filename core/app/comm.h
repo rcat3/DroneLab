@@ -73,6 +73,10 @@ bool comm_phone_connected(void);
 /* True while it's sending the voice to the phone. */
 bool comm_sending(void);
 
+/* True while the phone has asked it to talk, which carries on, in either
+ * mode, until the phone says stop. */
+bool comm_phone_talking(void);
+
 /* True while voice mode hears the wearer, whether or not a phone is there to
  * send to. */
 bool comm_voice_heard(void);

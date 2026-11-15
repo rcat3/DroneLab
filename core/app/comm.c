@@ -522,6 +522,11 @@ bool comm_sending(void)
     return sending;
 }
 
+bool comm_phone_talking(void)
+{
+    return running && phone_talk;
+}
+
 bool comm_voice_heard(void)
 {
     return running && voice_heard;
@@ -602,6 +607,11 @@ bool comm_phone_connected(void)
 }
 
 bool comm_sending(void)
+{
+    return false;
+}
+
+bool comm_phone_talking(void)
 {
     return false;
 }
