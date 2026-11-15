@@ -508,7 +508,8 @@ static void write_comm(json_t *j)
         jstring(j, direct_own_name());
         uint8_t id[4];
         direct_group_id(id);
-        jprintf(j, ",\"id\":\"%02x%02x%02x%02x\"}", id[0], id[1], id[2], id[3]);
+        jprintf(j, ",\"id\":\"%02x%02x%02x%02x\",\"channel\":%u,\"lr\":%d,\"scanning\":%d}", id[0], id[1],
+                id[2], id[3], direct_channel(), direct_long_range() ? 1 : 0, direct_scanning() ? 1 : 0);
     }
     jprintf(j, "}");
 }
@@ -707,6 +708,10 @@ static void set_comm(const char *query)
     {
         direct_stop();
     }
+    if (query_int(query, "scan", 0))
+    {
+        direct_scan();
+    }
     char hex[40], group[SETTINGS_DIRECT_NAME_LEN], name[SETTINGS_DIRECT_NAME_LEN];
     if (query_str(query, "key", hex, sizeof(hex)))
     {
@@ -727,7 +732,9 @@ static void set_comm(const char *query)
         {
             name[0] = '\0';
         }
-        direct_set_group(keyed ? key : NULL, group, name);
+        int channel = query_int(query, "ch", DIRECT_CHANNEL_DEFAULT);
+        int lr = query_int(query, "lr", 0);
+        direct_set_group(keyed ? key : NULL, group, name, (uint8_t)channel, lr != 0);
     }
 }
 

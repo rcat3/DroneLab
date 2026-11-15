@@ -42,7 +42,8 @@ static esp_ip4_addr_t wifi_ip;
 static volatile bool hotspot_on;
 
 // Direct comms: what's heard, oldest first, under direct_lock
-#define DIRECT_CHANNEL      HOTSPOT_CHANNEL
+static volatile uint8_t direct_channel = HOTSPOT_CHANNEL;
+static volatile bool direct_long_range;
 #define DIRECT_QUEUE        32
 typedef struct
 {
@@ -58,6 +59,7 @@ static portMUX_TYPE direct_lock = portMUX_INITIALIZER_UNLOCKED;
 static const uint8_t broadcast_mac[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
 static void direct_resume(void);
+static void direct_set_rate(void);
 
 static void wifi_event_cb(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
@@ -254,7 +256,7 @@ bool rcat_hal_hotspot_start(const char *ssid, const char *password)
     memcpy(config.ap.ssid, ssid, ssid_len);
     config.ap.ssid_len = (uint8_t)ssid_len;
     memcpy(config.ap.password, password, strnlen(password, sizeof(config.ap.password)));
-    config.ap.channel = HOTSPOT_CHANNEL;
+    config.ap.channel = direct_on ? direct_channel : HOTSPOT_CHANNEL;    // with direct comms, on its channel
     config.ap.max_connection = HOTSPOT_MAX_PHONES;
     config.ap.authmode = WIFI_AUTH_WPA2_PSK;
     config.ap.pmf_cfg.capable = true;
@@ -357,8 +359,11 @@ static void direct_resume(void)
         // Nothing else running: a station that joins nothing, on our channel
         esp_wifi_set_mode(WIFI_MODE_STA);
         esp_wifi_start();
-        esp_wifi_set_channel(DIRECT_CHANNEL, WIFI_SECOND_CHAN_NONE);
+        esp_wifi_set_channel(direct_channel, WIFI_SECOND_CHAN_NONE);
     }
+    // Hear Long Range broadcasts as well as ordinary ones, whichever this
+    // board sends: still able to join an ordinary network
+    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N | WIFI_PROTOCOL_LR);
     // Broadcasts aren't heard while the radio dozes
     esp_wifi_set_ps(WIFI_PS_NONE);
 }
@@ -405,9 +410,71 @@ bool rcat_hal_direct_start(void)
         esp_now_add_peer(&peer);
         espnow_ready = true;
     }
-    ESP_LOGI(TAG, "Direct comms on, channel %d. Free internal RAM: %u bytes", DIRECT_CHANNEL,
+    direct_set_rate();
+    ESP_LOGI(TAG, "Direct comms on, channel %d%s. Free internal RAM: %u bytes", direct_channel,
+             direct_long_range ? ", Long Range" : "",
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     return true;
+}
+
+/* Send at Long Range's 500 kb/s, or the usual 1 Mb/s. */
+static void direct_set_rate(void)
+{
+    if (!espnow_ready)
+    {
+        return;
+    }
+    esp_now_rate_config_t rate = {
+        .phymode = direct_long_range ? WIFI_PHY_MODE_LR : WIFI_PHY_MODE_11B,
+        .rate = direct_long_range ? WIFI_PHY_RATE_LORA_500K : WIFI_PHY_RATE_1M_L,
+    };
+    esp_err_t err = esp_now_set_peer_rate_config(broadcast_mac, &rate);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Direct comms: couldn't set the rate (%s)", esp_err_to_name(err));
+    }
+}
+
+void rcat_hal_direct_set_radio(uint8_t channel, bool long_range)
+{
+    if (channel != 1 && channel != 6 && channel != 11)
+    {
+        channel = HOTSPOT_CHANNEL;
+    }
+    bool moved = channel != direct_channel;
+    direct_channel = channel;
+    direct_long_range = long_range;
+    if (!direct_on)
+    {
+        return;
+    }
+    if (moved)
+    {
+        if (hotspot_on)
+        {
+            // The hotspot moves with it: phones on it reconnect
+            wifi_config_t config;
+            if (esp_wifi_get_config(WIFI_IF_AP, &config) == ESP_OK)
+            {
+                config.ap.channel = channel;
+                esp_wifi_set_config(WIFI_IF_AP, &config);
+            }
+        }
+        else if (!wifi_wanted)
+        {
+            esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+        }
+    }
+    direct_set_rate();
+}
+
+bool rcat_hal_direct_listen_on(uint8_t channel)
+{
+    if (!direct_on || hotspot_on || wifi_wanted)
+    {
+        return false;
+    }
+    return esp_wifi_set_channel(channel != 0 ? channel : direct_channel, WIFI_SECOND_CHAN_NONE) == ESP_OK;
 }
 
 void rcat_hal_direct_stop(void)

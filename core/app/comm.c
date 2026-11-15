@@ -1131,14 +1131,16 @@ static void send_direct_peers(uint32_t now_ms)
     n = direct_groups(groups, DIRECT_GROUPS_MAX);
     for (int i = 0; i < n; i++)
     {
-        uint8_t msg[7 + DIRECT_NAME_MAX];
+        uint8_t msg[9 + DIRECT_NAME_MAX];
         size_t len = strlen(groups[i].name);
         msg[0] = MSG_DIRECT_GROUP;
         memcpy(msg + 1, groups[i].id, 4);
         msg[5] = (uint8_t)groups[i].rssi;
         msg[6] = (uint8_t)groups[i].boards;
-        memcpy(msg + 7, groups[i].name, len);
-        rcat_hal_ble_peer_send(msg, 7 + len);
+        msg[7] = groups[i].channel;
+        msg[8] = groups[i].long_range ? 1 : 0;
+        memcpy(msg + 9, groups[i].name, len);
+        rcat_hal_ble_peer_send(msg, 9 + len);
     }
 }
 
@@ -1239,6 +1241,17 @@ void comm_poll(uint32_t now_ms)
     merge_hearing();
     send_direct_peers(now_ms);
     send_answer();
+
+    // The wearer's avatar, for direct comms to send the others, once it's here
+    static const uint16_t *own_sent;
+    static uint32_t own_changes;
+    const uint16_t *own = comm_avatar(own_avatar);
+    if (own != NULL && (own != own_sent || avatar_changes != own_changes))
+    {
+        own_sent = own;
+        own_changes = avatar_changes;
+        direct_set_avatar(own, avatar_size);
+    }
 }
 
 #else   // no comm channel on this platform

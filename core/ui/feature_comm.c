@@ -247,7 +247,7 @@ static void make_nobody(void)
 /* Draw src (RGB565, avatar_px square) on screen, AVATAR_SCALE times as big,
  * with every other row darker: in full color for RX and TX, and in dim
  * phosphor green while it's quiet. */
-static void bake(const uint16_t *src, look_t look)
+static void bake(const uint16_t *src, int src_px, look_t look)
 {
     int out_px = avatar_px * AVATAR_SCALE;
     bool mono = look == LOOK_IDLE || look == LOOK_OFF;
@@ -255,50 +255,68 @@ static void bake(const uint16_t *src, look_t look)
     const int tr = (PHOSPHOR_HEX >> 16) & 0xFF, tg = (PHOSPHOR_HEX >> 8) & 0xFF, tb = PHOSPHOR_HEX & 0xFF;
     for (int y = 0; y < out_px; y++)
     {
-        const uint16_t *row = src + (y / AVATAR_SCALE) * avatar_px;
+        // Each of the picture's pixels a block on screen: 2x2 for the phone's,
+        // and 7x7 for those sent over the air, which look all the more retro
+        const uint16_t *row = src + (y * src_px / out_px) * src_px;
         uint16_t *out = avatar_pixels + y * out_px;
         int l = (y % AVATAR_SCALE == AVATAR_SCALE - 1) ? level * SCANLINE / 256 : level;
-        for (int x = 0; x < avatar_px; x++)
+        int last_x = -1;
+        uint16_t p = 0;
+        for (int x = 0; x < out_px; x++)
         {
-            uint16_t v = row[x];
-            int r = (v >> 11) << 3, g = ((v >> 5) & 0x3F) << 2, b = (v & 0x1F) << 3;
-            if (mono)
+            int sx = x * src_px / out_px;
+            if (sx != last_x)
             {
-                int luma = (r * 77 + g * 150 + b * 29) >> 8;
-                r = tr * luma >> 8;
-                g = tg * luma >> 8;
-                b = tb * luma >> 8;
+                last_x = sx;
+                uint16_t v = row[sx];
+                int r = (v >> 11) << 3, g = ((v >> 5) & 0x3F) << 2, b = (v & 0x1F) << 3;
+                if (mono)
+                {
+                    int luma = (r * 77 + g * 150 + b * 29) >> 8;
+                    r = tr * luma >> 8;
+                    g = tg * luma >> 8;
+                    b = tb * luma >> 8;
+                }
+                r = r * l >> 8;
+                g = g * l >> 8;
+                b = b * l >> 8;
+                p = (uint16_t)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
             }
-            r = r * l >> 8;
-            g = g * l >> 8;
-            b = b * l >> 8;
-            uint16_t p = (uint16_t)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
-            for (int k = 0; k < AVATAR_SCALE; k++)
-            {
-                *out++ = p;
-            }
+            *out++ = p;
         }
     }
     lv_obj_invalidate(avatar_image);
 }
 
-static void show_avatar(int slot, look_t look)
+/* Show an avatar: the phone's, in slot, or for one heard over direct comms
+ * without one, the small one their board sent by name, if it has. */
+static void show_avatar(int slot, const char *direct_name, look_t look)
 {
     if (avatar_pixels == NULL)
     {
         return;
     }
     const uint16_t *src = comm_avatar(slot);
+    int src_px = avatar_px;
+    uint32_t changes = comm_avatar_changes();
+    if (src == NULL && direct_name != NULL)
+    {
+        uint8_t version = 0;
+        src = direct_avatar(direct_name, &version);
+        src_px = DIRECT_AVATAR_PX;
+        changes += version;
+    }
     if (src == NULL)
     {
         src = nobody;
+        src_px = avatar_px;
     }
-    if (src != baked_from || look != baked_look || comm_avatar_changes() != baked_changes)
+    if (src != baked_from || look != baked_look || changes != baked_changes)
     {
         baked_from = src;
         baked_look = look;
-        baked_changes = comm_avatar_changes();
-        bake(src, look);
+        baked_changes = changes;
+        bake(src, src_px, look);
     }
 }
 
@@ -366,7 +384,8 @@ static void show_status(void)
     look_t l = !on ? LOOK_OFF : tx ? LOOK_TX : hearing > 0 ? LOOK_RX : LOOK_IDLE;
     set_look(l);
     set_antenna(!uplink ? ANTENNA_DOWN : server == COMM_SERVER_CONNECTED ? ANTENNA_UP : ANTENNA_NO_SERVER);
-    show_avatar(l == LOOK_RX ? comm_hearing_avatar(0) : comm_own_avatar(), l);
+    bool rx_direct = l == LOOK_RX && comm_hearing_transport(0) == COMM_TALK_DIRECT;
+    show_avatar(l == LOOK_RX ? comm_hearing_avatar(0) : comm_own_avatar(), rx_direct ? comm_hearing_name(0) : NULL, l);
 
     set_label(tag, l == LOOK_TX ? "TX" : l == LOOK_RX ? "RX" : l == LOOK_OFF ? "OFF" :
                    comm_mode() == COMM_VOICE ? "VOX" : "PTT");
@@ -799,7 +818,8 @@ static void show_direct(void)
     lv_obj_set_state(direct_switch, LV_STATE_CHECKED, on);
     check_choice(talk_on_buttons, comm_talk_on());     // the app can change it too
     char text[160];
-    snprintf(text, sizeof(text), "Group: %s\nAs: %s", direct_group_name(), direct_own_name());
+    snprintf(text, sizeof(text), "%s, ch %u%s\nAs: %s", direct_group_name(), direct_channel(),
+             direct_long_range() ? ", LR" : "", direct_own_name());
     set_label(direct_group_label, text);
     if (!on)
     {

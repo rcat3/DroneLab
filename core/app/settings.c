@@ -327,6 +327,13 @@ void settings_set_comm_voice_effect(int preset)
     schedule_save();
 }
 
+void settings_set_direct_radio(uint8_t channel, uint8_t long_range)
+{
+    current.direct_channel = channel;
+    current.direct_long_range = long_range ? 1 : 0;
+    schedule_save();
+}
+
 void settings_set_direct(uint8_t on)
 {
     current.direct_on = on ? 1 : 0;

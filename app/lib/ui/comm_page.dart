@@ -445,7 +445,8 @@ class _DirectCard extends StatelessWidget {
                         DropdownMenuItem(value: 'group:${g.id}', child: item(Icons.lock, g.name)),
                       for (final h in heard)
                         DropdownMenuItem(
-                            value: 'group:${h.id}', child: item(Icons.lock_outline, '${h.name} (nearby, ${h.boards})')),
+                            value: 'group:${h.id}',
+                            child: item(Icons.lock_outline, '${h.name} (nearby, ch ${h.channel})')),
                       if (!known)
                         DropdownMenuItem(value: current, child: item(Icons.lock, direct.group)),
                     ],

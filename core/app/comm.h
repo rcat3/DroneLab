@@ -63,7 +63,8 @@
  *                  signed), flags (bit 0 talking), then its name: each board
  *                  heard over direct comms, every couple of seconds.
  *     0x09 direct group: 09, a group's id (4 bytes), how strong it's heard
- *                  (dBm, signed), how many boards are in it, then its name:
+ *                  (dBm, signed), how many boards are in it, its channel,
+ *                  flags (bit 0 Long Range), then its name:
  *                  each group heard about over direct comms, from their
  *                  beacons, every couple of seconds.
  *

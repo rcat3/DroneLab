@@ -47,7 +47,10 @@ class DirectSettings {
   final String group;
   final String name;          // what the other boards see it as
   final String id;            // the group's id, 8 hex digits
-  const DirectSettings(this.on, this.keyed, this.group, this.name, this.id);
+  final int channel;
+  final bool longRange;
+  final bool scanning;        // listening to the other channels for groups
+  const DirectSettings(this.on, this.keyed, this.group, this.name, this.id, this.channel, this.longRange, this.scanning);
 }
 
 /// A direct comms group kept in the app: one made here, or joined.
@@ -56,14 +59,20 @@ class DirectGroup {
   final String passphrase;
   final String key;           // 32 hex digits, from the two
   final bool mine;            // made here
-  const DirectGroup(this.name, this.passphrase, this.key, this.mine);
+  final int channel;          // 1, 6 or 11
+  final bool longRange;
+  const DirectGroup(this.name, this.passphrase, this.key, this.mine, [this.channel = 6, this.longRange = true]);
 
   String get id => directGroupId(key);
 
-  Map<String, Object> toJson() => {'name': name, 'passphrase': passphrase, 'key': key, 'mine': mine};
-  static DirectGroup fromJson(Map<String, dynamic> j) =>
-      DirectGroup(j['name'] as String, j['passphrase'] as String, j['key'] as String, j['mine'] == true);
+  Map<String, Object> toJson() =>
+      {'name': name, 'passphrase': passphrase, 'key': key, 'mine': mine, 'channel': channel, 'lr': longRange};
+  static DirectGroup fromJson(Map<String, dynamic> j) => DirectGroup(j['name'] as String, j['passphrase'] as String,
+      j['key'] as String, j['mine'] == true, (j['channel'] as num?)?.toInt() ?? 6, j['lr'] as bool? ?? true);
 }
+
+/// How a group's radio is set up, to show: "ch 6, Long Range".
+String radioText(int channel, bool longRange) => 'ch $channel${longRange ? ', Long Range' : ''}';
 
 /// A group heard about over direct comms.
 class HeardGroup {
@@ -71,8 +80,10 @@ class HeardGroup {
   String name;
   int rssi;
   int boards;
+  int channel;
+  bool longRange;
   int seenMs;
-  HeardGroup(this.id, this.name, this.rssi, this.boards, this.seenMs);
+  HeardGroup(this.id, this.name, this.rssi, this.boards, this.channel, this.longRange, this.seenMs);
 }
 
 /// A board heard over direct comms.
@@ -148,7 +159,8 @@ class CommController extends ChangeNotifier {
       final now = DateTime.now().millisecondsSinceEpoch;
       _updateTalking(now);
       nearby.removeWhere((_, b) => now - b.seenMs > _nearbyFor);
-      heardGroups.removeWhere((_, g) => now - g.seenMs > _nearbyFor);
+      // Groups on other channels are only heard while scanning: keep them a while
+      heardGroups.removeWhere((_, g) => now - g.seenMs > _heardGroupFor);
       _updateBoardScreen();   // and whether it's UDP, which changes by itself
     });
     mixer.targetMs = bufferMs;
@@ -249,7 +261,7 @@ class CommController extends ChangeNotifier {
           d == null
               ? null
               : DirectSettings(d['on'] == 1, d['keyed'] == 1, d['group'] as String? ?? '', d['name'] as String? ?? '',
-                  d['id'] as String? ?? ''),
+                  d['id'] as String? ?? '', (d['channel'] as num?)?.toInt() ?? 6, d['lr'] == 1, d['scanning'] == 1),
           (v['voice'] as num?)?.toInt() ?? -1,
           [for (final n in (v['voices'] as List<dynamic>? ?? const [])) n as String],
           (v['talk'] as num?)?.toInt() ?? talkServer);
@@ -278,6 +290,7 @@ class CommController extends ChangeNotifier {
   /// Boards heard over direct comms, by their id.
   final Map<int, NearbyBoard> nearby = {};
   static const _nearbyFor = 7000;
+  static const _heardGroupFor = 60000;
 
   StreamSubscription<DirectSound>? _directSoundSub;
   StreamSubscription<DirectPeer>? _directPeerSub;
@@ -323,31 +336,41 @@ class CommController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> joinOpenGroup() => _setBoardGroup('', '');
+  Future<void> joinOpenGroup() => _setBoardGroup('', '', 6, true);
+
+  /// Listen to the other channels for a few seconds, for the groups there.
+  Future<void> scanDirect() async {
+    await _boardSettingsRequest('POST', '?scan=1');
+    // Catch up as it finishes: a couple of seconds a channel
+    for (final s in const [3, 6, 9]) {
+      Timer(Duration(seconds: s), () => _boardSettingsRequest('GET', ''));
+    }
+  }
 
   /// Join a group: by its name and passphrase. If it was heard over the air
   /// ([expectId]), the passphrase is checked against it first. Returns why
   /// not, or null once it's joined.
-  Future<String?> joinGroup(String name, String passphrase, {String? expectId, bool mine = false}) async {
+  Future<String?> joinGroup(String name, String passphrase,
+      {String? expectId, bool mine = false, int channel = 6, bool longRange = true}) async {
     name = name.trim();
     if (name.isEmpty) return 'It needs a name';
     if (utf8.encode(name).length > 15) return 'That name is too long';
     if (passphrase.isEmpty) return 'It needs a passphrase';
     final key = await compute(directKey, (name, passphrase));
-    final g = DirectGroup(name, passphrase, key, mine);
+    final g = DirectGroup(name, passphrase, key, mine, channel, longRange);
     if (expectId != null && g.id != expectId) return "That's not the passphrase";
     groups.removeWhere((o) => o.id == g.id);
     groups.add(g);
     await _saveGroups();
-    await _setBoardGroup(key, name);
+    await _setBoardGroup(key, name, channel, longRange);
     return null;
   }
 
   /// Make a new group, with a passphrase for the others to join with.
-  Future<String?> createGroup(String name, String passphrase) async {
+  Future<String?> createGroup(String name, String passphrase, int channel, bool longRange) async {
     final clash = heardGroups.values.any((h) => h.name == name.trim());
     if (clash) return 'A group by that name is about already';
-    return joinGroup(name, passphrase, mine: true);
+    return joinGroup(name, passphrase, mine: true, channel: channel, longRange: longRange);
   }
 
   /// Forget a group; the board goes back to the open group if it was in it.
@@ -363,21 +386,24 @@ class CommController extends ChangeNotifier {
     await _prefs?.setString('directGroups', jsonEncode([for (final g in groups) g.toJson()]));
   }
 
-  Future<void> _setBoardGroup(String key, String name) {
+  Future<void> _setBoardGroup(String key, String name, int channel, bool longRange) {
     String q(String v) => Uri.encodeQueryComponent(v);
-    return _boardSettingsRequest('POST', '?key=$key&group=${q(name)}&name=${q(server.username)}');
+    return _boardSettingsRequest(
+        'POST', '?key=$key&group=${q(name)}&name=${q(server.username)}&ch=$channel&lr=${longRange ? 1 : 0}');
   }
 
   void _onDirectGroup(DirectGroupHeard h) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final g = heardGroups[h.id];
     if (g == null) {
-      heardGroups[h.id] = HeardGroup(h.id, h.name, h.rssi, h.boards, now);
+      heardGroups[h.id] = HeardGroup(h.id, h.name, h.rssi, h.boards, h.channel, h.longRange, now);
     } else {
       g
         ..name = h.name
         ..rssi = h.rssi
         ..boards = h.boards
+        ..channel = h.channel
+        ..longRange = h.longRange
         ..seenMs = now;
     }
     notifyListeners();

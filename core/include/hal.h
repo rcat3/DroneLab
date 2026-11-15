@@ -148,6 +148,18 @@ int rcat_hal_hotspot_clients(void);
 bool rcat_hal_direct_start(void);
 void rcat_hal_direct_stop(void);
 
+/* The channel it's on (1, 6 or 11) and whether it sends in Long Range mode
+ * (ESP-NOW at 500 kb/s, Espressif's own, reaching further). It always hears
+ * both, so boards in either can share a channel. The hotspot, if it's on,
+ * moves to the channel too. Can be called before rcat_hal_direct_start(). */
+void rcat_hal_direct_set_radio(uint8_t channel, bool long_range);
+
+/* Listen on another channel for a moment, to hear what's there, without
+ * moving the hotspot: false if it can't, as while the hotspot's on or a
+ * network's joined. rcat_hal_direct_set_radio()'s channel goes back with
+ * channel 0. */
+bool rcat_hal_direct_listen_on(uint8_t channel);
+
 /* Broadcast data to every board in range. False if it couldn't go. */
 bool rcat_hal_direct_send(const void *data, size_t len);
 

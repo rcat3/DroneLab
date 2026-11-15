@@ -158,9 +158,9 @@ void main() {
   });
 
   test('a heard group from the board', () {
-    final g = parseBoardMessage(Uint8List.fromList([0x09, 0xde, 0xad, 0xbe, 0xef, 0xC4, 3, ...'Pack'.codeUnits]))
+    final g = parseBoardMessage(Uint8List.fromList([0x09, 0xde, 0xad, 0xbe, 0xef, 0xC4, 3, 11, 1, ...'Pack'.codeUnits]))
         as DirectGroupHeard;
-    expect([g.id, g.rssi, g.boards, g.name], ['deadbeef', -60, 3, 'Pack']);
+    expect([g.id, g.rssi, g.boards, g.channel, g.longRange, g.name], ['deadbeef', -60, 3, 11, true, 'Pack']);
   });
 }
 

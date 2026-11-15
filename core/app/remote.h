@@ -71,9 +71,11 @@ const char *remote_page_html(size_t *len);
  * the same. With direct comms (see
  * direct.h), the answer has "direct": {"on", "keyed" (1 for a group with a
  * key, 0 for the open group), "group" (its name), "name" (this board's),
- * "id" (the group's id, 8 hex digits)},
- * and POST takes direct=0 or 1, and key= (32 hex digits, or empty for the
- * open group) with group= and name=. */
+ * "id" (the group's id, 8 hex digits), "channel", "lr" (1 for Long Range),
+ * "scanning" (1 while it listens to the other channels)},
+ * and POST takes direct=0 or 1, scan=1 to hear about the groups on the
+ * other channels, and key= (32 hex digits, or empty for the open group) with
+ * group=, name=, ch= (1, 6 or 11) and lr= (1 for Long Range). */
 int remote_api(const char *method, const char *target, const char *body, size_t body_len, char *out, size_t cap);
 
 #endif

@@ -363,6 +363,15 @@ void rcat_hal_direct_stop(void)
 {
 }
 
+void rcat_hal_direct_set_radio(uint8_t channel, bool long_range)
+{
+}
+
+bool rcat_hal_direct_listen_on(uint8_t channel)
+{
+    return false;
+}
+
 bool rcat_hal_direct_send(const void *data, size_t len)
 {
     return false;

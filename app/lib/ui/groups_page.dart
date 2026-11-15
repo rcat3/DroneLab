@@ -5,9 +5,23 @@ import '../comm/comm_controller.dart';
 
 /// Direct comms' groups: the open group, the groups made here or joined, and
 /// the groups heard about nearby, to join with their passphrase.
-class GroupsPage extends StatelessWidget {
+class GroupsPage extends StatefulWidget {
   final CommController comm;
   const GroupsPage({super.key, required this.comm});
+
+  @override
+  State<GroupsPage> createState() => _GroupsPageState();
+}
+
+class _GroupsPageState extends State<GroupsPage> {
+  CommController get comm => widget.comm;
+
+  @override
+  void initState() {
+    super.initState();
+    // Hear about the groups on the other channels too
+    if (comm.boardSettings?.direct?.on ?? false) comm.scanDirect();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,8 +41,22 @@ class GroupsPage extends StatelessWidget {
             );
         final usable = direct != null;
 
+        final scanning = direct?.scanning ?? false;
         return Scaffold(
-          appBar: AppBar(title: const Text('Direct Comms Groups')),
+          appBar: AppBar(
+            title: const Text('Direct Comms Groups'),
+            actions: [
+              if (usable && direct.on)
+                scanning
+                    ? const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                    : IconButton(
+                        tooltip: 'Look for groups on every channel',
+                        icon: const Icon(Icons.refresh),
+                        onPressed: comm.scanDirect),
+            ],
+          ),
           floatingActionButton: usable
               ? FloatingActionButton.extended(
                   onPressed: () => createGroup(context, comm),
@@ -53,7 +81,7 @@ class GroupsPage extends StatelessWidget {
                 selected: usable && !direct.keyed,
                 icon: Icons.lock_open,
                 title: 'Open group',
-                subtitle: 'Any board nearby can hear it',
+                subtitle: 'Any board nearby can hear it. ${radioText(6, true)}',
                 onTap: usable ? comm.joinOpenGroup : null,
               ),
               header('Your groups'),
@@ -69,6 +97,7 @@ class GroupsPage extends StatelessWidget {
                   title: g.name,
                   subtitle: [
                     g.mine ? 'Made here' : 'Joined',
+                    radioText(g.channel, g.longRange),
                     if (comm.heardGroups[g.id] case final h?) '${h.boards} nearby',
                   ].join(', '),
                   onTap: usable ? () => joinSavedGroup(context, comm, g) : null,
@@ -80,14 +109,16 @@ class GroupsPage extends StatelessWidget {
                 ),
               if (usable && direct.on) ...[
                 header('Heard nearby'),
-                if (heard.isEmpty) const ListTile(title: Text('No other groups heard')),
+                if (heard.isEmpty)
+                  ListTile(title: Text(scanning ? 'Listening on every channel...' : 'No other groups heard')),
                 for (final h in heard)
                   _choice(
                     context,
                     selected: currentId == h.id,
                     icon: Icons.lock_outline,
                     title: h.name,
-                    subtitle: '${h.boards} ${h.boards == 1 ? 'board' : 'boards'}, ${h.rssi} dBm. Tap to join',
+                    subtitle: '${h.boards} ${h.boards == 1 ? 'board' : 'boards'}, ${h.rssi} dBm, '
+                        '${radioText(h.channel, h.longRange)}. Tap to join',
                     onTap: () => joinHeardGroup(context, comm, h),
                   ),
               ],
@@ -144,19 +175,20 @@ class GroupsPage extends StatelessWidget {
 Future<void> joinHeardGroup(BuildContext context, CommController comm, HeardGroup h) async {
   final got = await _ask(context, title: 'Join ${h.name}', askName: false, action: 'Join');
   if (got == null || !context.mounted) return;
-  await _busy(context, comm.joinGroup(h.name, got.$2, expectId: h.id));
+  await _busy(context,
+      comm.joinGroup(h.name, got.passphrase, expectId: h.id, channel: h.channel, longRange: h.longRange));
 }
 
 /// Make a new group, asking for its name and passphrase.
 Future<void> createGroup(BuildContext context, CommController comm) async {
   final got = await _ask(context, title: 'Create a group', askName: true, action: 'Create');
   if (got == null || !context.mounted) return;
-  await _busy(context, comm.createGroup(got.$1, got.$2));
+  await _busy(context, comm.createGroup(got.name, got.passphrase, got.channel, got.longRange));
 }
 
 /// Join one of the groups kept here.
 Future<void> joinSavedGroup(BuildContext context, CommController comm, DirectGroup g) =>
-    _busy(context, comm.joinGroup(g.name, g.passphrase, mine: g.mine));
+    _busy(context, comm.joinGroup(g.name, g.passphrase, mine: g.mine, channel: g.channel, longRange: g.longRange));
 
 /// Wait for a join, which takes a moment to make the key, and say if it
 /// didn't work.
@@ -168,18 +200,25 @@ Future<void> _busy(BuildContext context, Future<String?> work) async {
   if (why != null) messenger.showSnackBar(SnackBar(content: Text(why)));
 }
 
-  /// A group's name (if [askName]) and passphrase.
-Future<(String, String)?> _ask(BuildContext context,
-      {required String title, required bool askName, required String action}) {
-    final name = TextEditingController();
-    final passphrase = TextEditingController();
-    var show = false;
-    return showDialog<(String, String)>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(title),
-          content: Column(
+  /// What's typed in to make or join a group.
+typedef GroupAnswer = ({String name, String passphrase, int channel, bool longRange});
+
+/// A group's name, channel and Long Range (if [askName], for a new one), and
+/// passphrase.
+Future<GroupAnswer?> _ask(BuildContext context,
+    {required String title, required bool askName, required String action}) {
+  final name = TextEditingController();
+  final passphrase = TextEditingController();
+  var show = false;
+  var channel = 6;
+  var longRange = true;
+  return showDialog<GroupAnswer>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: Text(title),
+        content: SingleChildScrollView(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (askName)
@@ -202,16 +241,46 @@ Future<(String, String)?> _ask(BuildContext context,
                   ),
                 ),
               ),
+              if (askName) ...[
+                const SizedBox(height: 16),
+                Row(children: [
+                  const Expanded(child: Text('Channel')),
+                  SegmentedButton<int>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: 1, label: Text('1')),
+                      ButtonSegment(value: 6, label: Text('6')),
+                      ButtonSegment(value: 11, label: Text('11')),
+                    ],
+                    selected: {channel},
+                    onSelectionChanged: (sel) => setState(() => channel = sel.first),
+                  ),
+                ]),
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text('Another from the open group (6) keeps the two from crowding each other',
+                      style: TextStyle(fontSize: 12)),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Long Range'),
+                  subtitle: const Text('Reaches further, but each packet takes twice as long on the air'),
+                  value: longRange,
+                  onChanged: (v) => setState(() => longRange = v),
+                ),
+              ],
             ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, (name.text, passphrase.text)),
-              child: Text(action),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+                context, (name: name.text, passphrase: passphrase.text, channel: channel, longRange: longRange)),
+            child: Text(action),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}

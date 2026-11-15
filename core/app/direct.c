@@ -31,17 +31,28 @@
 #endif
 #define ECHO_GROUP          "Echo Test"
 #define ECHO_PASSPHRASE     "dronelab"
+#ifndef RCAT_DIRECT_ECHO_CHANNEL
+#define RCAT_DIRECT_ECHO_CHANNEL    DIRECT_CHANNEL_DEFAULT
+#endif
+#ifndef RCAT_DIRECT_ECHO_LR
+#define RCAT_DIRECT_ECHO_LR         0
+#endif
 
 // 1 to print what was sent, heard and dropped every couple of seconds.
 #define DIRECT_DEBUG        0
 
 #define MAGIC               'D'
 #define HEADER_LEN          15
+#define CHECKED_LEN         14          // the header but for the hops, which relays change
 #define TAG_LEN             8
 #define TYPE_VOICE          0x01
 #define TYPE_HELLO          0x02
+#define TYPE_AVATAR         0x03
 #define BEACON              'G'         // a group says it's here, not encrypted
+#define BEACON_LR           0x01
 #define HELLO_TALKING       0x01
+#define HELLO_ASKS          0x02        // it asks for pieces of an avatar
+#define ASK_LEN             (4 + 1 + 16)    // whose, its version, and the pieces, a bit each
 #define MAX_OPUS            160
 
 #define HELLO_EVERY_MS      2000
@@ -52,6 +63,28 @@
 #define TASK_BUSY_MS        2
 #define VOICE_QUEUE         8           // the wearer's voice, waiting to go
 #define REPEATS             2           // packets sent again in each after them
+
+// Relaying
+#define HOPS                1           // how many times a broadcast may be passed on
+#define RELAY_RSSI          (-78)       // heard weaker than this (dBm): pass it on
+#define RELAY_WAIT_MIN_MS   3           // and wait between these first, for another
+#define RELAY_WAIT_MAX_MS   15          // board to do it instead
+#define RELAYS              8           // waiting at once
+
+// Scanning the other channels for groups
+#define SCAN_DWELL_MS       (HELLO_EVERY_MS + 300)
+static const uint8_t scan_channels[] = { 1, 6, 11 };
+
+// Avatars, sent over the air
+#define AVATAR_PIXELS       (DIRECT_AVATAR_PX * DIRECT_AVATAR_PX)
+#define AVATAR_PIECE        100         // pixels a piece
+#define AVATAR_PIECES       ((AVATAR_PIXELS + AVATAR_PIECE - 1) / AVATAR_PIECE)
+#define AVATAR_SKETCH       ((DIRECT_AVATAR_PX / 4) * (DIRECT_AVATAR_PX / 4))  // the two coarsest layers' pixels
+#define AVATAR_SKETCH_PIECES ((AVATAR_SKETCH + AVATAR_PIECE - 1) / AVATAR_PIECE)
+#define AVATAR_SKETCH_MS    30000       // the coarse layers this often
+#define AVATAR_FULL_MS      300000      // and all of it this often
+#define AVATAR_SOON_MS      3000        // or this soon after a new board's heard
+#define AVATAR_PIECE_MS     150         // a piece at a time, this far apart
 
 typedef struct
 {
@@ -64,6 +97,8 @@ typedef struct
     char name[DIRECT_NAME_MAX];
     int8_t rssi;
     bool used;
+    uint8_t avatar_version;     // of the avatar coming in, 0 for none
+    uint8_t avatar_changes;     // goes up with each piece of it
 } peer_t;
 
 typedef struct
@@ -102,11 +137,47 @@ typedef struct
     int8_t rssi;
     uint32_t senders[GROUP_SENDERS];    // the boards heard in it
     uint32_t sender_ms[GROUP_SENDERS];
+    uint8_t channel;
+    bool long_range;
     bool used;
 } group_t;
 static group_t groups[DIRECT_GROUPS_MAX];
 static volatile uint32_t groups_seq;
 static bool keyed;                      // in a group with a key, so it says so
+static uint8_t radio_channel = DIRECT_CHANNEL_DEFAULT;
+static bool radio_long_range;
+
+// Scanning: the channel it's on, as an index into scan_channels, or -1
+static volatile bool scan_wanted;
+static volatile int scan_at = -1;
+static uint32_t scan_ms;
+
+// Broadcasts waiting to be passed on
+typedef struct
+{
+    uint8_t msg[RCAT_HAL_DIRECT_MAX];
+    uint8_t len;
+    uint32_t sender, counter;
+    uint32_t due_ms;
+    bool used;
+} relay_t;
+static relay_t relays[RELAYS];
+
+// Avatars: the wearer's, and each peer's (as peers[]), as much as has come:
+// the pixels, which it has, and the pixels with those it hasn't filled in
+// from the nearest coarser ones, to show
+static uint16_t *own_avatar;
+static volatile uint8_t own_avatar_version;
+static uint16_t *avatar_order;          // the pixels, in the order they're sent
+static uint16_t *peer_avatars;          // DIRECT_PEERS_MAX of them, filled in
+static uint8_t *peer_known;             // DIRECT_PEERS_MAX bitmaps, a bit a pixel
+static bool avatar_soon;                // a new board's about: send ours soon
+static uint32_t avatar_full_ms, avatar_sketch_ms;   // when the last went
+static int avatar_piece = -1;           // the next piece to go, -1 while none are
+static int avatar_last;                 // the last piece of this round
+static uint8_t resend[16];              // pieces of ours others asked for, a bit each
+static int ask_next;                    // whose to ask for next, round the peers
+static uint32_t avatar_piece_ms;
 
 // The wearer's voice: one writer (the comm channel's encoder), one reader
 static voice_t *voice_queue;
@@ -154,6 +225,9 @@ static void use_group(void)
     memset(key, 0, sizeof(key));
     snprintf(group_name, sizeof(group_name), "%s", s->direct_keyed ? s->direct_group : "Open");
     keyed = s->direct_keyed;
+    radio_channel = keyed && s->direct_channel ? s->direct_channel : DIRECT_CHANNEL_DEFAULT;
+    radio_long_range = keyed ? s->direct_long_range != 0 : true;     // the open group reaches as far as it can
+    rcat_hal_direct_set_radio(radio_channel, radio_long_range);
     if (RCAT_DIRECT_ECHO)
     {
         snprintf(own_name, sizeof(own_name), "ECHO-%04lX", (unsigned long)(own_id & 0xFFFF));
@@ -192,10 +266,10 @@ static void send_sealed(const uint8_t *plain, size_t len)
     msg[11] = (uint8_t)(c >> 8);
     msg[12] = (uint8_t)(c >> 16);
     msg[13] = (uint8_t)(c >> 24);
-    msg[14] = 0;    // hops left: nothing's passed on yet
+    msg[14] = HOPS;
     uint8_t iv[12];
     nonce(iv, msg);
-    if (mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, len, iv, sizeof(iv), msg, HEADER_LEN, plain,
+    if (mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, len, iv, sizeof(iv), msg, CHECKED_LEN, plain,
                                   msg + HEADER_LEN, TAG_LEN, msg + HEADER_LEN + len) == 0)
     {
         bool ok = rcat_hal_direct_send(msg, HEADER_LEN + len + TAG_LEN);
@@ -208,19 +282,21 @@ static void send_sealed(const uint8_t *plain, size_t len)
  * join: its id and name, and this board's id, not encrypted. */
 static void send_beacon(void)
 {
-    uint8_t msg[10 + DIRECT_NAME_MAX];
+    uint8_t msg[12 + DIRECT_NAME_MAX];
     msg[0] = BEACON;
     msg[1] = DIRECT_VERSION;
     memcpy(msg + 2, group_id, 4);
     memcpy(msg + 6, &own_id, 4);
+    msg[10] = radio_channel;
+    msg[11] = radio_long_range ? BEACON_LR : 0;
     size_t n = strlen(group_name);
-    memcpy(msg + 10, group_name, n);
-    rcat_hal_direct_send(msg, 10 + n);
+    memcpy(msg + 12, group_name, n);
+    rcat_hal_direct_send(msg, 12 + n);
 }
 
 static void heard_beacon(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
 {
-    if (len < 10 || msg[1] != DIRECT_VERSION)
+    if (len < 12 || msg[1] != DIRECT_VERSION)
     {
         return;
     }
@@ -252,9 +328,11 @@ static void heard_beacon(const uint8_t *msg, size_t len, int8_t rssi, uint32_t n
     }
     if (g != NULL)
     {
-        size_t n = len - 10 < DIRECT_NAME_MAX - 1 ? len - 10 : DIRECT_NAME_MAX - 1;
-        memcpy(g->name, msg + 10, n);
+        size_t n = len - 12 < DIRECT_NAME_MAX - 1 ? len - 12 : DIRECT_NAME_MAX - 1;
+        memcpy(g->name, msg + 12, n);
         g->name[n] = '\0';
+        g->channel = msg[10];
+        g->long_range = (msg[11] & BEACON_LR) != 0;
         g->rssi = now - g->heard_ms > HELLO_EVERY_MS * 2 || rssi > g->rssi ? rssi : g->rssi;
         g->heard_ms = now;
         // Which boards are in it: this one, in its place or the oldest's
@@ -277,14 +355,23 @@ static void heard_beacon(const uint8_t *msg, size_t len, int8_t rssi, uint32_t n
     __atomic_add_fetch(&groups_seq, 1, __ATOMIC_SEQ_CST);
 }
 
+static bool avatar_ask(uint8_t out[ASK_LEN]);
+
+/* Who we are, and, if we're missing pieces of a board's avatar, which. */
 static void send_hello(void)
 {
-    uint8_t plain[2 + DIRECT_NAME_MAX];
+    uint8_t plain[2 + ASK_LEN + DIRECT_NAME_MAX];
     plain[0] = TYPE_HELLO;
     plain[1] = talking ? HELLO_TALKING : 0;
+    size_t at = 2;
+    if (avatar_ask(plain + 2))
+    {
+        plain[1] |= HELLO_ASKS;
+        at += ASK_LEN;
+    }
     size_t n = strlen(own_name);
-    memcpy(plain + 2, own_name, n);
-    send_sealed(plain, 2 + n);
+    memcpy(plain + at, own_name, n);
+    send_sealed(plain, at + n);
 }
 
 /* A packet of voice, with the REPEATS before it too, so that as many lost in
@@ -351,8 +438,235 @@ static peer_t *find_peer(uint32_t id, uint32_t now)
     memset(spare, 0, sizeof(*spare));
     spare->id = id;
     spare->used = true;
+    avatar_soon = true;     // a board that hasn't seen ours
     snprintf(spare->name, sizeof(spare->name), "%08lX", (unsigned long)id);    // until its hello
     return spare;
+}
+
+/* ----- Relaying ----- */
+
+static void relay_later(const uint8_t *msg, size_t len, uint32_t sender, uint32_t c, uint32_t now)
+{
+    for (int i = 0; i < RELAYS; i++)
+    {
+        relay_t *r = &relays[i];
+        if (!r->used)
+        {
+            memcpy(r->msg, msg, len);
+            r->msg[14]--;       // one hop fewer
+            r->len = (uint8_t)len;
+            r->sender = sender;
+            r->counter = c;
+            r->due_ms = now + RELAY_WAIT_MIN_MS + rcat_hal_random() % (RELAY_WAIT_MAX_MS - RELAY_WAIT_MIN_MS + 1);
+            r->used = true;
+            return;
+        }
+    }
+}
+
+/* Another board passed it on first: no need. */
+static void relay_cancel(uint32_t sender, uint32_t c)
+{
+    for (int i = 0; i < RELAYS; i++)
+    {
+        if (relays[i].used && relays[i].sender == sender && relays[i].counter == c)
+        {
+            relays[i].used = false;
+        }
+    }
+}
+
+static void relay_due(uint32_t now)
+{
+    for (int i = 0; i < RELAYS; i++)
+    {
+        if (relays[i].used && (int32_t)(now - relays[i].due_ms) >= 0)
+        {
+            rcat_hal_direct_send(relays[i].msg, relays[i].len);
+            relays[i].used = false;
+        }
+    }
+}
+
+/* ----- Avatars ----- */
+
+/* The order the pixels go in: every 8th pixel each way first, then every
+ * 4th, then every 2nd, then the rest, so what's come shows the whole
+ * picture, coarse at first and finer as more comes. */
+static void make_avatar_order(void)
+{
+    int n = 0;
+    for (int step = 8; step >= 1; step /= 2)
+    {
+        for (int y = 0; y < DIRECT_AVATAR_PX; y += step)
+        {
+            for (int x = 0; x < DIRECT_AVATAR_PX; x += step)
+            {
+                // Only those not in a coarser layer already
+                if (step == 8 || x % (step * 2) != 0 || y % (step * 2) != 0)
+                {
+                    avatar_order[n++] = (uint16_t)(y * DIRECT_AVATAR_PX + x);
+                }
+            }
+        }
+    }
+}
+
+static void send_avatar_piece(int piece)
+{
+    uint8_t plain[4 + 2 * AVATAR_PIECE];
+    int at = piece * AVATAR_PIECE;
+    int n = AVATAR_PIXELS - at < AVATAR_PIECE ? AVATAR_PIXELS - at : AVATAR_PIECE;
+    plain[0] = TYPE_AVATAR;
+    plain[1] = own_avatar_version;
+    plain[2] = (uint8_t)piece;
+    plain[3] = AVATAR_PIECES;
+    for (int i = 0; i < n; i++)
+    {
+        uint16_t v = own_avatar[avatar_order[at + i]];
+        plain[4 + 2 * i] = (uint8_t)v;
+        plain[5 + 2 * i] = (uint8_t)(v >> 8);
+    }
+    send_sealed(plain, 4 + 2 * (size_t)n);
+}
+
+static bool known(const uint8_t *bits, int i)
+{
+    return (bits[i >> 3] >> (i & 7)) & 1;
+}
+
+/* Fill in each pixel that hasn't come from the nearest coarser one that has:
+ * blocks to start with, sharper as more comes. */
+static void fill_avatar(uint16_t *pixels, const uint8_t *bits)
+{
+    for (int y = 0; y < DIRECT_AVATAR_PX; y++)
+    {
+        for (int x = 0; x < DIRECT_AVATAR_PX; x++)
+        {
+            int i = y * DIRECT_AVATAR_PX + x;
+            if (known(bits, i))
+            {
+                continue;
+            }
+            for (int mask = ~1; mask >= ~7; mask = mask * 2)
+            {
+                int j = (y & mask) * DIRECT_AVATAR_PX + (x & mask);
+                if (known(bits, j))
+                {
+                    pixels[i] = pixels[j];
+                    break;
+                }
+            }
+        }
+    }
+}
+
+static void heard_avatar_piece(peer_t *p, const uint8_t *plain, size_t len)
+{
+    if (len < 4 || peer_avatars == NULL || plain[1] == 0 || plain[3] != AVATAR_PIECES || plain[2] >= AVATAR_PIECES)
+    {
+        return;
+    }
+    uint8_t version = plain[1];
+    int at = plain[2] * AVATAR_PIECE;
+    int n = AVATAR_PIXELS - at < AVATAR_PIECE ? AVATAR_PIXELS - at : AVATAR_PIECE;
+    if (len - 4 != 2 * (size_t)n)
+    {
+        return;
+    }
+    size_t slot = (size_t)(p - peers);
+    uint16_t *pixels = peer_avatars + slot * AVATAR_PIXELS;
+    uint8_t *bits = peer_known + slot * (AVATAR_PIXELS / 8);
+    if (version != p->avatar_version)
+    {
+        // A new picture: start afresh, from the board's head in a visor
+        memset(bits, 0, AVATAR_PIXELS / 8);
+        p->avatar_version = version;
+    }
+    bool news = false;
+    for (int i = 0; i < n; i++)
+    {
+        int k = avatar_order[at + i];
+        news |= !known(bits, k);
+        pixels[k] = (uint16_t)(plain[4 + 2 * i] | (plain[5 + 2 * i] << 8));
+        bits[k >> 3] |= (uint8_t)(1 << (k & 7));
+    }
+    if (news)
+    {
+        fill_avatar(pixels, bits);
+        p->avatar_changes++;
+    }
+#if RCAT_DIRECT_ECHO
+    // The echo board takes on the avatar it's sent, once it's all come, to
+    // send back as its own
+    bool all = true;
+    for (int i = 0; i < AVATAR_PIXELS / 8 && all; i++)
+    {
+        all = bits[i] == 0xFF;
+    }
+    if (all && news)
+    {
+        direct_set_avatar(pixels, DIRECT_AVATAR_PX);
+    }
+#endif
+}
+
+/* The pieces of a peer's avatar still missing, a bit each: true if any are. */
+static bool missing_pieces(const peer_t *p, uint8_t out[16])
+{
+    const uint8_t *bits = peer_known + (size_t)(p - peers) * (AVATAR_PIXELS / 8);
+    bool any = false;
+    memset(out, 0, 16);
+    for (int piece = 0; piece < AVATAR_PIECES; piece++)
+    {
+        int end = (piece + 1) * AVATAR_PIECE < AVATAR_PIXELS ? (piece + 1) * AVATAR_PIECE : AVATAR_PIXELS;
+        for (int i = piece * AVATAR_PIECE; i < end; i++)
+        {
+            if (!known(bits, avatar_order[i]))
+            {
+                out[piece >> 3] |= (uint8_t)(1 << (piece & 7));
+                any = true;
+                break;
+            }
+        }
+    }
+    return any;
+}
+
+/* Ask for the pieces missing of one board's avatar, a different board each
+ * time round. */
+static bool avatar_ask(uint8_t out[ASK_LEN])
+{
+    if (peer_avatars == NULL)
+    {
+        return false;
+    }
+    for (int k = 0; k < DIRECT_PEERS_MAX; k++)
+    {
+        peer_t *p = &peers[(ask_next + k) % DIRECT_PEERS_MAX];
+        if (p->used && p->avatar_version != 0 && missing_pieces(p, out + 5))
+        {
+            memcpy(out, &p->id, 4);
+            out[4] = p->avatar_version;
+            ask_next = (int)(p - peers) + 1;
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Another board asks for pieces: if they're of ours, as it is, send them. */
+static void heard_ask(const uint8_t *ask)
+{
+    uint32_t whose;
+    memcpy(&whose, ask, 4);
+    if (whose == own_id && ask[4] == own_avatar_version && own_avatar_version != 0)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            resend[i] |= ask[5 + i];
+        }
+    }
 }
 
 /* A packet of another board's voice: to the phone, or back out again. */
@@ -395,7 +709,7 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
     uint8_t plain[RCAT_HAL_DIRECT_MAX];
     uint8_t iv[12];
     nonce(iv, msg);
-    if (mbedtls_gcm_auth_decrypt(&gcm, plain_len, iv, sizeof(iv), msg, HEADER_LEN, msg + HEADER_LEN + plain_len,
+    if (mbedtls_gcm_auth_decrypt(&gcm, plain_len, iv, sizeof(iv), msg, CHECKED_LEN, msg + HEADER_LEN + plain_len,
                                  TAG_LEN, msg + HEADER_LEN, plain) != 0)
     {
         DBG(dbg_bad++);
@@ -405,6 +719,14 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
     __atomic_add_fetch(&peers_seq, 1, __ATOMIC_SEQ_CST);
     peer_t *p = find_peer(id, now);
     bool fresh = p->counter == 0 || (int32_t)(c - p->counter) > 0;
+    if (!fresh)
+    {
+        relay_cancel(id, c);    // passed on by another: no need for us to
+    }
+    else if (msg[14] > 0 && rssi < RELAY_RSSI && !RCAT_DIRECT_ECHO)
+    {
+        relay_later(msg, len, id, c, now);  // heard from far off: pass it on
+    }
     if (fresh)
     {
         p->counter = c;
@@ -412,13 +734,23 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
         p->rssi = rssi;
         if (plain[0] == TYPE_HELLO && plain_len >= 2)
         {
-            size_t n = plain_len - 2 < DIRECT_NAME_MAX - 1 ? plain_len - 2 : DIRECT_NAME_MAX - 1;
-            memcpy(p->name, plain + 2, n);
+            size_t at = 2;
+            if ((plain[1] & HELLO_ASKS) && plain_len >= 2 + ASK_LEN)
+            {
+                heard_ask(plain + 2);
+                at += ASK_LEN;
+            }
+            size_t n = plain_len - at < DIRECT_NAME_MAX - 1 ? plain_len - at : DIRECT_NAME_MAX - 1;
+            memcpy(p->name, plain + at, n);
             p->name[n] = '\0';
         }
         else if (plain[0] == TYPE_VOICE && plain_len >= 5)
         {
             p->voice_ms = (plain[3] & DIRECT_LAST) ? 0 : now;
+        }
+        else if (plain[0] == TYPE_AVATAR)
+        {
+            heard_avatar_piece(p, plain, plain_len);
         }
     }
     __atomic_add_fetch(&peers_seq, 1, __ATOMIC_SEQ_CST);
@@ -491,6 +823,73 @@ static void direct_task(void *arg)
         {
             heard(msg, len, rssi, now);
         }
+        relay_due(now);
+
+        // Scanning: a couple of seconds on each channel, then back
+        if (scan_wanted && scan_at < 0)
+        {
+            scan_wanted = rcat_hal_direct_listen_on(scan_channels[0]);
+            scan_at = scan_wanted ? 0 : -1;
+            scan_ms = now;
+        }
+        if (scan_at >= 0)
+        {
+            if (now - scan_ms >= SCAN_DWELL_MS)
+            {
+                scan_ms = now;
+                if (++scan_at < (int)sizeof(scan_channels))
+                {
+                    rcat_hal_direct_listen_on(scan_channels[scan_at]);
+                }
+                else
+                {
+                    rcat_hal_direct_listen_on(0);
+                    scan_at = -1;
+                    scan_wanted = false;
+                }
+            }
+            rcat_hal_delay_ms(TASK_BUSY_MS);
+            continue;   // nobody of ours to hear what's sent meanwhile
+        }
+
+        // Our avatar: all of it soon after a new board's heard, and now and
+        // then; the coarse layers more often. Not while talking.
+        if (avatar_piece < 0 && own_avatar_version != 0 && !talking)
+        {
+            if ((avatar_soon && now - avatar_full_ms >= AVATAR_SOON_MS) || now - avatar_full_ms >= AVATAR_FULL_MS)
+            {
+                avatar_piece = 0;
+                avatar_last = AVATAR_PIECES - 1;
+                avatar_soon = false;
+                avatar_full_ms = avatar_sketch_ms = now;
+            }
+            else if (now - avatar_sketch_ms >= AVATAR_SKETCH_MS)
+            {
+                avatar_piece = 0;
+                avatar_last = AVATAR_SKETCH_PIECES - 1;
+                avatar_sketch_ms = now;
+            }
+        }
+        if (avatar_piece >= 0 && !talking && now - avatar_piece_ms >= AVATAR_PIECE_MS)
+        {
+            avatar_piece_ms = now;
+            send_avatar_piece(avatar_piece);
+            avatar_piece = avatar_piece < avatar_last ? avatar_piece + 1 : -1;
+        }
+        else if (avatar_piece < 0 && !talking && own_avatar_version != 0 && now - avatar_piece_ms >= AVATAR_PIECE_MS)
+        {
+            // Pieces others asked for, between rounds
+            for (int piece = 0; piece < AVATAR_PIECES; piece++)
+            {
+                if (resend[piece >> 3] & (1 << (piece & 7)))
+                {
+                    resend[piece >> 3] &= (uint8_t)~(1 << (piece & 7));
+                    avatar_piece_ms = now;
+                    send_avatar_piece(piece);
+                    break;
+                }
+            }
+        }
 
         if (now - hello_ms >= HELLO_EVERY_MS)
         {
@@ -527,6 +926,20 @@ void direct_init(void)
 {
     own_id = rcat_hal_random();
     voice_queue = calloc(VOICE_QUEUE, sizeof(voice_t));
+    // Big enough to go in PSRAM
+    own_avatar = calloc(AVATAR_PIXELS, sizeof(uint16_t));
+    avatar_order = calloc(AVATAR_PIXELS, sizeof(uint16_t));
+    peer_avatars = calloc((size_t)DIRECT_PEERS_MAX * AVATAR_PIXELS, sizeof(uint16_t));
+    peer_known = calloc((size_t)DIRECT_PEERS_MAX * AVATAR_PIXELS / 8, 1);
+    if (avatar_order != NULL)
+    {
+        make_avatar_order();
+    }
+    if (avatar_order == NULL || peer_known == NULL)
+    {
+        free(peer_avatars);
+        peer_avatars = NULL;
+    }
     mbedtls_gcm_init(&gcm);
     const settings_t *s = settings_get();
     if (voice_queue == NULL || !rcat_hal_task_start("direct", direct_task, NULL, TASK_STACK))
@@ -539,6 +952,7 @@ void direct_init(void)
         uint8_t key[DIRECT_KEY_LEN];
         direct_key(ECHO_GROUP, ECHO_PASSPHRASE, key);
         settings_set_direct_group(key, ECHO_GROUP, "");
+        settings_set_direct_radio(RCAT_DIRECT_ECHO_CHANNEL, RCAT_DIRECT_ECHO_LR);
     }
     if (s->direct_on || RCAT_DIRECT_ECHO)
     {
@@ -580,10 +994,101 @@ bool direct_running(void)
     return running;
 }
 
-void direct_set_group(const uint8_t *key, const char *group, const char *name)
+void direct_set_group(const uint8_t *key, const char *group, const char *name, uint8_t channel, bool long_range)
 {
     settings_set_direct_group(key, group, name);
+    settings_set_direct_radio(channel, long_range);
     group_changed = true;   // the task takes it up
+}
+
+uint8_t direct_channel(void)
+{
+    return radio_channel;
+}
+
+bool direct_long_range(void)
+{
+    return radio_long_range;
+}
+
+void direct_scan(void)
+{
+    if (running)
+    {
+        scan_wanted = true;
+    }
+}
+
+bool direct_scanning(void)
+{
+    return scan_wanted;
+}
+
+void direct_set_avatar(const uint16_t *pixels, int px)
+{
+    if (own_avatar == NULL)
+    {
+        return;
+    }
+    if (pixels == NULL || px <= 0)
+    {
+        own_avatar_version = 0;
+        return;
+    }
+    // Shrink it, each pixel the average of those it covers
+    uint32_t hash = 2166136261u;
+    for (int y = 0; y < DIRECT_AVATAR_PX; y++)
+    {
+        for (int x = 0; x < DIRECT_AVATAR_PX; x++)
+        {
+            int y0 = y * px / DIRECT_AVATAR_PX, y1 = (y + 1) * px / DIRECT_AVATAR_PX;
+            int x0 = x * px / DIRECT_AVATAR_PX, x1 = (x + 1) * px / DIRECT_AVATAR_PX;
+            uint32_t r = 0, g = 0, b = 0, n = 0;
+            for (int sy = y0; sy < (y1 > y0 ? y1 : y0 + 1); sy++)
+            {
+                for (int sx = x0; sx < (x1 > x0 ? x1 : x0 + 1); sx++)
+                {
+                    uint16_t v = pixels[sy * px + sx];
+                    r += v >> 11;
+                    g += (v >> 5) & 0x3F;
+                    b += v & 0x1F;
+                    n++;
+                }
+            }
+            uint16_t v = (uint16_t)(((r / n) << 11) | ((g / n) << 5) | (b / n));
+            own_avatar[y * DIRECT_AVATAR_PX + x] = v;
+            hash = (hash ^ (v & 0xFF)) * 16777619u;
+            hash = (hash ^ (v >> 8)) * 16777619u;
+        }
+    }
+    uint8_t version = (uint8_t)(hash | 1);  // never 0
+    if (version != own_avatar_version)
+    {
+        own_avatar_version = version;
+        memset(resend, 0, sizeof(resend));
+        avatar_soon = true;
+    }
+}
+
+const uint16_t *direct_avatar(const char *name, uint8_t *version)
+{
+    peer_t copy[DIRECT_PEERS_MAX];
+    uint32_t seq;
+    do
+    {
+        seq = __atomic_load_n(&peers_seq, __ATOMIC_SEQ_CST);
+        memcpy(copy, peers, sizeof(copy));
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    } while ((seq & 1) || seq != __atomic_load_n(&peers_seq, __ATOMIC_SEQ_CST));
+    for (int i = 0; i < DIRECT_PEERS_MAX && peer_avatars != NULL; i++)
+    {
+        if (copy[i].used && copy[i].avatar_version != 0 && strcmp(copy[i].name, name) == 0)
+        {
+            *version = copy[i].avatar_changes;
+            return peer_avatars + (size_t)i * AVATAR_PIXELS;
+        }
+    }
+    return NULL;
 }
 
 const char *direct_group_name(void)
@@ -650,7 +1155,7 @@ int direct_groups(direct_group_t *out, int max)
         {
             continue;
         }
-        direct_group_t g = { .rssi = copy[i].rssi };
+        direct_group_t g = { .rssi = copy[i].rssi, .channel = copy[i].channel, .long_range = copy[i].long_range };
         memcpy(g.id, copy[i].id, 4);
         memcpy(g.name, copy[i].name, sizeof(g.name));
         for (int k = 0; k < GROUP_SENDERS; k++)
@@ -721,8 +1226,36 @@ bool direct_running(void)
     return false;
 }
 
-void direct_set_group(const uint8_t *key, const char *group, const char *name)
+void direct_set_group(const uint8_t *key, const char *group, const char *name, uint8_t channel, bool long_range)
 {
+}
+
+uint8_t direct_channel(void)
+{
+    return DIRECT_CHANNEL_DEFAULT;
+}
+
+bool direct_long_range(void)
+{
+    return false;
+}
+
+void direct_scan(void)
+{
+}
+
+bool direct_scanning(void)
+{
+    return false;
+}
+
+void direct_set_avatar(const uint16_t *pixels, int px)
+{
+}
+
+const uint16_t *direct_avatar(const char *name, uint8_t *version)
+{
+    return NULL;
 }
 
 const char *direct_group_name(void)

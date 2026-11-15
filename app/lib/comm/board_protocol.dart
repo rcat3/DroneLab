@@ -20,7 +20,7 @@
 ///           another board's voice, heard over direct comms (core/app/direct.h)
 ///   direct peer [0x08][id LE32][rssi][flags: 1 talking][name]
 ///           a board heard over direct comms, every couple of seconds
-///   direct group [0x09][group id, 4 bytes][rssi][boards][name]
+///   direct group [0x09][group id, 4 bytes][rssi][boards][channel][flags: 1 Long Range][name]
 ///           a group heard about over direct comms, from its beacons
 /// Both ways, the phone remote's requests and their answers, in pieces:
 ///   request [0x03][id][flags][piece of "METHOD /api/...\n" + body]
@@ -119,8 +119,10 @@ class DirectGroupHeard {
   final String id;          // 8 hex digits
   final int rssi;
   final int boards;
+  final int channel;
+  final bool longRange;
   final String name;
-  DirectGroupHeard(this.id, this.rssi, this.boards, this.name);
+  DirectGroupHeard(this.id, this.rssi, this.boards, this.channel, this.longRange, this.name);
 }
 
 class AnswerPiece {
@@ -152,9 +154,10 @@ Object? parseBoardMessage(Uint8List data) {
     return DirectPeer(le32(1), data[5].toSigned(8), data[6] & 1 != 0,
         utf8.decode(data.sublist(7), allowMalformed: true));
   }
-  if (data[0] == _msgDirectGroup && data.length >= 7) {
+  if (data[0] == _msgDirectGroup && data.length >= 9) {
     final id = data.sublist(1, 5).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    return DirectGroupHeard(id, data[5].toSigned(8), data[6], utf8.decode(data.sublist(7), allowMalformed: true));
+    return DirectGroupHeard(id, data[5].toSigned(8), data[6], data[7], data[8] & 1 != 0,
+        utf8.decode(data.sublist(9), allowMalformed: true));
   }
   if (data[0] == _msgAvatar && data.length >= 7) {
     final got = data[3] | (data[4] << 8) | (data[5] << 16) | (data[6] << 24);

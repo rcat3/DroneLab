@@ -58,6 +58,8 @@ typedef struct
     char direct_name[SETTINGS_DIRECT_NAME_LEN];     // what the others see this board as; empty for its own name
     uint8_t comm_voice_effect;              // the comm channel's own voice effect: 0 the speaker's, else its preset + 1
     uint8_t comm_talk_on;                   // comm_transport_t: where talking goes, by choice
+    uint8_t direct_channel;                 // direct comms' group's channel: 1, 6 or 11; 0 for 6
+    uint8_t direct_long_range;              // 1 if the group sends in Long Range mode
 } settings_t;
 
 /* comm_auto_show: switch to the comm channel's status screen while it's
@@ -97,6 +99,7 @@ void settings_set_comm_talk_on(uint8_t transport);
 /* Direct comms' group: its key (NULL for the open group) and name, and this
  * board's name in it. */
 void settings_set_direct_group(const uint8_t *key, const char *group, const char *name);
+void settings_set_direct_radio(uint8_t channel, uint8_t long_range);
 /* The talk button, or none with addr NULL. */
 void settings_set_button(const uint8_t *addr, uint8_t addr_type, const char *name);
 /* Keep a learned battery curve (see app/battery_log.h), or forget it with runs = 0. */
