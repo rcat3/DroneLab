@@ -10,7 +10,7 @@ The Voice Lab streams the board's microphone over WiFi to `tools/voice_monitor.p
    password=my password
    ```
 2. Install the monitor's packages on the computer: `pip install numpy sounddevice` (on Linux, sounddevice also needs PortAudio: `sudo apt install libportaudio2`).
-3. On the board, go to the last page of the Visualizer feature and switch the Voice Lab on.  It shows the board's address once it's connected.
+3. On the board, go to the last page of the Voice feature and switch the Voice Lab on.  It shows the board's address once it's connected.
 4. On the computer, run `python3 tools/voice_monitor.py`.  It finds the board on the network, and the board shows *Streaming to* the computer's address.  If it isn't found, give the board's address: `python3 tools/voice_monitor.py --board 192.168.1.23`.
 
 Some things to try:

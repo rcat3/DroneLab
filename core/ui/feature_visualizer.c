@@ -1,10 +1,8 @@
 /*
  * Visualizer feature (boards with a microphone): a full screen picture of
  * the wearer's voice, and of whatever the speaker is playing, in one of
- * several styles (see visualizer.h). Its pages are the visualizer, a page to
- * choose the style, and then the voice pages (feature_voice.c): the voice
- * ring, the voice effect and the voice lab. Tapping the visualizer moves on
- * to the next style.
+ * several styles (see visualizer.h). Its pages are the visualizer, and a
+ * page to choose the style. Tapping the visualizer moves on to the next one.
  *
  * The visualizer draws into a canvas the size of the screen, a frame at a
  * time while it's on screen, and only the part it draws in is sent to the
@@ -32,17 +30,9 @@ static const visualizer_t *const visualizers[] = {
 
 static bool build(ui_feature_t *feature);
 
-static void on_navigate(void)
-{
-#if RCAT_FEATURE_VOICE
-    feature_voice_on_navigate();
-#endif
-}
-
 const ui_feature_def_t feature_visualizer = {
     .name = "Visualizer",
     .build = build,
-    .on_navigate = on_navigate,
 };
 
 static lv_obj_t *canvas;
@@ -221,9 +211,6 @@ static bool build(ui_feature_t *feature)
         return false;
     }
     add_chooser_page(feature);
-#if RCAT_FEATURE_VOICE
-    feature_voice_add_pages(feature);
-#endif
     lv_timer_create(frame_timer_cb, FRAME_MS, NULL);
     lv_timer_create(sync_timer_cb, SYNC_MS, NULL);
     return true;

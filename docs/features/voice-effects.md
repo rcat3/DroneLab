@@ -2,7 +2,7 @@
 
 *The ESP32-S3-Touch-AMOLED-1.75*
 
-The *Voice Effect* page, in the [Visualizer](visualizer.md) after its own pages, runs your voice through an effect on the board itself:
+The *Voice Effect* page, in the Voice feature, runs your voice through an effect on the board itself:
 
 | Preset | Sound |
 |---|---|

@@ -1,11 +1,7 @@
 /*
- * Voice pages (boards with a microphone): the settings page for the voice
- * ring, the voice effect, and the voice lab (boards with WiFi).
- *
- * On boards with the Visualizer, they're its pages, after its own: then the
- * first page a swipe up or down lands on is the Visualizer, and not a
- * roller that the swipe would turn. Without it, they're a Voice feature of
- * their own.
+ * Voice feature (boards with a microphone): the settings page for the voice
+ * ring, the voice effect, and the voice lab (boards with WiFi). Pictures of
+ * the voice are in the Visualizer feature.
  *
  * The voice ring itself is drawn over the images feature, and over its own
  * settings page so the color can be previewed.
@@ -342,15 +338,12 @@ static void add_lab_page(ui_feature_t *feature)
     lv_obj_align(lab_status_label, LV_ALIGN_CENTER, 0, ui_px(40));
 }
 
-static bool pages_added;
-
-bool feature_voice_add_pages(ui_feature_t *feature)
+static bool build(ui_feature_t *feature)
 {
-    if (pages_added || !audio_level_available())
+    if (!audio_level_available())
     {
         return false;
     }
-    pages_added = true;
 
     voice_ring_create();
 
@@ -367,18 +360,4 @@ bool feature_voice_add_pages(ui_feature_t *feature)
         add_lab_page(feature);
     }
     return true;
-}
-
-void feature_voice_on_navigate(void)
-{
-    if (pages_added)
-    {
-        on_navigate();
-    }
-}
-
-/* The Voice feature, if the Visualizer didn't take its pages. */
-static bool build(ui_feature_t *feature)
-{
-    return feature_voice_add_pages(feature);
 }
