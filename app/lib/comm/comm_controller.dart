@@ -124,6 +124,19 @@ class CommController extends ChangeNotifier {
     }
   }
 
+  /// The app's Hold to talk. Letting go stops the talking however it
+  /// started, the headphones' button included, so the button's next press
+  /// starts afresh.
+  void holdToTalk(bool held) {
+    if (held) {
+      board.setTalk(true);
+    } else if (headsetTalking) {
+      _setHeadsetTalking(false);    // sets the board's talk off too
+    } else {
+      board.setTalk(false);
+    }
+  }
+
   void _onHeadsetPress() {
     if (board.state != BoardState.connected) return;
     // Headphones send a press, not a hold: each press starts or stops

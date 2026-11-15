@@ -270,7 +270,7 @@ class _TalkButtonState extends State<_TalkButton> {
   void _set(bool held) {
     if (held == _held) return;
     setState(() => _held = held);
-    widget.comm.board.setTalk(held);
+    widget.comm.holdToTalk(held);
   }
 
   @override
