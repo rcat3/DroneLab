@@ -79,6 +79,7 @@ static lv_obj_t *next_button;
 static lv_obj_t *battery_label;
 static lv_obj_t *stop_button;
 static lv_obj_t *nothing_label;
+static lv_obj_t *nothing_title;     // says what the page is, while it's empty
 
 static int selected = -1;           // slot shown on the control page, or -1
 
@@ -279,6 +280,7 @@ static void show_control(void)
     strcpy(shown_status, status);
 
     lv_obj_set_hidden(nothing_label, d != NULL);
+    lv_obj_set_hidden(nothing_title, d != NULL);
     lv_obj_set_hidden(name_label, d == NULL);
     lv_obj_set_hidden(stop_button, d == NULL);
     lv_obj_set_hidden(prev_button, d == NULL || connected < 2);
@@ -495,6 +497,10 @@ static void add_control_page(ui_feature_t *feature)
         lv_obj_set_style_text_color(knob_labels[i], lv_color_black(), 0);
         lv_obj_center(knob_labels[i]);
     }
+
+    nothing_title = lv_label_create(control_page);
+    lv_label_set_text(nothing_title, "Lovense Control");
+    lv_obj_align(nothing_title, LV_ALIGN_TOP_MID, 0, ui_px(32));
 
     nothing_label = lv_label_create(control_page);
     lv_label_set_text(nothing_label, "Nothing connected\n\nSwipe left to\nfind a device");

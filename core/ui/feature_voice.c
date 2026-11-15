@@ -324,14 +324,17 @@ static void add_lab_page(ui_feature_t *feature)
     lv_label_set_text(help, "Streams the microphone to\nvoice_monitor.py over WiFi");
     lv_obj_set_style_text_align(help, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(help, lv_palette_main(LV_PALETTE_GREY), 0);
-    lv_obj_align(help, LV_ALIGN_CENTER, 0, ui_px(-44));
+    lv_obj_align(help, LV_ALIGN_CENTER, 0, ui_px(-52));
 
     lv_timer_t *timer = lv_timer_create(lab_timer_cb, LAB_POLL_MS, NULL);
     lv_timer_pause(timer);
 
+    // Big, like the others, so it's easy to hit
     lv_obj_t *sw = lv_switch_create(page);
     lab_switch = sw;
-    lv_obj_align(sw, LV_ALIGN_CENTER, 0, ui_px(-6));
+    lv_obj_set_size(sw, ui_px(76), ui_px(38));
+    lv_obj_set_ext_click_area(sw, ui_px(8));
+    lv_obj_align(sw, LV_ALIGN_CENTER, 0, ui_px(-2));
     lv_obj_add_event_cb(sw, lab_switch_event_cb, LV_EVENT_VALUE_CHANGED, timer);
 
     lab_status_label = lv_label_create(page);
@@ -339,7 +342,7 @@ static void add_lab_page(ui_feature_t *feature)
     lv_label_set_long_mode(lab_status_label, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_width(lab_status_label, ui_px(170));
     lv_obj_set_style_text_align(lab_status_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lab_status_label, LV_ALIGN_CENTER, 0, ui_px(40));
+    lv_obj_align(lab_status_label, LV_ALIGN_CENTER, 0, ui_px(46));
 }
 
 static bool ring_added;
