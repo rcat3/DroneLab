@@ -68,6 +68,8 @@ A few ideas run through it:
 - `tools/prepare_sd.py` - Resizes and re-encodes images for an SD card (see [Images on the SD card](../features/images.md#images-on-the-sd-card)).
 - `tools/voice_monitor.py` - Plays and records the microphone stream from the [Voice Lab](../features/voice-lab.md), with voice effects.
 - `tools/gen_remote_page.py` - Turns `core/app/remote_page.html`, the [WiFi Hotspot Remote](../features/phone-remote.md)'s page, into the C file that's built in, and copies it into the app.  Run it after changing the page.
+- `tools/ble_record.py` - Records the board's voice effect on a computer over Bluetooth, as the app's Record tab does, or plays it to a sound device (a video call's microphone, through a virtual audio cable), with no hotspot to join (see [Recording over Bluetooth](../features/voice-lab.md#recording-over-bluetooth)).
+- `tools/ble_pair.py` - Pairs a Linux computer with a board over Bluetooth, asking for the code the board shows, for `ble_record.py` and `comm_bridge.py`.
 - `tools/comm_bridge.py` - Stands in for the phone app on a computer, for trying the [comm channel](../features/comm.md): plays or saves what the board sends, or passes it on to a Mumble server.
 - `tools/mumble/` - Runs the comm channel's [Mumble](https://www.mumble.info) server with Docker.
 - `tools/gen_terminal_font.py` - Makes the [Terminal](../features/terminal.md)'s font, `core/ui/terminal_font.c`.

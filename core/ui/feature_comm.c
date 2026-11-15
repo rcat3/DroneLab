@@ -387,19 +387,24 @@ static void show_status(void)
     bool rx_direct = l == LOOK_RX && comm_hearing_transport(0) == COMM_TALK_DIRECT;
     show_avatar(l == LOOK_RX ? comm_hearing_avatar(0) : comm_own_avatar(), rx_direct ? comm_hearing_name(0) : NULL, l);
 
-    set_label(tag, l == LOOK_TX ? "TX" : l == LOOK_RX ? "RX" : l == LOOK_OFF ? "OFF" :
+    bool rec = comm_recording();
+    set_label(tag, rec ? "REC" : l == LOOK_TX ? "TX" : l == LOOK_RX ? "RX" : l == LOOK_OFF ? "OFF" :
                    comm_mode() == COMM_VOICE ? "VOX" : "PTT");
 
     // Under it: where it's sending, who's talking, or how things are
     char text[64];
     // The icon: where it's sending, or how the one talking is heard
-    bool show_icon = tx || hearing > 0;
+    bool show_icon = (tx || hearing > 0) && !rec;
     int transport = tx ? (int)comm_talk_now() : comm_hearing_transport(0);
     if (show_icon && lv_image_get_src(transport_icon) != &transport_icons[transport])
     {
         lv_image_set_src(transport_icon, &transport_icons[transport]);
     }
-    if (tx)
+    if (rec)
+    {
+        snprintf(text, sizeof(text), "RECORDING");
+    }
+    else if (tx)
     {
         // Where it's going: the server's channel, or the direct group
         const char *channel = comm_server_channel();

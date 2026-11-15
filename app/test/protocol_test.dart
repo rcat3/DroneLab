@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:dronelab/comm/avatars.dart';
 import 'package:dronelab/comm/board_protocol.dart';
+import 'package:dronelab/comm/recorder.dart';
 import 'package:image/image.dart' as img;
 import 'package:dronelab/comm/protobuf.dart';
 import 'package:dronelab/comm/voice_packet.dart';
@@ -161,6 +162,23 @@ void main() {
     final g = parseBoardMessage(Uint8List.fromList([0x09, 0xde, 0xad, 0xbe, 0xef, 0xC4, 3, 11, 1, ...'Pack'.codeUnits]))
         as DirectGroupHeard;
     expect([g.id, g.rssi, g.boards, g.channel, g.longRange, g.name], ['deadbeef', -60, 3, 11, true, 'Pack']);
+  });
+
+  test('recording messages', () {
+    expect(recordMessage(true, speakerVoice: true, beep: true), [0x0A, 1, 3]);
+    expect(recordMessage(false), [0x0A, 0, 0]);
+    final r = parseBoardMessage(Uint8List.fromList([0x0A, 0x34, 0x12, 1, 7, 8])) as RecordedSound;
+    expect([r.sound.seq, r.sound.first, r.sound.opus], [0x1234, true, [7, 8]]);
+    final st = parseBoardMessage(Uint8List.fromList([0x02, 3, 0, 8])) as BoardStatus;
+    expect(st.recording, isTrue);
+  });
+
+  test('a WAV header for 48 kHz mono', () {
+    final h = ByteData.sublistView(wavHeader(96000));
+    expect(String.fromCharCodes(h.buffer.asUint8List(0, 4)), 'RIFF');
+    expect(h.getUint32(24, Endian.little), 48000);
+    expect(h.getUint32(40, Endian.little), 96000);
+    expect(h.lengthInBytes, 44);
   });
 }
 

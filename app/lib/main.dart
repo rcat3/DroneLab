@@ -3,6 +3,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'comm/comm_controller.dart';
 import 'ui/comm_page.dart';
+import 'ui/record_page.dart';
 import 'ui/remote_page.dart';
 
 void main() {
@@ -46,13 +47,14 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: IndexedStack(
         index: _tab,
-        children: [CommPage(comm: widget.comm), RemotePage(comm: widget.comm)],
+        children: [CommPage(comm: widget.comm), RecordPage(comm: widget.comm), RemotePage(comm: widget.comm)],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.headset_mic), label: 'Comm'),
+          NavigationDestination(icon: Icon(Icons.fiber_manual_record), label: 'Record'),
           NavigationDestination(icon: Icon(Icons.tune), label: 'Remote'),
         ],
       ),

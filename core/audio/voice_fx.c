@@ -957,6 +957,7 @@ static chain_t speaker_chain = { .preset = -1 };
 static chain_t comm_chain = { .preset = -1 };
 static volatile int wanted_preset;          // set by the UI loop
 static volatile int wanted_comm_preset = -1;    // -1 for the speaker's
+static volatile bool listen_to_speaker;         // the listener gets the speaker's effect, not the comm one
 
 static void free_chain(chain_t *c)
 {
@@ -1250,7 +1251,7 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     }
     // The comm channel's own effect, if it has one and something's listening
     int comm_preset = wanted_comm_preset;
-    bool own_comm = comm_preset >= 0 && comm_preset != preset &&
+    bool own_comm = comm_preset >= 0 && comm_preset != preset && !listen_to_speaker &&
                     __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE) != NULL;
     if (own_comm && comm_preset != comm_chain.preset)
     {
@@ -1369,6 +1370,11 @@ const char *voice_fx_preset_name(size_t index)
 void voice_fx_set_preset(size_t index)
 {
     wanted_preset = (index < PRESET_COUNT) ? (int)index : 0;
+}
+
+void voice_fx_listen_to_speaker(bool speaker)
+{
+    listen_to_speaker = speaker;
 }
 
 void voice_fx_set_comm_preset(int index)

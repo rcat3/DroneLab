@@ -59,9 +59,10 @@
 // correction for the internet's lost packets. Complexity 3 of 10 keeps it
 // quick, for little loss at this rate.
 #define OPUS_BITRATE        24000
+#define OPUS_RECORD_BITRATE 48000   // for recording: no coding to hear, and room for it on Bluetooth
 #define OPUS_COMPLEXITY     3
 #define OPUS_LOSS_PERCENT   5
-#define MAX_OPUS_BYTES      160
+#define MAX_OPUS_BYTES      200
 #define HEADER_BYTES        4
 
 #define MSG_SOUND           0x01
@@ -94,6 +95,17 @@
 #define STATUS_SENDING      0x01
 #define STATUS_HEARD        0x02
 #define STATUS_BUTTON       0x04
+#define STATUS_RECORDING    0x08
+#define MSG_RECORD          0x0A    // both ways: start or stop recording, and what's recorded
+#define RECORD_SPEAKER      0x01    // the speaker's voice effect, not the comm voice
+#define RECORD_BEEP         0x02    // with a sync beep to start
+// The beep comes out of the speaker about this long after the speaker's
+// task makes it (as voice_lab.c), so it's put in the recording then too
+#define BEEP_OUT_DELAY_MS   25
+// And what the microphone hears is left out while it beeps, and this long
+// after, so the beep it picks up from the speaker, late from the effect,
+// isn't in the recording as a second one
+#define BEEP_MUTE_TAIL_MS   150
 #define STATUS_EVERY_MS     5000
 
 // Voice mode: the voice effect's output is louder than VOX_DB (in dB below
@@ -154,6 +166,9 @@ static uint8_t hearing_avatar[COMM_HEARING_MAX];
 static uint8_t hearing_transport[COMM_HEARING_MAX];
 static bool audio_on;               // the voice is listened to, and the talk button used
 static volatile comm_transport_t tx_transport;  // where the transmission going out goes
+static volatile bool recording;     // the phone's recording what's said, and nothing goes anywhere else
+static uint32_t beep_seen;          // speaker_beep_count(), by the microphone's task
+static uint32_t beep_pos = UINT32_MAX;  // samples since the speaker made it, UINT32_MAX while there's none
 static uint32_t direct_peers_ms;
 
 static void direct_voice(uint32_t sender, uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len, void *arg);
@@ -202,6 +217,7 @@ static void voice_cb(const int16_t *samples, size_t count, void *user_data)
         agc_gain = gain_target;
     }
     uint32_t w = ring_write;
+    uint32_t w0 = w;
     for (size_t i = 0; i < count; i++)
     {
         float x = samples[i] / 32768.0f;
@@ -251,6 +267,36 @@ static void voice_cb(const int16_t *samples, size_t count, void *user_data)
         }
     }
     voice_heard = (int32_t)(voice_until - w) > 0;
+
+    // Recording: the sync beep, in the recording as it comes out of the
+    // speaker, to line it up with video
+    uint32_t beeps = speaker_beep_count();
+    if (beeps != beep_seen)
+    {
+        beep_seen = beeps;
+        beep_pos = 0;
+    }
+    if (beep_pos != UINT32_MAX)
+    {
+        uint32_t start = FS * BEEP_OUT_DELAY_MS / 1000, end = start + FS * SPEAKER_BEEP_MS / 1000;
+        uint32_t quiet_end = end + FS * BEEP_MUTE_TAIL_MS / 1000;
+        const float step = 2.0f * (float)M_PI * SPEAKER_BEEP_HZ / FS;
+        for (uint32_t k = w0; k != w && beep_pos < quiet_end; k++, beep_pos++)
+        {
+            if (recording && beep_pos >= start)
+            {
+                // Just the beep: not the microphone, which hears it too
+                uint32_t pos = beep_pos - start;
+                ring[k & RING_MASK] = beep_pos < end ? (int16_t)(sinf(step * pos) * speaker_beep_envelope(pos, FS) *
+                                                                 SPEAKER_BEEP_LEVEL * 32767.0f)
+                                                     : 0;
+            }
+        }
+        if (beep_pos >= quiet_end)
+        {
+            beep_pos = UINT32_MAX;
+        }
+    }
     __atomic_store_n(&ring_write, w, __ATOMIC_RELEASE);
 }
 
@@ -258,7 +304,7 @@ static void voice_cb(const int16_t *samples, size_t count, void *user_data)
 
 static uint8_t status_flags(void)
 {
-    return (sending ? STATUS_SENDING : 0) | (voice_heard ? STATUS_HEARD : 0) |
+    return (sending ? STATUS_SENDING : 0) | (voice_heard ? STATUS_HEARD : 0) | (recording ? STATUS_RECORDING : 0) |
            (talk_button_state() == TALK_BUTTON_CONNECTED ? STATUS_BUTTON : 0);
 }
 
@@ -309,7 +355,7 @@ static comm_transport_t choose_transport(void)
 
 static bool talking(void)
 {
-    return screen_talk || phone_talk || talk_button_held() || (mode == COMM_VOICE && voice_heard);
+    return recording || screen_talk || phone_talk || talk_button_held() || (mode == COMM_VOICE && voice_heard);
 }
 
 static void encoder_task(void *arg)
@@ -336,6 +382,7 @@ static void encoder_task(void *arg)
     uint32_t end = 0;           // where the transmission ends, once it's let go
     uint16_t seq = 0;
     bool first = false;
+    bool tx_record = false;     // the transmission going out is a recording
     uint8_t last_status = 0xFF;
     uint32_t status_ms = 0;
     int16_t pcm[FRAME];
@@ -365,26 +412,30 @@ static void encoder_task(void *arg)
         connected = phone;
 
         uint32_t w = __atomic_load_n(&ring_write, __ATOMIC_ACQUIRE);
-        bool talk = talking();
+        // A recording starting or stopping ends what's going out first
+        bool rec = recording;
+        bool talk = talking() && !(sending && tx_record != rec);
 
         if (!sending && talk)
         {
-            uint32_t pre = mode == COMM_VOICE ? MS_TO_SAMPLES(VOX_PREROLL_MS) + VOX_ATTACK * FRAME : 0;
+            uint32_t pre = mode == COMM_VOICE && !rec ? MS_TO_SAMPLES(VOX_PREROLL_MS) + VOX_ATTACK * FRAME : 0;
             if (pre > w)
             {
                 pre = w;
             }
             read = w - pre;
             tx_transport = choose_transport();  // one way, for the whole transmission
+            tx_record = rec;
             sending = true;
             releasing = false;
             first = true;
             opus_encoder_ctl(enc, OPUS_RESET_STATE);
+            opus_encoder_ctl(enc, OPUS_SET_BITRATE(rec ? OPUS_RECORD_BITRATE : OPUS_BITRATE));
         }
         if (sending && !talk && !releasing)
         {
             releasing = true;
-            end = w + (mode == COMM_PUSH_TO_TALK ? MS_TO_SAMPLES(PTT_TAIL_MS) : 0);
+            end = w + (mode == COMM_PUSH_TO_TALK && !tx_record ? MS_TO_SAMPLES(PTT_TAIL_MS) : 0);
         }
         else if (sending && talk)
         {
@@ -425,17 +476,17 @@ static void encoder_task(void *arg)
             {
                 continue;
             }
-            packet[0] = MSG_SOUND;
+            packet[0] = tx_record ? MSG_RECORD : MSG_SOUND;
             packet[1] = seq & 0xFF;
             packet[2] = seq >> 8;
             packet[3] = first ? FLAG_FIRST : 0;
             seq++;
             first = false;
-            if (direct && tx_transport == COMM_TALK_DIRECT)
+            if (direct && !tx_record && tx_transport == COMM_TALK_DIRECT)
             {
                 direct_send_voice((uint16_t)(seq - 1), packet[3], packet + HEADER_BYTES, (size_t)n);
             }
-            if (phone && tx_transport == COMM_TALK_SERVER && !send_retrying(packet, HEADER_BYTES + n))
+            if (phone && (tx_record || tx_transport == COMM_TALK_SERVER) && !send_retrying(packet, HEADER_BYTES + n))
             {
 #if COMM_DEBUG
                 debug_dropped++;
@@ -448,16 +499,16 @@ static void encoder_task(void *arg)
 
         if (sending && releasing && (int32_t)(end - read) < FRAME)
         {
-            packet[0] = MSG_SOUND;
+            packet[0] = tx_record ? MSG_RECORD : MSG_SOUND;
             packet[1] = seq & 0xFF;
             packet[2] = seq >> 8;
             packet[3] = FLAG_LAST | (first ? FLAG_FIRST : 0);
             seq++;
-            if (direct && tx_transport == COMM_TALK_DIRECT)
+            if (direct && !tx_record && tx_transport == COMM_TALK_DIRECT)
             {
                 direct_send_voice((uint16_t)(seq - 1), packet[3], NULL, 0);
             }
-            if (phone && tx_transport == COMM_TALK_SERVER)
+            if (phone && (tx_record || tx_transport == COMM_TALK_SERVER))
             {
                 send_retrying(packet, HEADER_BYTES);
             }
@@ -644,6 +695,11 @@ comm_transport_t comm_talk_now(void)
 bool comm_talk_switched(void)
 {
     return comm_talk_now() != comm_talk_on();
+}
+
+bool comm_recording(void)
+{
+    return recording;
 }
 
 void comm_set_voice_effect(int preset)
@@ -1027,9 +1083,27 @@ static void receive_avatar(const uint8_t *msg, size_t len)
     }
 }
 
+static void set_recording(bool on, bool speaker, bool beep)
+{
+    if (on != recording)
+    {
+        printf("comm: recording %s\n", on ? "on" : "off");
+    }
+    voice_fx_listen_to_speaker(on && speaker);
+    recording = on;
+    if (on && beep)
+    {
+        speaker_beep();
+    }
+}
+
 static void forget_phone(void)
 {
     phone_talk = false;     // so a phone that's gone doesn't leave it talking
+    if (recording)
+    {
+        set_recording(false, false, false);     // nor recording
+    }
     app_version[0] = '\0';
     answering = false;
     request_open = false;
@@ -1073,8 +1147,8 @@ static void update_audio(void)
     }
 }
 
-/* What's shown: who the phone says is talking, then those heard over direct
- * comms that it hasn't named. */
+/* What's shown: who the phone says is talking; or, with no phone, those
+ * heard over direct comms. */
 static void merge_hearing(void)
 {
     hearing_count = 0;
@@ -1084,7 +1158,9 @@ static void merge_hearing(void)
         hearing_transport[hearing_count] = phone_hearing_transport[i];
         hearing_avatar[hearing_count++] = phone_hearing_avatar[i];
     }
-    if (!direct_running())
+    // With a phone, its list is the whole of it: it has those heard directly
+    // too, but for any muted there
+    if (!direct_running() || comm_phone_connected())
     {
         return;
     }
@@ -1148,7 +1224,7 @@ static void send_direct_peers(uint32_t now_ms)
  * comms' task. */
 static void direct_voice(uint32_t sender, uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len, void *arg)
 {
-    if (!running || !rcat_hal_ble_peer_connected())
+    if (!running || recording || !rcat_hal_ble_peer_connected())
     {
         return;
     }
@@ -1237,6 +1313,10 @@ void comm_poll(uint32_t now_ms)
         {
             receive_avatar(msg, len);
         }
+        else if (msg[0] == MSG_RECORD && len >= 3)
+        {
+            set_recording(msg[1] != 0, (msg[2] & RECORD_SPEAKER) != 0, (msg[2] & RECORD_BEEP) != 0);
+        }
     }
     merge_hearing();
     send_direct_peers(now_ms);
@@ -1311,6 +1391,11 @@ comm_transport_t comm_talk_now(void)
 }
 
 bool comm_talk_switched(void)
+{
+    return false;
+}
+
+bool comm_recording(void)
 {
     return false;
 }

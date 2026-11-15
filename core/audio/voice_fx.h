@@ -35,6 +35,10 @@ void voice_fx_set_preset(size_t index);
  * the voice runs through both, which takes more of the processor. */
 void voice_fx_set_comm_preset(int index);
 
+/* Hand the listener the speaker's effect instead of the comm channel's own,
+ * as for recording what the speaker plays. */
+void voice_fx_listen_to_speaker(bool speaker);
+
 /* How loud it is on the speaker, in percent: 50 is 10 dB up from the
  * microphone, and each step 0.5 dB more or less, with a limiter. 0 is silent. */
 void voice_fx_set_volume(uint8_t percent);

@@ -192,6 +192,12 @@ class Mixer {
 
   void playTone(Int16List samples) => _tones.add(samples);
 
+  /// Stop what [playTone] is playing, and drop the rest.
+  void stopTones() {
+    _tones.clear();
+    _toneAt = 0;
+  }
+
   /// Two short notes, rising or falling, faded at their ends so they don't
   /// click.
   Int16List chirp({required bool rising, double level = 0.25}) {

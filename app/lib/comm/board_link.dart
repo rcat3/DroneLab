@@ -45,6 +45,8 @@ class BoardLink extends ChangeNotifier {
   final _directSounds = StreamController<DirectSound>.broadcast();
   final _directPeers = StreamController<DirectPeer>.broadcast();
   final _directGroups = StreamController<DirectGroupHeard>.broadcast();
+  final _recorded = StreamController<BoardSound>.broadcast();
+  Stream<BoardSound> get recorded => _recorded.stream;
   Stream<DirectGroupHeard> get directGroups => _directGroups.stream;
   Stream<DirectSound> get directSounds => _directSounds.stream;
   Stream<DirectPeer> get directPeers => _directPeers.stream;
@@ -200,6 +202,8 @@ class BoardLink extends ChangeNotifier {
       _directPeers.add(msg);
     } else if (msg is DirectGroupHeard) {
       _directGroups.add(msg);
+    } else if (msg is RecordedSound) {
+      _recorded.add(msg.sound);
     } else if (msg is BoardStatus) {
       final old = status;
       status = msg;
@@ -219,7 +223,8 @@ class BoardLink extends ChangeNotifier {
           old.mode != msg.mode ||
           old.sending != msg.sending ||
           old.hearsVoice != msg.hearsVoice ||
-          old.buttonConnected != msg.buttonConnected) {
+          old.buttonConnected != msg.buttonConnected ||
+          old.recording != msg.recording) {
         notifyListeners();
       }
     }

@@ -5,6 +5,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -17,6 +18,7 @@ import 'board_link.dart';
 import 'board_protocol.dart';
 import 'jitter.dart';
 import 'media_buttons.dart';
+import 'recorder.dart';
 import 'mumble_client.dart';
 
 class ServerSettings {
@@ -152,6 +154,9 @@ class CommController extends ChangeNotifier {
     ]);
     _directSoundSub = board.directSounds.listen(_onDirectSound);
     _directGroupSub = board.directGroups.listen(_onDirectGroup);
+    _recordSub = board.recorded.listen((s) => _recorder?.add(s));
+    recordSpeakerVoice = p.getBool('recordSpeakerVoice') ?? true;
+    recordBeep = p.getBool('recordBeep') ?? false;
     _directPeerSub = board.directPeers.listen(_onDirectPeer);
     // Who's talking, kept up to date whether the voices come from the server
     // or over direct comms
@@ -221,6 +226,7 @@ class CommController extends ChangeNotifier {
   }
 
   void _onBoardChanged() {
+    if (recording && board.state != BoardState.connected) stopRecording();    // the board's gone
     _updateHeadset();
     _updateBoardScreen();
     _updateBoardSettings();
@@ -484,6 +490,97 @@ class CommController extends ChangeNotifier {
         : serverUp
             ? talkServer
             : talkDirect;
+  }
+
+  // ----- Recording -----
+
+  /// Record the speaker's voice effect (or the comm voice), with a sync beep
+  /// to start (or not). Kept for next time.
+  bool recordSpeakerVoice = true;
+  bool recordBeep = false;
+
+  Recorder? _recorder;
+  StreamSubscription<BoardSound>? _recordSub;
+  Timer? _recordTick;
+  bool _resumeServer = false;
+  bool _resumeDirect = false;
+  bool get recording => _recorder != null;
+  Duration get recordingLength => _recorder?.length ?? Duration.zero;
+
+  /// The recording last made, and those before it.
+  List<Recording> recordings = [];
+
+  Future<void> setRecordOptions({bool? speakerVoice, bool? beep}) async {
+    if (speakerVoice != null) recordSpeakerVoice = speakerVoice;
+    if (beep != null) recordBeep = beep;
+    await _prefs?.setBool('recordSpeakerVoice', recordSpeakerVoice);
+    await _prefs?.setBool('recordBeep', recordBeep);
+    notifyListeners();
+  }
+
+  Future<void> loadRecordings() async {
+    recordings = await listRecordings();
+    notifyListeners();
+  }
+
+  /// Start recording. Comms stop meanwhile (the server and direct comms),
+  /// and start again afterwards. Returns why not, or null.
+  Future<String?> startRecording() async {
+    if (recording) return null;
+    if (board.state != BoardState.connected || board.status == null) return 'Connect to the board first';
+    if (board.status!.version < 3) return "The board's firmware is too old to record";
+    holdToTalk(false);
+    _resumeServer = _serverWanted;
+    _resumeDirect = boardSettings?.direct?.on ?? false;
+    if (_serverWanted) await disconnectServer();
+    if (_resumeDirect) await setDirect(false);
+    _recorder = await Recorder.start(OpusVoiceDecoder());
+    await board.send(recordMessage(true, speakerVoice: recordSpeakerVoice, beep: recordBeep));
+    _recordTick = Timer.periodic(const Duration(milliseconds: 250), (_) => notifyListeners());
+    notifyListeners();
+    return null;
+  }
+
+  /// Stop, finish the file, and start comms again as they were.
+  Future<void> stopRecording() async {
+    final r = _recorder;
+    if (r == null) return;
+    await board.send(recordMessage(false));
+    await Future<void>.delayed(const Duration(milliseconds: 300));   // the last few packets
+    _recorder = null;
+    _recordTick?.cancel();
+    await r.finish();
+    if (_resumeDirect && board.state == BoardState.connected) await setDirect(true);
+    if (_resumeServer) await connectServer();
+    await loadRecordings();
+  }
+
+  /// The recording playing, if one is.
+  File? playing;
+  Timer? _playTimer;
+
+  Future<void> play(Recording r) async {
+    stopPlaying();
+    final samples = await readRecording(r.file);
+    await _audio.start();
+    mixer.playTone(samples);
+    playing = r.file;
+    _playTimer = Timer(Duration(milliseconds: samples.length * 1000 ~/ outputRate + 200), stopPlaying);
+    notifyListeners();
+  }
+
+  void stopPlaying() {
+    if (playing == null) return;
+    mixer.stopTones();
+    playing = null;
+    _playTimer?.cancel();
+    notifyListeners();
+  }
+
+  Future<void> deleteRecording(Recording r) async {
+    if (playing?.path == r.file.path) stopPlaying();
+    await r.file.delete();
+    await loadRecordings();
   }
 
   // ----- Channels -----
@@ -834,6 +931,7 @@ class CommController extends ChangeNotifier {
     _directSoundSub?.cancel();
     _directPeerSub?.cancel();
     _directGroupSub?.cancel();
+    _recordSub?.cancel();
     _talkingTimer?.cancel();
     disconnectServer();
     board.disconnect();

@@ -3,10 +3,12 @@
 /// Board to phone, notified on [toPhoneUuid]:
 ///   sound   [0x01][seq LE16][flags][opus]   flags: 1 first, 2 last (no opus)
 ///   status  [0x02][version][mode][flags]    flags: 1 sending, 2 hears the voice,
-///                                           4 the talk button is connected
+///                                           4 the talk button is connected, 8 recording
+///   recorded [0x0A][seq LE16][flags][opus]  as sound, while recording
 /// Phone to board, written to [fromPhoneUuid]:
 ///   talk    [0x01][0 or 1]
 ///   mode    [0x02][mode]
+///   record  [0x0A][1 start, 0 stop][flags: 1 the speaker's voice, 2 a sync beep]
 ///   server  [0x04][flags][others in the channel][own avatar slot][channel name]
 ///           flags: 1 connected, 2 connecting, 4 voice over UDP
 ///   hearing [0x05] then for each talking, in the order they started:
@@ -62,6 +64,7 @@ const _msgAvatar = 0x06;
 const _msgDirectSound = 0x07;
 const _msgDirectPeer = 0x08;
 const _msgDirectGroup = 0x09;
+const _msgRecord = 0x0A;
 
 /// No avatar, in a slot.
 const avatarNone = 0xFF;
@@ -87,7 +90,14 @@ class BoardStatus {
   final bool sending;
   final bool hearsVoice;
   final bool buttonConnected;
-  BoardStatus(this.version, this.mode, this.sending, this.hearsVoice, this.buttonConnected);
+  final bool recording;
+  BoardStatus(this.version, this.mode, this.sending, this.hearsVoice, this.buttonConnected, [this.recording = false]);
+}
+
+/// The board's voice while recording: as [BoardSound], kept apart from it.
+class RecordedSound {
+  final BoardSound sound;
+  RecordedSound(this.sound);
 }
 
 class AvatarAck {
@@ -143,7 +153,10 @@ Object? parseBoardMessage(Uint8List data) {
           Uint8List.sublistView(data, 4));
     case _msgStatus:
       final mode = data[2] < BoardMode.values.length ? BoardMode.values[data[2]] : BoardMode.pushToTalk;
-      return BoardStatus(data[1], mode, data[3] & 1 != 0, data[3] & 2 != 0, data[3] & 4 != 0);
+      return BoardStatus(data[1], mode, data[3] & 1 != 0, data[3] & 2 != 0, data[3] & 4 != 0, data[3] & 8 != 0);
+    case _msgRecord:
+      return RecordedSound(BoardSound(data[1] | (data[2] << 8), data[3] & 1 != 0, data[3] & 2 != 0,
+          Uint8List.sublistView(data, 4)));
   }
   int le32(int at) => data[at] | (data[at + 1] << 8) | (data[at + 2] << 16) | (data[at + 3] << 24);
   if (data[0] == _msgDirectSound && data.length >= 8) {
@@ -185,6 +198,8 @@ List<Uint8List> requestMessages(int id, Uint8List request, [int maxWrite = board
 
 Uint8List talkMessage(bool talk) => Uint8List.fromList([_msgTalk, talk ? 1 : 0]);
 Uint8List modeMessage(BoardMode mode) => Uint8List.fromList([_msgMode, mode.index]);
+Uint8List recordMessage(bool on, {bool speakerVoice = false, bool beep = false}) =>
+    Uint8List.fromList([_msgRecord, on ? 1 : 0, (speakerVoice ? 1 : 0) | (beep ? 2 : 0)]);
 
 enum ServerLink { off, connecting, connected }
 

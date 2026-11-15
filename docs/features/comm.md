@@ -82,6 +82,8 @@ Voice goes to and from the server over UDP, which is quicker on a patchy connect
 
 The *Buffer* (in the server settings) is how long the others' voices wait before they play, to ride out an uneven connection: 60 ms to start, more on mobile data.  It doesn't grow by itself, so the delay stays put.
 
+The app's *Record* tab records the board's voice to the phone, for videos: see [Recording in the app](voice-lab.md#recording-in-the-app).
+
 See [`app/README.md`](../../app/README.md) to build it.
 
 ## Trying it without the app

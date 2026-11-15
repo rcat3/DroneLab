@@ -25,6 +25,8 @@ Some things to try:
 
 No recording is ever written over: if the file's there already, the new one gets `-2`, `-3` and so on before the `.wav`.
 
+
+For recording the voice effect for videos, the DroneLab app's *Record* tab is the easier way: see [Recording in the app](#recording-in-the-app).
 ## Recording for video
 
 To use the voice effect as the sound of a video, instead of a microphone on the outside of the mask picking up your real voice:
@@ -60,3 +62,30 @@ Turn off the call app's noise suppression if it's cutting into the effect, as so
 WiFi adds a delay of around a tenth of a second, which is fine for judging an effect but odd if you listen to yourself live.  It's easier to have someone else listen, or to record and play back.
 
 The Voice Lab is off whenever the board starts, and WiFi is off while it's off.  The Voice Lab and the [WiFi Hotspot Remote](phone-remote.md) both use WiFi, so they can't run at once: switching one on stops the other.
+
+## Recording in the app
+
+The DroneLab app's *Record* tab records the board's voice, after the effect, straight to the phone, over the same Bluetooth link as the [comm channel](comm.md), with no computer or WiFi.  Pick the *Speaker voice* (the effect the board plays) or the *Comm voice* (the [Comm Voice](comm.md#comm-voice), if it's different), and, if you like, a *Sync beep*: the board beeps as it starts, and the same beep's in the recording, for lining it up with video.  The microphone's left out of the recording while it beeps, and a moment after, so the beep it picks up from the speaker doesn't follow as a second one.
+
+Each recording is a 48 kHz mono WAV, the voice sent at 48 kb/s (the effect itself runs at 16 kHz, so that's as much as there is to hear).  The list under the button plays, shares (to Google Drive, email and the rest, from Android's share sheet) and deletes them.  Comms stop while it records, the server and direct comms, and start again after; the board shows REC.  The voice is evened out by the comm channel's automatic gain, as on the channel.
+
+## Recording over Bluetooth
+
+`tools/ble_record.py` does what the app's Record tab does on a computer, over Bluetooth, so the computer stays on its own network, with no hotspot to join:
+
+```
+python3 tools/ble_record.py --beep --take intro      # to intro.wav, with a sync beep
+python3 tools/ble_record.py --play                   # and hear it as it records
+python3 tools/ble_record.py --device "CABLE Input" --no-record   # a video call's microphone
+```
+
+Enter stops it.  It records the speaker's voice effect, or the comm voice with `--comm-voice`, to a 48 kHz mono WAV named for when it starts, never written over.  Played to a virtual audio cable with `--device` (see `--list-devices`), the board's voice can be a video call's microphone, as above.
+
+The board talks to one phone or computer at a time, so disconnect the app first: while it's connected, the board isn't even found.  The computer has to be paired with the board once, as a phone does, with the code the board shows: without it, the board connects but won't take the request to record.  On Linux:
+
+```
+python3 tools/ble_pair.py
+```
+
+It asks you to open pairing on the board (Settings, *Paired Phones*, *Pair a phone*) and disconnect the app, finds the board, asks for the code the board shows, and leaves it free afterwards.  On Windows and macOS, pair it in the system's Bluetooth settings instead.  After that, `ble_record.py` finds the board by itself, even if this computer's left connected to it from before.  It needs `pip install bleak`, libopus (the `libopus0` package on Debian and Ubuntu, `opus` from Homebrew on macOS), and for `--play` or `--device`, `numpy` and `sounddevice`.
+

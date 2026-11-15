@@ -19,7 +19,7 @@
  *                  data, and only says it's over.
  *     0x02 status: 02, version (COMM_VERSION), mode (comm_mode_t), flags
  *                  (bit 0 sending, bit 1 voice heard, bit 2 the talk button
- *                  is connected; see talk_button.h), when the phone turns
+ *                  is connected, see talk_button.h; bit 3 recording), when the phone turns
  *                  notifications on, when any of it changes, and every few
  *                  seconds.
  *
@@ -27,6 +27,14 @@
  *     0x01 talk:   01, then 1 to talk or 0 to stop (push to talk from the
  *                  phone, or a button paired with it)
  *     0x02 mode:   02, then a comm_mode_t
+ *     0x0A record: 0A, 1 to start recording or 0 to stop, flags (bit 0 the
+ *                  speaker's voice effect rather than the comm voice, bit 1
+ *                  a sync beep to start). While it records, the board sends
+ *                  what it hears, the whole time, as 0x0A below, at a higher
+ *                  bitrate, and nothing else: no talking, to the server or
+ *                  direct, and nothing heard directly passed on. It stops if
+ *                  the phone goes. With the beep, the speaker beeps, and the
+ *                  same beep's in the recording, as the Voice Lab's.
  *     0x04 server: 04, flags (bit 0 connected to the server, bit 1
  *                  connecting, bit 2 the voice is going over UDP), how many
  *                  others are in the channel, the wearer's own avatar's slot
@@ -56,6 +64,7 @@
  *                  1 it's the right size), then how many bytes have come,
  *                  32 bits little endian. For each piece that asks, and for
  *                  the last.
+ *     0x0A recorded sound: as 0x01 sound, while recording, at 48 kb/s.
  *     0x07 direct sound: 07, the sender's id (32 bits, little endian), seq
  *                  (16), flags, then the Opus packet: another board's voice,
  *                  heard over direct comms (see direct.h), as 0x01's.
@@ -104,7 +113,8 @@
  *   2  the phone remote's requests (0x03), GET /version, and pairing with a
  *      code; the status's bit 2, the talk button
  *   3  server (0x04), hearing (0x05) and avatars (0x06), from the phone, in
- *      messages up to 244 bytes */
+ *      messages up to 244 bytes; direct comms (0x07 to 0x09); recording
+ *      (0x0A) */
 #define COMM_VERSION            3
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
@@ -163,6 +173,9 @@ void comm_set_talk_on(comm_transport_t transport);
 comm_transport_t comm_talk_on(void);            // as chosen
 comm_transport_t comm_talk_now(void);           // where talking would go now, or is going
 bool comm_talk_switched(void);                  // comm_talk_now() isn't the one chosen
+
+/* True while the phone's recording (0x0A). */
+bool comm_recording(void);
 
 /* The voice effect for what's sent: -1 for the same as the speaker's, else a
  * voice effect preset. Remembered. */
