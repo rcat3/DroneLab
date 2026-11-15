@@ -61,14 +61,14 @@ static const ui_feature_def_t *const feature_defs[] = {
 #if RCAT_FEATURE_SOUND
     &feature_sound,
 #endif
-#if RCAT_FEATURE_LEVEL
-    &feature_level,
-#endif
 #if RCAT_FEATURE_LOVENSE
     &feature_lovense,
 #endif
 #if RCAT_FEATURE_TERMINAL
     &feature_terminal,
+#endif
+#if RCAT_FEATURE_LEVEL
+    &feature_level,     // just before Settings, as it's mostly for setting the display up
 #endif
     &feature_settings,   // last, so it can list every feature's startup choices
 };
