@@ -11,8 +11,8 @@ The display is organized into features.  You swipe up and down to move between t
 | [Voice Effects](voice-effects.md) | Changes your voice: female, robot, Dalek, Borg and more.  Needs the speaker housing |
 | [Voice Lab](voice-lab.md) | Streams the microphone to a computer, for trying out voice effects |
 | [Sound](sound.md) | Plays sound files from the SD card.  Needs the speaker housing |
-| [Lovense](lovense.md) | Controls up to three Lovense devices over Bluetooth |
 | [Terminal](terminal.md) | Shows text typed on a phone, like a green screen terminal |
+| [Lovense](lovense.md) | Controls up to three Lovense devices over Bluetooth |
 | [Level](level.md) | A spirit level, for lining the display up on the mask |
 | [Phone Remote](phone-remote.md) | Runs the display from a phone's web browser |
 | [Comm](comm.md) | Talks to a group through a phone, like a radio.  In development |
