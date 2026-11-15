@@ -49,7 +49,9 @@ static size_t mix_beep(int16_t *frames, size_t count, size_t max_frames, uint32_
         }
         if (beep_pos >= lead)
         {
-            int32_t s = (int32_t)(sinf(step * (beep_pos - lead)) * SPEAKER_BEEP_LEVEL * 32767.0f);
+            uint32_t pos = beep_pos - lead;
+            int32_t s = (int32_t)(sinf(step * pos) * speaker_beep_envelope(pos, beep_rate) * SPEAKER_BEEP_LEVEL *
+                                  32767.0f);
             for (int c = 0; c < 2; c++)
             {
                 int32_t v = frames[2 * i + c] + s;

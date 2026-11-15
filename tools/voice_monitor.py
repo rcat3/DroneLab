@@ -62,6 +62,7 @@ BOARD_PORT = 5005
 HELLO = b"RCAT-HELLO"
 BEEP = b"RCAT-BEEP"         # asks the board for a sync beep
 SPEAKER_BEEP_LEAD_MS = 30   # as in core/audio/speaker.h
+SPEAKER_BEEP_MS = 300
 HELLO_INTERVAL_S = 1.0
 HEADER = struct.Struct("<IIIHH")
 PACKET_MAGIC = 0x31564352  # "RCV1"
@@ -946,7 +947,7 @@ def stream(args):
                     # A beep at the end too, so a long take can be stretched
                     # to match the video if the clocks drift apart.
                     beep()
-                    stop_at = time.time() + (SPEAKER_BEEP_LEAD_MS + 25 + 150 + 400) / 1000
+                    stop_at = time.time() + (SPEAKER_BEEP_LEAD_MS + 25 + SPEAKER_BEEP_MS + 400) / 1000
                     print("Recording the last beep...")
                 else:
                     break

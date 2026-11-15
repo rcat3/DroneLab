@@ -103,7 +103,9 @@ static void add_beep(stream_beep_t *b, uint32_t sample_rate, int16_t *samples, s
     {
         if (b->pos >= start)
         {
-            int32_t v = samples[i] + (int32_t)(sinf(step * (b->pos - start)) * SPEAKER_BEEP_LEVEL * 32767.0f);
+            uint32_t pos = b->pos - start;
+            int32_t v = samples[i] + (int32_t)(sinf(step * pos) * speaker_beep_envelope(pos, sample_rate) *
+                                               SPEAKER_BEEP_LEVEL * 32767.0f);
             samples[i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
         }
     }
