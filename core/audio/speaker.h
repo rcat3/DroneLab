@@ -10,6 +10,12 @@
  * once. */
 bool speaker_start(void);
 
+/* Silence the speaker, whatever it's playing, or let it play again. It
+ * fades over a few ms, so it doesn't click. Playing carries on underneath.
+ * The comm channel uses it to keep quiet while it sends. Call it from any
+ * task. */
+void speaker_set_muted(bool muted);
+
 /* A short beep, for lining recordings up with video (see voice_lab.h). It
  * plays over whatever the speaker is playing, after SPEAKER_BEEP_LEAD_MS of
  * silence so the amplifier is on in time. Call it from any task. */

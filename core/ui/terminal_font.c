@@ -1,11 +1,11 @@
 /*
- * The Terminal feature's fonts: LVGL's unscii 8 (public domain) with each
+ * The Terminal's and Comm's fonts: LVGL's unscii 8 (public domain) with each
  * pixel blown up into a square block, by tools/gen_terminal_font.py. Edit
  * the script rather than this file.
  */
 #include "lvgl.h"
 
-#if RCAT_FEATURE_TERMINAL
+#if RCAT_FEATURE_TERMINAL || RCAT_FEATURE_COMM
 
 /* U+0020 to U+007F */
 static const lv_font_fmt_txt_cmap_t cmaps[] = {

@@ -19,10 +19,10 @@ You swipe up and down between features, and left and right between each feature'
 - **[Voice Lab](docs/features/voice-lab.md)**: streams the microphone to a computer, for trying out voice effects.
 - **[Sound](docs/features/sound.md)**: plays WAV, MP3 and FLAC files from the SD card.
 - **[Lovense](docs/features/lovense.md)**: controls up to three Lovense devices over Bluetooth, with patterns and reactions to your voice and movement.
-- **[Level](docs/features/level.md)**: a spirit level, for lining the display up on the mask.
 - **[Terminal](docs/features/terminal.md)**: shows text typed on a phone, like an old green-screen terminal.
+- **[Comm](docs/features/comm.md)**: talks to a group, like a radio, through the DroneLab phone app and a Mumble server, with a status screen that shows who's talking.
 - **[WiFi Hotspot Remote](docs/features/phone-remote.md)**: runs the whole display from a phone's web browser, over the display's own WiFi hotspot, with no app.
-- **[Settings](docs/features/settings.md)**: brightness, rotation, what's shown at startup, and the battery voltage.
+- **[Settings](docs/features/settings.md)**: brightness, rotation, a [spirit level](docs/features/level.md) for lining the display up on the mask, what's shown at startup, and the battery voltage.
 
 ## Hardware
 

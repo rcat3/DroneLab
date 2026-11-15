@@ -13,6 +13,8 @@
  */
 #include "app/comm.h"
 
+#include <stddef.h>
+
 #if RCAT_HAVE_COMM
 
 #include <math.h>
@@ -26,6 +28,7 @@
 #include "app/remote.h"
 #include "app/settings.h"
 #include "app/talk_button.h"
+#include "audio/speaker.h"
 #include "audio/voice_fx.h"
 #include "hal.h"
 
@@ -65,6 +68,17 @@
 #define MSG_TALK            0x01
 #define MSG_MODE            0x02
 #define MSG_REQUEST         0x03    // both ways: a request, and its answer
+#define MSG_SERVER          0x04
+#define MSG_HEARING         0x05
+#define MSG_AVATAR          0x06    // both ways: a piece of it, and the ack
+#define AVATAR_FIRST        0x01
+#define AVATAR_LAST         0x02
+#define AVATAR_ACK          0x04
+#define AVATAR_DONE         0x01
+#define AVATAR_OK           0x02
+#define SERVER_CONNECTED    0x01
+#define SERVER_CONNECTING   0x02
+#define SERVER_UDP          0x04
 #define REQ_FIRST           0x01
 #define REQ_LAST            0x02
 #define REQUEST_MAX         2048    // the method, target and body
@@ -119,6 +133,20 @@ static uint8_t answer_id;
 static bool answering;
 static uint32_t last_state_hash;    // of the last /api/state sent, to say "unchanged"
 static char app_version[24];        // what the app said it is
+static comm_server_t server_state;  // what the app says about the server
+static bool server_udp;
+static int server_others;
+static char server_channel[COMM_NAME_MAX];
+static int hearing_count;
+static char hearing[COMM_HEARING_MAX][COMM_NAME_MAX];
+static uint8_t hearing_avatar[COMM_HEARING_MAX];
+static uint8_t own_avatar = COMM_AVATAR_NONE;
+static int avatar_size;
+static uint16_t *avatars[COMM_AVATAR_SLOTS];        // allocated as they come; big enough for PSRAM
+static uint32_t avatar_got[COMM_AVATAR_SLOTS];      // bytes so far
+static bool avatar_ready[COMM_AVATAR_SLOTS];
+static uint32_t avatar_changes;
+static bool speaker_muted;
 static bool available;
 static volatile bool running;
 static volatile comm_mode_t mode;
@@ -571,6 +599,75 @@ const char *comm_app_version(void)
     return app_version;
 }
 
+comm_server_t comm_server(void)
+{
+    return server_state;
+}
+
+bool comm_server_udp(void)
+{
+    return server_udp;
+}
+
+int comm_server_others(void)
+{
+    return server_others;
+}
+
+const char *comm_server_channel(void)
+{
+    return server_channel;
+}
+
+int comm_hearing_count(void)
+{
+    return hearing_count;
+}
+
+const char *comm_hearing_name(int index)
+{
+    return index >= 0 && index < hearing_count ? hearing[index] : "";
+}
+
+int comm_hearing_avatar(int index)
+{
+    return index >= 0 && index < hearing_count ? hearing_avatar[index] : COMM_AVATAR_NONE;
+}
+
+void comm_set_avatar_size(int px)
+{
+    if (px != avatar_size)
+    {
+        for (int i = 0; i < COMM_AVATAR_SLOTS; i++)
+        {
+            free(avatars[i]);
+            avatars[i] = NULL;
+            avatar_ready[i] = false;
+        }
+        avatar_size = px > 0 ? px : 0;
+    }
+}
+
+int comm_avatar_size(void)
+{
+    return avatar_size;
+}
+
+int comm_own_avatar(void)
+{
+    return own_avatar;
+}
+
+const uint16_t *comm_avatar(int slot)
+{
+    return slot >= 0 && slot < COMM_AVATAR_SLOTS && avatar_ready[slot] ? avatars[slot] : NULL;
+}
+
+uint32_t comm_avatar_changes(void)
+{
+    return avatar_changes;
+}
+
 static uint32_t hash(const char *data, size_t len)
 {
     uint32_t h = 2166136261u;   // FNV-1a
@@ -609,8 +706,10 @@ static void answer_request(void)
                 app_version[n] = '\0';
                 printf("comm: app version %s\n", app_version);
             }
-            len = snprintf(answer + 4, ANSWER_MAX - 4, "{\"firmware\":\"%s\",\"built\":\"%s\",\"comm\":%d}",
-                           rcat_hal_firmware_version(), rcat_hal_firmware_built(), COMM_VERSION);
+            len = snprintf(answer + 4, ANSWER_MAX - 4,
+                           "{\"firmware\":\"%s\",\"built\":\"%s\",\"comm\":%d,\"avatar\":%d,\"avatars\":%d}",
+                           rcat_hal_firmware_version(), rcat_hal_firmware_built(), COMM_VERSION, avatar_size,
+                           COMM_AVATAR_SLOTS);
         }
         else if (strncmp(target, "/remote.html", 12) == 0)
         {
@@ -734,22 +833,144 @@ static void send_answer(void)
     }
 }
 
+/* Copy at most n bytes of UTF-8 into out (COMM_NAME_MAX), without cutting a
+ * character in two. */
+static void copy_name(char *out, const uint8_t *text, size_t n)
+{
+    if (n > COMM_NAME_MAX - 1)
+    {
+        n = COMM_NAME_MAX - 1;
+        while (n > 0 && (text[n] & 0xC0) == 0x80)
+        {
+            n--;    // text[n] would carry on a character
+        }
+    }
+    memcpy(out, text, n);
+    out[n] = '\0';
+}
+
+static void receive_server(const uint8_t *msg, size_t len)
+{
+    if (len < 3)
+    {
+        return;
+    }
+    server_state = msg[1] & SERVER_CONNECTED    ? COMM_SERVER_CONNECTED
+                   : msg[1] & SERVER_CONNECTING ? COMM_SERVER_CONNECTING
+                                                : COMM_SERVER_OFF;
+    server_udp = (msg[1] & SERVER_UDP) != 0;
+    server_others = msg[2];
+    own_avatar = len > 3 ? msg[3] : COMM_AVATAR_NONE;
+    copy_name(server_channel, msg + 4, len > 4 ? len - 4 : 0);
+}
+
+static void receive_hearing(const uint8_t *msg, size_t len)
+{
+    hearing_count = 0;
+    size_t at = 1;
+    while (at + 1 < len && hearing_count < COMM_HEARING_MAX)
+    {
+        uint8_t slot = msg[at++];
+        size_t end = at;
+        while (end < len && msg[end] != '\n')
+        {
+            end++;
+        }
+        if (end > at)
+        {
+            hearing_avatar[hearing_count] = slot;
+            copy_name(hearing[hearing_count++], msg + at, end - at);
+        }
+        at = end + 1;
+    }
+}
+
+static void receive_avatar(const uint8_t *msg, size_t len)
+{
+    uint8_t slot = msg[1], flags = msg[2];
+    size_t total = (size_t)avatar_size * avatar_size * 2;
+    if (len < 3 || slot >= COMM_AVATAR_SLOTS || total == 0)
+    {
+        return;
+    }
+    if (flags & AVATAR_FIRST)
+    {
+        if (avatars[slot] == NULL)
+        {
+            avatars[slot] = malloc(total);
+        }
+        avatar_got[slot] = 0;
+        avatar_ready[slot] = false;
+    }
+    size_t n = len - 3;
+    if (avatars[slot] != NULL && avatar_got[slot] + n <= total)
+    {
+        memcpy((uint8_t *)avatars[slot] + avatar_got[slot], msg + 3, n);
+    }
+    avatar_got[slot] += n;
+    bool ok = avatars[slot] != NULL && avatar_got[slot] == total;
+    if (flags & AVATAR_LAST)
+    {
+        avatar_ready[slot] = ok;
+        if (ok)
+        {
+            avatar_changes++;
+        }
+    }
+    if (flags & (AVATAR_ACK | AVATAR_LAST))
+    {
+        uint32_t got = avatar_got[slot];
+        uint8_t ack[7] = { MSG_AVATAR, slot,
+                           (uint8_t)((flags & AVATAR_LAST ? AVATAR_DONE : 0) | (ok ? AVATAR_OK : 0)),
+                           (uint8_t)got, (uint8_t)(got >> 8), (uint8_t)(got >> 16), (uint8_t)(got >> 24) };
+        send_retrying(ack, sizeof(ack));
+    }
+}
+
+static void forget_phone(void)
+{
+    phone_talk = false;     // so a phone that's gone doesn't leave it talking
+    app_version[0] = '\0';
+    answering = false;
+    request_open = false;
+    last_state_hash = 0;
+    server_state = COMM_SERVER_UNKNOWN;
+    server_udp = false;
+    server_others = 0;
+    server_channel[0] = '\0';
+    hearing_count = 0;
+    own_avatar = COMM_AVATAR_NONE;
+    // The pictures are kept, but a new phone fills the slots afresh
+    for (int i = 0; i < COMM_AVATAR_SLOTS; i++)
+    {
+        if (avatar_ready[i])
+        {
+            avatar_ready[i] = false;
+            avatar_changes++;
+        }
+    }
+}
+
 void comm_poll(uint32_t now_ms)
 {
+    // Quiet while it sends, if that's chosen
+    bool mute = running && sending && settings_get()->comm_mute_speaker;
+    if (mute != speaker_muted)
+    {
+        speaker_muted = mute;
+        speaker_set_muted(mute);
+    }
     if (!running)
     {
+        forget_phone();
         return;
     }
     if (!rcat_hal_ble_peer_connected())
     {
-        phone_talk = false;     // so a phone that's gone doesn't leave it talking
-        app_version[0] = '\0';
-        answering = false;
-        request_open = false;
-        last_state_hash = 0;
+        forget_phone();
         return;
     }
-    uint8_t msg[64];
+    uint8_t msg[RCAT_HAL_BLE_PEER_MSG_MAX];
     size_t len;
     while ((len = rcat_hal_ble_peer_receive(msg, sizeof(msg))) > 0)
     {
@@ -764,6 +985,18 @@ void comm_poll(uint32_t now_ms)
         else if (msg[0] == MSG_REQUEST)
         {
             receive_request(msg, len);
+        }
+        else if (msg[0] == MSG_SERVER)
+        {
+            receive_server(msg, len);
+        }
+        else if (msg[0] == MSG_HEARING)
+        {
+            receive_hearing(msg, len);
+        }
+        else if (msg[0] == MSG_AVATAR)
+        {
+            receive_avatar(msg, len);
         }
     }
     send_answer();
@@ -835,6 +1068,65 @@ const char *comm_name(void)
 const char *comm_app_version(void)
 {
     return "";
+}
+
+comm_server_t comm_server(void)
+{
+    return COMM_SERVER_UNKNOWN;
+}
+
+bool comm_server_udp(void)
+{
+    return false;
+}
+
+int comm_server_others(void)
+{
+    return 0;
+}
+
+const char *comm_server_channel(void)
+{
+    return "";
+}
+
+int comm_hearing_count(void)
+{
+    return 0;
+}
+
+const char *comm_hearing_name(int index)
+{
+    return "";
+}
+
+int comm_hearing_avatar(int index)
+{
+    return COMM_AVATAR_NONE;
+}
+
+void comm_set_avatar_size(int px)
+{
+}
+
+int comm_avatar_size(void)
+{
+    return 0;
+}
+
+int comm_own_avatar(void)
+{
+    return COMM_AVATAR_NONE;
+}
+
+const uint16_t *comm_avatar(int slot)
+{
+    return NULL;
+}
+
+uint32_t comm_avatar_changes(void)
+{
+    return 0;
 }
 
 void comm_poll(uint32_t now_ms)

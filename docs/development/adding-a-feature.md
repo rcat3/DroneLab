@@ -1,6 +1,6 @@
 # Adding a Feature
 
-A feature is one of the sections you swipe up and down between, like Images or Level.  Each one lives in its own `core/ui/feature_<name>.c`, and [`core/ui/feature_level.c`](../../core/ui/feature_level.c) is a small, complete example to start from.
+A feature is one of the sections you swipe up and down between, like Images or Comm.  Each one lives in its own `core/ui/feature_<name>.c`, and [`core/ui/feature_images.c`](../../core/ui/feature_images.c) is a small, complete example to start from.
 
 1. Create `core/ui/feature_<name>.c` with a `ui_feature_def_t` called `feature_<name>` (see [`core/ui/ui_internal.h`](../../core/ui/ui_internal.h)):
    - `build` adds the feature's pages with `ui_feature_add_page()`.  Return `false` to leave the feature out, for example when the board doesn't have the hardware it needs (see [The hardware abstraction layer](hardware-abstraction.md)).

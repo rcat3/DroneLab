@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:dronelab/comm/avatars.dart';
 import 'package:dronelab/comm/board_protocol.dart';
+import 'package:image/image.dart' as img;
 import 'package:dronelab/comm/protobuf.dart';
 import 'package:dronelab/comm/voice_packet.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,5 +80,58 @@ void main() {
     expect(status.buttonConnected, isTrue);
     expect(talkMessage(true), [1, 1]);
     expect(modeMessage(BoardMode.pushToTalk), [2, 0]);
+  });
+
+  test('server message', () {
+    final m = serverMessage(ServerLink.connected, udp: true, others: 3, channel: 'Root', ownAvatar: 2);
+    expect(m, [0x04, 1 | 4, 3, 2, ...'Root'.codeUnits]);
+    expect(serverMessage(ServerLink.connecting), [0x04, 2, 0, avatarNone]);
+    expect(serverMessage(ServerLink.connected, channel: 'x' * 100).length, boardMaxWrite);
+  });
+
+  String names(Uint8List m) {
+    // [slot]name\n... as "slot:name|"
+    final out = StringBuffer();
+    var i = 1;
+    while (i < m.length) {
+      final slot = m[i++];
+      final end = m.indexOf(0x0A, i);
+      out.write('$slot:${utf8.decode(m.sublist(i, end))}|');
+      i = end + 1;
+    }
+    return out.toString();
+  }
+
+  test('hearing message fits, and counts the rest', () {
+    expect(hearingMessage([]), [0x05]);
+    expect(names(hearingMessage(const [Talker('Pup', 1), Talker('Drone7')])), '1:Pup|255:Drone7|');
+    final many = hearingMessage([for (final n in 'abcdef'.split('')) Talker(n, 0)]);
+    expect(names(many), '0:a|0:b|0:c|255:+3|');
+    final long = hearingMessage([for (final c in 'ABCD'.split('')) Talker(c * 30, 3)]);
+    expect(long.length, lessThanOrEqualTo(boardMaxWrite));
+    expect(names(long), '3:${'A' * 20}|3:${'B' * 20}|255:+2|');
+    // Not cut inside a character
+    expect(names(hearingMessage(const [Talker('ééééééééééééé')])), '255:éééééééééé|');
+  });
+
+  test('avatar pieces fit, ask for acks, and add up', () {
+    final rgb = Uint8List.fromList(List.generate(112 * 112 * 2, (i) => i & 0xFF));
+    final pieces = avatarMessages(5, rgb, 244, window: 8);
+    expect(pieces.every((p) => p.length <= 244 && p[0] == 0x06 && p[1] == 5), isTrue);
+    expect(pieces.first[2] & 1, 1);
+    expect(pieces.last[2] & 6, 6);
+    expect(pieces[7][2] & 4, 4);
+    expect(pieces[6][2] & 4, 0);
+    expect(pieces.fold<int>(0, (n, p) => n + p.length - 3), rgb.length);
+    final ack = parseBoardMessage(Uint8List.fromList([0x06, 5, 3, 0x00, 0x62, 0, 0])) as AvatarAck;
+    expect([ack.slot, ack.done, ack.ok, ack.received], [5, true, true, 0x6200]);
+  });
+
+  test('a picture becomes RGB565 for the board', () {
+    final im = img.Image(width: 40, height: 20);
+    img.fill(im, color: img.ColorRgb8(255, 0, 0));
+    final out = avatarRgb565(img.encodePng(im), 8)!;
+    expect(out.length, 8 * 8 * 2);
+    expect(out[0] | (out[1] << 8), 0xF800);
   });
 }

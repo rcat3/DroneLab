@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../comm/comm_controller.dart';
 
@@ -18,6 +19,22 @@ class _ServerPageState extends State<ServerPage> {
   late final _password = TextEditingController(text: widget.comm.server.password);
   late double _buffer = widget.comm.bufferMs.toDouble();
   bool _showPassword = false;
+  bool _picking = false;
+
+  Future<void> _pickAvatar() async {
+    setState(() => _picking = true);
+    try {
+      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (file == null) return;
+      final ok = await widget.comm.setAvatar(await file.readAsBytes());
+      if (mounted) setState(() {});
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("That doesn't look like a picture")));
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -90,6 +107,41 @@ class _ServerPageState extends State<ServerPage> {
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          Text('Your avatar', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(border: Border.all(color: Theme.of(context).colorScheme.outline)),
+                child: widget.comm.avatar == null
+                    ? const Icon(Icons.person, size: 40)
+                    : Image.memory(widget.comm.avatar!, fit: BoxFit.cover, gaplessPlayback: true),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    FilledButton.tonal(
+                        onPressed: _picking ? null : _pickAvatar, child: const Text('Choose a picture')),
+                    if (widget.comm.avatar != null)
+                      TextButton(
+                          onPressed: () async {
+                            await widget.comm.setAvatar(null);
+                            setState(() {});
+                          },
+                          child: const Text('Remove')),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text('Shown on the others\' displays while you talk, cut square from the middle. '
+              'Mumble on a computer shows it too.'),
           const SizedBox(height: 24),
           Text('Buffer: ${_buffer.round()} ms', style: Theme.of(context).textTheme.titleSmall),
           Slider(

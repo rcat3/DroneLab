@@ -18,19 +18,13 @@ The percentage is worked out from the voltage, along a discharge curve the board
 
 *The ESP32-S3-Touch-AMOLED-1.75*
 
-The Bluetooth link to the DroneLab app on a phone: the [comm channel](comm.md), sending your voice to the group, and the remote, run from the app.  The app is the better remote, as the phone stays on the internet.  The page also has the comm channel's *Push to talk* and *Voice* modes.
+The Bluetooth link to the DroneLab app on a phone: the [comm channel](comm.md), sending your voice to the group, and the remote, run from the app.  The app is the better remote, as the phone stays on the internet.  The comm channel's own settings, its modes and the talk button, are in the [Comm](comm.md#on-the-display) feature.
 
 ## Paired Phones
 
 *The ESP32-S3-Touch-AMOLED-1.75*
 
 How many phones are paired with the Phone App's link.  *Forget them* (tap it twice) unpairs them all, for when a phone's been lost: each has to pair again, with a new code.  It keeps the talk button.
-
-## Talk Button
-
-*The ESP32-S3-Touch-AMOLED-1.75*
-
-Pairs a Bluetooth camera remote, to hold to talk.  See [the talk button](comm.md#the-talk-button).
 
 ## WiFi Hotspot Remote
 
@@ -42,9 +36,15 @@ Runs the display from a phone's web browser, over the board's own WiFi hotspot, 
 
 Turns the whole display, touch included, in 90 degree steps.  It helps when the display ends up sitting at an angle in the mask, and some housings turn the board a quarter turn, which this puts right (each board's build guide says which).  The new rotation is applied about a second after you stop scrolling the roller.
 
+## Level
+
+*Boards with a supported accelerometer: the ESP32-S3 boards*
+
+A spirit level, for lining the display up on the mask.  See [Level](level.md).
+
 ## Startup
 
-What's shown when the display turns on: any image (see [Images](images.md)), the blank page, the [Visualizer](visualizer.md), the [Level](level.md) or the [Terminal](terminal.md), depending on what the board has.
+What's shown when the display turns on: any image (see [Images](images.md)), the blank page, the [Visualizer](visualizer.md), the [Terminal](terminal.md) or the [Comm](comm.md) status screen, depending on what the board has.
 
 ## Battery Log
 

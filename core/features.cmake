@@ -5,9 +5,10 @@
 #
 # Feature <NAME> is the file ui/feature_<name>.c. To add one, add its name
 # here, add it to the list in ui/ui.c, and add it to each platform's
-# features.cmake.
+# features.cmake. LEVEL is a page of Settings rather than a section of its
+# own.
 
-set(RCAT_FEATURES IMAGES VISUALIZER VOICE SOUND LEVEL LOVENSE TERMINAL)
+set(RCAT_FEATURES IMAGES VISUALIZER VOICE SOUND COMM LEVEL LOVENSE TERMINAL)
 
 # Leave the source files of switched off features out of the list in
 # sources_var.

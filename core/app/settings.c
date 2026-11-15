@@ -118,6 +118,8 @@ static bool load(settings_t *out)
     out->button_paired = out->button_paired ? 1 : 0;
     out->button_name[SETTINGS_BUTTON_NAME_LEN - 1] = '\0';
     // comm_mode is checked by the comm channel
+    out->comm_mute_speaker = out->comm_mute_speaker ? 1 : 0;
+    out->comm_auto_show &= SETTINGS_SHOW_SENDING | SETTINGS_SHOW_HEARING;
     for (int k = 0; k < SETTINGS_CURVE_POINTS && out->battery_curve_runs > 0; k++)
     {
         uint16_t mv = out->battery_curve_mv[k];
@@ -306,5 +308,12 @@ void settings_set_comm(uint8_t on, uint8_t mode)
 {
     current.comm_on = on ? 1 : 0;
     current.comm_mode = mode;
+    schedule_save();
+}
+
+void settings_set_comm_options(uint8_t mute_speaker, uint8_t auto_show)
+{
+    current.comm_mute_speaker = mute_speaker ? 1 : 0;
+    current.comm_auto_show = auto_show & (SETTINGS_SHOW_SENDING | SETTINGS_SHOW_HEARING);
     schedule_save();
 }

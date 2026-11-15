@@ -30,6 +30,12 @@ const _userRemove = 8;
 const _userState = 9;
 const _textMessage = 11;
 const _cryptSetup = 15;
+const _requestBlob = 23;
+
+// UserState's avatar ("texture"): the picture, or its hash when it's too big
+// to send to everyone, which RequestBlob fetches
+const _fieldTexture = 11;
+const _fieldTextureHash = 17;
 
 const _voiceTypePing = 1;
 const _udpPingInterval = Duration(seconds: 5);
@@ -51,6 +57,11 @@ class MumbleUser {
   MumbleUser(this.session);
 
   bool get muted => _flags.values.any((on) => on);
+
+  /// Their avatar: a PNG or JPEG, or null for none (or not fetched yet).
+  Uint8List? texture;
+  Uint8List? textureHash;
+  bool _textureAsked = false;
 }
 
 class MumbleText {
@@ -278,6 +289,7 @@ class MumbleClient {
       await _synced!.future.timeout(timeout,
           onTimeout: () => throw MumbleException("The server didn't let us in"));
       state = MumbleState.connected;
+      if (avatar != null) _sendAvatar();
       _changes.add(null);
     } catch (e) {
       final message = e is MumbleException
@@ -293,6 +305,25 @@ class MumbleClient {
   }
 
   void close() => _shutdown(null);
+
+  /// Our own avatar, a PNG or JPEG, sent now if connected, and each time it
+  /// connects. Null takes it away. Servers turn away big ones (128 KB, by
+  /// default).
+  Uint8List? avatar;
+
+  void setAvatar(Uint8List? picture) {
+    avatar = picture;
+    _sendAvatar();
+  }
+
+  void _sendAvatar() {
+    final me = mySession;
+    if (_socket == null || me == null) return;
+    _send(_userState, (ProtoWriter()
+          ..int_(1, me)
+          ..bytes(_fieldTexture, avatar ?? Uint8List(0)))
+        .toBytes());
+  }
 
   /// Send a packet of our voice. seq counts in 10 ms frames.
   void sendVoice(int seq, Uint8List opus, {bool last = false}) {
@@ -386,6 +417,24 @@ class MumbleClient {
         for (final f in const [6, 7, 9, 10]) {
           if (m.has(f)) u._flags[f] = m.bool_(f)!;
         }
+        if (m.has(_fieldTexture)) {
+          final t = m.bytes(_fieldTexture)!;
+          u.texture = t.isEmpty ? null : Uint8List.fromList(t);
+          u._textureAsked = false;
+        }
+        if (m.has(_fieldTextureHash)) {
+          final h = m.bytes(_fieldTextureHash)!;
+          if (u.textureHash == null || !_same(u.textureHash!, h)) {
+            u.textureHash = Uint8List.fromList(h);
+            u.texture = null;
+            u._textureAsked = false;
+          }
+        }
+        // Too big to come with the rest: ask for it
+        if (u.texture == null && u.textureHash != null && u.textureHash!.isNotEmpty && !u._textureAsked) {
+          u._textureAsked = true;
+          _send(_requestBlob, (ProtoWriter()..int_(1, session)).toBytes());
+        }
         _changes.add(null);
       case _userRemove:
         final session = ProtoMessage.parse(payload).int_(1);
@@ -399,6 +448,14 @@ class MumbleClient {
       case _ping:
         break;
     }
+  }
+
+  static bool _same(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   void _closed(String? reason) {

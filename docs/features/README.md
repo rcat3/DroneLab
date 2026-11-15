@@ -13,9 +13,8 @@ The display is organized into features.  You swipe up and down to move between t
 | [Sound](sound.md) | Plays sound files from the SD card.  Needs the speaker housing |
 | [Terminal](terminal.md) | Shows text typed on a phone, like a green screen terminal |
 | [Lovense](lovense.md) | Controls up to three Lovense devices over Bluetooth |
-| [Level](level.md) | A spirit level, for lining the display up on the mask |
 | [WiFi Hotspot Remote](phone-remote.md) | Runs the display from a phone's web browser |
-| [Comm](comm.md) | Talks to a group through a phone and the DroneLab app, like a radio |
-| [Settings](settings.md) | Brightness, rotation, what's shown at startup, and the battery voltage |
+| [Comm](comm.md) | Talks to a group through a phone and the DroneLab app, like a radio, with a status screen showing who's talking |
+| [Settings](settings.md) | Brightness, rotation, the [Level](level.md), what's shown at startup, and the battery voltage |
 
 Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp32s3_touch_amoled_1_75.md).  The low-profile housing has no speaker, so sound and voice effects need the speaker housing.  The firmware also runs on a few [other boards](../other-boards.md), which have fewer features.

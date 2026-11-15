@@ -43,7 +43,7 @@ extern const ui_feature_def_t feature_images;
 extern const ui_feature_def_t feature_visualizer;
 extern const ui_feature_def_t feature_voice;
 extern const ui_feature_def_t feature_sound;
-extern const ui_feature_def_t feature_level;
+extern const ui_feature_def_t feature_comm;
 extern const ui_feature_def_t feature_lovense;
 extern const ui_feature_def_t feature_terminal;
 extern const ui_feature_def_t feature_settings;
@@ -61,14 +61,14 @@ static const ui_feature_def_t *const feature_defs[] = {
 #if RCAT_FEATURE_SOUND
     &feature_sound,
 #endif
+#if RCAT_FEATURE_COMM
+    &feature_comm,
+#endif
 #if RCAT_FEATURE_TERMINAL
     &feature_terminal,
 #endif
 #if RCAT_FEATURE_LOVENSE
     &feature_lovense,
-#endif
-#if RCAT_FEATURE_LEVEL
-    &feature_level,     // just before Settings, as it's mostly for setting the display up
 #endif
     &feature_settings,   // last, so it can list every feature's startup choices
 };
@@ -275,6 +275,19 @@ void ui_show(size_t feature, size_t page)
     lv_tileview_set_tile(features[feature].pages, lv_obj_get_child(features[feature].pages, (int32_t)page),
                          LV_ANIM_OFF);
     navigate_event_cb(NULL);    // as a swipe would
+}
+
+bool ui_show_page(lv_obj_t *page)
+{
+    for (uint8_t i = 0; i < feature_count; i++)
+    {
+        if (lv_obj_get_parent(page) == features[i].pages)
+        {
+            ui_show(i, (size_t)lv_obj_get_index(page));
+            return true;
+        }
+    }
+    return false;
 }
 
 void ui_add_startup_choice(ui_feature_t *feature, lv_obj_t *page, const char *label, const char *value)

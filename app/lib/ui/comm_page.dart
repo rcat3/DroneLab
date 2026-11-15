@@ -147,7 +147,7 @@ class _BoardCard extends StatelessWidget {
     switch (b.state) {
       case BoardState.off:
       case BoardState.scanning:
-        status = b.error ?? 'Not connected. Switch Comm on in the board\'s Settings.';
+        status = b.error ?? 'Not connected. Switch on the Phone App in the board\'s Settings.';
       case BoardState.connecting:
         status = b.error == null ? 'Connecting...' : '${b.error}. Trying again...';
       case BoardState.connected:
@@ -235,7 +235,7 @@ class _BoardCard extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const ListTile(title: Text('Boards with Comm on'), subtitle: Text('Looking...')),
+                const ListTile(title: Text('Boards with the Phone App on'), subtitle: Text('Looking...')),
                 if (comm.board.error != null) ListTile(title: Text(comm.board.error!)),
                 for (final f in boards)
                   ListTile(

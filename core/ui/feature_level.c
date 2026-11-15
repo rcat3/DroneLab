@@ -1,6 +1,6 @@
 /*
- * Level feature (boards with an accelerometer): a spirit level for lining the
- * display up when it's mounted on the mask. A line across the screen stays
+ * The Level (boards with an accelerometer), a page of Settings: a spirit
+ * level for lining the display up when it's mounted on the mask. A line across the screen stays
  * level with the ground, and turns green once the screen is within a degree
  * of it. It assumes the wearer is sitting or standing upright.
  */
@@ -15,15 +15,6 @@
 #define LEVEL_OK_DEG        1.0f    // green within this
 #define LEVEL_CLOSE_DEG     3.0f    // amber within this
 #define LEVEL_MIN_G         0.5f    // below this the screen is facing too far up or down to tell
-
-static bool build(ui_feature_t *feature);
-static void on_navigate(void);
-
-const ui_feature_def_t feature_level = {
-    .name = "Level",
-    .build = build,
-    .on_navigate = on_navigate,
-};
 
 static lv_obj_t *level_page;
 static lv_obj_t *horizon;
@@ -99,7 +90,7 @@ static void level_timer_cb(lv_timer_t *t)
 }
 
 /* Only read the accelerometer while the page is on screen. */
-static void on_navigate(void)
+void feature_level_on_navigate(void)
 {
     if (ui_current_page() == level_page)
     {
@@ -112,7 +103,7 @@ static void on_navigate(void)
     }
 }
 
-static bool build(ui_feature_t *feature)
+bool feature_level_add_page(ui_feature_t *feature)
 {
     float x, y, z;
     if (!rcat_hal_accel_read(&x, &y, &z))
@@ -151,7 +142,5 @@ static bool build(ui_feature_t *feature)
     set_color(lv_color_white());
     level_timer = lv_timer_create(level_timer_cb, LEVEL_UPDATE_MS, NULL);
     lv_timer_pause(level_timer);
-
-    ui_add_startup_choice(feature, level_page, "Level", "level");
     return true;
 }

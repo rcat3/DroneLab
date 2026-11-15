@@ -5,6 +5,7 @@ set(RCAT_FEATURE_IMAGES ON)     # images and animations
 set(RCAT_FEATURE_VISUALIZER OFF) # pictures of the voice. These boards have no microphone
 set(RCAT_FEATURE_VOICE  ON)     # voice settings
 set(RCAT_FEATURE_SOUND  ON)     # sound file player
+set(RCAT_FEATURE_COMM   OFF)    # the comm channel. These boards have no Bluetooth
 set(RCAT_FEATURE_LEVEL  OFF)    # spirit level. These boards' accelerometer isn't supported yet
 set(RCAT_FEATURE_LOVENSE OFF)   # Lovense control. These boards have no Bluetooth
 set(RCAT_FEATURE_TERMINAL OFF)  # text from the phone remote. These boards have no WiFi

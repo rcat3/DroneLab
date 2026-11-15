@@ -1293,8 +1293,10 @@ function:	The peripheral: one service that a phone connects to
 ********************************************************************************/
 #if CONFIG_BT_NIMBLE_ROLE_PERIPHERAL
 
-#define PEER_MSGS           8
-#define PEER_MSG_MAX        64
+// Room for what the phone writes: a few avatars' pieces at once (see
+// core/app/comm.h), each as long as the biggest MTU lets it be.
+#define PEER_MSGS           32
+#define PEER_MSG_MAX        RCAT_HAL_BLE_PEER_MSG_MAX
 // How often it advertises, in 0.625 ms steps: 100 to 150 ms, which a phone
 // finds in a second or so, without costing much battery.
 #define PEER_ADV_MIN        160
@@ -1318,8 +1320,9 @@ static volatile uint16_t peer_mtu;
 static volatile bool peer_secure;       // paired with a code: encrypted and authenticated
 static volatile int32_t peer_passkey = -1;  // the code to show while pairing
 
-// What the phone wrote, oldest first, under ble_lock
-static uint8_t peer_msgs[PEER_MSGS][PEER_MSG_MAX];
+// What the phone wrote, oldest first, under ble_lock. In PSRAM, as internal
+// RAM is short.
+static uint8_t (*peer_msgs)[PEER_MSG_MAX];
 static uint8_t peer_msg_len[PEER_MSGS];
 static size_t peer_msg_head, peer_msg_count;
 
@@ -1341,7 +1344,7 @@ static int peer_access_cb(uint16_t conn_handle, uint16_t attr_handle, struct ble
         return 0;       // reading the notify characteristic gives nothing
     }
     uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
-    if (len == 0 || len > PEER_MSG_MAX)
+    if (len == 0 || len > PEER_MSG_MAX || peer_msgs == NULL)
     {
         return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
     }
@@ -1584,6 +1587,14 @@ void rcat_hal_ble_peer_setup(const rcat_hal_ble_peer_service_t *service)
     if (!started)
     {
         peer_service = service;
+    }
+    if (peer_msgs == NULL)
+    {
+        peer_msgs = heap_caps_malloc(PEER_MSGS * PEER_MSG_MAX, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (peer_msgs == NULL)
+        {
+            peer_msgs = malloc(PEER_MSGS * PEER_MSG_MAX);
+        }
     }
 }
 

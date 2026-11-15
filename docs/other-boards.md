@@ -32,6 +32,7 @@ Their housings for the MSA Millennium mask are no longer supported.  They're kep
 | [Lovense](features/lovense.md) | | | Yes |
 | [Level](features/level.md) | | | Yes |
 | [Terminal](features/terminal.md) | | | Yes |
+| [Comm](features/comm.md) | | | |
 | [WiFi Hotspot Remote](features/phone-remote.md) | | | Yes |
 | [Settings](features/settings.md) | Yes | Yes | Yes |
 

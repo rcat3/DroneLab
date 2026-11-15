@@ -48,6 +48,14 @@ lv_obj_t *ui_feature_add_page(ui_feature_t *feature, const char *name, bool blac
 bool ui_feature_is_current(const ui_feature_t *feature);
 lv_obj_t *ui_current_page(void);
 
+/* Show a page, as if it had been swiped to. Returns false if it isn't one. */
+bool ui_show_page(lv_obj_t *page);
+
+/* The Level (feature_level.c), as a page of Settings. Returns false without
+ * an accelerometer. Settings calls feature_level_on_navigate. */
+bool feature_level_add_page(ui_feature_t *feature);
+void feature_level_on_navigate(void);
+
 /*
  * Startup choices: pages that can be picked in the Startup setting. value is
  * what's saved (see settings_set_startup_image) and label is what's shown.

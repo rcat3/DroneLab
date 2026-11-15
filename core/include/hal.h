@@ -298,8 +298,10 @@ size_t rcat_hal_ble_peer_max_send(void);
  * room for it just now (try again in a few milliseconds). */
 bool rcat_hal_ble_peer_send(const void *data, size_t len);
 
-/* Take the oldest message the phone has written (the board keeps a few, of
- * up to 64 bytes each). Returns its length, or 0 if there isn't one. */
+/* Take the oldest message the phone has written (the board keeps a few
+ * dozen, of up to RCAT_HAL_BLE_PEER_MSG_MAX bytes each, and drops the oldest
+ * if more come). Returns its length, or 0 if there isn't one. */
+#define RCAT_HAL_BLE_PEER_MSG_MAX   244
 size_t rcat_hal_ble_peer_receive(void *data, size_t max);
 
 /* Run fn(arg) on a task of its own, for work that mustn't hold up the UI loop

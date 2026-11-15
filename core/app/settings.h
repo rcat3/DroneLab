@@ -47,7 +47,14 @@ typedef struct
     uint8_t button_addr_type;               // its Bluetooth address
     uint8_t button_addr[6];
     char button_name[SETTINGS_BUTTON_NAME_LEN];
+    uint8_t comm_mute_speaker;              // 1 to silence the speaker while the comm channel sends
+    uint8_t comm_auto_show;                 // SETTINGS_SHOW_*: when to switch to the comm status screen
 } settings_t;
+
+/* comm_auto_show: switch to the comm channel's status screen while it's
+ * sending, while it hears someone, or both, and back afterwards. */
+#define SETTINGS_SHOW_SENDING       0x01
+#define SETTINGS_SHOW_HEARING       0x02
 
 /* Load the saved settings, or the defaults if nothing valid has been saved. */
 void settings_init(void);
@@ -73,6 +80,7 @@ void settings_set_remote_autostart(uint8_t enabled);
 void settings_set_terminal_size(uint8_t size);
 void settings_set_visualizer(uint8_t index);
 void settings_set_comm(uint8_t on, uint8_t mode);
+void settings_set_comm_options(uint8_t mute_speaker, uint8_t auto_show);
 /* The talk button, or none with addr NULL. */
 void settings_set_button(const uint8_t *addr, uint8_t addr_type, const char *name);
 /* Keep a learned battery curve (see app/battery_log.h), or forget it with runs = 0. */

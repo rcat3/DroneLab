@@ -5,6 +5,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -34,6 +35,17 @@ class BoardLink extends ChangeNotifier {
 
   /// The board's firmware version (rcat_hal_firmware_version), once it's said.
   String? firmware;
+
+  /// How big the board shows avatars, in pixels, and how many it keeps,
+  /// once it's said; 0 if it doesn't.
+  int avatarSize = 0;
+  int avatarSlots = 0;
+
+  final _avatarAcks = StreamController<AvatarAck>.broadcast();
+  Stream<AvatarAck> get avatarAcks => _avatarAcks.stream;
+
+  /// The longest message the board takes.
+  int get maxWrite => (status?.version ?? 0) >= 3 ? math.min(boardMaxWriteV3, mtu - 3) : boardMaxWrite;
 
   BoardState state = BoardState.off;
   String? error;
@@ -156,6 +168,7 @@ class BoardLink extends ChangeNotifier {
     error = why;
     status = null;
     firmware = null;
+    avatarSize = avatarSlots = 0;
     notifyListeners();
     _retry?.cancel();
     if (_wanted) {
@@ -169,6 +182,8 @@ class BoardLink extends ChangeNotifier {
       _sounds.add(msg);
     } else if (msg is AnswerPiece) {
       _onAnswerPiece(msg);
+    } else if (msg is AvatarAck) {
+      _avatarAcks.add(msg);
     } else if (msg is BoardStatus) {
       final old = status;
       status = msg;
@@ -178,6 +193,8 @@ class BoardLink extends ChangeNotifier {
           if (a.status == 200) {
             final v = jsonDecode(a.body) as Map<String, dynamic>;
             firmware = v['firmware'] as String?;
+            avatarSize = (v['avatar'] as num?)?.toInt() ?? 0;
+            avatarSlots = (v['avatars'] as num?)?.toInt() ?? 0;
             notifyListeners();
           }
         }).catchError((_) {});
@@ -240,7 +257,7 @@ class BoardLink extends ChangeNotifier {
     _answerId = _requestId;
     _answerBytes = null;
     final text = Uint8List.fromList(utf8.encode('$method $target\n$body'));
-    for (final m in requestMessages(_requestId, text)) {
+    for (final m in requestMessages(_requestId, text, maxWrite)) {
       await UniversalBle.write(id, serviceUuid, fromPhoneUuid, m);
     }
     try {
@@ -248,6 +265,25 @@ class BoardLink extends ChangeNotifier {
     } finally {
       _answer = null;
     }
+  }
+
+  /// Tell the board about the server and who's talking (commVersion 3).
+  Future<void> send(Uint8List msg) => _write(msg);
+
+  /// Send without waiting for the board to say it's got it, for avatars'
+  /// pieces. Returns false if the link's gone.
+  Future<bool> sendFast(Uint8List msg) async {
+    for (var tries = 0; tries < 20; tries++) {
+      final id = deviceId;
+      if (id == null || state != BoardState.connected) return false;
+      try {
+        await UniversalBle.write(id, serviceUuid, fromPhoneUuid, msg, withoutResponse: true);
+        return true;
+      } catch (_) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));   // its buffer's full
+      }
+    }
+    return false;
   }
 
   Future<void> setTalk(bool talk) => _write(talkMessage(talk));
@@ -269,6 +305,7 @@ class BoardLink extends ChangeNotifier {
     state = BoardState.off;
     status = null;
     firmware = null;
+    avatarSize = avatarSlots = 0;
     notifyListeners();
   }
 }

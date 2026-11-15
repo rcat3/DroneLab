@@ -4,12 +4,14 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'audio_out.dart';
+import 'avatars.dart';
 import 'background.dart';
 import 'board_link.dart';
 import 'board_protocol.dart';
@@ -41,7 +43,17 @@ class CommController extends ChangeNotifier {
   late final Mixer mixer = Mixer(sampleRate: outputRate, newDecoder: OpusVoiceDecoder.new, targetMs: bufferMs);
   late final AudioOut _audio = AudioOut(mixer);
   Timer? _talkingTimer;
+
+  /// Who's talking on the channel, in the order they started. Counted from
+  /// when their voice arrives, so the board's screen shows them at once.
   Set<int> talking = {};
+  final Map<int, int> _heardAt = {};
+  static const _talkingFor = 300;     // ms after their last packet
+
+  /// Our own avatar, a square JPEG, sent to the server (and from there to
+  /// everyone) and to the board.
+  Uint8List? avatar;
+  late final BoardAvatars _boardAvatars = BoardAvatars(board, _updateBoardScreen);
 
   // The board's voice, numbered for Mumble in 10 ms frames, keeping the
   // board's gaps so listeners' decoders fill them in.
@@ -63,11 +75,33 @@ class CommController extends ChangeNotifier {
       password: p.getString('password') ?? '',
     );
     bufferMs = p.getInt('bufferMs') ?? 60;
+    final a = p.getString('avatar');
+    avatar = a == null ? null : base64Decode(a);
     mixer.targetMs = bufferMs;
     board.addListener(_onBoardChanged);
     _soundSub = board.sounds.listen(_onBoardSound);
     await loadOpus();
     notifyListeners();
+  }
+
+  /// Pick a new avatar from [picture] (any image), or take it away with null.
+  /// Returns false if it isn't a picture.
+  Future<bool> setAvatar(Uint8List? picture) async {
+    Uint8List? a;
+    if (picture != null) {
+      a = await compute(avatarForMumble, picture);
+      if (a == null) return false;
+    }
+    avatar = a;
+    if (a == null) {
+      await _prefs?.remove('avatar');
+    } else {
+      await _prefs?.setString('avatar', base64Encode(a));
+    }
+    mumble?.setAvatar(a);
+    _updateBoardScreen();
+    notifyListeners();
+    return true;
   }
 
   String? get lastBoardId => _prefs?.getString('boardId');
@@ -102,7 +136,83 @@ class CommController extends ChangeNotifier {
 
   void _onBoardChanged() {
     _updateHeadset();
+    _updateBoardScreen();
     notifyListeners();
+  }
+
+  // ----- The board's Comm screen -----
+
+  Uint8List? _sentServer;
+  Uint8List? _sentHearing;
+
+  /// Tell the board how the server's doing and who's talking, when it
+  /// changes, and all of it when the board's newly there. Avatars go as
+  /// they're needed: ours and those talking first, then everyone else's.
+  void _updateBoardScreen() {
+    _boardAvatars.update();
+    if (board.state != BoardState.connected || board.status == null) {
+      _sentServer = _sentHearing = null;
+      return;
+    }
+    final m = mumble;
+    final link = m == null
+        ? (_serverWanted ? ServerLink.connecting : ServerLink.off)
+        : m.state == MumbleState.connected
+            ? ServerLink.connected
+            : m.state == MumbleState.connecting || _serverWanted
+                ? ServerLink.connecting
+                : ServerLink.off;
+    final connected = link == ServerLink.connected;
+    final talkers = [
+      if (connected)
+        for (final s in talking)
+          Talker(m!.users[s]?.name ?? '?', _boardAvatars.slotFor(m.users[s]?.texture, soon: true))
+    ];
+    final server = serverMessage(link,
+        udp: connected && m!.udpActive,
+        others: connected ? m!.channelUsers.length : 0,
+        channel: connected ? (m!.channels[m.myChannel] ?? '') : '',
+        ownAvatar: _boardAvatars.slotFor(avatar, soon: true));
+    if (connected) {
+      for (final u in m!.channelUsers) {
+        _boardAvatars.slotFor(u.texture);   // ready for when they talk
+      }
+    }
+    if (_sentServer == null || !listEquals(server, _sentServer)) {
+      _sentServer = server;
+      board.send(server);
+    }
+    final hearing = hearingMessage(talkers);
+    if (_sentHearing == null || !listEquals(hearing, _sentHearing)) {
+      _sentHearing = hearing;
+      board.send(hearing);
+    }
+  }
+
+  /// Someone's voice came: they're talking, from now if they weren't.
+  void _heard(int session, bool last) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (last) {
+      _heardAt.remove(session);
+    } else {
+      _heardAt[session] = now;
+    }
+    _updateTalking(now);
+  }
+
+  void _updateTalking(int now) {
+    _heardAt.removeWhere((_, at) => now - at > _talkingFor);
+    final next = <int>{
+      for (final s in talking)
+        if (_heardAt.containsKey(s)) s,
+      for (final s in _heardAt.keys)
+        if (!talking.contains(s)) s,
+    };
+    if (!setEquals(next, talking)) {
+      talking = next;
+      _updateBoardScreen();
+      notifyListeners();
+    }
   }
 
   // ----- Talking with the headphones' button -----
@@ -192,12 +302,15 @@ class CommController extends ChangeNotifier {
     if (!_serverWanted) return;
     _closeMumble();
     final m = MumbleClient(
-        host: server.host, port: server.port, username: server.username, password: server.password);
+        host: server.host, port: server.port, username: server.username, password: server.password)
+      ..avatar = avatar;
     mumble = m;
     serverError = null;
+    _updateBoardScreen();
     _mumbleSubs.add(m.changes.listen((_) => _onMumbleChanged(m)));
     _mumbleSubs.add(m.voice.listen((v) {
       mixer.receive(v.session, v.seq, v.opus, v.last, DateTime.now().millisecondsSinceEpoch);
+      _heard(v.session, v.last);
     }));
     _mumbleSubs.add(m.texts.listen((t) {
       texts.add(t);
@@ -208,12 +321,9 @@ class CommController extends ChangeNotifier {
     try {
       await m.connect(checkCertificate: (fp) => _checkPin(fp));
       await _audio.start();
-      _talkingTimer ??= Timer.periodic(const Duration(milliseconds: 150), (_) {
-        final now = mixer.talking(DateTime.now().millisecondsSinceEpoch);
-        if (!setEquals(now, talking)) {
-          talking = now;
-          notifyListeners();
-        }
+      _talkingTimer ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
+        _updateTalking(DateTime.now().millisecondsSinceEpoch);
+        _updateBoardScreen();   // and whether it's UDP, which changes by itself
       });
     } on MumbleException catch (e) {
       serverError = e.message;
@@ -248,6 +358,7 @@ class CommController extends ChangeNotifier {
       if (!m.users.containsKey(session)) mixer.remove(session);
     }
     _updateHeadset();
+    _updateBoardScreen();
     if (m.state == MumbleState.disconnected && _serverWanted) {
       serverError = m.error;
       _scheduleReconnect();
@@ -279,6 +390,8 @@ class CommController extends ChangeNotifier {
     _talkingTimer?.cancel();
     _talkingTimer = null;
     talking = {};
+    _heardAt.clear();
+    _updateBoardScreen();
     await _audio.stop();
     for (final session in mixer.speakers.keys.toList()) {
       mixer.remove(session);

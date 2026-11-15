@@ -16,6 +16,31 @@ static uint32_t beep_count;             // published atomically by the speaker's
 static bool beeping;                    // the rest only by the speaker's task
 static uint32_t beep_pos;               // samples into the beep, lead included
 static uint32_t beep_rate;
+static volatile bool muted;             // set by any task
+static float mute_gain = 1.0f;          // by the speaker's task: 1 playing, 0 silent
+
+#define MUTE_FADE_MS    10
+
+/* Fade the block towards silence, or back, while muted changes. */
+static void apply_mute(int16_t *frames, size_t count, uint32_t rate)
+{
+    float target = muted ? 0.0f : 1.0f;
+    if (mute_gain == target)
+    {
+        if (target == 0.0f)
+        {
+            memset(frames, 0, count * 2 * sizeof(int16_t));
+        }
+        return;
+    }
+    float step = 1000.0f / (MUTE_FADE_MS * (float)(rate > 0 ? rate : 16000));
+    for (size_t i = 0; i < count; i++)
+    {
+        mute_gain = target > mute_gain ? fminf(target, mute_gain + step) : fmaxf(target, mute_gain - step);
+        frames[2 * i] = (int16_t)(frames[2 * i] * mute_gain);
+        frames[2 * i + 1] = (int16_t)(frames[2 * i + 1] * mute_gain);
+    }
+}
 
 /* Add the beep to a block, or play it alone if there's nothing else. */
 static size_t mix_beep(int16_t *frames, size_t count, size_t max_frames, uint32_t rate)
@@ -77,7 +102,8 @@ static size_t fill_cb(int16_t *frames, size_t max_frames, uint32_t *sample_rate,
     {
         count = audio_player_fill(frames, max_frames, sample_rate);
     }
-    count = mix_beep(frames, count, max_frames, *sample_rate);
+    apply_mute(frames, count, *sample_rate);
+    count = mix_beep(frames, count, max_frames, *sample_rate);     // the beep's heard anyway
     audio_tap_speaker(frames, count, *sample_rate);     // for the visualizer
     return count;
 }
@@ -92,6 +118,11 @@ bool speaker_start(void)
         started = rcat_hal_audio_out_start(fill_cb, NULL);
     }
     return started;
+}
+
+void speaker_set_muted(bool m)
+{
+    muted = m;
 }
 
 void speaker_beep(void)

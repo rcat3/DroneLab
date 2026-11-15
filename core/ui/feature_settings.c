@@ -3,11 +3,13 @@
  * Settings that belong to a single feature live with that feature instead.
  *
  * On boards that have the comm channel, the pages after Brightness are the
- * Phone App (the app's Bluetooth link, see app/comm.h), the phones paired
- * with it, and the talk button. Then, on boards with WiFi, the WiFi hotspot
+ * Phone App (the app's Bluetooth link, see app/comm.h) and the phones paired
+ * with it. The comm channel's own settings and its talk button are in the
+ * Comm feature (feature_comm.c). Then, on boards with WiFi, the WiFi hotspot
  * remote (see app/remote.h): a switch for its hotspot, the QR code that
  * joins it, a new password, and whether it switches itself on at power-up.
- * The last page is firmware updates.
+ * Then Rotation, the Level, Startup and the battery log, and last, firmware
+ * updates.
  */
 #include <stdio.h>
 #include <string.h>
@@ -24,7 +26,7 @@
 
 #define BATTERY_UPDATE_MS 1000
 #define REMOTE_POLL_MS    50
-#define COMM_POLL_MS      50
+#define COMM_POLL_MS      20      // quick, so the Comm screen keeps up with the phone
 #define LOG_UPDATE_MS     1000
 #define UPTIME_UPDATE_MS  1000
 #define UPDATE_POLL_MS    200
@@ -35,10 +37,12 @@
 #define ROTATION_APPLY_DELAY_MS 1000
 
 static bool build(ui_feature_t *feature);
+static void on_navigate(void);
 
 const ui_feature_def_t feature_settings = {
     .name = "Settings",
     .build = build,
+    .on_navigate = on_navigate,
 };
 
 static lv_obj_t *battery_label;
@@ -543,8 +547,6 @@ static lv_obj_t *comm_page;
 static lv_obj_t *comm_title;
 static lv_obj_t *comm_switch;
 static lv_obj_t *comm_hint;
-static lv_obj_t *comm_modes;
-static lv_obj_t *comm_talk;
 static lv_obj_t *comm_name_label;
 
 /* Set a label's text only if it's changed, so it isn't redrawn every time. */
@@ -560,17 +562,9 @@ static void show_comm(void)
 {
     bool on = comm_running();
     lv_obj_set_state(comm_switch, LV_STATE_CHECKED, on);
-    lv_obj_set_hidden(comm_hint, on);
-    lv_obj_set_hidden(comm_modes, !on);
-    lv_obj_set_hidden(comm_talk, !on);
     lv_obj_set_hidden(comm_name_label, !on);
     if (on)
     {
-        // The phone can change the mode too
-        if (!lv_buttonmatrix_has_button_ctrl(comm_modes, comm_mode(), LV_BUTTONMATRIX_CTRL_CHECKED))
-        {
-            lv_buttonmatrix_set_button_ctrl(comm_modes, comm_mode(), LV_BUTTONMATRIX_CTRL_CHECKED);
-        }
         // The board's name, and the app's version once it's said
         char text[64];
         const char *app = comm_app_version();
@@ -612,30 +606,6 @@ static void comm_switch_event_cb(lv_event_t *e)
     show_comm();
 }
 
-static void comm_mode_event_cb(lv_event_t *e)
-{
-    uint32_t selected = lv_buttonmatrix_get_selected_button(comm_modes);
-    if (selected < COMM_MODE_COUNT)
-    {
-        comm_set_mode((comm_mode_t)selected);
-    }
-}
-
-static void comm_talk_event_cb(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_PRESSED)
-    {
-        comm_set_talk(true);
-    }
-    else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST)
-    {
-        comm_set_talk(false);
-    }
-}
-
-static lv_obj_t *button_page;
-static void show_button(void);
 static lv_obj_t *paired_page;
 static void show_paired(void);
 
@@ -689,10 +659,6 @@ static void comm_timer_cb(lv_timer_t *t)
     comm_poll(lv_tick_get());
     talk_button_poll(lv_tick_get());
     show_pairing_code();
-    if (button_page != NULL && ui_current_page() == button_page)
-    {
-        show_button();
-    }
     if (paired_page != NULL && ui_current_page() == paired_page)
     {
         show_paired();
@@ -714,181 +680,23 @@ static void add_comm_page(ui_feature_t *feature)
 
     comm_switch = lv_switch_create(comm_page);
     lv_obj_set_size(comm_switch, ui_px(64), ui_px(32));
-    lv_obj_align(comm_switch, LV_ALIGN_CENTER, 0, ui_px(-58));
+    lv_obj_align(comm_switch, LV_ALIGN_CENTER, 0, ui_px(-40));
     lv_obj_add_event_cb(comm_switch, comm_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
+    // Off, what it's for; on, which board this is
     comm_hint = lv_label_create(comm_page);
     lv_label_set_text(comm_hint, "The DroneLab app, over\nBluetooth: the comm channel\nand the remote");
     lv_obj_set_style_text_align(comm_hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(comm_hint, COLOR_MUTED, 0);
-    lv_obj_align(comm_hint, LV_ALIGN_CENTER, 0, ui_px(0));
-
-    // Push to talk, or talk whenever it hears you. It changes when the
-    // finger lifts (CLICK_TRIG), not when it lands, so that swiping to the
-    // next page from here doesn't change it.
-    static const char *const modes[] = { "Push to talk", "Voice", "" };
-    comm_modes = lv_buttonmatrix_create(comm_page);
-    lv_buttonmatrix_set_map(comm_modes, modes);
-    lv_buttonmatrix_set_button_ctrl_all(comm_modes, LV_BUTTONMATRIX_CTRL_CHECKABLE | LV_BUTTONMATRIX_CTRL_CLICK_TRIG);
-    lv_buttonmatrix_set_one_checked(comm_modes, true);
-    // The chosen one is filled in, and the other dark: told apart by how
-    // bright they are, not only by their color.
-    lv_obj_set_style_bg_opa(comm_modes, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(comm_modes, 0, 0);
-    lv_obj_set_style_pad_all(comm_modes, 0, 0);
-    lv_obj_set_style_pad_column(comm_modes, ui_px(6), 0);
-    lv_obj_set_style_radius(comm_modes, ui_px(10), LV_PART_ITEMS);
-    lv_obj_set_style_border_width(comm_modes, 0, LV_PART_ITEMS);
-    lv_obj_set_style_shadow_width(comm_modes, 0, LV_PART_ITEMS);
-    lv_obj_set_style_bg_opa(comm_modes, LV_OPA_COVER, LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(comm_modes, lv_color_hex(0x2a2a2a), LV_PART_ITEMS);
-    lv_obj_set_style_text_color(comm_modes, lv_color_hex(0x909090), LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(comm_modes, lv_palette_main(LV_PALETTE_PINK), LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_text_color(comm_modes, lv_color_white(), LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_buttonmatrix_set_button_ctrl(comm_modes, comm_mode(), LV_BUTTONMATRIX_CTRL_CHECKED);
-    lv_obj_set_size(comm_modes, ui_px(190), ui_px(40));
-    lv_obj_align(comm_modes, LV_ALIGN_CENTER, 0, ui_px(-12));
-    lv_obj_add_event_cb(comm_modes, comm_mode_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
-
-    // For trying it out with the display in hand; in the mask, the phone or
-    // a button paired with it does this
-    comm_talk = lv_button_create(comm_page);
-    lv_obj_set_size(comm_talk, ui_px(130), ui_px(36));
-    lv_obj_set_style_radius(comm_talk, LV_RADIUS_CIRCLE, 0);
-    lv_obj_align(comm_talk, LV_ALIGN_CENTER, 0, ui_px(38));
-    lv_obj_add_event_cb(comm_talk, comm_talk_event_cb, LV_EVENT_ALL, NULL);
-    lv_obj_t *text = lv_label_create(comm_talk);
-    lv_label_set_text(text, "Hold to talk");
-    lv_obj_center(text);
+    lv_obj_align(comm_hint, LV_ALIGN_CENTER, 0, ui_px(14));
 
     comm_name_label = lv_label_create(comm_page);
     lv_label_set_text(comm_name_label, "");
     lv_obj_set_style_text_color(comm_name_label, COLOR_MUTED, 0);
-    lv_obj_align(comm_name_label, LV_ALIGN_CENTER, 0, ui_px(80));
+    lv_obj_align(comm_name_label, LV_ALIGN_CENTER, 0, ui_px(56));
 
     show_comm();
     lv_timer_create(comm_timer_cb, COMM_POLL_MS, NULL);
-}
-
-/* ----- The comm channel's talk button ----- */
-
-static lv_obj_t *button_title;
-static lv_obj_t *button_status;
-static lv_obj_t *button_action;
-static lv_obj_t *button_action_label;
-static lv_obj_t *button_hint;
-
-static void show_button(void)
-{
-    talk_button_state_t st = talk_button_state();
-    const char *status = "";
-    const char *action = "Pair a button";
-    const char *hint = "A Bluetooth camera remote,\nto hold to talk";
-    switch (st)
-    {
-    case TALK_BUTTON_NONE:
-        break;
-    case TALK_BUTTON_OFF:
-        status = "Works while Comm is on";
-        action = "Forget it";
-        hint = "";
-        break;
-    case TALK_BUTTON_WAITING:
-        status = "Asleep: press it to wake it";
-        action = "Forget it";
-        hint = "";
-        break;
-    case TALK_BUTTON_CONNECTING:
-        status = "Connecting...";
-        action = "Forget it";
-        hint = "";
-        break;
-    case TALK_BUTTON_CONNECTED:
-        status = talk_button_held() ? LV_SYMBOL_AUDIO "  Pressed" : LV_SYMBOL_BLUETOOTH "  Connected";
-        action = "Forget it";
-        hint = "Hold it to talk";
-        break;
-    case TALK_BUTTON_FINDING:
-        status = "Looking...";
-        action = "Cancel";
-        hint = "Put the button in pairing mode:\nswitch it on, or hold it down";
-        break;
-    case TALK_BUTTON_PAIRING:
-        status = "Pairing...";
-        action = "Cancel";
-        hint = "";
-        break;
-    case TALK_BUTTON_NOT_FOUND:
-        status = "No button found";
-        action = "OK";
-        hint = "Is it in pairing mode?";
-        break;
-    case TALK_BUTTON_FAILED:
-        status = "Pairing didn't work";
-        action = "OK";
-        hint = "Try it again from pairing mode";
-        break;
-    }
-    bool named = st != TALK_BUTTON_NONE && st != TALK_BUTTON_FINDING && st != TALK_BUTTON_NOT_FOUND;
-    set_label(button_title, named ? talk_button_name() : "Talk Button");
-    set_label(button_status, status);
-    set_label(button_action_label, action);
-    set_label(button_hint, hint);
-}
-
-static void button_action_cb(lv_event_t *e)
-{
-    switch (talk_button_state())
-    {
-    case TALK_BUTTON_NONE:
-        if (!talk_button_pair())
-        {
-            set_label(button_hint, "Bluetooth didn't start");
-            return;
-        }
-        break;
-    case TALK_BUTTON_FINDING:
-    case TALK_BUTTON_PAIRING:
-    case TALK_BUTTON_NOT_FOUND:
-    case TALK_BUTTON_FAILED:
-        talk_button_cancel();
-        break;
-    default:
-        talk_button_forget();
-        break;
-    }
-    show_button();
-}
-
-static void add_button_page(ui_feature_t *feature)
-{
-    button_page = ui_feature_add_page(feature, "Talk Button", false);
-    lv_obj_set_scrollable(button_page, false);
-
-    button_title = lv_label_create(button_page);
-    lv_label_set_text(button_title, "Talk Button");
-    lv_obj_align(button_title, LV_ALIGN_TOP_MID, 0, ui_px(28));
-
-    button_status = lv_label_create(button_page);
-    lv_label_set_text(button_status, "");
-    lv_obj_align(button_status, LV_ALIGN_CENTER, 0, ui_px(-50));
-
-    button_action = lv_button_create(button_page);
-    lv_obj_set_size(button_action, ui_px(150), ui_px(40));
-    lv_obj_set_style_radius(button_action, LV_RADIUS_CIRCLE, 0);
-    lv_obj_align(button_action, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_add_event_cb(button_action, button_action_cb, LV_EVENT_CLICKED, NULL);
-    button_action_label = lv_label_create(button_action);
-    lv_label_set_text(button_action_label, "");
-    lv_obj_center(button_action_label);
-
-    button_hint = lv_label_create(button_page);
-    lv_label_set_text(button_hint, "");
-    lv_obj_set_style_text_align(button_hint, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(button_hint, COLOR_MUTED, 0);
-    lv_obj_align(button_hint, LV_ALIGN_CENTER, 0, ui_px(60));
-
-    show_button();
 }
 
 /* ----- The phones paired with the app's Bluetooth link ----- */
@@ -1078,7 +886,6 @@ static bool build(ui_feature_t *feature)
     {
         add_comm_page(feature);
         add_paired_page(feature);
-        add_button_page(feature);
     }
     if (remote_available())
     {
@@ -1086,6 +893,9 @@ static bool build(ui_feature_t *feature)
     }
 #endif
     add_rotation_page(feature);
+#if RCAT_FEATURE_LEVEL
+    feature_level_add_page(feature);    // with Rotation, for lining the display up
+#endif
     add_startup_page(feature);
     lv_timer_create(sync_timer_cb, SYNC_MS, NULL);
     if (battery_log_available())
@@ -1099,4 +909,11 @@ static bool build(ui_feature_t *feature)
     }
 #endif
     return true;
+}
+
+static void on_navigate(void)
+{
+#if RCAT_FEATURE_LEVEL
+    feature_level_on_navigate();
+#endif
 }

@@ -17,30 +17,52 @@ flowchart LR
 
 ## On the display
 
-The *Phone App* page is in [Settings](settings.md), after Brightness.
+Switch on the *Phone App* page in [Settings](settings.md), after Brightness.  The board starts advertising over Bluetooth for the app to connect, under the board's name (`DroneLab-` and four letters, the same as its WiFi hotspot's), shown at the bottom of the page, with the app's version once it's connected.  It stays on, or off, from one startup to the next.  The voice effect has to run the whole time it's on, so it uses more battery than with the voice effect off.
 
-1. Switch it on.  The board starts advertising over Bluetooth for the app to connect, under the board's name (`DroneLab-` and four letters, the same as its WiFi hotspot's), shown at the bottom of the page, with the app's version once it's connected.
-2. Pick *Push to talk* or *Voice*.
-3. The title shows what it's doing: waiting for a phone, connected, or talking.  *Hold to talk* is for trying it out with the display in hand.  In the mask, the app, the headphones' button or the talk button does the talking.
+Everything else is in the *Comm* feature, swiping up and down, after Sound.  It's left out on boards without the comm channel.
 
-It stays on, or off, from one startup to the next.  The voice effect has to run the whole time it's on, so it uses more battery than with the voice effect off.
+### The status screen
 
-## The talk button
+The first page shows how the channel's doing at a glance, as a green screen like the [Terminal](terminal.md)'s:
+
+- At the top, *Comms* and an antenna: red and struck through with no uplink (the phone running the app), yellow without its waves while the app's connected but the server isn't, and green with its waves once everything's connected.
+- In the middle, an avatar in a frame, with a tag on its bottom edge:
+  - **RX**: whoever's talking, their avatar in full color and the frame lit up, with their name underneath, and "+1" and so on for others talking at once.
+  - **TX**: your own avatar, in full color, the frame white-hot, and a ring round the edge of the screen.
+  - *PTT* or *VOX*, the mode, while it's quiet: your avatar, dim and green, with how things are underneath: how many others are online, or what's missing.
+
+Holding the avatar talks, for trying it out with the display in hand.  It waits a moment before it starts, so a swipe across it doesn't, and once it's talking the page holds still until you let go.  In the mask, the app, the headphones' button or the talk button does the talking.
+
+The status screen can be picked to show when the display turns on, in [Settings](settings.md#startup).
+
+### Avatars
+
+Each person's avatar is their [Mumble](https://www.mumble.info) avatar, so desktop Mumble shows the same pictures, and anyone who's set one in Mumble shows up with it on the boards.  Set yours in the app, under the server settings: *Choose a picture* cuts it square from the middle, and the app gives it to the server each time it connects.  Anyone without one shows as a head in a visor.
+
+The app fetches everyone's from the server, shrinks them to the board's size, and sends them to the board in the background, yours and whoever's talking first, about a second each.  The board keeps 16, until the app's link drops.
+
+### Comm Setup
+
+- *Push to talk* or *Voice*: the board only sends while the wearer talks.  In *Push to talk*, while the talk button (or the app's, or the core) is held, and in *Voice*, whenever it hears them speak.
+- *Speaker off while talking*: the speaker goes quiet while the board's sending, voice effect and sound files alike, so those nearby don't hear what goes to the group.
+- *Show Comm while*: *Talk*, *Hear* or *Both* comes to the status screen by itself while the board's sending, while someone else is talking, or both, and goes back to the page you were on two seconds after it stops.  If you swipe somewhere else in the meantime, it stays where you went.  It waits while you're touching the screen.
+
+### The talk button
 
 A Bluetooth camera shutter remote can be the talk button: hold it to talk, in either mode.  It has to be a Bluetooth LE one, which shows up as a keyboard (the ATUMTEK one does); the cheapest ones are often older Bluetooth only, which the board can't use.
 
-1. On the *Talk Button* page, after *Paired Phones*, tap *Pair a button*.
+1. On the *Talk Button* page, after *Comm Setup*, tap *Pair a button*.
 2. Put the remote in pairing mode: switch it on, or hold its button until it blinks.  The board pairs with the nearest one it finds, and shows its name.
 
-The board remembers it.  The remote goes to sleep after a minute or so; pressing it wakes it, the board connects again, and that press counts, a moment late.  It's only used while Comm is on.  *Forget it* unpairs it.  A remote usually remembers only the last thing it paired with, so pairing it with the board unpairs it from a computer or phone it was used with.
+The board remembers it.  The remote goes to sleep after a minute or so; pressing it wakes it, the board connects again, and that press counts, a moment late.  It's only used while the Phone App is on.  *Forget it* unpairs it.  A remote usually remembers only the last thing it paired with, so pairing it with the board unpairs it from a computer or phone it was used with.
 
 ## The app
 
-The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now.  Set up the server (the gear at the top: its address, your name and the server password), connect to it, then *Find the board* and pick yours.  The app passes the board's voice on to the server and plays the others to your headphones.  It has its own *Hold to talk*, and the board's mode can be changed from it too.
+The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now.  Set up the server (the gear at the top: its address, your name and the server password), connect to it, then *Find the board* and pick yours.  The app passes the board's voice on to the server and plays the others to your headphones, and tells the board who's talking, for its status screen.  It has its own *Hold to talk*, and the board's mode can be changed from it too.
 
 The first time the app connects, the phone asks to pair, and the board shows a 6-digit code over whatever's on its screen: type it into the phone.  The board only talks to a phone that's paired like that, so nobody else nearby can listen in or take over, and the phone and board remember each other after that.
 
-The app's *Remote* tab is the [WiFi Hotspot Remote](phone-remote.md)'s page, run over the same Bluetooth link instead of the board's WiFi hotspot, so the phone keeps its internet for the comm channel.  It needs *Comm* on, like the rest of the app.
+The app's *Remote* tab is the [WiFi Hotspot Remote](phone-remote.md)'s page, run over the same Bluetooth link instead of the board's WiFi hotspot, so the phone keeps its internet for the comm channel.  It needs the *Phone App* on, like the rest of the app.
 
 The headphones' play/pause button talks too, while the app's connected to the board and the server.  Headphones send a press rather than a hold, so a press starts talking and another stops it, with a rising chirp in your ear as it starts and a falling one as it stops.  It stops by itself after two minutes, in case it's been left on.  Holding the button down usually starts the phone's voice assistant instead.
 
@@ -66,7 +88,7 @@ The computer has to pair with the board first, as the app does: in `bluetoothctl
 
 ## How it works
 
-The board is a Bluetooth LE peripheral with one service.  It notifies the phone with the voice, as 20 ms Opus packets of 16 kHz mono at about 24 kb/s, and with its status.  The phone writes to it to talk and to change the mode.  The messages are described at the top of [`core/app/comm.h`](../../core/app/comm.h).
+The board is a Bluetooth LE peripheral with one service.  It notifies the phone with the voice, as 20 ms Opus packets of 16 kHz mono at about 24 kb/s, and with its status.  The phone writes to it to talk, to change the mode, and to say how the server's doing and who's talking.  The messages are described at the top of [`core/app/comm.h`](../../core/app/comm.h).
 
 The Opus packets go on to Mumble as they are, so the phone doesn't need to decode or encode anything.  `comm_bridge.py` shows how: it logs in to Mumble and sends the packets inside its TCP connection.
 
