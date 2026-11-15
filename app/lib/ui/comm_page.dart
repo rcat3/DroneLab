@@ -207,6 +207,28 @@ class _BoardCard extends StatelessWidget {
                 onSelectionChanged: (sel) => b.setMode(sel.first),
               ),
             ],
+            if (b.state == BoardState.connected && comm.boardSettings != null) ...[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Speaker off while talking'),
+                subtitle: const Text("So those nearby don't hear what goes to the group"),
+                value: comm.boardSettings!.muteSpeaker,
+                onChanged: (on) => comm.setBoardSettings(muteSpeaker: on),
+              ),
+              Text('Show the Comm screen while', style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 8),
+              SegmentedButton<int>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 0, label: Text('Off')),
+                  ButtonSegment(value: 1, label: Text('Talk')),
+                  ButtonSegment(value: 2, label: Text('Hear')),
+                  ButtonSegment(value: 3, label: Text('Both')),
+                ],
+                selected: {comm.boardSettings!.show},
+                onSelectionChanged: (sel) => comm.setBoardSettings(show: sel.first),
+              ),
+            ],
             const SizedBox(height: 12),
             Wrap(spacing: 8, children: [
               if (b.state == BoardState.off || b.state == BoardState.scanning)
@@ -338,11 +360,19 @@ class _PeopleCard extends StatelessWidget {
                       : Icons.person),
               title: Text(u.name,
                   style: comm.talking.contains(u.session) ? const TextStyle(fontWeight: FontWeight.bold) : null),
-              subtitle: comm.talking.contains(u.session)
-                  ? const Text('Talking')
-                  : u.muted
-                      ? const Text('Muted')
-                      : null,
+              subtitle: comm.isMuted(u.name)
+                  ? const Text('Muted by you')
+                  : comm.talking.contains(u.session)
+                      ? const Text('Talking')
+                      : u.muted
+                          ? const Text('Muted')
+                          : null,
+              trailing: IconButton(
+                tooltip: comm.isMuted(u.name) ? 'Hear them' : 'Mute them, here only',
+                icon: Icon(comm.isMuted(u.name) ? Icons.volume_off : Icons.volume_up),
+                color: comm.isMuted(u.name) ? Theme.of(context).colorScheme.error : null,
+                onPressed: () => comm.setMuted(u.name, !comm.isMuted(u.name)),
+              ),
             ),
         ],
       ),

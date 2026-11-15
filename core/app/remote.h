@@ -60,7 +60,12 @@ const char *remote_page_html(size_t *len);
  * method is "GET" or "POST", and target the path and query, like
  * "/api/voice?p=3". Writes the JSON answer to out, and returns its length,
  * or -1 if there's no such request. Works whether the hotspot's on or not.
- * Call it from the UI loop. */
+ * Call it from the UI loop.
+ *
+ * Besides the page's own, GET /api/comm answers the comm channel's settings,
+ * {"available", "mode", "mute" (the speaker while it sends), "show" (when to
+ * come to the Comm screen: SETTINGS_SHOW_* bits)}, and POST /api/comm?m=&mute=
+ * &show= changes any of them and answers the same. */
 int remote_api(const char *method, const char *target, const char *body, size_t body_len, char *out, size_t cap);
 
 #endif

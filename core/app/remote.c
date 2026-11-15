@@ -53,6 +53,7 @@
 #include <string.h>
 
 #include "app/battery.h"
+#include "app/comm.h"
 #include "app/lovense.h"
 #include "app/message.h"
 #include "app/patterns.h"
@@ -484,6 +485,14 @@ static void write_state(json_t *j)
     jprintf(j, "]}");
 }
 
+/* The comm channel's settings, as on its Comm Setup page. */
+static void write_comm(json_t *j)
+{
+    const settings_t *s = settings_get();
+    jprintf(j, "{\"available\":%d,\"mode\":%d,\"mute\":%u,\"show\":%u}", comm_available() ? 1 : 0,
+            (int)comm_mode(), s->comm_mute_speaker, s->comm_auto_show);
+}
+
 static void write_info(json_t *j)
 {
     jprintf(j, "{\"firmware\":");
@@ -604,6 +613,23 @@ static int connected_count(void)
         n += is_connected(i);
     }
     return n;
+}
+
+/* Change them: m the mode, mute 0 or 1, show SETTINGS_SHOW_* bits. */
+static void set_comm(const char *query)
+{
+    const settings_t *s = settings_get();
+    int mode = query_int(query, "m", -1);
+    if (mode >= 0 && mode < COMM_MODE_COUNT)
+    {
+        comm_set_mode((comm_mode_t)mode);
+    }
+    int mute = query_int(query, "mute", s->comm_mute_speaker);
+    int show = query_int(query, "show", s->comm_auto_show);
+    if (mute != s->comm_mute_speaker || show != s->comm_auto_show)
+    {
+        settings_set_comm_options(mute != 0, (uint8_t)show);
+    }
 }
 
 /* Carry out an API command. Returns false if there's no such command. */
@@ -931,6 +957,15 @@ int remote_api(const char *method, const char *target, const char *body, size_t 
     else if (strcmp(path, "/api/tracks") == 0)
     {
         write = write_tracks;
+    }
+    else if (strcmp(path, "/api/comm") == 0)
+    {
+        // GET for the comm channel's settings, POST to change them
+        if (strcmp(method, "POST") == 0)
+        {
+            set_comm(query);
+        }
+        write = write_comm;
     }
     else if (strncmp(path, "/api/", 5) == 0 && strcmp(method, "POST") == 0)
     {

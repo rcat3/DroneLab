@@ -29,6 +29,13 @@ class ServerSettings {
   bool get complete => host.isNotEmpty && username.isNotEmpty;
 }
 
+/// The board's comm settings, as on its Comm Setup page (GET /api/comm).
+class BoardCommSettings {
+  final bool muteSpeaker;     // the speaker's off while it sends
+  final int show;             // when it comes to the Comm screen: 1 sending, 2 hearing, 3 both
+  const BoardCommSettings(this.muteSpeaker, this.show);
+}
+
 class CommController extends ChangeNotifier {
   final BoardLink board = BoardLink();
   ServerSettings server = ServerSettings();
@@ -77,6 +84,7 @@ class CommController extends ChangeNotifier {
     bufferMs = p.getInt('bufferMs') ?? 60;
     final a = p.getString('avatar');
     avatar = a == null ? null : base64Decode(a);
+    muted.addAll(p.getStringList('muted') ?? const []);
     mixer.targetMs = bufferMs;
     board.addListener(_onBoardChanged);
     _soundSub = board.sounds.listen(_onBoardSound);
@@ -137,8 +145,72 @@ class CommController extends ChangeNotifier {
   void _onBoardChanged() {
     _updateHeadset();
     _updateBoardScreen();
+    _updateBoardSettings();
     notifyListeners();
   }
+
+  // ----- The board's Comm Setup -----
+
+  BoardCommSettings? boardSettings;
+  Timer? _settingsTimer;
+
+  /// Read them once the board's said its version, and every few seconds
+  /// after, as they can be changed on the board too.
+  void _updateBoardSettings() {
+    final ready = board.state == BoardState.connected && board.firmware != null;
+    if (!ready) {
+      _settingsTimer?.cancel();
+      _settingsTimer = null;
+      boardSettings = null;
+      return;
+    }
+    if (_settingsTimer == null) {
+      _settingsTimer = Timer.periodic(const Duration(seconds: 5), (_) => _boardSettingsRequest('GET', ''));
+      _boardSettingsRequest('GET', '');
+    }
+  }
+
+  Future<void> _boardSettingsRequest(String method, String query) async {
+    try {
+      final a = await board.request(method, '/api/comm$query');
+      if (a.status != 200) return;
+      final v = jsonDecode(a.body) as Map<String, dynamic>;
+      if (v['available'] != 1) return;
+      boardSettings = BoardCommSettings(v['mute'] == 1, (v['show'] as num?)?.toInt() ?? 0);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Change the board's: the speaker off while it sends, and when it shows
+  /// the Comm screen (1 sending, 2 hearing, 3 both).
+  Future<void> setBoardSettings({bool? muteSpeaker, int? show}) => _boardSettingsRequest('POST', [
+        '?',
+        if (muteSpeaker != null) 'mute=${muteSpeaker ? 1 : 0}&',
+        if (show != null) 'show=$show',
+      ].join());
+
+  // ----- Muting people, here only -----
+
+  /// The names of those muted: they aren't played, nor shown talking on the
+  /// board. Kept by name, as their session changes each time they connect.
+  final Set<String> muted = {};
+
+  Future<void> setMuted(String name, bool mute) async {
+    if (mute ? !muted.add(name) : !muted.remove(name)) return;
+    await _prefs?.setStringList('muted', muted.toList()..sort());
+    final m = mumble;
+    if (mute && m != null) {
+      // Stop them now, mid-sentence
+      for (final u in m.users.values.where((u) => u.name == name)) {
+        mixer.remove(u.session);
+        _heardAt.remove(u.session);
+      }
+      _updateTalking(DateTime.now().millisecondsSinceEpoch);
+    }
+    notifyListeners();
+  }
+
+  bool isMuted(String name) => muted.contains(name);
 
   // ----- The board's Comm screen -----
 
@@ -309,6 +381,7 @@ class CommController extends ChangeNotifier {
     _updateBoardScreen();
     _mumbleSubs.add(m.changes.listen((_) => _onMumbleChanged(m)));
     _mumbleSubs.add(m.voice.listen((v) {
+      if (muted.isNotEmpty && muted.contains(m.users[v.session]?.name)) return;
       mixer.receive(v.session, v.seq, v.opus, v.last, DateTime.now().millisecondsSinceEpoch);
       _heard(v.session, v.last);
     }));

@@ -58,7 +58,9 @@ The board remembers it.  The remote goes to sleep after a minute or so; pressing
 
 ## The app
 
-The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now.  Set up the server (the gear at the top: its address, your name and the server password), connect to it, then *Find the board* and pick yours.  The app passes the board's voice on to the server and plays the others to your headphones, and tells the board who's talking, for its status screen.  It has its own *Hold to talk*, and the board's mode can be changed from it too.
+The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now.  Set up the server (the gear at the top: its address, your name and the server password), connect to it, then *Find the board* and pick yours.  The app passes the board's voice on to the server and plays the others to your headphones, and tells the board who's talking, for its status screen.  It has its own *Hold to talk*, and the board's [Comm Setup](#comm-setup) can be changed from it too: the mode, *Speaker off while talking*, and when to show the Comm screen.
+
+Each person on the channel has a speaker button in the app, which mutes them for you alone: the app doesn't play them, and the board doesn't show them talking.  The app remembers who by name, so they stay muted the next time they join.
 
 The first time the app connects, the phone asks to pair, and the board shows a 6-digit code over whatever's on its screen: type it into the phone.  The board only talks to a phone that's paired like that, so nobody else nearby can listen in or take over, and the phone and board remember each other after that.
 
