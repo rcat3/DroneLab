@@ -2,9 +2,10 @@
  * Voice feature (boards with a microphone): the voice effect and its volume,
  * and the voice lab (boards with WiFi).
  *
- * The voice ring's settings page is here too, but on boards with the
- * Visualizer, it's the last of the Visualizer's pages instead, as the ring
- * is a picture of the voice too (feature_voice_add_ring_page).
+ * The voice ring's settings page is the last of the Visualizer's pages, as
+ * the ring is a picture of the voice too (feature_voice_add_ring_page). It
+ * only comes here if the Visualizer is left out of a board with a
+ * microphone, which none is now.
  *
  * The voice ring itself is drawn over the images feature, and over its own
  * settings page so the color can be previewed.
