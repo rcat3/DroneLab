@@ -410,6 +410,11 @@ size_t rcat_hal_ble_receive(int link, void *data, size_t max)
     return 0;
 }
 
+int32_t rcat_hal_ble_peer_passkey(void)
+{
+    return -1;
+}
+
 bool rcat_hal_ble_button_find(void)
 {
     return false;

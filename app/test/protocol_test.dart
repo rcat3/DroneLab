@@ -43,6 +43,20 @@ void main() {
     expect(v.last, isTrue);
   });
 
+  test("the remote's requests and answers", () {
+    final request = Uint8List.fromList(List.generate(130, (i) => i));
+    final msgs = requestMessages(7, request);
+    expect(msgs.length, 3); // 61 + 61 + 8
+    expect(msgs.every((m) => m.length <= boardMaxWrite), isTrue);
+    expect(msgs.map((m) => m[2]).toList(), [1, 0, 2]);
+    expect(msgs.expand((m) => m.sublist(3)).toList(), request);
+    expect(requestMessages(1, Uint8List.fromList([65]))[0], [3, 1, 3, 65]);
+    final piece = parseBoardMessage(Uint8List.fromList([3, 7, 3, 0x32, 0x30, 0x30, 10])) as AnswerPiece;
+    expect(piece.id, 7);
+    expect(piece.first && piece.last, isTrue);
+    expect(String.fromCharCodes(piece.data), '200\n');
+  });
+
   test('board messages', () {
     final sound = parseBoardMessage(Uint8List.fromList([1, 0x34, 0x12, 1, 9, 8])) as BoardSound;
     expect(sound.seq, 0x1234);

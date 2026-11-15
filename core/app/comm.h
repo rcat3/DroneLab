@@ -28,6 +28,18 @@
  *                  phone, or a button paired with it)
  *     0x02 mode:   02, then a comm_mode_t
  *
+ *   Both ways: the phone remote's requests (see remote.h), so the app can
+ *   show the remote's page without joining the board's hotspot
+ *     0x03 request: 03, id, flags (bit 0 the first piece, bit 1 the last),
+ *                  then a piece of "METHOD /api/...\n" and the body. Pieces
+ *                  of one request share an id; a new one drops the last.
+ *     0x03 answer: 03, the request's id, flags as above, then a piece of
+ *                  "200\n" and the JSON, "304\n" for a GET /api/state that's
+ *                  the same as the last one sent, or "404\n".
+ *
+ * The link has to be paired, with the 6-digit code the board shows, before
+ * any of it goes through (see rcat_hal_ble_peer_passkey in hal.h).
+ *
  * The phone should ask for an MTU of 185 or more: the Opus packets are cut
  * down to fit, and with the smallest MTU there's only room for a poor 6 kb/s.
  */

@@ -4,6 +4,8 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:universal_ble/universal_ble.dart';
@@ -19,6 +21,13 @@ class FoundBoard {
   FoundBoard(this.id, this.name, this.rssi);
 }
 
+/// The board's answer to one of the phone remote's requests.
+class RemoteAnswer {
+  final int status;   // 200, 304 (the state hasn't changed) or 404
+  final String body;
+  RemoteAnswer(this.status, this.body);
+}
+
 class BoardLink extends ChangeNotifier {
   BoardState state = BoardState.off;
   String? error;
@@ -30,6 +39,13 @@ class BoardLink extends ChangeNotifier {
 
   final _sounds = StreamController<BoardSound>.broadcast();
   Stream<BoardSound> get sounds => _sounds.stream;
+
+  // The phone remote's requests, one at a time
+  int _requestId = 0;
+  Future<void> _requestChain = Future.value();
+  Completer<RemoteAnswer>? _answer;
+  int _answerId = -1;
+  BytesBuilder? _answerBytes;
 
   StreamSubscription<BleDevice>? _scanSub;
   StreamSubscription<Uint8List>? _valueSub;
@@ -144,6 +160,8 @@ class BoardLink extends ChangeNotifier {
     final msg = parseBoardMessage(data);
     if (msg is BoardSound) {
       _sounds.add(msg);
+    } else if (msg is AnswerPiece) {
+      _onAnswerPiece(msg);
     } else if (msg is BoardStatus) {
       final old = status;
       status = msg;
@@ -163,6 +181,55 @@ class BoardLink extends ChangeNotifier {
     try {
       await UniversalBle.write(id, serviceUuid, fromPhoneUuid, msg);
     } catch (_) {}
+  }
+
+  void _onAnswerPiece(AnswerPiece p) {
+    if (p.id != _answerId || _answer == null) return;
+    if (p.first) _answerBytes = BytesBuilder();
+    final b = _answerBytes;
+    if (b == null) return;
+    b.add(p.data);
+    if (p.last) {
+      final text = utf8.decode(b.takeBytes(), allowMalformed: true);
+      _answerBytes = null;
+      final nl = text.indexOf('\n');
+      final status = int.tryParse(nl < 0 ? text : text.substring(0, nl)) ?? 500;
+      _answer!.complete(RemoteAnswer(status, nl < 0 ? '' : text.substring(nl + 1)));
+    }
+  }
+
+  /// Ask the board what the phone remote's page would, over Bluetooth:
+  /// [target] like "/api/voice?p=3". One request goes at a time.
+  Future<RemoteAnswer> request(String method, String target, [String body = '']) {
+    final result = Completer<RemoteAnswer>();
+    _requestChain = _requestChain.then((_) async {
+      try {
+        result.complete(await _send(method, target, body));
+      } catch (e) {
+        result.completeError(e);
+      }
+    });
+    return result.future;
+  }
+
+  Future<RemoteAnswer> _send(String method, String target, String body) async {
+    final id = deviceId;
+    if (id == null || state != BoardState.connected) {
+      throw StateError('The board is not connected');
+    }
+    _requestId = (_requestId + 1) & 0xFF;
+    final answer = _answer = Completer<RemoteAnswer>();
+    _answerId = _requestId;
+    _answerBytes = null;
+    final text = Uint8List.fromList(utf8.encode('$method $target\n$body'));
+    for (final m in requestMessages(_requestId, text)) {
+      await UniversalBle.write(id, serviceUuid, fromPhoneUuid, m);
+    }
+    try {
+      return await answer.future.timeout(const Duration(seconds: 5));
+    } finally {
+      _answer = null;
+    }
   }
 
   Future<void> setTalk(bool talk) => _write(talkMessage(talk));

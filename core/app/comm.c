@@ -64,6 +64,12 @@
 #define MSG_STATUS          0x02
 #define MSG_TALK            0x01
 #define MSG_MODE            0x02
+#define MSG_REQUEST         0x03    // both ways: a request, and its answer
+#define REQ_FIRST           0x01
+#define REQ_LAST            0x02
+#define REQUEST_MAX         2048    // the method, target and body
+#define ANSWER_MAX          8192    // as long as the remote's longest
+#define ANSWER_CHUNKS_PER_POLL  6   // at most this many notifications every 50 ms, leaving room for the voice
 #define FLAG_FIRST          0x01
 #define FLAG_LAST           0x02
 #define STATUS_SENDING      0x01
@@ -99,6 +105,17 @@
 #define MS_TO_SAMPLES(ms)   ((uint32_t)(ms) * (FS / 1000))
 
 static rcat_hal_ble_peer_service_t service;
+
+// The phone remote's requests, from the UI loop only (see comm.h)
+static char *request;               // REQUEST_MAX + 1, then the answer, ANSWER_MAX
+static char *answer;
+static size_t request_len;
+static uint8_t request_id;
+static bool request_open;           // its first piece came, and not its last
+static size_t answer_len, answer_sent;
+static uint8_t answer_id;
+static bool answering;
+static uint32_t last_state_hash;    // of the last /api/state sent, to say "unchanged" 
 static bool available;
 static volatile bool running;
 static volatile comm_mode_t mode;
@@ -440,11 +457,15 @@ void comm_init(void)
     {
         return;     // nothing to send
     }
+    request = malloc(REQUEST_MAX + 1 + ANSWER_MAX);     // big enough to go in PSRAM
+    answer = request != NULL ? request + REQUEST_MAX + 1 : NULL;
     ring = calloc(RING, sizeof(ring[0]));
-    if (ring == NULL || !rcat_hal_task_start("comm", encoder_task, NULL, TASK_STACK))
+    if (ring == NULL || request == NULL || !rcat_hal_task_start("comm", encoder_task, NULL, TASK_STACK))
     {
         free(ring);
         ring = NULL;
+        free(request);
+        request = answer = NULL;
         return;
     }
     available = true;
@@ -542,6 +563,125 @@ const char *comm_name(void)
     return remote_ssid();   // the same name as the phone remote's hotspot
 }
 
+static uint32_t hash(const char *data, size_t len)
+{
+    uint32_t h = 2166136261u;   // FNV-1a
+    for (size_t i = 0; i < len; i++)
+    {
+        h = (h ^ (uint8_t)data[i]) * 16777619u;
+    }
+    return h;
+}
+
+/* A whole request has come: "METHOD /api/...\n" then the body. */
+static void answer_request(void)
+{
+    request[request_len] = '\0';
+    char *nl = strchr(request, '\n');
+    const char *body = nl != NULL ? nl + 1 : request + request_len;
+    size_t body_len = request + request_len - body;
+    if (nl != NULL)
+    {
+        *nl = '\0';
+    }
+    char method[8], target[200];
+    int status = 404;
+    int len = -1;
+    if (sscanf(request, "%7s %199s", method, target) == 2)
+    {
+        len = remote_api(method, target, body, body_len, answer + 4, ANSWER_MAX - 4);
+    }
+    if (len >= 0)
+    {
+        status = 200;
+        // The page asks for the state every 0.4 s: say if it's the same.
+        if (strncmp(target, "/api/state", 10) == 0 && strcmp(method, "GET") == 0)
+        {
+            uint32_t h = hash(answer + 4, len);
+            if (h == last_state_hash)
+            {
+                status = 304;
+                len = 0;
+            }
+            last_state_hash = h;
+        }
+        else
+        {
+            last_state_hash = 0;    // a change: send the next state in full
+        }
+    }
+    else
+    {
+        len = 0;
+    }
+    memcpy(answer, status == 200 ? "200\n" : status == 304 ? "304\n" : "404\n", 4);
+    answer_len = 4 + len;
+    answer_sent = 0;
+    answer_id = request_id;
+    answering = true;
+}
+
+static void receive_request(const uint8_t *msg, size_t len)
+{
+    if (len < 3 || request == NULL)
+    {
+        return;
+    }
+    uint8_t id = msg[1], flags = msg[2];
+    if (flags & REQ_FIRST)
+    {
+        request_id = id;
+        request_len = 0;
+        request_open = true;
+        answering = false;      // a new request drops what's left of the last answer
+    }
+    if (!request_open || id != request_id)
+    {
+        return;
+    }
+    size_t n = len - 3;
+    if (request_len + n > REQUEST_MAX)
+    {
+        n = REQUEST_MAX - request_len;
+    }
+    memcpy(request + request_len, msg + 3, n);
+    request_len += n;
+    if (flags & REQ_LAST)
+    {
+        request_open = false;
+        answer_request();
+    }
+}
+
+/* Send what's left of the answer, a few pieces at a time. */
+static void send_answer(void)
+{
+    size_t room = rcat_hal_ble_peer_max_send();
+    if (!answering || room <= 3)
+    {
+        return;
+    }
+    uint8_t msg[256];
+    size_t piece = room - 3 < sizeof(msg) - 3 ? room - 3 : sizeof(msg) - 3;
+    for (int i = 0; i < ANSWER_CHUNKS_PER_POLL && answering; i++)
+    {
+        size_t n = answer_len - answer_sent < piece ? answer_len - answer_sent : piece;
+        msg[0] = MSG_REQUEST;
+        msg[1] = answer_id;
+        msg[2] = (answer_sent == 0 ? REQ_FIRST : 0) | (answer_sent + n == answer_len ? REQ_LAST : 0);
+        memcpy(msg + 3, answer + answer_sent, n);
+        if (!rcat_hal_ble_peer_send(msg, 3 + n))
+        {
+            return;     // no room just now: carry on next time
+        }
+        answer_sent += n;
+        if (answer_sent == answer_len)
+        {
+            answering = false;
+        }
+    }
+}
+
 void comm_poll(uint32_t now_ms)
 {
     if (!running)
@@ -551,9 +691,12 @@ void comm_poll(uint32_t now_ms)
     if (!rcat_hal_ble_peer_connected())
     {
         phone_talk = false;     // so a phone that's gone doesn't leave it talking
+        answering = false;
+        request_open = false;
+        last_state_hash = 0;
         return;
     }
-    uint8_t msg[8];
+    uint8_t msg[64];
     size_t len;
     while ((len = rcat_hal_ble_peer_receive(msg, sizeof(msg))) > 0)
     {
@@ -565,7 +708,12 @@ void comm_poll(uint32_t now_ms)
         {
             comm_set_mode((comm_mode_t)msg[1]);
         }
+        else if (msg[0] == MSG_REQUEST)
+        {
+            receive_request(msg, len);
+        }
     }
+    send_answer();
 }
 
 #else   // no comm channel on this platform

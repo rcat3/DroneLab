@@ -41,10 +41,11 @@ CONFIG_FATFS_MAX_LFN=255
 # Bluetooth LE: NimBLE as a central for the Lovense feature, with up to three
 # connections (RCAT_HAL_BLE_MAX_LINKS), as a peripheral for the comm
 # channel's phone, a fourth, and for the comm channel's talk button, a fifth.
-# Pairing is on, for the button, with the pairings kept in flash. Its memory
-# is in PSRAM, and it only starts when it's first used. The controller sets
-# aside room for its activities when it starts, so the links and the scan
-# don't take more internal RAM as they're used.
+# Pairing is on, for the phone (with a code) and the button, with up to
+# eight pairings kept in flash. Its memory is in PSRAM, and it only starts
+# when it's first used. The controller sets aside room for its activities
+# when it starts, so the links and the scan don't take more internal RAM as
+# they're used.
 CONFIG_BT_ENABLED=y
 CONFIG_BT_NIMBLE_ENABLED=y
 CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
@@ -54,6 +55,7 @@ CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
 CONFIG_BT_NIMBLE_MAX_CONNECTIONS=5
 CONFIG_BT_NIMBLE_SECURITY_ENABLE=y
 CONFIG_BT_NIMBLE_NVS_PERSIST=y
+CONFIG_BT_NIMBLE_MAX_BONDS=8
 CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL=y
 
 # WiFi and Bluetooth together (the Lovense phone remote) need more internal

@@ -520,11 +520,13 @@ static bool ble_start(void)
     ble_hs_cfg.sync_cb = on_sync;
     ble_hs_cfg.reset_cb = on_reset;
 #if CONFIG_BT_NIMBLE_SECURITY_ENABLE
-    // Pairing, for the button: it has no screen or keys, so "just works",
-    // remembered (bonded) so it reconnects without pairing again
-    ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_NO_IO;
+    // Pairing, remembered (bonded) so it isn't needed again. The board can
+    // show a code, which a phone types in: its link is then safe from anyone
+    // listening in or pretending. The button has no screen or keys, so it
+    // pairs without a code ("just works").
+    ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_DISP_ONLY;
     ble_hs_cfg.sm_bonding = 1;
-    ble_hs_cfg.sm_mitm = 0;
+    ble_hs_cfg.sm_mitm = 1;
     ble_hs_cfg.sm_sc = 1;
     ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
     ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
@@ -1313,6 +1315,8 @@ static volatile bool peer_wanted;
 static volatile uint16_t peer_conn = BLE_HS_CONN_HANDLE_NONE;
 static volatile bool peer_subscribed;
 static volatile uint16_t peer_mtu;
+static volatile bool peer_secure;       // paired with a code: encrypted and authenticated
+static volatile int32_t peer_passkey = -1;  // the code to show while pairing
 
 // What the phone wrote, oldest first, under ble_lock
 static uint8_t peer_msgs[PEER_MSGS][PEER_MSG_MAX];
@@ -1369,7 +1373,13 @@ static struct ble_gatt_chr_def peer_chrs[] = {
     {
         .uuid = &peer_rx_uuid.u,
         .access_cb = peer_access_cb,
+#if CONFIG_BT_NIMBLE_SECURITY_ENABLE
+        // Only from a paired phone: an unpaired one is told to pair
+        .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP | BLE_GATT_CHR_F_WRITE_ENC |
+                 BLE_GATT_CHR_F_WRITE_AUTHEN,
+#else
         .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
+#endif
     },
     { 0 },
 };
@@ -1479,13 +1489,55 @@ static int peer_event_cb(struct ble_gap_event *event, void *arg)
             };
             ble_gap_update_params(peer_conn, &params);
             ble_gattc_exchange_mtu(peer_conn, NULL, NULL);
+#if CONFIG_BT_NIMBLE_SECURITY_ENABLE
+            // Ask the phone to pair, or to use its pairing if it has one
+            ble_gap_security_initiate(peer_conn);
+#else
+            peer_secure = true;
+#endif
         }
         break;
+
+#if CONFIG_BT_NIMBLE_SECURITY_ENABLE
+    case BLE_GAP_EVENT_PASSKEY_ACTION:
+        if (event->passkey.params.action == BLE_SM_IOACT_DISP)
+        {
+            struct ble_sm_io io = { .action = BLE_SM_IOACT_DISP, .passkey = rcat_hal_random() % 1000000 };
+            peer_passkey = (int32_t)io.passkey;
+            ble_sm_inject_io(event->passkey.conn_handle, &io);
+            ESP_LOGI(TAG, "Phone pairing: showing the code");
+        }
+        break;
+
+    case BLE_GAP_EVENT_ENC_CHANGE:
+    {
+        struct ble_gap_conn_desc desc;
+        bool ok = event->enc_change.status == 0 && ble_gap_conn_find(event->enc_change.conn_handle, &desc) == 0 &&
+                  desc.sec_state.encrypted && desc.sec_state.authenticated;
+        peer_secure = ok;
+        peer_passkey = -1;
+        ESP_LOGI(TAG, "Phone's link %s (%d)", ok ? "paired" : "not paired", event->enc_change.status);
+        break;
+    }
+
+    case BLE_GAP_EVENT_REPEAT_PAIRING:
+    {
+        // The phone forgot the board and is pairing again: drop the old keys.
+        struct ble_gap_conn_desc desc;
+        if (ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc) == 0)
+        {
+            ble_store_util_delete_peer(&desc.peer_id_addr);
+        }
+        return BLE_GAP_REPEAT_PAIRING_RETRY;
+    }
+#endif
 
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "Phone disconnected (reason %d)", event->disconnect.reason);
         peer_conn = BLE_HS_CONN_HANDLE_NONE;
         peer_subscribed = false;
+        peer_secure = false;
+        peer_passkey = -1;
         peer_mtu = 0;
         taskENTER_CRITICAL(&ble_lock);
         peer_msg_count = 0;
@@ -1568,7 +1620,12 @@ void rcat_hal_ble_peer_stop(void)
 
 bool rcat_hal_ble_peer_connected(void)
 {
-    return peer_conn != BLE_HS_CONN_HANDLE_NONE && peer_subscribed;
+    return peer_conn != BLE_HS_CONN_HANDLE_NONE && peer_subscribed && peer_secure;
+}
+
+int32_t rcat_hal_ble_peer_passkey(void)
+{
+    return peer_conn != BLE_HS_CONN_HANDLE_NONE ? peer_passkey : -1;
 }
 
 size_t rcat_hal_ble_peer_max_send(void)
@@ -1580,7 +1637,8 @@ size_t rcat_hal_ble_peer_max_send(void)
 bool rcat_hal_ble_peer_send(const void *data, size_t len)
 {
     uint16_t conn = peer_conn;
-    if (conn == BLE_HS_CONN_HANDLE_NONE || !peer_subscribed || len == 0 || len > rcat_hal_ble_peer_max_send())
+    if (conn == BLE_HS_CONN_HANDLE_NONE || !peer_subscribed || !peer_secure || len == 0 ||
+        len > rcat_hal_ble_peer_max_send())
     {
         return false;
     }
@@ -1637,6 +1695,11 @@ void rcat_hal_ble_peer_stop(void)
 bool rcat_hal_ble_peer_connected(void)
 {
     return false;
+}
+
+int32_t rcat_hal_ble_peer_passkey(void)
+{
+    return -1;
 }
 
 size_t rcat_hal_ble_peer_max_send(void)

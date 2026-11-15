@@ -23,6 +23,7 @@
  */
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /* True on boards with WiFi. */
@@ -49,5 +50,13 @@ int remote_phones(void);
 
 /* Answer the phones. Call every 50 ms or so with a millisecond clock. */
 void remote_poll(uint32_t now_ms);
+
+/* Answer one of the page's API requests, from somewhere other than the
+ * hotspot: the app, over the comm channel's Bluetooth link (see comm.h).
+ * method is "GET" or "POST", and target the path and query, like
+ * "/api/voice?p=3". Writes the JSON answer to out, and returns its length,
+ * or -1 if there's no such request. Works whether the hotspot's on or not.
+ * Call it from the UI loop. */
+int remote_api(const char *method, const char *target, const char *body, size_t body_len, char *out, size_t cap);
 
 #endif

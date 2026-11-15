@@ -263,8 +263,15 @@ void rcat_hal_ble_peer_setup(const rcat_hal_ble_peer_service_t *service);
 bool rcat_hal_ble_peer_start(const char *name);
 void rcat_hal_ble_peer_stop(void);
 
-/* True while a phone is connected and has turned notifications on. */
+/* True while a phone is connected, paired, and has turned notifications on.
+ * On boards with pairing, a phone has to pair before anything goes through:
+ * the board makes up a 6-digit code for the phone to type in, and remembers
+ * the phone after that. */
 bool rcat_hal_ble_peer_connected(void);
+
+/* The code for a phone that's pairing to type in, to show on the screen, or
+ * -1 when no phone's pairing. */
+int32_t rcat_hal_ble_peer_passkey(void);
 
 /* The biggest message rcat_hal_ble_peer_send() can take, which depends on
  * what the phone agreed to. 0 while nothing's connected. */

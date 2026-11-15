@@ -25,4 +25,8 @@ On an iPhone, the page opens in a small sign-in window.  Leave it open, or tap *
 
 The Phone Remote and the [Voice Lab](voice-lab.md) both use WiFi, so they can't run at once: switching one on stops the other.
 
-The page is `core/app/remote_page.html`.  After changing it, run `python3 tools/gen_remote_page.py` to turn it into the C file that's built into the firmware.
+## In the app
+
+The [comm channel](comm.md)'s Android app has the same page on its *Remote* tab, sent over the comm channel's Bluetooth link instead of the hotspot, so the phone stays on its own WiFi or mobile data.  It needs the board's *Comm* switched on, and the phone paired with it; the hotspot isn't used.
+
+The page is `core/app/remote_page.html`.  After changing it, run `python3 tools/gen_remote_page.py` to turn it into the C file that's built into the firmware, and to copy it into the app.

@@ -900,6 +900,45 @@ static void respond_json(client_t *c, void (*write)(json_t *))
     respond(c, "200 OK", "application/json", c->json, j.len, NULL);
 }
 
+int remote_api(const char *method, const char *target, const char *body, size_t body_len, char *out, size_t cap)
+{
+    char path[200];
+    snprintf(path, sizeof(path), "%s", target);
+    char *query = strchr(path, '?');
+    if (query != NULL)
+    {
+        *query++ = '\0';
+    }
+    void (*write)(json_t *) = NULL;
+    if (strcmp(path, "/api/info") == 0)
+    {
+        write = write_info;
+    }
+    else if (strcmp(path, "/api/state") == 0)
+    {
+        write = write_state;
+    }
+    else if (strcmp(path, "/api/tracks") == 0)
+    {
+        write = write_tracks;
+    }
+    else if (strncmp(path, "/api/", 5) == 0 && strcmp(method, "POST") == 0)
+    {
+        printf("remote: app %s %s\n", method, path);
+        if (run_command(path + 5, query, body, body_len))
+        {
+            write = write_state;
+        }
+    }
+    if (write == NULL)
+    {
+        return -1;
+    }
+    json_t j = { out, 0, cap };
+    write(&j);
+    return (int)j.len;
+}
+
 static void redirect_to_page(client_t *c)
 {
     respond(c, "302 Found", "text/html", "", 0, "Location: http://" RCAT_HAL_HOTSPOT_ADDRESS "/\r\n");
@@ -1274,5 +1313,9 @@ const char *remote_join_text(void) { return ""; }
 void remote_new_password(void) {}
 int remote_phones(void) { return 0; }
 void remote_poll(uint32_t now_ms) { (void)now_ms; }
+int remote_api(const char *method, const char *target, const char *body, size_t body_len, char *out, size_t cap)
+{
+    return -1;
+}
 
 #endif

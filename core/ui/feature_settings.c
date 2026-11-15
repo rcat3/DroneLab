@@ -605,12 +605,56 @@ static void comm_talk_event_cb(lv_event_t *e)
 static lv_obj_t *button_page;
 static void show_button(void);
 
+/* While a phone pairs, its code, over whatever's on screen. */
+static lv_obj_t *pair_panel;
+static lv_obj_t *pair_code;
+
+static void show_pairing_code(void)
+{
+    int32_t code = rcat_hal_ble_peer_passkey();
+    if (code < 0)
+    {
+        if (pair_panel != NULL)
+        {
+            lv_obj_delete(pair_panel);
+            pair_panel = pair_code = NULL;
+        }
+        return;
+    }
+    if (pair_panel == NULL)
+    {
+        pair_panel = lv_obj_create(lv_layer_top());
+        lv_obj_set_size(pair_panel, ui_px(280), ui_px(150));
+        lv_obj_center(pair_panel);
+        lv_obj_set_style_bg_color(pair_panel, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(pair_panel, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_color(pair_panel, lv_palette_main(LV_PALETTE_PINK), 0);
+        lv_obj_set_style_border_width(pair_panel, ui_px(3), 0);
+        lv_obj_set_style_radius(pair_panel, ui_px(20), 0);
+        lv_obj_set_scrollable(pair_panel, false);
+        lv_obj_t *title = lv_label_create(pair_panel);
+        lv_label_set_text(title, "Pairing a phone: type in");
+        lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(4));
+        pair_code = lv_label_create(pair_panel);
+        lv_obj_set_style_text_font(pair_code, &lv_font_montserrat_24, 0);
+        lv_obj_set_style_text_letter_space(pair_code, ui_px(4), 0);
+        lv_obj_set_style_transform_scale(pair_code, 384, 0);   // 1.5 times
+        lv_obj_set_style_transform_pivot_x(pair_code, LV_PCT(50), 0);
+        lv_obj_set_style_transform_pivot_y(pair_code, LV_PCT(50), 0);
+        lv_obj_align(pair_code, LV_ALIGN_CENTER, 0, ui_px(14));
+    }
+    char text[12];
+    snprintf(text, sizeof(text), "%03ld %03ld", (long)(code / 1000), (long)(code % 1000));
+    set_label(pair_code, text);
+}
+
 /* The channel answers the phone from here, whatever's on screen, and
  * pairing a talk button goes on. */
 static void comm_timer_cb(lv_timer_t *t)
 {
     comm_poll(lv_tick_get());
     talk_button_poll(lv_tick_get());
+    show_pairing_code();
     if (button_page != NULL && ui_current_page() == button_page)
     {
         show_button();

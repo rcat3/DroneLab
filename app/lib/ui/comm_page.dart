@@ -151,7 +151,7 @@ class _BoardCard extends StatelessWidget {
         status = b.error == null ? 'Connecting...' : '${b.error}. Trying again...';
       case BoardState.connected:
         status = st == null
-            ? 'Connected'
+            ? 'Pairing: type in the code the board shows'
             : st.sending
                 ? 'Sending your voice${comm.sendingToServer ? ' to the server' : ''}'
                 : st.mode == BoardMode.voice
