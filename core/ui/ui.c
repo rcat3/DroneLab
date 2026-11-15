@@ -40,6 +40,7 @@
 // All but settings are optional, and each platform picks which to build in
 // its features.cmake.
 extern const ui_feature_def_t feature_images;
+extern const ui_feature_def_t feature_visualizer;
 extern const ui_feature_def_t feature_voice;
 extern const ui_feature_def_t feature_sound;
 extern const ui_feature_def_t feature_level;
@@ -50,6 +51,9 @@ extern const ui_feature_def_t feature_settings;
 static const ui_feature_def_t *const feature_defs[] = {
 #if RCAT_FEATURE_IMAGES
     &feature_images,
+#endif
+#if RCAT_FEATURE_VISUALIZER
+    &feature_visualizer,
 #endif
 #if RCAT_FEATURE_VOICE
     &feature_voice,
@@ -96,6 +100,19 @@ static uint8_t feature_count;
 static startup_choice_t startup_choices[MAX_STARTUP_CHOICES];
 static size_t startup_choice_count;
 static int32_t screen_size;
+
+#if !RCAT_FEATURE_VISUALIZER
+// Without the feature, there are no visualizers for the phone remote to list.
+size_t ui_visualizer_count(void)
+{
+    return 0;
+}
+
+const char *ui_visualizer_name(size_t index)
+{
+    return "";
+}
+#endif
 
 static void setup_theme(void);
 static void show_startup_page(void);

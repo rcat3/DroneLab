@@ -853,7 +853,7 @@ static void audio_task(void *arg)
     // Watched, so that if it ever stops (stuck in a loop, or waiting on the
     // microphones for ever) the board restarts after a few seconds, with a
     // core dump saying where it was, rather than sitting there silent with
-    // KITT frozen (see sdkconfig.defaults).
+    // the Visualizer frozen (see sdkconfig.defaults).
     esp_task_wdt_add(NULL);
 
     while (1)

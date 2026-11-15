@@ -74,11 +74,11 @@ A few ideas run through it:
 
 ## Threads
 
-The UI runs on a single loop, which just runs LVGL's timers (see `app_run()` in [`core/app/app.c`](../../core/app/app.c)).  Anything a feature does regularly, like updating KITT's bars or polling the Lovense devices, is an LVGL timer (`lv_timer_create()`), so it runs on that loop and can use LVGL freely.  The microphone and speaker callbacks run on the board's audio tasks, and Bluetooth on its own task, so they mustn't call LVGL.  They leave their results where the UI's timers pick them up.
+The UI runs on a single loop, which just runs LVGL's timers (see `app_run()` in [`core/app/app.c`](../../core/app/app.c)).  Anything a feature does regularly, like drawing the Visualizer's frames or polling the Lovense devices, is an LVGL timer (`lv_timer_create()`), so it runs on that loop and can use LVGL freely.  The microphone and speaker callbacks run on the board's audio tasks, and Bluetooth on its own task, so they mustn't call LVGL.  They leave their results where the UI's timers pick them up.
 
 ## Crashes and hangs
 
-On the ESP32-S3 boards, the task watchdog watches each core's idle task, and on the 1.75" board the audio task as well.  If one of them goes 5 seconds without checking in, the board restarts rather than carrying on half stuck.  An idle task misses its check-in when something on its core keeps the core busy, like a loop that never ends.  The audio task misses its check-in when it stops for any reason, whether it's busy or blocked: the sound stops and KITT's bars freeze, but the display still works.
+On the ESP32-S3 boards, the task watchdog watches each core's idle task, and on the 1.75" board the audio task as well.  If one of them goes 5 seconds without checking in, the board restarts rather than carrying on half stuck.  An idle task misses its check-in when something on its core keeps the core busy, like a loop that never ends.  The audio task misses its check-in when it stops for any reason, whether it's busy or blocked: the sound stops and the Visualizer freezes, but the display still works.
 
 Before restarting, after a crash as well as a watchdog restart, the board:
 

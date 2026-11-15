@@ -158,6 +158,10 @@ body:not(.toys) #stop { display: none; }
     <div class="where"><span class="muted" id="now-feature"></span><b id="now-page"></b></div>
     <button id="next" aria-label="Next page">&#9654;</button>
   </div>
+  <div id="vis-box" hidden>
+    <h2>Visualizer</h2>
+    <div class="chips" id="visualizers"></div>
+  </div>
   <h2>Show on the display</h2>
   <div id="features"></div>
 </section>
@@ -296,7 +300,7 @@ body:not(.toys) #stop { display: none; }
 const $ = id => document.getElementById(id);
 const colors = ["var(--m0)", "var(--m1)", "var(--m2)"];
 let info = { patterns: [], modes: [], max_connected: 3, message_max: 600, features: [], presets: [], ring_colors: [],
-  startup_choices: [] };
+  startup_choices: [], visualizers: [] };
 let tracks = [];
 let state = null;
 let target = -1;                // where patterns play: -1 for every device
@@ -377,6 +381,14 @@ function buildScreen() {
     card.append(chips);
     box.append(card);
   });
+  const vis = $("visualizers");
+  vis.replaceChildren();
+  (info.visualizers || []).forEach((name, v) => {
+    const b = el("button", "", name);
+    b.dataset.v = v;
+    b.onclick = () => command("vis", { v, show: 1 });
+    vis.append(b);
+  });
 }
 
 ["0°", "90°", "180°", "270°"].forEach((name, r) => {
@@ -418,6 +430,8 @@ function showScreen() {
   $("now-feature").textContent = feature ? feature[0] : "";
   $("now-page").textContent = feature ? (feature[1][p] || "Page " + (p + 1)) : "";
   for (const b of $("features").querySelectorAll("button")) b.classList.toggle("on", +b.dataset.f === f && +b.dataset.p === p);
+  $("vis-box").hidden = state.vis === undefined;
+  for (const b of $("visualizers").children) b.classList.toggle("on", +b.dataset.v === state.vis);
 }
 
 // Step through every page of every feature, in order, round and round

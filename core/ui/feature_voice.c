@@ -1,7 +1,7 @@
 /*
- * Voice feature (boards with a microphone): ways of showing the microphone
- * level, one per page, then the settings page for the voice ring, the voice
- * effect, and the voice lab (boards with WiFi).
+ * Voice feature (boards with a microphone): the settings page for the voice
+ * ring, the voice effect, and the voice lab (boards with WiFi). Pictures of
+ * the voice are in the Visualizer feature.
  *
  * The voice ring itself is drawn over the images feature, and over its own
  * settings page so the color can be previewed.
@@ -13,7 +13,6 @@
 #include "audio/voice_fx.h"
 #include "audio/voice_lab.h"
 #include "hal.h"
-#include "ui/kitt.h"
 #include "ui/ui_internal.h"
 #include "ui/voice_ring.h"
 
@@ -347,11 +346,6 @@ static bool build(ui_feature_t *feature)
     }
 
     voice_ring_create();
-
-    // Ways of showing the level. More styles can go here, one page each.
-    lv_obj_t *kitt_page = ui_feature_add_page(feature, "KITT", true);
-    kitt_create(kitt_page);
-    ui_add_startup_choice(feature, kitt_page, "KITT", SETTINGS_STARTUP_KITT);
 
     add_ring_settings_page(feature);
     if (voice_fx_start())

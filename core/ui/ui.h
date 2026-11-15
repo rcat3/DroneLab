@@ -22,4 +22,9 @@ void ui_current(size_t *feature, size_t *page);
 /* Bring a page on screen, as if it had been swiped to. */
 void ui_show(size_t feature, size_t page);
 
+/* The Visualizer's styles, by the index saved in settings_t.visualizer.
+ * None without the feature or a microphone. */
+size_t ui_visualizer_count(void);
+const char *ui_visualizer_name(size_t index);
+
 #endif

@@ -2,7 +2,7 @@
 
 *All boards*
 
-Settings that apply to the whole display, one per page.  Settings that belong to a single feature, like the [Voice Ring](kitt-and-voice-ring.md#voice-ring)'s color or the [Sound](sound.md) volume, are on that feature's own pages.
+Settings that apply to the whole display, one per page.  Settings that belong to a single feature, like the [Voice Ring](voice-ring.md)'s color or the [Sound](sound.md) volume, are on that feature's own pages.
 
 The [Phone Remote](phone-remote.md)'s Setup tab can set the brightness, rotation and startup page too, and shows the battery and uptime.
 
@@ -26,7 +26,7 @@ Turns the whole display, touch included, in 90 degree steps.  It helps when the 
 
 ## Startup
 
-What's shown when the display turns on: any image (see [Images](images.md)), the blank page, [KITT](kitt-and-voice-ring.md), the [Level](level.md) or the [Terminal](terminal.md), depending on what the board has.
+What's shown when the display turns on: any image (see [Images](images.md)), the blank page, the [Visualizer](visualizer.md), the [Level](level.md) or the [Terminal](terminal.md), depending on what the board has.
 
 ## Battery Log
 

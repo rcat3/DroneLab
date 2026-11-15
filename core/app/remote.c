@@ -32,6 +32,8 @@
  *                                     shown at startup, and whether the
  *                                     remote starts at power-up, as in Settings
  *     POST /api/ring?[on=<1 or 0>][&c=<color>]   the voice ring
+ *     POST /api/vis?v=<style>[&show=1]  the Visualizer's style, and bring
+ *                                     it on screen
  *     GET  /api/tracks    the sound player's tracks, which don't change
  *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>]   the voice
  *                                     effect, Play on speaker and Effect Volume
@@ -437,6 +439,10 @@ static void write_state(json_t *j)
     {
         jprintf(j, ",\"ring\":{\"on\":%u,\"color\":%u}", s->voice_ring, s->voice_ring_color);
     }
+    if (ui_visualizer_count() > 0)
+    {
+        jprintf(j, ",\"vis\":%u", s->visualizer < ui_visualizer_count() ? s->visualizer : 0);
+    }
     if (voice_fx_available())
     {
         jprintf(j, ",\"voice\":{\"preset\":%u,\"speaker\":%d,\"volume\":%u}", s->voice_effect,
@@ -529,6 +535,12 @@ static void write_info(json_t *j)
         jprintf(j, "%s[", i ? "," : "");
         jstring(j, voice_ring_color_name(i));
         jprintf(j, ",\"#%06lx\"]", (unsigned long)voice_ring_color_rgb(i));
+    }
+    jprintf(j, "],\"visualizers\":[");
+    for (size_t i = 0; i < ui_visualizer_count(); i++)
+    {
+        jprintf(j, "%s", i ? "," : "");
+        jstring(j, ui_visualizer_name(i));
     }
     jprintf(j, "]}");
 }
@@ -759,6 +771,22 @@ static bool run_command(const char *name, const char *query, const char *body, s
             color = s->voice_ring_color;
         }
         settings_set_voice_ring(on != 0, (uint8_t)color);
+    }
+    else if (strcmp(name, "vis") == 0 && ui_visualizer_count() > 0)
+    {
+        // As the Visualizer's own page does; it catches up and shows it
+        int style = query_int(query, "v", -1);
+        if (style >= 0 && (size_t)style < ui_visualizer_count())
+        {
+            settings_set_visualizer((uint8_t)style);
+        }
+        for (size_t f = 0; query_int(query, "show", 0) && f < ui_feature_count(); f++)
+        {
+            if (strcmp(ui_feature_name(f), "Visualizer") == 0)
+            {
+                ui_show(f, 0);
+            }
+        }
     }
     else if (strcmp(name, "voice") == 0 && voice_fx_available())
     {

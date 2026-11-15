@@ -4,7 +4,7 @@ The Images feature shows a page for each image, then a blank (black) page at the
 
 Any image, or the blank page, can be picked to show when the display turns on, in [Settings](settings.md#startup).
 
-While the Images feature is on screen, the [Voice Ring](kitt-and-voice-ring.md#voice-ring) can glow around the edge with your voice.
+While the Images feature is on screen, the [Voice Ring](voice-ring.md) can glow around the edge with your voice.
 
 The images built into the firmware are in the `imgs/` folder.  The ESP32-S3 boards can also show images from their micro SD card, which come first.
 

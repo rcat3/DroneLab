@@ -13,7 +13,8 @@ What started as a simple application to display images on Waveshare displays has
 You swipe up and down between features, and left and right between each feature's pages (see [Using the Display](docs/using-the-display.md)).
 
 - **[Images](docs/features/images.md)**: still images and animated GIFs, built into the firmware or from an SD card.
-- **[KITT and the Voice Ring](docs/features/kitt-and-voice-ring.md)**: red bars like KITT's voice box, or a glowing ring around the edge, that light up as you talk.
+- **[Visualizer](docs/features/visualizer.md)**: moving pictures of your voice and the speaker: KITT's voice box, a 3D spectrum, an oscilloscope and four more.
+- **[Voice Ring](docs/features/voice-ring.md)**: a glowing ring around the edge of the images that lights up as you talk.
 - **[Voice Effects](docs/features/voice-effects.md)**: changes your voice on the board itself, from a natural female voice to a robot, a Dalek or the Borg.
 - **[Voice Lab](docs/features/voice-lab.md)**: streams the microphone to a computer, for trying out voice effects.
 - **[Sound](docs/features/sound.md)**: plays WAV, MP3 and FLAC files from the SD card.

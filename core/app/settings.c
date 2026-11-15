@@ -78,6 +78,11 @@ static bool load(settings_t *out)
     }
     out->rotation &= 3;
     out->startup_image[SETTINGS_NAME_LEN - 1] = '\0';
+    if (strcmp(out->startup_image, SETTINGS_STARTUP_OLD_KITT) == 0)
+    {
+        // KITT is one of the Visualizer's styles now, and the default one.
+        strcpy(out->startup_image, SETTINGS_STARTUP_VISUALIZER);
+    }
     out->voice_ring = out->voice_ring ? 1 : 0;
     // voice_ring_color is checked against the color list by the UI
     if (out->sound_volume > 100)
@@ -94,6 +99,7 @@ static bool load(settings_t *out)
     }
     out->lovense_release_to_zero = out->lovense_release_to_zero ? 1 : 0;
     out->remote_autostart = out->remote_autostart ? 1 : 0;
+    // visualizer is checked against the list of styles by the UI
     for (int k = 0; k < SETTINGS_CURVE_POINTS && out->battery_curve_runs > 0; k++)
     {
         uint16_t mv = out->battery_curve_mv[k];
@@ -206,6 +212,12 @@ void settings_set_voice_effect(uint8_t preset)
 void settings_set_voice_volume(uint8_t percent)
 {
     current.voice_volume = percent;
+    schedule_save();
+}
+
+void settings_set_visualizer(uint8_t index)
+{
+    current.visualizer = index;
     schedule_save();
 }
 

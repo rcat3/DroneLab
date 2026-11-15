@@ -10,9 +10,11 @@
 #define SETTINGS_REMOTE_LEN         16
 #define SETTINGS_CURVE_POINTS       21      // 100%, 95% ... 0%
 
-/* Startup image names that select the blank (black) tile and the KITT tile. */
+/* Startup image names that select the blank (black) tile and the Visualizer.
+ * Firmware from before the Visualizer saved it as "kitt". */
 #define SETTINGS_STARTUP_BLANK      "blank"
-#define SETTINGS_STARTUP_KITT       "kitt"
+#define SETTINGS_STARTUP_VISUALIZER "visualizer"
+#define SETTINGS_STARTUP_OLD_KITT   "kitt"
 
 /* Only ever add new fields to the end. Settings saved by older firmware are
  * still loaded, and any fields they don't have get their defaults. */
@@ -37,6 +39,7 @@ typedef struct
     uint32_t battery_curve_last_run;        // the battery log session it last learned from
     uint8_t voice_volume;                   // the voice effect on the speaker, percent
     uint8_t remote_autostart;               // 1 to switch the phone remote on at power-up
+    uint8_t visualizer;                     // which visualizer style, 0 for KITT
 } settings_t;
 
 /* Load the saved settings, or the defaults if nothing valid has been saved. */
@@ -61,6 +64,7 @@ void settings_set_lovense_release_to_zero(uint8_t enabled);
 void settings_set_remote(const char *ssid, const char *password);
 void settings_set_remote_autostart(uint8_t enabled);
 void settings_set_terminal_size(uint8_t size);
+void settings_set_visualizer(uint8_t index);
 /* Keep a learned battery curve (see app/battery_log.h), or forget it with runs = 0. */
 void settings_set_battery_curve(const uint16_t *mv, uint8_t runs, uint32_t last_run);
 

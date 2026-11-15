@@ -24,7 +24,8 @@ Their housings for the MSA Millennium mask are no longer supported.  They're kep
 | [Images](features/images.md) | Yes | Yes | Yes |
 | [Full screen animated GIFs](features/images.md#animated-gif-memory-use) | | Yes | From the SD card |
 | [Images from the SD card](features/images.md#images-on-the-sd-card) | | | Yes |
-| [KITT and the Voice Ring](features/kitt-and-voice-ring.md) | | | Yes |
+| [Visualizer](features/visualizer.md) | | | Yes |
+| [Voice Ring](features/voice-ring.md) | | | Yes |
 | [Voice Effects](features/voice-effects.md) | | | |
 | [Voice Lab](features/voice-lab.md) | | | Yes |
 | [Sound](features/sound.md) | | | Yes |

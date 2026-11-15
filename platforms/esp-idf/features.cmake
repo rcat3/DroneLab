@@ -2,7 +2,8 @@
 # leave it out. See core/features.cmake.
 
 set(RCAT_FEATURE_IMAGES ON)     # images and animations
-set(RCAT_FEATURE_VOICE  ON)     # microphone level displays, voice effects and the voice lab
+set(RCAT_FEATURE_VISUALIZER ON) # pictures of the voice and the speaker: KITT, a 3D spectrum and more
+set(RCAT_FEATURE_VOICE  ON)     # the voice ring, voice effects and the voice lab
 set(RCAT_FEATURE_SOUND  ON)     # sound file player
 set(RCAT_FEATURE_LEVEL  ON)     # spirit level, for lining the display up on the mask
 set(RCAT_FEATURE_LOVENSE ON)    # controls a Lovense device over Bluetooth
