@@ -44,18 +44,25 @@ module case_outline_2d()
 
 // Under the pod, the pocket follows the chin's slope, so the housing is held
 // there too and doesn't rock on its back. The slope is lowered so the gap
-// across it, square to it, is case_clear.
+// across it, square to it, is case_clear. Lowering it moves its end nearest
+// the body outwards, so it's joined with the slope as it is, which keeps the
+// clearance there.
 chin_drop = case_clear * sqrt(chin_shift * chin_shift + chin_h * chin_h) / chin_shift;
 
 module case_pocket()
 {
     translate([0, 0, case_z[0]]) cylinder(r = thread_out_r + case_clear, h = z_grip - case_z[0] + 0.01, $fn = 128);
-    translate([0, 0, z_grip]) cylinder(r = collar_r + case_clear, h = z_back - z_grip + 0.01, $fn = 192);
-    // The round part behind the display, and the chin under the pod
-    translate([0, 0, z_back]) cylinder(r = body_r + case_clear, h = z_front - z_back + 0.01, $fn = 192);
+    // The round part, as wide as the collar's grip all the way up: the grip is
+    // the widest part of it, and has to pass the rest on its way in
+    translate([0, 0, z_grip]) cylinder(r = collar_r + case_clear, h = z_front - z_grip + 0.01, $fn = 192);
+    // The chin under the pod
     intersection()
     {
-        translate([0, 0, -chin_drop]) chin_sweep(case_clear);
+        union()
+        {
+            translate([0, 0, -chin_drop]) chin_sweep(case_clear);
+            chin_sweep(case_clear);
+        }
         translate([0, 0, z_back]) linear_extrude(z_pod_back - z_back + 0.01) case_outline_2d();
     }
     // The pod and the rest of the front
