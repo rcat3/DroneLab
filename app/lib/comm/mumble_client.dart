@@ -1,7 +1,10 @@
 /// A small Mumble client: it logs in, keeps track of who's in our channel,
-/// and sends and receives Opus voice inside its TLS connection (Mumble's
-/// "UDP tunnel"), so it needs no UDP. Plain Dart, so it can be tested on a
-/// computer.
+/// and sends and receives Opus voice. Voice goes over UDP, encrypted with the
+/// key the server gives (crypt_state.dart), while UDP gets through: a UDP
+/// ping every few seconds checks. Otherwise it goes inside the TLS
+/// connection (Mumble's "UDP tunnel"), which always works, but a lost
+/// packet there holds up everything after it. Plain Dart, so it can be
+/// tested on a computer.
 library;
 
 import 'dart:async';
@@ -10,6 +13,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 
+import 'crypt_state.dart';
 import 'protobuf.dart';
 import 'voice_packet.dart';
 
@@ -25,6 +29,12 @@ const _channelState = 7;
 const _userRemove = 8;
 const _userState = 9;
 const _textMessage = 11;
+const _cryptSetup = 15;
+
+const _voiceTypePing = 1;
+const _udpPingInterval = Duration(seconds: 5);
+const _udpTimeout = Duration(seconds: 12);      // no answer for this long: back to TCP
+const _resyncAfter = Duration(seconds: 5);      // no good packet for this long: ask for a new nonce
 
 /// Version 1.4.0: the server then sends, and expects, voice in the older
 /// format (see voice_packet.dart).
@@ -65,6 +75,7 @@ class MumbleClient {
   final String username;
   final String password;
   final String clientName;
+  final bool useUdp;
 
   SecureSocket? _socket;
   Timer? _pingTimer;
@@ -95,7 +106,125 @@ class MumbleClient {
     required this.username,
     this.password = '',
     this.clientName = 'DroneLab',
+    this.useUdp = true,
   });
+
+  // ----- UDP -----
+
+  final CryptState _crypt = CryptState();
+  RawDatagramSocket? _udp;
+  InternetAddress? _udpAddress;
+  Timer? _udpPingTimer;
+  DateTime? _lastUdpGood;
+  DateTime _lastResync = DateTime.fromMillisecondsSinceEpoch(0);
+  int udpPacketsIn = 0;
+  int tcpVoiceIn = 0;
+
+  /// True while voice is going over UDP.
+  bool get udpActive {
+    final last = _lastUdpGood;
+    return _udp != null && last != null && DateTime.now().difference(last) < _udpTimeout;
+  }
+
+  Future<void> _startUdp() async {
+    if (!useUdp || _udp != null || !_crypt.ready) return;
+    try {
+      final address = (await InternetAddress.lookup(host)).first;
+      final socket = await RawDatagramSocket.bind(
+          address.type == InternetAddressType.IPv6 ? InternetAddress.anyIPv6 : InternetAddress.anyIPv4, 0);
+      if (state == MumbleState.disconnected) {
+        socket.close();
+        return;
+      }
+      _udp = socket;
+      _udpAddress = address;
+      socket.listen((event) {
+        if (event != RawSocketEvent.read) return;
+        Datagram? d;
+        while ((d = socket.receive()) != null) {
+          _onUdp(d!.data);
+        }
+      });
+      _sendUdpPing();
+      _udpPingTimer = Timer.periodic(_udpPingInterval, (_) => _sendUdpPing());
+    } catch (_) {
+      // No UDP: the voice stays in the TCP connection
+    }
+  }
+
+  void _sendUdpPing() {
+    final b = BytesBuilder()..addByte(_voiceTypePing << 5);
+    writeMumbleVarint(b, DateTime.now().millisecondsSinceEpoch);
+    _sendUdp(b.toBytes());
+    // A connection that's gone quiet goes back to TCP, which tells the
+    // server to send that way too
+    final wasActive = _wasUdpActive;
+    _wasUdpActive = udpActive;
+    if (wasActive != _wasUdpActive) _changes.add(null);
+  }
+
+  bool _wasUdpActive = false;
+
+  void _sendUdp(Uint8List plain) {
+    final socket = _udp, address = _udpAddress;
+    if (socket == null || address == null || !_crypt.ready) return;
+    socket.send(_crypt.encrypt(plain), address, port);
+  }
+
+  void _onUdp(Uint8List data) {
+    final plain = _crypt.decrypt(data);
+    if (plain == null) {
+      // Out of step with the server's count: ask it for its nonce again
+      final now = DateTime.now();
+      final last = _lastUdpGood;
+      if ((last == null || now.difference(last) > _resyncAfter) && now.difference(_lastResync) > _resyncAfter) {
+        _lastResync = now;
+        _send(_cryptSetup, Uint8List(0));
+      }
+      return;
+    }
+    final first = !udpActive;
+    _lastUdpGood = DateTime.now();
+    if (first) {
+      _wasUdpActive = true;
+      _changes.add(null);
+    }
+    if (plain.isEmpty) return;
+    if (plain[0] >> 5 == voiceTypeOpus) {
+      try {
+        final v = decodeVoice(plain);
+        if (v != null) {
+          udpPacketsIn++;
+          _voice.add(v);
+        }
+      } on FormatException {
+        // a broken packet
+      }
+    }
+  }
+
+  void _onCryptSetup(Uint8List payload) {
+    final m = ProtoMessage.parse(payload);
+    final key = m.bytes(1), client = m.bytes(2), server = m.bytes(3);
+    if (key != null && key.length == 16 && client != null && client.length == 16 && server != null && server.length == 16) {
+      _crypt.setKey(key, client, server);
+      _startUdp();
+    } else if (server != null && server.length == 16) {
+      _crypt.setDecryptIv(server);       // the server's starting its count again
+    } else if (_crypt.ready) {
+      // The server asks for our count
+      _send(_cryptSetup, (ProtoWriter()..bytes(2, _crypt.encryptIv)).toBytes());
+    }
+  }
+
+  void _stopUdp() {
+    _udpPingTimer?.cancel();
+    _udpPingTimer = null;
+    _udp?.close();
+    _udp = null;
+    _lastUdpGood = null;
+    _wasUdpActive = false;
+  }
 
   int get myChannel => users[mySession]?.channel ?? 0;
 
@@ -168,7 +297,12 @@ class MumbleClient {
   /// Send a packet of our voice. seq counts in 10 ms frames.
   void sendVoice(int seq, Uint8List opus, {bool last = false}) {
     if (state != MumbleState.connected) return;
-    _send(_udpTunnel, encodeVoice(seq: seq, opus: opus, last: last));
+    final packet = encodeVoice(seq: seq, opus: opus, last: last);
+    if (udpActive) {
+      _sendUdp(packet);
+    } else {
+      _send(_udpTunnel, packet);
+    }
   }
 
   void sendText(String message) {
@@ -216,7 +350,12 @@ class MumbleClient {
     switch (type) {
       case _udpTunnel:
         final v = decodeVoice(payload);
-        if (v != null) _voice.add(v);
+        if (v != null) {
+          tcpVoiceIn++;
+          _voice.add(v);
+        }
+      case _cryptSetup:
+        _onCryptSetup(payload);
       case _serverSync:
         final m = ProtoMessage.parse(payload);
         mySession = m.int_(1);
@@ -270,6 +409,7 @@ class MumbleClient {
   void _shutdown(String? reason) {
     _pingTimer?.cancel();
     _pingTimer = null;
+    _stopUdp();
     final socket = _socket;
     _socket = null;
     socket?.destroy();

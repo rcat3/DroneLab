@@ -62,7 +62,8 @@ class _ServerCard extends StatelessWidget {
       icon = Icons.cloud_off;
     } else if (m?.state == MumbleState.connected) {
       final n = m!.channelUsers.length;
-      status = 'Connected as ${s.username}, ${n == 0 ? 'nobody else here' : n == 1 ? '1 other here' : '$n others here'}';
+      status = 'Connected as ${s.username}, ${n == 0 ? 'nobody else here' : n == 1 ? '1 other here' : '$n others here'}.\n'
+          '${m.udpActive ? 'Voice over UDP' : 'Voice over TCP (UDP isn\'t getting through)'}';
       icon = Icons.cloud_done;
     } else if (comm.serverWanted) {
       status = comm.serverError == null ? 'Connecting...' : '${comm.serverError}. Trying again...';
