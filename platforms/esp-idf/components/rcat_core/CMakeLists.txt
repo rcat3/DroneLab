@@ -38,7 +38,7 @@ idf_component_register(SRCS ${CORE_SOURCES} ${IMAGE_SOURCES}
                        INCLUDE_DIRS ${CORE_DIR}/include
                        PRIV_INCLUDE_DIRS ${CORE_DIR} ${CORE_DIR}/../third_party/dr_libs
                        REQUIRES lvgl
-                       PRIV_REQUIRES ${board_component} lwip 78__esp-opus)
+                       PRIV_REQUIRES ${board_component} lwip mbedtls 78__esp-opus)
 
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     rcat_feature_definitions(feature_definitions)
@@ -61,6 +61,14 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     if(CONFIG_BT_NIMBLE_ROLE_PERIPHERAL)
         target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_HAVE_COMM=1)
     endif()
+endif()
+
+# Direct comms, board to board over ESP-NOW (see core/app/direct.h). Pass
+# -DRCAT_DIRECT_ECHO=1 to build a board that only echoes back what it hears,
+# for trying it with one board that can send.
+target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_HAVE_DIRECT=1)
+if(RCAT_DIRECT_ECHO)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_DIRECT_ECHO=1)
 endif()
 
 # Images and sounds can be loaded from the SD card

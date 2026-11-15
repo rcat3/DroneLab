@@ -1,6 +1,7 @@
 #include "app.h"
 #include "app/battery_log.h"
 #include "app/comm.h"
+#include "app/direct.h"
 #include "app/patterns.h"
 #include "app/settings.h"
 #include "app/updater.h"
@@ -130,6 +131,7 @@ void app_run(void)
     voice_lab_init(storage_path);
     patterns_init(storage_path);        // for the Lovense feature
     comm_init();                        // before anything else starts Bluetooth
+    direct_init();                      // board to board, over the radio
 
     battery_log_init();                 // learns the battery's curve from the last run
 

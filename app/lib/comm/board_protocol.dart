@@ -16,6 +16,10 @@
 /// and back from the board:
 ///   avatar ack [0x06][slot][flags][bytes received, LE32]
 ///           flags: 1 it's all there, 2 the right size
+///   direct sound [0x07][sender LE32][seq LE16][flags][opus]
+///           another board's voice, heard over direct comms (core/app/direct.h)
+///   direct peer [0x08][id LE32][rssi][flags: 1 talking][name]
+///           a board heard over direct comms, every couple of seconds
 /// Both ways, the phone remote's requests and their answers, in pieces:
 ///   request [0x03][id][flags][piece of "METHOD /api/...\n" + body]
 ///   answer  [0x03][id][flags][piece of "200\n" + JSON, "304\n" or "404\n"]
@@ -25,6 +29,8 @@ library;
 
 import 'dart:convert';
 import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
 
 const serviceUuid = 'efe06e1b-a7ff-4823-bfbb-b3a82ea05849';
 const toPhoneUuid = 'efe06e1c-a7ff-4823-bfbb-b3a82ea05849';
@@ -50,6 +56,8 @@ const _msgRequest = 0x03;
 const _msgServer = 0x04;
 const _msgHearing = 0x05;
 const _msgAvatar = 0x06;
+const _msgDirectSound = 0x07;
+const _msgDirectPeer = 0x08;
 
 /// No avatar, in a slot.
 const avatarNone = 0xFF;
@@ -86,6 +94,23 @@ class AvatarAck {
   AvatarAck(this.slot, this.done, this.ok, this.received);
 }
 
+class DirectSound {
+  final int sender;
+  final int seq;            // counts packets, wrapping at 65536
+  final bool first;
+  final bool last;
+  final Uint8List opus;
+  DirectSound(this.sender, this.seq, this.first, this.last, this.opus);
+}
+
+class DirectPeer {
+  final int id;
+  final int rssi;
+  final bool talking;
+  final String name;
+  DirectPeer(this.id, this.rssi, this.talking, this.name);
+}
+
 class AnswerPiece {
   final int id;
   final bool first;
@@ -105,6 +130,15 @@ Object? parseBoardMessage(Uint8List data) {
     case _msgStatus:
       final mode = data[2] < BoardMode.values.length ? BoardMode.values[data[2]] : BoardMode.pushToTalk;
       return BoardStatus(data[1], mode, data[3] & 1 != 0, data[3] & 2 != 0, data[3] & 4 != 0);
+  }
+  int le32(int at) => data[at] | (data[at + 1] << 8) | (data[at + 2] << 16) | (data[at + 3] << 24);
+  if (data[0] == _msgDirectSound && data.length >= 8) {
+    return DirectSound(le32(1), data[5] | (data[6] << 8), data[7] & 1 != 0, data[7] & 2 != 0,
+        Uint8List.sublistView(data, 8));
+  }
+  if (data[0] == _msgDirectPeer && data.length >= 7) {
+    return DirectPeer(le32(1), data[5].toSigned(8), data[6] & 1 != 0,
+        utf8.decode(data.sublist(7), allowMalformed: true));
   }
   if (data[0] == _msgAvatar && data.length >= 7) {
     final got = data[3] | (data[4] << 8) | (data[5] << 16) | (data[6] << 24);
@@ -209,6 +243,12 @@ List<Uint8List> avatarMessages(int slot, Uint8List rgb565, int maxWrite, {int wi
   }
   return out;
 }
+
+/// A direct comms group's key, from its name and passphrase, as 32 hex digits
+/// for the board (POST /api/comm?key=). Everyone in the group types the same
+/// two, and gets the same key.
+String directKey(String group, String passphrase) =>
+    sha256.convert(utf8.encode('dronelab-direct\n$group\n$passphrase')).toString().substring(0, 32);
 
 /// FNV-1a, 32 bits: how the board tells whether the app's copy of the
 /// remote's page is the same as its own.

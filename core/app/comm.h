@@ -55,6 +55,12 @@
  *                  1 it's the right size), then how many bytes have come,
  *                  32 bits little endian. For each piece that asks, and for
  *                  the last.
+ *     0x07 direct sound: 07, the sender's id (32 bits, little endian), seq
+ *                  (16), flags, then the Opus packet: another board's voice,
+ *                  heard over direct comms (see direct.h), as 0x01's.
+ *     0x08 direct peer: 08, a board's id (32), how strong it's heard (dBm,
+ *                  signed), flags (bit 0 talking), then its name: each board
+ *                  heard over direct comms, every couple of seconds.
  *
  *   Both ways: the phone remote's requests (see remote.h), so the app can
  *   show the remote's page without joining the board's hotspot

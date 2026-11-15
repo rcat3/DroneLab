@@ -120,6 +120,10 @@ static bool load(settings_t *out)
     // comm_mode is checked by the comm channel
     out->comm_mute_speaker = out->comm_mute_speaker ? 1 : 0;
     out->comm_auto_show &= SETTINGS_SHOW_SENDING | SETTINGS_SHOW_HEARING;
+    out->direct_on = out->direct_on ? 1 : 0;
+    out->direct_keyed = out->direct_keyed ? 1 : 0;
+    out->direct_group[SETTINGS_DIRECT_NAME_LEN - 1] = '\0';
+    out->direct_name[SETTINGS_DIRECT_NAME_LEN - 1] = '\0';
     for (int k = 0; k < SETTINGS_CURVE_POINTS && out->battery_curve_runs > 0; k++)
     {
         uint16_t mv = out->battery_curve_mv[k];
@@ -308,6 +312,27 @@ void settings_set_comm(uint8_t on, uint8_t mode)
 {
     current.comm_on = on ? 1 : 0;
     current.comm_mode = mode;
+    schedule_save();
+}
+
+void settings_set_direct(uint8_t on)
+{
+    current.direct_on = on ? 1 : 0;
+    schedule_save();
+}
+
+void settings_set_direct_group(const uint8_t *key, const char *group, const char *name)
+{
+    current.direct_keyed = key != NULL;
+    memset(current.direct_key, 0, sizeof(current.direct_key));
+    if (key != NULL)
+    {
+        memcpy(current.direct_key, key, sizeof(current.direct_key));
+    }
+    memset(current.direct_group, 0, sizeof(current.direct_group));
+    strncpy(current.direct_group, group != NULL ? group : "", sizeof(current.direct_group) - 1);
+    memset(current.direct_name, 0, sizeof(current.direct_name));
+    strncpy(current.direct_name, name != NULL ? name : "", sizeof(current.direct_name) - 1);
     schedule_save();
 }
 

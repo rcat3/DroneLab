@@ -354,6 +354,25 @@ int rcat_hal_hotspot_clients(void)
     return 0;
 }
 
+bool rcat_hal_direct_start(void)
+{
+    return false;
+}
+
+void rcat_hal_direct_stop(void)
+{
+}
+
+bool rcat_hal_direct_send(const void *data, size_t len)
+{
+    return false;
+}
+
+size_t rcat_hal_direct_receive(void *data, size_t max, int8_t *rssi)
+{
+    return 0;
+}
+
 const char *rcat_hal_firmware_built(void)
 {
     return __DATE__ " " __TIME__;
@@ -554,6 +573,11 @@ void rcat_hal_restart(void)
     while (1)
     {
     }
+}
+
+uint32_t rcat_hal_millis(void)
+{
+    return to_ms_since_boot(get_absolute_time());
 }
 
 void rcat_hal_delay_ms(uint32_t ms)

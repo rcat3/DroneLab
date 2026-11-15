@@ -42,6 +42,10 @@ class BoardLink extends ChangeNotifier {
   int avatarSlots = 0;
 
   final _avatarAcks = StreamController<AvatarAck>.broadcast();
+  final _directSounds = StreamController<DirectSound>.broadcast();
+  final _directPeers = StreamController<DirectPeer>.broadcast();
+  Stream<DirectSound> get directSounds => _directSounds.stream;
+  Stream<DirectPeer> get directPeers => _directPeers.stream;
   Stream<AvatarAck> get avatarAcks => _avatarAcks.stream;
 
   /// The longest message the board takes.
@@ -188,6 +192,10 @@ class BoardLink extends ChangeNotifier {
       _onAnswerPiece(msg);
     } else if (msg is AvatarAck) {
       _avatarAcks.add(msg);
+    } else if (msg is DirectSound) {
+      _directSounds.add(msg);
+    } else if (msg is DirectPeer) {
+      _directPeers.add(msg);
     } else if (msg is BoardStatus) {
       final old = status;
       status = msg;

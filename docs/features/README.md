@@ -15,6 +15,7 @@ The display is organized into features.  You swipe up and down to move between t
 | [Lovense](lovense.md) | Controls up to three Lovense devices over Bluetooth |
 | [WiFi Hotspot Remote](phone-remote.md) | Runs the display from a phone's web browser |
 | [Comm](comm.md) | Talks to a group through a phone and the DroneLab app, like a radio, with a status screen showing who's talking |
+| [Direct Comms](direct.md) | The comm channel board to board over the radio, with no internet: in development |
 | [Settings](settings.md) | Brightness, rotation, the [Level](level.md), what's shown at startup, and the battery voltage |
 
 Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp32s3_touch_amoled_1_75.md).  The low-profile housing has no speaker, so sound and voice effects need the speaker housing.  The firmware also runs on a few [other boards](../other-boards.md), which have fewer features.

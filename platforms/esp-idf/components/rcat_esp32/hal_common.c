@@ -57,6 +57,11 @@ bool rcat_esp32_sd_mount(int clk, int cmd, int d0, const char **path)
     return true;
 }
 
+uint32_t rcat_hal_millis(void)
+{
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
+
 void rcat_hal_delay_ms(uint32_t ms)
 {
     TickType_t ticks = pdMS_TO_TICKS(ms);

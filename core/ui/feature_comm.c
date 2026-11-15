@@ -17,8 +17,9 @@
  *
  * Then Comm Setup: push to talk or voice, whether the speaker goes quiet
  * while it sends, and whether to come to the status screen while it sends
- * or hears someone, going back to where it was afterwards. And the talk
- * button. Switching the phone app's link on, and pairing phones, are in
+ * or hears someone, going back to where it was afterwards. Then Direct:
+ * direct comms, board to board (app/direct.h), with the boards it hears. And
+ * the talk button. Switching the phone app's link on, and pairing phones, are in
  * Settings, as the remote uses them too.
  */
 #include <stdio.h>
@@ -26,6 +27,7 @@
 #include <string.h>
 
 #include "app/comm.h"
+#include "app/direct.h"
 #include "app/settings.h"
 #include "app/talk_button.h"
 #include "ui/ui.h"
@@ -306,7 +308,7 @@ static void set_antenna(antenna_t a)
 
 static void show_status(void)
 {
-    bool on = comm_running();
+    bool on = comm_running() || direct_running();
     bool uplink = comm_phone_connected();
     comm_server_t server = comm_server();
     int hearing = comm_hearing_count();
@@ -340,6 +342,13 @@ static void show_status(void)
     else if (!on)
     {
         snprintf(text, sizeof(text), "COMMS OFF");
+    }
+    else if (!uplink && direct_running())
+    {
+        // Board to board: how many are about
+        direct_peer_t peers[DIRECT_PEERS_MAX];
+        int n = direct_peers(peers, DIRECT_PEERS_MAX);
+        snprintf(text, sizeof(text), n == 0 ? "DIRECT" : "%d NEARBY", n);
     }
     else if (!uplink)
     {
@@ -381,7 +390,7 @@ static void update_frame_talk(uint32_t now)
     {
         pressed_since = now | 1;
     }
-    if (!frame_talking && comm_running() && now - pressed_since >= HOLD_TO_TALK_MS)
+    if (!frame_talking && (comm_running() || direct_running()) && now - pressed_since >= HOLD_TO_TALK_MS)
     {
         frame_talking = true;
         lv_obj_set_scroll_chain(frame, false);  // a swipe from here doesn't move the page now
@@ -628,6 +637,96 @@ static void add_setup_page(ui_feature_t *feature)
     show_setup();
 }
 
+/* ----- Direct comms ----- */
+
+static lv_obj_t *direct_page;
+static lv_obj_t *direct_switch;
+static lv_obj_t *direct_group_label;
+static lv_obj_t *direct_peers_label;
+
+static void show_direct(void)
+{
+    bool on = direct_running();
+    lv_obj_set_state(direct_switch, LV_STATE_CHECKED, on);
+    char text[160];
+    snprintf(text, sizeof(text), "Group: %s\nAs: %s", direct_group_name(), direct_own_name());
+    set_label(direct_group_label, text);
+    if (!on)
+    {
+        set_label(direct_peers_label, "Board to board, over the\nradio: no signal needed");
+        return;
+    }
+    direct_peer_t peers[DIRECT_PEERS_MAX];
+    int n = direct_peers(peers, DIRECT_PEERS_MAX);
+    if (n == 0)
+    {
+        set_label(direct_peers_label, "No boards heard yet");
+        return;
+    }
+    // The strongest few, with bars for how well they're heard
+    size_t at = 0;
+    for (int i = 0; i < n && i < 3; i++)
+    {
+        int r = peers[i].rssi;
+        const char *bars = r > -60 ? "||||" : r > -70 ? "|||" : r > -80 ? "||" : "|";
+        at += (size_t)snprintf(text + at, sizeof(text) - at, "%s%s %s%s", i ? "\n" : "", peers[i].name, bars,
+                               peers[i].talking ? " " LV_SYMBOL_AUDIO : "");
+        if (at >= sizeof(text))
+        {
+            break;
+        }
+    }
+    if (n > 3 && at < sizeof(text))
+    {
+        snprintf(text + at, sizeof(text) - at, "\n+%d more", n - 3);
+    }
+    set_label(direct_peers_label, text);
+}
+
+static void direct_switch_cb(lv_event_t *e)
+{
+    if (lv_obj_has_state(direct_switch, LV_STATE_CHECKED))
+    {
+        if (!direct_start())
+        {
+            set_label(direct_peers_label, "The radio didn't start");
+        }
+    }
+    else
+    {
+        direct_stop();
+    }
+    show_direct();
+}
+
+static void add_direct_page(ui_feature_t *feature)
+{
+    direct_page = ui_feature_add_page(feature, "Direct", false);
+    lv_obj_set_scrollable(direct_page, false);
+
+    lv_obj_t *t = lv_label_create(direct_page);
+    lv_label_set_text(t, "Direct");
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, ui_px(28));
+
+    direct_switch = lv_switch_create(direct_page);
+    lv_obj_set_size(direct_switch, ui_px(64), ui_px(32));
+    lv_obj_align(direct_switch, LV_ALIGN_CENTER, 0, ui_px(-58));
+    lv_obj_add_event_cb(direct_switch, direct_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    direct_group_label = lv_label_create(direct_page);
+    lv_label_set_text(direct_group_label, "");
+    lv_obj_set_style_text_align(direct_group_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(direct_group_label, LV_ALIGN_CENTER, 0, ui_px(-14));
+
+    direct_peers_label = lv_label_create(direct_page);
+    lv_label_set_text(direct_peers_label, "");
+    lv_obj_set_style_text_align(direct_peers_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(direct_peers_label, COLOR_MUTED, 0);
+    lv_obj_align(direct_peers_label, LV_ALIGN_CENTER, 0, ui_px(46));
+
+    show_direct();
+}
+
 /* ----- The talk button ----- */
 
 static lv_obj_t *button_page;
@@ -771,6 +870,10 @@ static void update_timer_cb(lv_timer_t *t)
     {
         show_button();
     }
+    else if (page != NULL && page == direct_page)
+    {
+        show_direct();
+    }
 }
 
 static void on_navigate(void)
@@ -794,6 +897,10 @@ static bool build(ui_feature_t *feature)
     }
     add_status_page(feature);
     add_setup_page(feature);
+    if (direct_available())
+    {
+        add_direct_page(feature);
+    }
     add_button_page(feature);
     lv_timer_create(update_timer_cb, UPDATE_MS, NULL);
     return true;

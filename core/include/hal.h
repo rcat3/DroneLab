@@ -136,6 +136,26 @@ void rcat_hal_hotspot_stop(void);
 /* How many phones (or anything else) have joined the hotspot. */
 int rcat_hal_hotspot_clients(void);
 
+/*
+ * Direct radio: short broadcasts to other boards nearby, with no network
+ * (ESP-NOW on the ESP32 boards), for direct comms (see app/direct.h). It
+ * shares the WiFi radio, and keeps to the hotspot's channel, so the hotspot
+ * can run at the same time; joining a network on another channel (the voice
+ * lab) takes it off the others' channel while it lasts. Start returns false
+ * on boards without it.
+ */
+#define RCAT_HAL_DIRECT_MAX     250     // the longest broadcast
+bool rcat_hal_direct_start(void);
+void rcat_hal_direct_stop(void);
+
+/* Broadcast data to every board in range. False if it couldn't go. */
+bool rcat_hal_direct_send(const void *data, size_t len);
+
+/* Take the oldest broadcast heard (the board keeps a few dozen), and how
+ * strong it was, in dBm. Returns its length, or 0 if there isn't one. Safe
+ * from any one task. */
+size_t rcat_hal_direct_receive(void *data, size_t max, int8_t *rssi);
+
 /* A random number, as good as the board can make, for passwords. */
 uint32_t rcat_hal_random(void);
 
@@ -341,5 +361,8 @@ void rcat_hal_restart(void);
 bool rcat_hal_button_pressed(void);
 
 void rcat_hal_delay_ms(uint32_t ms);
+
+/* Milliseconds since the board started, from any task. Wraps after 49 days. */
+uint32_t rcat_hal_millis(void);
 
 #endif

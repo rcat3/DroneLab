@@ -33,7 +33,27 @@ class ServerSettings {
 class BoardCommSettings {
   final bool muteSpeaker;     // the speaker's off while it sends
   final int show;             // when it comes to the Comm screen: 1 sending, 2 hearing, 3 both
-  const BoardCommSettings(this.muteSpeaker, this.show);
+  final DirectSettings? direct;   // null on boards without direct comms
+  const BoardCommSettings(this.muteSpeaker, this.show, this.direct);
+}
+
+/// Direct comms on the board (core/app/direct.h).
+class DirectSettings {
+  final bool on;
+  final bool keyed;           // a group with a key; false for the open group
+  final String group;
+  final String name;          // what the other boards see it as
+  const DirectSettings(this.on, this.keyed, this.group, this.name);
+}
+
+/// A board heard over direct comms.
+class NearbyBoard {
+  final int id;
+  String name;
+  int rssi;
+  bool talking;
+  int seenMs;
+  NearbyBoard(this.id, this.name, this.rssi, this.talking, this.seenMs);
 }
 
 class CommController extends ChangeNotifier {
@@ -86,6 +106,18 @@ class CommController extends ChangeNotifier {
     avatar = a == null ? null : base64Decode(a);
     muted.addAll(p.getStringList('muted') ?? const []);
     channel = p.getString('channel');
+    directGroup = p.getString('directGroup') ?? '';
+    directPassphrase = p.getString('directPassphrase') ?? '';
+    _directSoundSub = board.directSounds.listen(_onDirectSound);
+    _directPeerSub = board.directPeers.listen(_onDirectPeer);
+    // Who's talking, kept up to date whether the voices come from the server
+    // or over direct comms
+    _talkingTimer ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      _updateTalking(now);
+      nearby.removeWhere((_, b) => now - b.seenMs > _nearbyFor);
+      _updateBoardScreen();   // and whether it's UDP, which changes by itself
+    });
     mixer.targetMs = bufferMs;
     board.addListener(_onBoardChanged);
     _soundSub = board.sounds.listen(_onBoardSound);
@@ -177,7 +209,13 @@ class CommController extends ChangeNotifier {
       if (a.status != 200) return;
       final v = jsonDecode(a.body) as Map<String, dynamic>;
       if (v['available'] != 1) return;
-      boardSettings = BoardCommSettings(v['mute'] == 1, (v['show'] as num?)?.toInt() ?? 0);
+      final d = v['direct'] as Map<String, dynamic>?;
+      boardSettings = BoardCommSettings(
+          v['mute'] == 1,
+          (v['show'] as num?)?.toInt() ?? 0,
+          d == null
+              ? null
+              : DirectSettings(d['on'] == 1, d['keyed'] == 1, d['group'] as String? ?? '', d['name'] as String? ?? ''));
       notifyListeners();
     } catch (_) {}
   }
@@ -189,6 +227,108 @@ class CommController extends ChangeNotifier {
         if (muteSpeaker != null) 'mute=${muteSpeaker ? 1 : 0}&',
         if (show != null) 'show=$show',
       ].join());
+
+  // ----- Direct comms -----
+
+  /// The group's name and passphrase, as typed here, kept to show again.
+  String directGroup = '';
+  String directPassphrase = '';
+
+  /// Boards heard over direct comms, by their id.
+  final Map<int, NearbyBoard> nearby = {};
+  static const _nearbyFor = 7000;
+
+  StreamSubscription<DirectSound>? _directSoundSub;
+  StreamSubscription<DirectPeer>? _directPeerSub;
+  final Map<int, (int, int)> _directSeq = {};     // sender: its last seq, and that counted on
+
+  /// Direct voice waits this much longer than the server's: a packet lost on
+  /// the way comes again with the next one or two, 20 or 40 ms later.
+  static const _directExtraMs = 40;
+
+  // How direct comms' voices are doing, in the log every couple of seconds
+  int _directLogMs = 0;
+  int _directPackets = 0;
+  static const _logDirectStats = false;   // true to see them in the log
+  void _logDirect(int now) {
+    if (!_logDirectStats) return;
+    _directPackets++;
+    if (now - _directLogMs < 2000) return;
+    _directLogMs = now;
+    for (final sp in mixer.speakers.values.where((sp) => isDirectSession(sp.session))) {
+      debugPrint('direct ${talkerName(sp.session)}: ${sp.packets} packets, ${sp.lost} lost, '
+          '${sp.underruns} underruns, ${sp.concealed * 10} ms made up, ${sp.dropped * 1000 ~/ sp.sampleRate} ms dropped, '
+          '${sp.queued * 1000 ~/ sp.sampleRate} ms queued ($_directPackets in)');
+    }
+    _directPackets = 0;
+  }
+
+  /// A direct sender's voice, kept apart from the server's sessions.
+  static int directSession(int sender) => 0x40000000 | (sender & 0x3FFFFFFF);
+  static bool isDirectSession(int session) => session & 0x40000000 != 0;
+
+  Future<void> setDirect(bool on) => _boardSettingsRequest('POST', '?direct=${on ? 1 : 0}');
+
+  /// Join a group: everyone in it types the same name and passphrase. An
+  /// empty passphrase goes back to the open group, which any board hears.
+  Future<void> setDirectGroup(String group, String passphrase) async {
+    directGroup = group.trim();
+    directPassphrase = passphrase;
+    await _prefs?.setString('directGroup', directGroup);
+    await _prefs?.setString('directPassphrase', directPassphrase);
+    final open = directPassphrase.isEmpty;
+    final key = open ? '' : directKey(directGroup, directPassphrase);
+    String q(String v) => Uri.encodeQueryComponent(v);
+    await _boardSettingsRequest(
+        'POST', '?key=$key&group=${q(open ? '' : directGroup)}&name=${q(server.username)}');
+  }
+
+  void _onDirectPeer(DirectPeer p) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final b = nearby[p.id];
+    if (b == null) {
+      nearby[p.id] = NearbyBoard(p.id, p.name, p.rssi, p.talking, now);
+    } else {
+      b
+        ..name = p.name
+        ..rssi = p.rssi
+        ..talking = p.talking
+        ..seenMs = now;
+    }
+    notifyListeners();
+  }
+
+  void _onDirectSound(DirectSound d) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final name = nearby[d.sender]?.name;
+    if (name != null && muted.contains(name)) return;
+    // Its seq wraps at 65536: count on past that, in the server's 10 ms frames
+    final prev = _directSeq[d.sender];
+    int counted;
+    if (prev == null || d.first) {
+      counted = d.seq;
+    } else {
+      var delta = (d.seq - prev.$1) & 0xFFFF;
+      if (delta >= 0x8000) delta -= 0x10000;
+      counted = prev.$2 + delta;
+    }
+    _directSeq[d.sender] = (d.seq, counted);
+    _audio.start();
+    mixer.receive(directSession(d.sender), counted * 2, d.opus, d.last, now, extraMs: _directExtraMs);
+    _logDirect(now);
+    _heard(directSession(d.sender), d.last);
+  }
+
+  /// A talker's name, whether they're on the server or heard directly.
+  String talkerName(int session) {
+    if (isDirectSession(session)) {
+      for (final b in nearby.values) {
+        if (directSession(b.id) == session) return b.name;
+      }
+      return 'Nearby';
+    }
+    return mumble?.users[session]?.name ?? '?';
+  }
 
   // ----- Channels -----
 
@@ -271,8 +411,10 @@ class CommController extends ChangeNotifier {
                 : ServerLink.off;
     final connected = link == ServerLink.connected;
     final talkers = [
-      if (connected)
-        for (final s in talking)
+      for (final s in talking)
+        if (isDirectSession(s))
+          Talker(talkerName(s), _boardAvatars.slotFor(_textureOf(talkerName(s)), soon: true))
+        else if (connected)
           Talker(m!.users[s]?.name ?? '?', _boardAvatars.slotFor(m.users[s]?.texture, soon: true))
     ];
     final server = serverMessage(link,
@@ -294,6 +436,16 @@ class CommController extends ChangeNotifier {
       _sentHearing = hearing;
       board.send(hearing);
     }
+  }
+
+  /// A name's Mumble avatar, for someone heard directly.
+  Uint8List? _textureOf(String name) {
+    final m = mumble;
+    if (m == null) return null;
+    for (final u in m.users.values) {
+      if (u.name == name) return u.texture;
+    }
+    return null;
   }
 
   /// Someone's voice came: they're talking, from now if they weren't.
@@ -429,10 +581,7 @@ class CommController extends ChangeNotifier {
     try {
       await m.connect(checkCertificate: (fp) => _checkPin(fp));
       await _audio.start();
-      _talkingTimer ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
-        _updateTalking(DateTime.now().millisecondsSinceEpoch);
-        _updateBoardScreen();   // and whether it's UDP, which changes by itself
-      });
+
     } on MumbleException catch (e) {
       serverError = e.message;
       _scheduleReconnect();
@@ -465,7 +614,7 @@ class CommController extends ChangeNotifier {
     _joinPickedChannel(m);
     // Forget those who left
     for (final session in mixer.speakers.keys.toList()) {
-      if (!m.users.containsKey(session)) mixer.remove(session);
+      if (!isDirectSession(session) && !m.users.containsKey(session)) mixer.remove(session);
     }
     _updateHeadset();
     _updateBoardScreen();
@@ -497,14 +646,14 @@ class CommController extends ChangeNotifier {
     _reconnect?.cancel();
     _closeMumble();
     _updateHeadset();
-    _talkingTimer?.cancel();
-    _talkingTimer = null;
     talking = {};
     _heardAt.clear();
     _updateBoardScreen();
-    await _audio.stop();
+    // Direct comms can carry on without the server
+    final direct = boardSettings?.direct?.on ?? false;
+    if (!direct) await _audio.stop();
     for (final session in mixer.speakers.keys.toList()) {
-      mixer.remove(session);
+      if (!isDirectSession(session)) mixer.remove(session);
     }
     await _updateBackground();
     notifyListeners();
@@ -526,6 +675,9 @@ class CommController extends ChangeNotifier {
   @override
   void dispose() {
     _soundSub?.cancel();
+    _directSoundSub?.cancel();
+    _directPeerSub?.cancel();
+    _talkingTimer?.cancel();
     disconnectServer();
     board.disconnect();
     super.dispose();

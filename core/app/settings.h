@@ -10,6 +10,8 @@
 #define SETTINGS_REMOTE_LEN         16
 #define SETTINGS_CURVE_POINTS       21      // 100%, 95% ... 0%
 #define SETTINGS_BUTTON_NAME_LEN    20
+#define SETTINGS_DIRECT_KEY_LEN     16
+#define SETTINGS_DIRECT_NAME_LEN    16
 
 /* Startup image names that select the blank (black) tile and the Visualizer.
  * Firmware from before the Visualizer saved it as "kitt". */
@@ -49,6 +51,11 @@ typedef struct
     char button_name[SETTINGS_BUTTON_NAME_LEN];
     uint8_t comm_mute_speaker;              // 1 to silence the speaker while the comm channel sends
     uint8_t comm_auto_show;                 // SETTINGS_SHOW_*: when to switch to the comm status screen
+    uint8_t direct_on;                      // 1 for direct comms (see app/direct.h)
+    uint8_t direct_keyed;                   // 1 if direct_key is a group's, 0 for the open group
+    uint8_t direct_key[SETTINGS_DIRECT_KEY_LEN];
+    char direct_group[SETTINGS_DIRECT_NAME_LEN];    // the group's name, to show
+    char direct_name[SETTINGS_DIRECT_NAME_LEN];     // what the others see this board as; empty for its own name
 } settings_t;
 
 /* comm_auto_show: switch to the comm channel's status screen while it's
@@ -81,6 +88,10 @@ void settings_set_terminal_size(uint8_t size);
 void settings_set_visualizer(uint8_t index);
 void settings_set_comm(uint8_t on, uint8_t mode);
 void settings_set_comm_options(uint8_t mute_speaker, uint8_t auto_show);
+void settings_set_direct(uint8_t on);
+/* Direct comms' group: its key (NULL for the open group) and name, and this
+ * board's name in it. */
+void settings_set_direct_group(const uint8_t *key, const char *group, const char *name);
 /* The talk button, or none with addr NULL. */
 void settings_set_button(const uint8_t *addr, uint8_t addr_type, const char *name);
 /* Keep a learned battery curve (see app/battery_log.h), or forget it with runs = 0. */

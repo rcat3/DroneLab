@@ -1,14 +1,24 @@
 /*
  * WiFi for the HAL, shared by the ESP32 boards: joining a network for the
- * voice lab, and the hotspot for the phone remote. See hal.h.
+ * voice lab, the hotspot for the phone remote, and ESP-NOW broadcasts for
+ * direct comms. See hal.h.
+ *
+ * Direct comms can run alongside either of the others: with the hotspot, the
+ * radio runs both an access point and a station, on the hotspot's channel,
+ * which is also direct comms' own channel when nothing else is running.
  */
 
+#include <stdlib.h>
 #include <string.h>
 
+#include "freertos/FreeRTOS.h"
+
+#include "esp_coexist.h"
 #include "esp_event.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_now.h"
 #include "esp_random.h"
 #include "esp_wifi.h"
 
@@ -30,6 +40,24 @@ static volatile bool wifi_wanted;
 static volatile bool wifi_connected;
 static esp_ip4_addr_t wifi_ip;
 static volatile bool hotspot_on;
+
+// Direct comms: what's heard, oldest first, under direct_lock
+#define DIRECT_CHANNEL      HOTSPOT_CHANNEL
+#define DIRECT_QUEUE        32
+typedef struct
+{
+    uint8_t len;
+    int8_t rssi;
+    uint8_t data[RCAT_HAL_DIRECT_MAX];
+} direct_msg_t;
+static volatile bool direct_on;
+static bool espnow_ready;
+static direct_msg_t *direct_queue;      // in PSRAM: internal RAM is short
+static size_t direct_head, direct_count;
+static portMUX_TYPE direct_lock = portMUX_INITIALIZER_UNLOCKED;
+static const uint8_t broadcast_mac[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+
+static void direct_resume(void);
 
 static void wifi_event_cb(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
@@ -168,6 +196,7 @@ void rcat_hal_wifi_disconnect(void)
         return;
     }
     wifi_stop();
+    direct_resume();
     ESP_LOGI(TAG, "WiFi off");
 }
 
@@ -218,7 +247,7 @@ bool rcat_hal_hotspot_start(const char *ssid, const char *password)
                                strlen(portal_uri));
         esp_netif_dhcps_start(ap_netif);
     }
-    esp_wifi_set_mode(WIFI_MODE_AP);
+    esp_wifi_set_mode(direct_on ? WIFI_MODE_APSTA : WIFI_MODE_AP);
 
     wifi_config_t config = { 0 };
     size_t ssid_len = strnlen(ssid, sizeof(config.ap.ssid));
@@ -242,6 +271,10 @@ bool rcat_hal_hotspot_start(const char *ssid, const char *password)
         return false;
     }
     hotspot_on = true;
+    if (direct_on)
+    {
+        esp_wifi_set_ps(WIFI_PS_NONE);
+    }
     ESP_LOGI(TAG, "Hotspot %s on. Free internal RAM: %u bytes (largest block %u)", ssid,
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
@@ -255,6 +288,7 @@ void rcat_hal_hotspot_stop(void)
         return;
     }
     wifi_stop();
+    direct_resume();
     ESP_LOGI(TAG, "Hotspot off");
 }
 
@@ -272,4 +306,157 @@ uint32_t rcat_hal_random(void)
 {
     // Truly random while the radio's on, which it is for the hotspot
     return esp_random();
+}
+
+/********************************************************************************
+function:	Direct comms: ESP-NOW broadcasts
+********************************************************************************/
+
+static void direct_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len)
+{
+    if (len <= 0 || len > RCAT_HAL_DIRECT_MAX || direct_queue == NULL)
+    {
+        return;
+    }
+    taskENTER_CRITICAL(&direct_lock);
+    size_t slot = (direct_head + direct_count) % DIRECT_QUEUE;
+    if (direct_count == DIRECT_QUEUE)
+    {
+        direct_head = (direct_head + 1) % DIRECT_QUEUE;     // drop the oldest
+    }
+    else
+    {
+        direct_count++;
+    }
+    direct_queue[slot].len = (uint8_t)len;
+    direct_queue[slot].rssi = info->rx_ctrl != NULL ? (int8_t)info->rx_ctrl->rssi : 0;
+    memcpy(direct_queue[slot].data, data, (size_t)len);
+    taskEXIT_CRITICAL(&direct_lock);
+}
+
+/* Have the radio listening on direct comms' channel, whatever else it's
+ * doing: after the hotspot or the voice lab's network stops, or as direct
+ * comms starts. */
+static void direct_resume(void)
+{
+    if (!direct_on)
+    {
+        return;
+    }
+    wifi_mode_t mode = WIFI_MODE_NULL;
+    esp_wifi_get_mode(&mode);
+    if (hotspot_on)
+    {
+        if (mode != WIFI_MODE_APSTA)
+        {
+            esp_wifi_set_mode(WIFI_MODE_APSTA);     // the station's interface carries ESP-NOW
+        }
+    }
+    else if (!wifi_wanted)
+    {
+        // Nothing else running: a station that joins nothing, on our channel
+        esp_wifi_set_mode(WIFI_MODE_STA);
+        esp_wifi_start();
+        esp_wifi_set_channel(DIRECT_CHANNEL, WIFI_SECOND_CHAN_NONE);
+    }
+    // Broadcasts aren't heard while the radio dozes
+    esp_wifi_set_ps(WIFI_PS_NONE);
+}
+
+bool rcat_hal_direct_start(void)
+{
+    if (direct_on)
+    {
+        return true;
+    }
+    if (!wifi_setup())
+    {
+        return false;
+    }
+    if (direct_queue == NULL)
+    {
+        direct_queue = heap_caps_malloc(DIRECT_QUEUE * sizeof(direct_msg_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (direct_queue == NULL)
+        {
+            direct_queue = malloc(DIRECT_QUEUE * sizeof(direct_msg_t));
+        }
+        if (direct_queue == NULL)
+        {
+            return false;
+        }
+    }
+    direct_on = true;
+    direct_resume();
+    // The radio's shared with Bluetooth: favour WiFi, as a broadcast that's
+    // missed is gone, where Bluetooth tries again
+    esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+    if (!espnow_ready)
+    {
+        esp_err_t err = esp_now_init();
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "ESP-NOW didn't start (%s)", esp_err_to_name(err));
+            direct_on = false;
+            return false;
+        }
+        esp_now_register_recv_cb(direct_recv_cb);
+        esp_now_peer_info_t peer = { .channel = 0, .ifidx = WIFI_IF_STA, .encrypt = false };
+        memcpy(peer.peer_addr, broadcast_mac, sizeof(broadcast_mac));
+        esp_now_add_peer(&peer);
+        espnow_ready = true;
+    }
+    ESP_LOGI(TAG, "Direct comms on, channel %d. Free internal RAM: %u bytes", DIRECT_CHANNEL,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    return true;
+}
+
+void rcat_hal_direct_stop(void)
+{
+    if (!direct_on)
+    {
+        return;
+    }
+    direct_on = false;
+    esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);
+    taskENTER_CRITICAL(&direct_lock);
+    direct_count = 0;
+    taskEXIT_CRITICAL(&direct_lock);
+    if (hotspot_on)
+    {
+        esp_wifi_set_mode(WIFI_MODE_AP);
+    }
+    else if (!wifi_wanted)
+    {
+        esp_wifi_stop();    // nothing else needs the radio
+    }
+    ESP_LOGI(TAG, "Direct comms off");
+}
+
+bool rcat_hal_direct_send(const void *data, size_t len)
+{
+    if (!direct_on || !espnow_ready || len == 0 || len > RCAT_HAL_DIRECT_MAX)
+    {
+        return false;
+    }
+    return esp_now_send(broadcast_mac, data, len) == ESP_OK;
+}
+
+size_t rcat_hal_direct_receive(void *data, size_t max, int8_t *rssi)
+{
+    size_t len = 0;
+    taskENTER_CRITICAL(&direct_lock);
+    if (direct_count > 0 && direct_queue != NULL)
+    {
+        direct_msg_t *m = &direct_queue[direct_head];
+        len = m->len < max ? m->len : max;
+        memcpy(data, m->data, len);
+        if (rssi != NULL)
+        {
+            *rssi = m->rssi;
+        }
+        direct_head = (direct_head + 1) % DIRECT_QUEUE;
+        direct_count--;
+    }
+    taskEXIT_CRITICAL(&direct_lock);
+    return len;
 }

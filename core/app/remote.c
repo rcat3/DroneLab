@@ -54,6 +54,7 @@
 
 #include "app/battery.h"
 #include "app/comm.h"
+#include "app/direct.h"
 #include "app/lovense.h"
 #include "app/message.h"
 #include "app/patterns.h"
@@ -489,8 +490,17 @@ static void write_state(json_t *j)
 static void write_comm(json_t *j)
 {
     const settings_t *s = settings_get();
-    jprintf(j, "{\"available\":%d,\"mode\":%d,\"mute\":%u,\"show\":%u}", comm_available() ? 1 : 0,
+    jprintf(j, "{\"available\":%d,\"mode\":%d,\"mute\":%u,\"show\":%u", comm_available() ? 1 : 0,
             (int)comm_mode(), s->comm_mute_speaker, s->comm_auto_show);
+    if (direct_available())
+    {
+        jprintf(j, ",\"direct\":{\"on\":%d,\"keyed\":%u,\"group\":", direct_running() ? 1 : 0, s->direct_keyed);
+        jstring(j, direct_group_name());
+        jprintf(j, ",\"name\":");
+        jstring(j, direct_own_name());
+        jprintf(j, "}");
+    }
+    jprintf(j, "}");
 }
 
 static void write_info(json_t *j)
@@ -615,6 +625,41 @@ static int connected_count(void)
     return n;
 }
 
+/* The value of name in a query string, %-decoded into out (cap bytes), or
+ * false if it isn't there. */
+static bool query_str(const char *query, const char *name, char *out, size_t cap)
+{
+    size_t n = strlen(name);
+    for (const char *q = query; q != NULL && *q != '\0';)
+    {
+        if (strncmp(q, name, n) == 0 && q[n] == '=')
+        {
+            size_t len = 0;
+            for (const char *v = q + n + 1; *v != '\0' && *v != '&' && len + 1 < cap; v++)
+            {
+                if (*v == '%' && v[1] != '\0' && v[2] != '\0')
+                {
+                    char hex[3] = { v[1], v[2], '\0' };
+                    out[len++] = (char)strtol(hex, NULL, 16);
+                    v += 2;
+                }
+                else
+                {
+                    out[len++] = *v == '+' ? ' ' : *v;
+                }
+            }
+            out[len] = '\0';
+            return true;
+        }
+        q = strchr(q, '&');
+        if (q != NULL)
+        {
+            q++;
+        }
+    }
+    return false;
+}
+
 /* Change them: m the mode, mute 0 or 1, show SETTINGS_SHOW_* bits. */
 static void set_comm(const char *query)
 {
@@ -629,6 +674,40 @@ static void set_comm(const char *query)
     if (mute != s->comm_mute_speaker || show != s->comm_auto_show)
     {
         settings_set_comm_options(mute != 0, (uint8_t)show);
+    }
+
+    // Direct comms: direct=0 or 1, and its group: key=32 hex digits (or
+    // empty for the open group), group=its name, name=this board's
+    int direct = query_int(query, "direct", -1);
+    if (direct == 1)
+    {
+        direct_start();
+    }
+    else if (direct == 0)
+    {
+        direct_stop();
+    }
+    char hex[40], group[SETTINGS_DIRECT_NAME_LEN], name[SETTINGS_DIRECT_NAME_LEN];
+    if (query_str(query, "key", hex, sizeof(hex)))
+    {
+        uint8_t key[SETTINGS_DIRECT_KEY_LEN];
+        bool keyed = strlen(hex) == 2 * sizeof(key);
+        for (size_t i = 0; keyed && i < sizeof(key); i++)
+        {
+            char byte[3] = { hex[2 * i], hex[2 * i + 1], '\0' };
+            char *end;
+            key[i] = (uint8_t)strtol(byte, &end, 16);
+            keyed = *end == '\0';
+        }
+        if (!query_str(query, "group", group, sizeof(group)))
+        {
+            group[0] = '\0';
+        }
+        if (!query_str(query, "name", name, sizeof(name)))
+        {
+            name[0] = '\0';
+        }
+        direct_set_group(keyed ? key : NULL, group, name);
     }
 }
 

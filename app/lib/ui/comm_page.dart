@@ -36,6 +36,10 @@ class CommPage extends StatelessWidget {
             _TalkButton(comm: comm),
             const SizedBox(height: 12),
             _PeopleCard(comm: comm),
+            if (comm.board.state == BoardState.connected && comm.boardSettings?.direct != null) ...[
+              const SizedBox(height: 12),
+              _DirectCard(comm: comm),
+            ],
             if (comm.texts.isNotEmpty) ...[
               const SizedBox(height: 12),
               _MessagesCard(comm: comm),
@@ -409,6 +413,79 @@ class _PeopleCard extends StatelessWidget {
       ),
     );
     if (picked != null && picked != m.myChannel) await comm.joinChannel(picked);
+  }
+}
+
+/// Direct comms: board to board over the radio, for where there's no signal.
+class _DirectCard extends StatelessWidget {
+  final CommController comm;
+  const _DirectCard({required this.comm});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = comm.boardSettings!.direct!;
+    final boards = comm.nearby.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi));
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            secondary: const Icon(Icons.settings_input_antenna),
+            title: Text('Direct comms', style: Theme.of(context).textTheme.titleMedium),
+            subtitle: const Text('Board to board over the radio, for where there\'s no signal. '
+                'Works with or without the server.'),
+            value: d.on,
+            onChanged: comm.setDirect,
+          ),
+          ListTile(
+            leading: Icon(d.keyed ? Icons.lock : Icons.lock_open),
+            title: Text(d.keyed ? 'Group: ${d.group}' : 'The open group'),
+            subtitle: Text(d.keyed
+                ? 'Only boards given the same group name and passphrase hear it. Seen as ${d.name}'
+                : 'Any board nearby can hear it. Set a group to keep it to yours. Seen as ${d.name}'),
+            trailing: TextButton(onPressed: () => _setGroup(context), child: const Text('Set group')),
+          ),
+          if (d.on && boards.isEmpty) const ListTile(title: Text('No boards heard yet')),
+          for (final b in boards)
+            ListTile(
+              leading: Icon(b.talking ? Icons.record_voice_over : _signal(b.rssi)),
+              title: Text(b.name),
+              subtitle: Text('${b.rssi} dBm${b.talking ? ', talking' : ''}'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static IconData _signal(int rssi) => rssi > -60
+      ? Icons.signal_cellular_4_bar
+      : rssi > -75
+          ? Icons.network_cell
+          : Icons.signal_cellular_0_bar;
+
+  Future<void> _setGroup(BuildContext context) async {
+    final group = TextEditingController(text: comm.directGroup);
+    final passphrase = TextEditingController(text: comm.directPassphrase);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Direct comms group'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Everyone in the group types the same name and passphrase. '
+                'Leave the passphrase empty for the open group.'),
+            TextField(controller: group, decoration: const InputDecoration(labelText: 'Group name'), maxLength: 15),
+            TextField(controller: passphrase, decoration: const InputDecoration(labelText: 'Passphrase')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Set')),
+        ],
+      ),
+    );
+    if (ok == true) await comm.setDirectGroup(group.text, passphrase.text);
   }
 }
 

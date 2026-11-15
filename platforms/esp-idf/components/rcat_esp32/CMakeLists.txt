@@ -6,7 +6,7 @@ idf_component_register(SRCS hal_common.c hal_imu.c hal_settings.c hal_update.c h
                        INCLUDE_DIRS include
                        PRIV_INCLUDE_DIRS ../../../../core/include
                        REQUIRES lvgl esp_driver_gpio esp_driver_i2c esp_driver_sdmmc sdmmc fatfs nvs_flash esp_partition app_update
-                                esp_wifi esp_netif esp_event bt)
+                                esp_wifi esp_netif esp_event esp_coex bt)
 
 # LVGL's memory functions are in lvgl_mem.c. Only LVGL calls them, and LVGL is
 # linked after this component, so ask for them up front or the linker passes

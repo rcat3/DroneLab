@@ -25,6 +25,7 @@
 
 #include "opus.h"
 
+#include "app/direct.h"
 #include "app/remote.h"
 #include "app/settings.h"
 #include "app/talk_button.h"
@@ -71,6 +72,9 @@
 #define MSG_SERVER          0x04
 #define MSG_HEARING         0x05
 #define MSG_AVATAR          0x06    // both ways: a piece of it, and the ack
+#define MSG_DIRECT_SOUND    0x07    // to the phone: what's heard over direct comms
+#define MSG_DIRECT_PEER     0x08    // to the phone: a board that's about
+#define DIRECT_PEERS_EVERY_MS 2000
 #define AVATAR_FIRST        0x01
 #define AVATAR_LAST         0x02
 #define AVATAR_ACK          0x04
@@ -137,9 +141,18 @@ static comm_server_t server_state;  // what the app says about the server
 static bool server_udp;
 static int server_others;
 static char server_channel[COMM_NAME_MAX];
+// Who's talking: as the phone says, and with those heard over direct comms
+// that it hasn't named, which is what's shown
+static int phone_hearing_count;
+static char phone_hearing[COMM_HEARING_MAX][COMM_NAME_MAX];
+static uint8_t phone_hearing_avatar[COMM_HEARING_MAX];
 static int hearing_count;
 static char hearing[COMM_HEARING_MAX][COMM_NAME_MAX];
 static uint8_t hearing_avatar[COMM_HEARING_MAX];
+static bool audio_on;               // the voice is listened to, and the talk button used
+static uint32_t direct_peers_ms;
+
+static void direct_voice(uint32_t sender, uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len, void *arg);
 static uint8_t own_avatar = COMM_AVATAR_NONE;
 static int avatar_size;
 static uint16_t *avatars[COMM_AVATAR_SLOTS];        // allocated as they come; big enough for PSRAM
@@ -308,8 +321,10 @@ static void encoder_task(void *arg)
 
     for (;;)
     {
-        bool now_connected = running && rcat_hal_ble_peer_connected();
-        if (!now_connected)
+        // Sending to the phone, over direct comms, or both
+        bool phone = running && rcat_hal_ble_peer_connected();
+        bool direct = direct_running();
+        if (!phone && !direct)
         {
             connected = false;
             sending = false;
@@ -317,11 +332,11 @@ static void encoder_task(void *arg)
             rcat_hal_delay_ms(TASK_IDLE_MS);
             continue;
         }
-        if (!connected)
+        if (phone && !connected)
         {
-            connected = true;
             last_status = 0xFF;     // tell the new phone how things are
         }
+        connected = phone;
 
         uint32_t w = __atomic_load_n(&ring_write, __ATOMIC_ACQUIRE);
         bool talk = talking();
@@ -361,7 +376,7 @@ static void encoder_task(void *arg)
             }
             read += FRAME;
 
-            size_t room = rcat_hal_ble_peer_max_send();
+            size_t room = phone ? rcat_hal_ble_peer_max_send() : HEADER_BYTES + MAX_OPUS_BYTES;
             int max_bytes = (int)(room > HEADER_BYTES ? room - HEADER_BYTES : 0);
             if (max_bytes > MAX_OPUS_BYTES)
             {
@@ -389,7 +404,11 @@ static void encoder_task(void *arg)
             packet[3] = first ? FLAG_FIRST : 0;
             seq++;
             first = false;
-            if (!send_retrying(packet, HEADER_BYTES + n))
+            if (direct)
+            {
+                direct_send_voice((uint16_t)(seq - 1), packet[3], packet + HEADER_BYTES, (size_t)n);
+            }
+            if (phone && !send_retrying(packet, HEADER_BYTES + n))
             {
 #if COMM_DEBUG
                 debug_dropped++;
@@ -407,7 +426,14 @@ static void encoder_task(void *arg)
             packet[2] = seq >> 8;
             packet[3] = FLAG_LAST | (first ? FLAG_FIRST : 0);
             seq++;
-            send_retrying(packet, HEADER_BYTES);
+            if (direct)
+            {
+                direct_send_voice((uint16_t)(seq - 1), packet[3], NULL, 0);
+            }
+            if (phone)
+            {
+                send_retrying(packet, HEADER_BYTES);
+            }
             sending = false;
             releasing = false;
         }
@@ -415,7 +441,7 @@ static void encoder_task(void *arg)
         // Status, when it changes and every few seconds
         status_ms += TASK_BUSY_MS;
         uint8_t now_status = ((uint8_t)mode << 4) | status_flags();
-        if (now_status != last_status || status_ms >= STATUS_EVERY_MS)
+        if (phone && (now_status != last_status || status_ms >= STATUS_EVERY_MS))
         {
             last_status = now_status;
             status_ms = 0;
@@ -502,6 +528,7 @@ void comm_init(void)
         return;
     }
     available = true;
+    direct_set_voice_cb(direct_voice, NULL);
     if (s->comm_on)
     {
         comm_start();
@@ -525,9 +552,7 @@ bool comm_start(void)
         {
             return false;
         }
-        voice_fx_set_listener(voice_cb, NULL);
         running = true;
-        talk_button_start();
     }
     settings_set_comm(1, mode);
     return true;
@@ -538,8 +563,6 @@ void comm_stop(void)
     if (running)
     {
         running = false;
-        talk_button_stop();
-        voice_fx_set_listener(NULL, NULL);
         rcat_hal_ble_peer_stop();
     }
     phone_talk = false;
@@ -868,9 +891,9 @@ static void receive_server(const uint8_t *msg, size_t len)
 
 static void receive_hearing(const uint8_t *msg, size_t len)
 {
-    hearing_count = 0;
+    phone_hearing_count = 0;
     size_t at = 1;
-    while (at + 1 < len && hearing_count < COMM_HEARING_MAX)
+    while (at + 1 < len && phone_hearing_count < COMM_HEARING_MAX)
     {
         uint8_t slot = msg[at++];
         size_t end = at;
@@ -880,8 +903,8 @@ static void receive_hearing(const uint8_t *msg, size_t len)
         }
         if (end > at)
         {
-            hearing_avatar[hearing_count] = slot;
-            copy_name(hearing[hearing_count++], msg + at, end - at);
+            phone_hearing_avatar[phone_hearing_count] = slot;
+            copy_name(phone_hearing[phone_hearing_count++], msg + at, end - at);
         }
         at = end + 1;
     }
@@ -940,7 +963,7 @@ static void forget_phone(void)
     server_udp = false;
     server_others = 0;
     server_channel[0] = '\0';
-    hearing_count = 0;
+    phone_hearing_count = 0;
     own_avatar = COMM_AVATAR_NONE;
     // The pictures are kept, but a new phone fills the slots afresh
     for (int i = 0; i < COMM_AVATAR_SLOTS; i++)
@@ -951,6 +974,104 @@ static void forget_phone(void)
             avatar_changes++;
         }
     }
+}
+
+/* Listen to the voice, and use the talk button, while the phone's link or
+ * direct comms is on. */
+static void update_audio(void)
+{
+    bool on = running || direct_running();
+    if (on == audio_on)
+    {
+        return;
+    }
+    audio_on = on;
+    voice_fx_set_listener(on ? voice_cb : NULL, NULL);
+    if (on)
+    {
+        talk_button_start();
+    }
+    else
+    {
+        talk_button_stop();
+        screen_talk = false;
+    }
+}
+
+/* What's shown: who the phone says is talking, then those heard over direct
+ * comms that it hasn't named. */
+static void merge_hearing(void)
+{
+    hearing_count = 0;
+    for (int i = 0; i < phone_hearing_count; i++)
+    {
+        memcpy(hearing[hearing_count], phone_hearing[i], COMM_NAME_MAX);
+        hearing_avatar[hearing_count++] = phone_hearing_avatar[i];
+    }
+    if (!direct_running())
+    {
+        return;
+    }
+    direct_peer_t peers[DIRECT_PEERS_MAX];
+    int n = direct_peers(peers, DIRECT_PEERS_MAX);
+    for (int i = 0; i < n && hearing_count < COMM_HEARING_MAX; i++)
+    {
+        bool named = false;
+        for (int k = 0; k < hearing_count && !named; k++)
+        {
+            named = strcmp(hearing[k], peers[i].name) == 0;
+        }
+        if (peers[i].talking && !named)
+        {
+            copy_name(hearing[hearing_count], (const uint8_t *)peers[i].name, strlen(peers[i].name));
+            hearing_avatar[hearing_count++] = COMM_AVATAR_NONE;
+        }
+    }
+}
+
+/* Tell the phone who's about over direct comms, every couple of seconds. */
+static void send_direct_peers(uint32_t now_ms)
+{
+    if (!direct_running() || now_ms - direct_peers_ms < DIRECT_PEERS_EVERY_MS)
+    {
+        return;
+    }
+    direct_peers_ms = now_ms;
+    direct_peer_t peers[DIRECT_PEERS_MAX];
+    int n = direct_peers(peers, DIRECT_PEERS_MAX);
+    for (int i = 0; i < n; i++)
+    {
+        uint8_t msg[7 + DIRECT_NAME_MAX];
+        size_t len = strlen(peers[i].name);
+        msg[0] = MSG_DIRECT_PEER;
+        memcpy(msg + 1, &peers[i].id, 4);
+        msg[5] = (uint8_t)peers[i].rssi;
+        msg[6] = peers[i].talking ? 1 : 0;
+        memcpy(msg + 7, peers[i].name, len);
+        rcat_hal_ble_peer_send(msg, 7 + len);
+    }
+}
+
+/* What's heard over direct comms goes on to the phone, to play. On direct
+ * comms' task. */
+static void direct_voice(uint32_t sender, uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len, void *arg)
+{
+    if (!running || !rcat_hal_ble_peer_connected())
+    {
+        return;
+    }
+    uint8_t msg[8 + MAX_OPUS_BYTES];
+    if (len > MAX_OPUS_BYTES)
+    {
+        return;
+    }
+    msg[0] = MSG_DIRECT_SOUND;
+    memcpy(msg + 1, &sender, 4);
+    msg[5] = (uint8_t)seq;
+    msg[6] = (uint8_t)(seq >> 8);
+    msg[7] = flags;
+    memcpy(msg + 8, opus, len);
+    send_retrying(msg, 8 + len);
 }
 
 void comm_allow_pairing(bool allow, uint32_t now_ms)
@@ -989,14 +1110,11 @@ void comm_poll(uint32_t now_ms)
         speaker_muted = mute;
         speaker_set_muted(mute);
     }
-    if (!running)
+    update_audio();
+    if (!running || !rcat_hal_ble_peer_connected())
     {
         forget_phone();
-        return;
-    }
-    if (!rcat_hal_ble_peer_connected())
-    {
-        forget_phone();
+        merge_hearing();
         return;
     }
     uint8_t msg[RCAT_HAL_BLE_PEER_MSG_MAX];
@@ -1028,6 +1146,8 @@ void comm_poll(uint32_t now_ms)
             receive_avatar(msg, len);
         }
     }
+    merge_hearing();
+    send_direct_peers(now_ms);
     send_answer();
 }
 
