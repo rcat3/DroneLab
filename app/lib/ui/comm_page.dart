@@ -188,6 +188,14 @@ class _BoardCard extends StatelessWidget {
                 Text('Talk button connected'),
               ]),
             ],
+            if (b.state == BoardState.connected && comm.mumble?.state == MumbleState.connected) ...[
+              const SizedBox(height: 4),
+              Text(
+                  comm.headsetTalking
+                      ? "Talking from the headphones' button: press it again to stop"
+                      : "Or press the headphones' play/pause button to start talking, and again to stop",
+                  style: Theme.of(context).textTheme.bodySmall),
+            ],
             if (b.state == BoardState.connected) ...[
               const SizedBox(height: 12),
               SegmentedButton<BoardMode>(

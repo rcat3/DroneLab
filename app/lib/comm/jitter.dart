@@ -159,6 +159,31 @@ class Mixer {
   final Map<int, Speaker> speakers = {};
   double volume = 1.0;
 
+  // Tones for the wearer, like the start and stop of talking, played over
+  // whatever's playing
+  final List<Int16List> _tones = [];
+  int _toneAt = 0;
+
+  void playTone(Int16List samples) => _tones.add(samples);
+
+  /// Two short notes, rising or falling, faded at their ends so they don't
+  /// click.
+  Int16List chirp({required bool rising, double level = 0.25}) {
+    const noteMs = 70;
+    final n = sampleRate * noteMs ~/ 1000;
+    final fade = sampleRate * 5 ~/ 1000;
+    final notes = rising ? const [660.0, 990.0] : const [990.0, 660.0];
+    final out = Int16List(n * notes.length);
+    for (var k = 0; k < notes.length; k++) {
+      for (var i = 0; i < n; i++) {
+        final edge = math.min(i, n - 1 - i);
+        final env = edge >= fade ? 1.0 : edge / fade;
+        out[k * n + i] = (math.sin(2 * math.pi * notes[k] * i / sampleRate) * env * level * 32767).round();
+      }
+    }
+    return out;
+  }
+
   Mixer({required this.sampleRate, required this.newDecoder, this.targetMs = 60});
 
   void receive(int session, int seq, Uint8List opus, bool last, int nowMs) {
@@ -175,6 +200,21 @@ class Mixer {
     var any = false;
     for (final s in speakers.values) {
       if (s.mixInto(sum, nowMs)) any = true;
+    }
+    var i = 0;
+    while (i < count && _tones.isNotEmpty) {
+      final tone = _tones.first;
+      final n = math.min(count - i, tone.length - _toneAt);
+      for (var k = 0; k < n; k++) {
+        sum[i + k] += tone[_toneAt + k];
+      }
+      i += n;
+      _toneAt += n;
+      any = true;
+      if (_toneAt == tone.length) {
+        _tones.removeAt(0);
+        _toneAt = 0;
+      }
     }
     final out = Int16List(count);
     if (!any) return out;

@@ -14,6 +14,7 @@ import 'background.dart';
 import 'board_link.dart';
 import 'board_protocol.dart';
 import 'jitter.dart';
+import 'media_buttons.dart';
 import 'mumble_client.dart';
 
 class ServerSettings {
@@ -99,7 +100,48 @@ class CommController extends ChangeNotifier {
     await _updateBackground();
   }
 
-  void _onBoardChanged() => notifyListeners();
+  void _onBoardChanged() {
+    _updateHeadset();
+    notifyListeners();
+  }
+
+  // ----- Talking with the headphones' button -----
+
+  static const headsetTalkLimit = Duration(minutes: 2);
+  late final MediaButtons _media = MediaButtons(_onHeadsetPress);
+  bool headsetTalking = false;
+  Timer? _headsetLimit;
+
+  /// The headphones' button works while there's a board to talk through and
+  /// a server to talk to, and the app's playing.
+  void _updateHeadset() {
+    final on = board.state == BoardState.connected && mumble?.state == MumbleState.connected;
+    if (on) {
+      _media.start();
+    } else {
+      _media.stop();
+      _setHeadsetTalking(false, chirp: false);
+    }
+  }
+
+  void _onHeadsetPress() {
+    if (board.state != BoardState.connected) return;
+    // Headphones send a press, not a hold: each press starts or stops
+    _setHeadsetTalking(!headsetTalking);
+  }
+
+  void _setHeadsetTalking(bool talk, {bool chirp = true}) {
+    if (talk == headsetTalking) return;
+    headsetTalking = talk;
+    board.setTalk(talk);
+    if (chirp) mixer.playTone(mixer.chirp(rising: talk));
+    _headsetLimit?.cancel();
+    if (talk) {
+      // In case it's left on: it would keep sending everything
+      _headsetLimit = Timer(headsetTalkLimit, () => _setHeadsetTalking(false));
+    }
+    notifyListeners();
+  }
 
   void _onBoardSound(BoardSound s) {
     final m = mumble;
@@ -192,6 +234,7 @@ class CommController extends ChangeNotifier {
     for (final session in mixer.speakers.keys.toList()) {
       if (!m.users.containsKey(session)) mixer.remove(session);
     }
+    _updateHeadset();
     if (m.state == MumbleState.disconnected && _serverWanted) {
       serverError = m.error;
       _scheduleReconnect();
@@ -219,6 +262,7 @@ class CommController extends ChangeNotifier {
     _serverWanted = false;
     _reconnect?.cancel();
     _closeMumble();
+    _updateHeadset();
     _talkingTimer?.cancel();
     _talkingTimer = null;
     talking = {};

@@ -76,4 +76,18 @@ void main() {
     expect(out[0], lessThan(32767));
     expect(m.talking(0), {1, 2});
   });
+
+  test('tones play over the voices, and then stop', () {
+    final m = Mixer(sampleRate: 48000, newDecoder: FakeDecoder.new, targetMs: 20);
+    final chirp = m.chirp(rising: true);
+    expect(chirp.length, 48 * 140);
+    expect(chirp.first, 0, reason: 'faded in');
+    m.playTone(chirp);
+    var heard = 0;
+    for (var i = 0; i < 20; i++) {
+      final out = m.pull(480, 0);
+      if (out.any((s) => s != 0)) heard++;
+    }
+    expect(heard, 14, reason: '140 ms of tone, in 10 ms blocks');
+  });
 }

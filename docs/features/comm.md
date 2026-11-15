@@ -42,6 +42,8 @@ The first time the app connects, the phone asks to pair, and the board shows a 6
 
 The app's *Remote* tab is the [WiFi Hotspot Remote](phone-remote.md)'s page, run over the same Bluetooth link instead of the board's WiFi hotspot, so the phone keeps its internet for the comm channel.  It needs *Comm* on, like the rest of the app.
 
+The headphones' play/pause button talks too, while the app's connected to the board and the server.  Headphones send a press rather than a hold, so a press starts talking and another stops it, with a rising chirp in your ear as it starts and a falling one as it stops.  It stops by itself after two minutes, in case it's been left on.  Holding the button down usually starts the phone's voice assistant instead.
+
 It keeps going with the screen off, with a notification while it's on.  It trusts the server's certificate the first time it connects, and if the certificate changes after that it won't connect without asking, as that could be someone pretending to be the server.
 
 Voice goes to and from the server over UDP, which is quicker on a patchy connection, as a lost packet doesn't hold up the ones after it.  Where UDP is blocked, it goes inside the connection to the server instead, and the server card says which.  The server needs both its TCP and UDP port open (64738).
