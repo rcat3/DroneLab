@@ -289,6 +289,11 @@ int rcat_hal_ble_peer_paired(const rcat_hal_ble_device_t *keep);
  * that's connected is dropped, and has to pair again with a new code. */
 void rcat_hal_ble_peer_forget_all(const rcat_hal_ble_device_t *keep);
 
+/* Let a new phone pair, or not. While it's shut, which it is at startup,
+ * only phones paired already can connect: one that isn't is dropped before
+ * a code's shown, as the screen faces outward while the mask is worn. */
+void rcat_hal_ble_peer_allow_pairing(bool allow);
+
 /* The biggest message rcat_hal_ble_peer_send() can take, which depends on
  * what the phone agreed to. 0 while nothing's connected. */
 size_t rcat_hal_ble_peer_max_send(void);

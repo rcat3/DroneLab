@@ -598,6 +598,10 @@ static void comm_switch_event_cb(lv_event_t *e)
     {
         lv_label_set_text(comm_hint, "Bluetooth didn't start");
     }
+    else if (on)
+    {
+        comm_allow_pairing(true, lv_tick_get());    // it's in hand: a new phone may pair
+    }
     else if (!on)
     {
         comm_stop();
@@ -705,6 +709,8 @@ static void add_comm_page(ui_feature_t *feature)
 
 static lv_obj_t *paired_count;
 static lv_obj_t *paired_button_label;
+static lv_obj_t *pair_button;
+static lv_obj_t *pair_button_label;
 static uint32_t forget_armed_at;    // when the first tap came, 0 if it hasn't
 
 static void show_paired(void)
@@ -726,6 +732,28 @@ static void show_paired(void)
         forget_armed_at = 0;
     }
     set_label(paired_button_label, forget_armed_at != 0 ? "Tap to confirm" : "Forget them");
+
+    // Pairing a new phone: open for a couple of minutes, counting down
+    uint32_t left = comm_pairing_left(lv_tick_get());
+    if (left > 0)
+    {
+        unsigned s = (unsigned)((left + 999) / 1000);
+        snprintf(text, sizeof(text), "Open %u:%02u", s / 60, s % 60);
+    }
+    else
+    {
+        snprintf(text, sizeof(text), "Pair a phone");
+    }
+    set_label(pair_button_label, text);
+    lv_obj_set_state(pair_button, LV_STATE_CHECKED, left > 0);
+    lv_obj_set_state(pair_button, LV_STATE_DISABLED, !comm_running());
+}
+
+static void pair_phone_cb(lv_event_t *e)
+{
+    uint32_t now = lv_tick_get();
+    comm_allow_pairing(comm_pairing_left(now) == 0, now);     // a second tap shuts it
+    show_paired();
 }
 
 static void forget_phones_cb(lv_event_t *e)
@@ -755,22 +783,34 @@ static void add_paired_page(ui_feature_t *feature)
     paired_count = lv_label_create(paired_page);
     lv_label_set_text(paired_count, "");
     lv_obj_set_style_text_align(paired_count, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(paired_count, LV_ALIGN_CENTER, 0, ui_px(-44));
+    lv_obj_align(paired_count, LV_ALIGN_CENTER, 0, ui_px(-54));
+
+    // Only phones paired already can connect, unless this is open: a new
+    // one's code would show on a screen that faces the world
+    pair_button = lv_button_create(paired_page);
+    lv_obj_set_size(pair_button, ui_px(150), ui_px(38));
+    lv_obj_set_style_radius(pair_button, LV_RADIUS_CIRCLE, 0);
+    lv_obj_align(pair_button, LV_ALIGN_CENTER, 0, ui_px(-14));
+    lv_obj_add_event_cb(pair_button, pair_phone_cb, LV_EVENT_CLICKED, NULL);
+    pair_button_label = lv_label_create(pair_button);
+    lv_label_set_text(pair_button_label, "");
+    lv_obj_center(pair_button_label);
 
     lv_obj_t *forget = lv_button_create(paired_page);
-    lv_obj_set_size(forget, ui_px(150), ui_px(40));
+    lv_obj_set_size(forget, ui_px(150), ui_px(38));
     lv_obj_set_style_radius(forget, LV_RADIUS_CIRCLE, 0);
-    lv_obj_align(forget, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(forget, lv_color_hex(0x3a3a3a), 0);
+    lv_obj_align(forget, LV_ALIGN_CENTER, 0, ui_px(32));
     lv_obj_add_event_cb(forget, forget_phones_cb, LV_EVENT_CLICKED, NULL);
     paired_button_label = lv_label_create(forget);
     lv_label_set_text(paired_button_label, "");
     lv_obj_center(paired_button_label);
 
     lv_obj_t *hint = lv_label_create(paired_page);
-    lv_label_set_text(hint, "If a phone's lost: they'll\nhave to pair again, with\na code. Keeps the talk button");
+    lv_label_set_text(hint, "Forget them if a phone's\nlost. Keeps the talk button");
     lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(hint, COLOR_MUTED, 0);
-    lv_obj_align(hint, LV_ALIGN_CENTER, 0, ui_px(62));
+    lv_obj_align(hint, LV_ALIGN_CENTER, 0, ui_px(76));
 
     show_paired();
 }

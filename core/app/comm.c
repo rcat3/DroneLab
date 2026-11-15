@@ -147,6 +147,8 @@ static uint32_t avatar_got[COMM_AVATAR_SLOTS];      // bytes so far
 static bool avatar_ready[COMM_AVATAR_SLOTS];
 static uint32_t avatar_changes;
 static bool speaker_muted;
+static bool pairing_open;
+static uint32_t pairing_until;
 static bool available;
 static volatile bool running;
 static volatile comm_mode_t mode;
@@ -951,8 +953,35 @@ static void forget_phone(void)
     }
 }
 
+void comm_allow_pairing(bool allow, uint32_t now_ms)
+{
+    pairing_open = allow && running;
+    pairing_until = now_ms + COMM_PAIRING_MS;
+    rcat_hal_ble_peer_allow_pairing(pairing_open);
+}
+
+uint32_t comm_pairing_left(uint32_t now_ms)
+{
+    return pairing_open ? pairing_until - now_ms : 0;
+}
+
 void comm_poll(uint32_t now_ms)
 {
+    // Shut pairing when its time's up, or once a phone's paired with a code
+    static bool code_shown;
+    if (pairing_open && rcat_hal_ble_peer_passkey() >= 0)
+    {
+        code_shown = true;
+    }
+    if (pairing_open && (!running || (int32_t)(pairing_until - now_ms) <= 0 ||
+                         (code_shown && rcat_hal_ble_peer_connected())))
+    {
+        comm_allow_pairing(false, now_ms);
+    }
+    if (!pairing_open)
+    {
+        code_shown = false;
+    }
     // Quiet while it sends, if that's chosen
     bool mute = running && sending && settings_get()->comm_mute_speaker;
     if (mute != speaker_muted)
@@ -1068,6 +1097,15 @@ const char *comm_name(void)
 const char *comm_app_version(void)
 {
     return "";
+}
+
+void comm_allow_pairing(bool allow, uint32_t now_ms)
+{
+}
+
+uint32_t comm_pairing_left(uint32_t now_ms)
+{
+    return 0;
 }
 
 comm_server_t comm_server(void)

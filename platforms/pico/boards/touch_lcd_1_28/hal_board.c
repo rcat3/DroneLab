@@ -434,6 +434,10 @@ void rcat_hal_ble_peer_forget_all(const rcat_hal_ble_device_t *keep)
 {
 }
 
+void rcat_hal_ble_peer_allow_pairing(bool allow)
+{
+}
+
 bool rcat_hal_ble_button_find(void)
 {
     return false;

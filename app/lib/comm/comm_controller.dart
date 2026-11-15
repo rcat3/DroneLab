@@ -85,6 +85,7 @@ class CommController extends ChangeNotifier {
     final a = p.getString('avatar');
     avatar = a == null ? null : base64Decode(a);
     muted.addAll(p.getStringList('muted') ?? const []);
+    channel = p.getString('channel');
     mixer.targetMs = bufferMs;
     board.addListener(_onBoardChanged);
     _soundSub = board.sounds.listen(_onBoardSound);
@@ -188,6 +189,40 @@ class CommController extends ChangeNotifier {
         if (muteSpeaker != null) 'mute=${muteSpeaker ? 1 : 0}&',
         if (show != null) 'show=$show',
       ].join());
+
+  // ----- Channels -----
+
+  /// The channel picked, by its path ("Root / Group A"), joined each time
+  /// the app connects; null for wherever the server puts it.
+  String? channel;
+  bool _channelTried = false;     // this connection
+
+  Future<void> joinChannel(int id) async {
+    final m = mumble;
+    if (m == null) return;
+    channel = id == 0 ? null : m.channelPath(id);
+    if (channel == null) {
+      await _prefs?.remove('channel');
+    } else {
+      await _prefs?.setString('channel', channel!);
+    }
+    _channelTried = true;
+    m.joinChannel(id);
+    notifyListeners();
+  }
+
+  /// Once connected, go to the picked channel, if it's there.
+  void _joinPickedChannel(MumbleClient m) {
+    final want = channel;
+    if (_channelTried || want == null || m.state != MumbleState.connected || m.mySession == null) return;
+    for (final id in m.channels.keys) {
+      if (m.channelPath(id) == want) {
+        _channelTried = true;
+        if (m.myChannel != id) m.joinChannel(id);
+        return;
+      }
+    }
+  }
 
   // ----- Muting people, here only -----
 
@@ -426,6 +461,8 @@ class CommController extends ChangeNotifier {
 
   void _onMumbleChanged(MumbleClient m) {
     if (m != mumble) return;
+    if (m.state != MumbleState.connected) _channelTried = false;
+    _joinPickedChannel(m);
     // Forget those who left
     for (final session in mixer.speakers.keys.toList()) {
       if (!m.users.containsKey(session)) mixer.remove(session);

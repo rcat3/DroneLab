@@ -179,6 +179,13 @@ uint32_t comm_avatar_changes(void);
 /* The name it advertises. */
 const char *comm_name(void);
 
+/* Let a new phone pair, for COMM_PAIRING_MS, or shut it again. Phones
+ * paired already can always connect. comm_pairing_left() is how long it's
+ * open for still, 0 when it's shut. */
+#define COMM_PAIRING_MS         120000
+void comm_allow_pairing(bool allow, uint32_t now_ms);
+uint32_t comm_pairing_left(uint32_t now_ms);
+
 /* The connected app's version, as it said, or "" if it hasn't. */
 const char *comm_app_version(void);
 

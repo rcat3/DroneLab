@@ -1319,6 +1319,7 @@ static volatile bool peer_subscribed;
 static volatile uint16_t peer_mtu;
 static volatile bool peer_secure;       // paired with a code: encrypted and authenticated
 static volatile int32_t peer_passkey = -1;  // the code to show while pairing
+static volatile bool peer_pairing_open;     // a new phone may pair (rcat_hal_ble_peer_allow_pairing)
 
 // What the phone wrote, oldest first, under ble_lock. In PSRAM, as internal
 // RAM is short.
@@ -1503,6 +1504,14 @@ static int peer_event_cb(struct ble_gap_event *event, void *arg)
 
 #if CONFIG_BT_NIMBLE_SECURITY_ENABLE
     case BLE_GAP_EVENT_PASSKEY_ACTION:
+        if (!peer_pairing_open)
+        {
+            // A phone that isn't paired, while pairing's shut: it would show
+            // the code on a display that faces the world
+            ESP_LOGI(TAG, "Phone pairing refused: pairing's not open");
+            ble_gap_terminate(event->passkey.conn_handle, BLE_ERR_AUTH_FAIL);
+            break;
+        }
         if (event->passkey.params.action == BLE_SM_IOACT_DISP)
         {
             struct ble_sm_io io = { .action = BLE_SM_IOACT_DISP, .passkey = rcat_hal_random() % 1000000 };
@@ -1525,7 +1534,12 @@ static int peer_event_cb(struct ble_gap_event *event, void *arg)
 
     case BLE_GAP_EVENT_REPEAT_PAIRING:
     {
-        // The phone forgot the board and is pairing again: drop the old keys.
+        // The phone forgot the board and is pairing again: drop the old keys,
+        // if pairing's open
+        if (!peer_pairing_open)
+        {
+            return BLE_GAP_REPEAT_PAIRING_IGNORE;
+        }
         struct ble_gap_conn_desc desc;
         if (ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc) == 0)
         {
@@ -1696,6 +1710,11 @@ void rcat_hal_ble_peer_forget_all(const rcat_hal_ble_device_t *keep)
     }
     ESP_LOGI(TAG, "Forgot %d paired phone%s", forgot, forgot == 1 ? "" : "s");
 }
+
+void rcat_hal_ble_peer_allow_pairing(bool allow)
+{
+    peer_pairing_open = allow;
+}
 #else
 int rcat_hal_ble_peer_paired(const rcat_hal_ble_device_t *keep)
 {
@@ -1703,6 +1722,10 @@ int rcat_hal_ble_peer_paired(const rcat_hal_ble_device_t *keep)
 }
 
 void rcat_hal_ble_peer_forget_all(const rcat_hal_ble_device_t *keep)
+{
+}
+
+void rcat_hal_ble_peer_allow_pairing(bool allow)
 {
 }
 #endif
@@ -1787,6 +1810,10 @@ int rcat_hal_ble_peer_paired(const rcat_hal_ble_device_t *keep)
 }
 
 void rcat_hal_ble_peer_forget_all(const rcat_hal_ble_device_t *keep)
+{
+}
+
+void rcat_hal_ble_peer_allow_pairing(bool allow)
 {
 }
 

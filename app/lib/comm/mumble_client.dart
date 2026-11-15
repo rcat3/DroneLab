@@ -29,6 +29,7 @@ const _channelState = 7;
 const _userRemove = 8;
 const _userState = 9;
 const _textMessage = 11;
+const _permissionDenied = 12;
 const _cryptSetup = 15;
 const _requestBlob = 23;
 
@@ -101,6 +102,10 @@ class MumbleClient {
   String? fingerprint;    // SHA-256 of the server's certificate, hex
   final Map<int, MumbleUser> users = {};
   final Map<int, String> channels = {};
+  final Map<int, int> channelParents = {};
+
+  /// Why the server last said no, as when joining a channel.
+  String? denied;
 
   final _changes = StreamController<void>.broadcast();
   final _voice = StreamController<IncomingVoice>.broadcast();
@@ -336,6 +341,36 @@ class MumbleClient {
     }
   }
 
+  /// Move to another channel. The server says no (see [denied]) if it
+  /// isn't allowed.
+  void joinChannel(int id) {
+    final me = mySession;
+    if (state != MumbleState.connected || me == null) return;
+    denied = null;
+    _send(_userState, (ProtoWriter()
+          ..int_(1, me)
+          ..int_(5, id))
+        .toBytes());
+  }
+
+  /// How many are in each channel.
+  Map<int, int> get channelCounts {
+    final out = <int, int>{};
+    for (final u in users.values) {
+      out[u.channel] = (out[u.channel] ?? 0) + 1;
+    }
+    return out;
+  }
+
+  /// A channel's name with those it's in, like "Root / Group A".
+  String channelPath(int id) {
+    final names = <String>[];
+    for (int? c = id; c != null && names.length < 8; c = c == 0 ? null : channelParents[c]) {
+      names.insert(0, channels[c] ?? '?');
+    }
+    return names.join(' / ');
+  }
+
   void sendText(String message) {
     if (state != MumbleState.connected) return;
     _send(_textMessage, (ProtoWriter()
@@ -402,10 +437,12 @@ class MumbleClient {
         final m = ProtoMessage.parse(payload);
         final id = m.int_(1);
         if (id != null && m.has(3)) channels[id] = m.string(3)!;
+        if (id != null && m.has(2)) channelParents[id] = m.int_(2)!;
         _changes.add(null);
       case _channelRemove:
         final id = ProtoMessage.parse(payload).int_(1);
         channels.remove(id);
+        channelParents.remove(id);
         _changes.add(null);
       case _userState:
         final m = ProtoMessage.parse(payload);
@@ -444,6 +481,15 @@ class MumbleClient {
         final m = ProtoMessage.parse(payload);
         final from = users[m.int_(1)]?.name ?? 'Server';
         _texts.add(MumbleText(from, m.string(5) ?? ''));
+      case _permissionDenied:
+        final m = ProtoMessage.parse(payload);
+        final reason = m.string(4);
+        denied = reason != null && reason.isNotEmpty
+            ? reason
+            : m.int_(2) != null
+                ? "The server didn't let us into ${channels[m.int_(2)] ?? 'that channel'}"
+                : 'The server said no';
+        _changes.add(null);
       case _version:
       case _ping:
         break;
@@ -480,6 +526,7 @@ class MumbleClient {
     if (reason != null) error = reason;
     users.clear();
     channels.clear();
+    channelParents.clear();
     mySession = null;
     if (wasUp) _changes.add(null);
   }

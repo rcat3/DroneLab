@@ -24,7 +24,7 @@ The Bluetooth link to the DroneLab app on a phone: the [comm channel](comm.md), 
 
 *The ESP32-S3-Touch-AMOLED-1.75*
 
-How many phones are paired with the Phone App's link.  *Forget them* (tap it twice) unpairs them all, for when a phone's been lost: each has to pair again, with a new code.  It keeps the talk button.
+How many phones are paired with the Phone App's link.  *Pair a phone* lets a new phone pair, for two minutes (it's open for two minutes after the Phone App's switched on, too); the rest of the time, only phones paired already can connect, so nobody can read the code off the display while it's worn and pair with it.  *Forget them* (tap it twice) unpairs them all, for when a phone's been lost: each has to pair again, with a new code.  It keeps the talk button.
 
 ## WiFi Hotspot Remote
 

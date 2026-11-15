@@ -139,7 +139,11 @@ class BoardLink extends ChangeNotifier {
     await _connSub?.cancel();
     _connSub = UniversalBle.connectionChangeStream(id).listen((c) {
       if (!c.isConnected && state == BoardState.connected) {
-        _lost(c.error ?? 'The board went out of range');
+        // Dropped before it ever said how it is: it wouldn't pair
+        _lost(status == null
+            ? "The board didn't let this phone pair. On the board, open Settings, Paired Phones, "
+                'and tap Pair a phone'
+            : c.error ?? 'The board went out of range');
       }
     });
     try {

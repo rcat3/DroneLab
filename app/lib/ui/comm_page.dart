@@ -152,7 +152,8 @@ class _BoardCard extends StatelessWidget {
         status = b.error == null ? 'Connecting...' : '${b.error}. Trying again...';
       case BoardState.connected:
         status = st == null
-            ? 'Pairing: type in the code the board shows'
+            ? 'Pairing: type in the code the board shows. A new phone can only pair while the board says so: '
+                'in its Settings, Paired Phones, tap Pair a phone'
             : st.sending
                 ? 'Sending your voice${comm.sendingToServer ? ' to the server' : ''}'
                 : st.mode == BoardMode.voice
@@ -344,12 +345,19 @@ class _PeopleCard extends StatelessWidget {
     final m = comm.mumble;
     if (m == null || m.state != MumbleState.connected) return const SizedBox.shrink();
     final users = m.channelUsers;
-    final channel = m.channels[m.myChannel] ?? 'Channel';
+    final channel = m.channelPath(m.myChannel);
     return Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ListTile(title: Text(channel, style: Theme.of(context).textTheme.titleMedium)),
+          ListTile(
+            leading: const Icon(Icons.forum),
+            title: Text(channel, style: Theme.of(context).textTheme.titleMedium),
+            subtitle: m.denied != null ? Text(m.denied!) : null,
+            trailing: m.channels.length > 1
+                ? TextButton(onPressed: () => _pickChannel(context, m), child: const Text('Change'))
+                : null,
+          ),
           if (users.isEmpty) const ListTile(title: Text('Nobody else yet')),
           for (final u in users)
             ListTile(
@@ -377,6 +385,30 @@ class _PeopleCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _pickChannel(BuildContext context, MumbleClient m) async {
+    final ids = m.channels.keys.toList()..sort((a, b) => m.channelPath(a).compareTo(m.channelPath(b)));
+    final counts = m.channelCounts;
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(title: Text('Channels'), subtitle: Text('Only those in the same channel hear each other')),
+            for (final id in ids)
+              ListTile(
+                leading: Icon(id == m.myChannel ? Icons.radio_button_checked : Icons.radio_button_unchecked),
+                title: Text(m.channelPath(id)),
+                trailing: Text('${counts[id] ?? 0}'),
+                onTap: () => Navigator.pop(context, id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && picked != m.myChannel) await comm.joinChannel(picked);
   }
 }
 

@@ -60,9 +60,13 @@ The board remembers it.  The remote goes to sleep after a minute or so; pressing
 
 The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now.  Set up the server (the gear at the top: its address, your name and the server password), connect to it, then *Find the board* and pick yours.  The app passes the board's voice on to the server and plays the others to your headphones, and tells the board who's talking, for its status screen.  It has its own *Hold to talk*, and the board's [Comm Setup](#comm-setup) can be changed from it too: the mode, *Speaker off while talking*, and when to show the Comm screen.
 
+The server can have channels, so that several groups can share it: only those in the same channel hear each other.  *Change*, by the channel's name in the app, moves you to another, and the app goes back to it each time it connects.  Channels are made on the server, from Mumble on a computer, logged in as its SuperUser, or as someone it lets make them.
+
 Each person on the channel has a speaker button in the app, which mutes them for you alone: the app doesn't play them, and the board doesn't show them talking.  The app remembers who by name, so they stay muted the next time they join.
 
 The first time the app connects, the phone asks to pair, and the board shows a 6-digit code over whatever's on its screen: type it into the phone.  The board only talks to a phone that's paired like that, so nobody else nearby can listen in or take over, and the phone and board remember each other after that.
+
+A new phone can only pair while pairing's open: for two minutes after the *Phone App* is switched on, or after *Pair a phone* on the *Paired Phones* page in Settings, and until a phone's paired.  The rest of the time, a phone that isn't paired is turned away before any code's shown, as the screen faces outward while the mask's worn, where anyone could read it.  Phones paired already can always connect.  With several boards about, pick yours by its name, shown on the *Phone App* page: if you pick someone else's, the code shows on theirs, not yours.
 
 The app's *Remote* tab is the [WiFi Hotspot Remote](phone-remote.md)'s page, run over the same Bluetooth link instead of the board's WiFi hotspot, so the phone keeps its internet for the comm channel.  It needs the *Phone App* on, like the rest of the app.
 
