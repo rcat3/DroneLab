@@ -20,6 +20,21 @@ class CommPage extends StatelessWidget {
       listenable: comm,
       builder: (context, _) {
         final direct = comm.boardSettings?.direct;
+        final showDirect = direct != null && comm.board.state == BoardState.connected;
+        final serverUp = comm.mumble?.state == MumbleState.connected;
+        final scheme = Theme.of(context).colorScheme;
+        final line = Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Divider(height: 1, color: scheme.outlineVariant),
+        );
+        Widget header(IconData icon, String text) => Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+              child: Row(children: [
+                Icon(icon, size: 18, color: scheme.primary),
+                const SizedBox(width: 8),
+                Text(text, style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.primary)),
+              ]),
+            );
         return Scaffold(
           appBar: AppBar(
             title: const Text('DroneLab Comm'),
@@ -36,13 +51,13 @@ class CommPage extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             children: [
               _LinksCard(comm: comm),
-              const SizedBox(height: 16),
-              if (direct != null && comm.board.state == BoardState.connected) ...[
+              line,
+              if (showDirect) ...[
                 _TalkOn(comm: comm),
                 const SizedBox(height: 12),
               ],
               _TalkButton(comm: comm),
-              if (comm.board.state == BoardState.connected && comm.mumble?.state == MumbleState.connected)
+              if (comm.board.state == BoardState.connected && serverUp)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
@@ -52,15 +67,19 @@ class CommPage extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodySmall),
                 ),
-              const SizedBox(height: 16),
-              _PeopleCard(comm: comm),
-              if (direct != null && comm.board.state == BoardState.connected) ...[
-                const SizedBox(height: 12),
-                _DirectCard(comm: comm),
+              if (serverUp || comm.texts.isNotEmpty) ...[
+                line,
+                header(Icons.cloud, 'Server comms'),
+                if (serverUp) _PeopleCard(comm: comm),
+                if (comm.texts.isNotEmpty) ...[
+                  if (serverUp) const SizedBox(height: 12),
+                  _MessagesCard(comm: comm),
+                ],
               ],
-              if (comm.texts.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _MessagesCard(comm: comm),
+              if (showDirect) ...[
+                line,
+                header(Icons.settings_input_antenna, 'Direct comms'),
+                _DirectCard(comm: comm),
               ],
             ],
           ),
@@ -421,7 +440,7 @@ class _DirectCard extends StatelessWidget {
         children: [
           SwitchListTile(
             secondary: const Icon(Icons.settings_input_antenna),
-            title: Text('Direct', style: Theme.of(context).textTheme.titleMedium),
+            title: Text(direct.on ? 'On' : 'Off', style: Theme.of(context).textTheme.titleMedium),
             subtitle: Text(!direct.on
                 ? "Board to board, for where there's no signal"
                 : boards.isEmpty
