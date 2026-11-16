@@ -15,6 +15,9 @@
 ///           [avatar slot][how they're heard: 0 the server, 1 direct][name]["\n"]
 ///   avatar  [0x06][slot][flags][piece of the picture, RGB565 LE]
 ///           flags: 1 the first piece, 2 the last, 4 asks for an ack
+///   command [0x0B][1][name length][name][command]   from someone on the server
+///           [0x0B][0][boards][their ids, LE32 each][command]   to send over direct
+///           comms, to those boards (none for all of them); see [OthersCommand]
 /// and back from the board:
 ///   avatar ack [0x06][slot][flags][bytes received, LE32]
 ///           flags: 1 it's all there, 2 the right size
@@ -46,7 +49,9 @@ const fromPhoneUuid = 'efe06e1d-a7ff-4823-bfbb-b3a82ea05849';
 ///   2  the phone remote's requests, GET /version, pairing with a code, and
 ///      the status's talk button bit
 ///   3  server and hearing, for the board's Comm screen
+///   4  commands for others (Lovense and the Terminal)
 const commVersion = 3;
+const commVersionCommands = 4;
 const commVersionRemote = 2;
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
@@ -65,6 +70,7 @@ const _msgDirectSound = 0x07;
 const _msgDirectPeer = 0x08;
 const _msgDirectGroup = 0x09;
 const _msgRecord = 0x0A;
+const _msgCommand = 0x0B;
 
 /// No avatar, in a slot.
 const avatarNone = 0xFF;
@@ -310,4 +316,83 @@ int fnv1a(List<int> bytes) {
     h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF;
   }
   return h;
+}
+
+/// A command for others' boards (core/app/others.h), the same over the
+/// server and over direct comms: the version, who it's from ([source], made
+/// up each time the app starts), [seq], then what to do. Each board only
+/// does it if its wearer has allowed us, and only once, by its source and
+/// seq. Commands for the Lovense devices, and messages for the Terminal.
+class OthersCommand {
+  static const version = 1;
+  static const stop = 0x00;
+  static const level = 0x01;
+  static const pattern = 0x02;
+  static const speed = 0x03;
+  static const react = 0x04;
+  static const message = 0x10;
+  static const allMotors = 0xFF;
+
+  /// The kinds of motor, as lovense_motor_kind_t.
+  static const vibrate = 0, rotate = 1, air = 2, oscillate = 3;
+
+  /// The levels commands give, 0 to this, scaled to each motor's own range.
+  static const levelTop = 20;
+
+  /// The longest a pattern's name can be, in bytes.
+  static const nameMax = 32;
+
+  /// The longest a message can be, in bytes.
+  static const messageMax = 120;
+
+  final Uint8List bytes;
+  OthersCommand._(this.bytes);
+
+  static OthersCommand _make(int source, int seq, List<int> what) => OthersCommand._(Uint8List.fromList([
+        version,
+        source & 0xFF, (source >> 8) & 0xFF, (source >> 16) & 0xFF, (source >> 24) & 0xFF,
+        seq & 0xFF, (seq >> 8) & 0xFF,
+        ...what,
+      ]));
+
+  /// Stop every device, and any reaction.
+  static OthersCommand stopAll(int source, int seq) => _make(source, seq, [stop]);
+  static OthersCommand setLevel(int source, int seq, int kind, int value) =>
+      _make(source, seq, [level, kind & 0xFF, value.clamp(0, levelTop)]);
+
+  /// Play a pattern on every device, by its name; no name stops them.
+  static OthersCommand play(int source, int seq, String? name) =>
+      _make(source, seq, [pattern, ..._cut(utf8.encode(name ?? ''), nameMax)]);
+  static OthersCommand setSpeed(int source, int seq, int percent) {
+    final p = percent.clamp(25, 300);
+    return _make(source, seq, [speed, p & 0xFF, p >> 8]);
+  }
+
+  /// React to the wearer (reactive_mode_t: 0 none, 1 voice, 2 moving, 3
+  /// still, 4 motion, 5 tilt).
+  static OthersCommand setReact(int source, int seq, int mode) => _make(source, seq, [react, mode & 0xFF]);
+
+  /// A message for the Terminal, shown after our name if it's [named];
+  /// otherwise nobody can see who it's from (but it still only goes to
+  /// those who've allowed us).
+  static OthersCommand sendMessage(int source, int seq, String text, {bool named = true}) =>
+      _make(source, seq, [message, named ? 1 : 0, ..._cut(utf8.encode(text), messageMax)]);
+}
+
+/// The longest command the board takes (OTHERS_CMD_MAX), and the most
+/// boards one sent over direct comms can be for (DIRECT_COMMAND_TARGETS).
+const othersCommandMax = 136;
+const directCommandTargets = 12;
+
+/// A command from [from] on the server, for the board.
+Uint8List commandFromServer(String from, List<int> cmd) {
+  final name = _cut(utf8.encode(from), hearingNameMax);
+  return Uint8List.fromList([_msgCommand, 1, name.length, ...name, ...cmd]);
+}
+
+/// A command for the board to send over direct comms, to the boards with
+/// these ids, or to all of them with none.
+Uint8List commandToDirect(List<int> boards, List<int> cmd) {
+  final ids = <int>[for (final id in boards) ...[id & 0xFF, (id >> 8) & 0xFF, (id >> 16) & 0xFF, (id >> 24) & 0xFF]];
+  return Uint8List.fromList([_msgCommand, 0, boards.length, ...ids, ...cmd]);
 }

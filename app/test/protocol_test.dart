@@ -180,5 +180,30 @@ void main() {
     expect(h.getUint32(40, Endian.little), 96000);
     expect(h.lengthInBytes, 44);
   });
-}
 
+  test('commands for others, as others.h', () {
+    const source = 0x04030201;
+    expect(OthersCommand.stopAll(source, 0x0605).bytes, [1, 1, 2, 3, 4, 5, 6, 0x00]);
+    expect(OthersCommand.setLevel(source, 7, OthersCommand.rotate, 25).bytes, [1, 1, 2, 3, 4, 7, 0, 0x01, 1, 20]);
+    expect(OthersCommand.setLevel(source, 7, OthersCommand.allMotors, 5).bytes.sublist(7), [0x01, 0xFF, 5]);
+    expect(OthersCommand.play(source, 7, 'Wave').bytes.sublist(7), [0x02, ...utf8.encode('Wave')]);
+    expect(OthersCommand.play(source, 7, null).bytes.sublist(7), [0x02]);
+    expect(OthersCommand.setSpeed(source, 7, 1000).bytes.sublist(7), [0x03, 300 & 0xFF, 300 >> 8]);
+    expect(OthersCommand.setReact(source, 7, 2).bytes.sublist(7), [0x04, 2]);
+    expect(OthersCommand.sendMessage(source, 7, 'hi').bytes.sublist(7), [0x10, 1, ...utf8.encode('hi')]);
+    expect(OthersCommand.sendMessage(source, 7, 'hi', named: false).bytes.sublist(7), [0x10, 0, ...utf8.encode('hi')]);
+    final long = OthersCommand.sendMessage(source, 7, 'x' * 500).bytes.length;
+    expect(long, 9 + OthersCommand.messageMax);
+    expect(long, lessThanOrEqualTo(othersCommandMax));
+
+    final cmd = OthersCommand.stopAll(source, 1).bytes;
+    expect(commandFromServer('Ann', cmd), [0x0B, 1, 3, ...utf8.encode('Ann'), ...cmd]);
+    expect(commandToDirect(const [], cmd), [0x0B, 0, 0, ...cmd]);
+    expect(commandToDirect(const [0x11223344], cmd), [0x0B, 0, 1, 0x44, 0x33, 0x22, 0x11, ...cmd]);
+  });
+
+  test('packed repeated fields', () {
+    final m = ProtoMessage.parse((ProtoWriter()..packed(2, [5, 300])).toBytes());
+    expect(m.bytes(2), [5, 0xAC, 0x02]);
+  });
+}

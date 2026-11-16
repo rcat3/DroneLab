@@ -32,6 +32,7 @@ const _textMessage = 11;
 const _permissionDenied = 12;
 const _cryptSetup = 15;
 const _requestBlob = 23;
+const _pluginData = 26;
 
 // UserState's avatar ("texture"): the picture, or its hash when it's too big
 // to send to everyone, which RequestBlob fetches
@@ -63,6 +64,15 @@ class MumbleUser {
   Uint8List? texture;
   Uint8List? textureHash;
   bool _textureAsked = false;
+}
+
+/// Data from another client's plugin (Mumble 1.4 and later), which Mumble
+/// passes on without showing it: [id] says what it's for.
+class MumblePluginData {
+  final int sender;     // their session
+  final String id;
+  final Uint8List data;
+  MumblePluginData(this.sender, this.id, this.data);
 }
 
 class MumbleText {
@@ -110,11 +120,13 @@ class MumbleClient {
   final _changes = StreamController<void>.broadcast();
   final _voice = StreamController<IncomingVoice>.broadcast();
   final _texts = StreamController<MumbleText>.broadcast();
+  final _pluginDatas = StreamController<MumblePluginData>.broadcast();
 
   /// Anything shown changed: the state, the users or the channels.
   Stream<void> get changes => _changes.stream;
   Stream<IncomingVoice> get voice => _voice.stream;
   Stream<MumbleText> get texts => _texts.stream;
+  Stream<MumblePluginData> get pluginData => _pluginDatas.stream;
 
   MumbleClient({
     required this.host,
@@ -330,6 +342,17 @@ class MumbleClient {
         .toBytes());
   }
 
+  /// Send plugin data to the users with these sessions. Servers limit how
+  /// many a second they pass on, though by default not to fewer than a few.
+  void sendPluginData(List<int> sessions, String id, Uint8List data) {
+    if (state != MumbleState.connected || sessions.isEmpty) return;
+    _send(_pluginData, (ProtoWriter()
+          ..packed(2, sessions)
+          ..bytes(3, data)
+          ..string(4, id))
+        .toBytes());
+  }
+
   /// Send a packet of our voice. seq counts in 10 ms frames.
   void sendVoice(int seq, Uint8List opus, {bool last = false}) {
     if (state != MumbleState.connected) return;
@@ -481,6 +504,13 @@ class MumbleClient {
         final m = ProtoMessage.parse(payload);
         final from = users[m.int_(1)]?.name ?? 'Server';
         _texts.add(MumbleText(from, m.string(5) ?? ''));
+      case _pluginData:
+        final m = ProtoMessage.parse(payload);
+        final sender = m.int_(1);
+        final data = m.bytes(3);
+        if (sender != null && data != null) {
+          _pluginDatas.add(MumblePluginData(sender, m.string(4) ?? '', Uint8List.fromList(data)));
+        }
       case _permissionDenied:
         final m = ProtoMessage.parse(payload);
         final reason = m.string(4);

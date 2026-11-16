@@ -36,6 +36,15 @@ class ProtoWriter {
 
   void string(int field, String value) => bytes(field, utf8.encode(value));
 
+  /// A repeated varint field, packed.
+  void packed(int field, List<int> values) {
+    final inner = ProtoWriter();
+    for (final v in values) {
+      inner._varint(v);
+    }
+    bytes(field, inner.toBytes());
+  }
+
   Uint8List toBytes() => _out.toBytes();
 }
 

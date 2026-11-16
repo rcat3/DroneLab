@@ -6,6 +6,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -800,6 +801,51 @@ class CommController extends ChangeNotifier {
 
   bool get sendingToServer => _sendingToServer;
 
+  // ----- Commands for others' boards (core/app/others.h) -----
+
+  /// What commands are called in Mumble's plugin data.
+  static const commandDataId = 'dronelab-command';
+
+  final int _commandSource = Random.secure().nextInt(0xFFFFFFFF);
+  int _commandSeq = 0;
+
+  /// True if the board takes commands for others.
+  bool get boardTakesCommands =>
+      board.state == BoardState.connected && (board.status?.version ?? 0) >= commVersionCommands;
+
+  /// True if commands can go anywhere: to the server, or over direct comms.
+  bool get canSendCommands =>
+      mumble?.state == MumbleState.connected || (boardTakesCommands && (boardSettings?.direct?.on ?? false));
+
+  /// A new command, from [make], with its source and the next seq.
+  OthersCommand newCommand(OthersCommand Function(int source, int seq) make) =>
+      make(_commandSource, _commandSeq = (_commandSeq + 1) & 0xFFFF);
+
+  /// Send a command to everyone (those in our channel on the server, and the
+  /// boards in our direct comms group), or to those picked: by their
+  /// sessions on the server, and their boards' ids over direct comms. Send
+  /// the same command again to make sure of it: it's only done once.
+  void sendCommand(OthersCommand cmd,
+      {bool everyone = true, Iterable<int> server = const [], Iterable<int> direct = const []}) {
+    final m = mumble;
+    if (m != null && m.state == MumbleState.connected) {
+      final sessions = everyone ? [for (final u in m.channelUsers) u.session] : server.toList();
+      m.sendPluginData(sessions, commandDataId, cmd.bytes);
+    }
+    if (boardTakesCommands && (boardSettings?.direct?.on ?? false) && (everyone || direct.isNotEmpty)) {
+      board.send(commandToDirect(everyone ? const [] : direct.take(directCommandTargets).toList(), cmd.bytes));
+    }
+  }
+
+  /// A command from someone on the server: on to the board, which decides
+  /// whether to do it.
+  void _onPluginData(MumbleClient m, MumblePluginData d) {
+    if (d.id != commandDataId || !boardTakesCommands) return;
+    final name = m.users[d.sender]?.name ?? '';
+    if (name.isEmpty || d.data.length > othersCommandMax) return;
+    board.send(commandFromServer(name, d.data));
+  }
+
   // ----- The server -----
 
   Future<void> connectServer() async {
@@ -830,6 +876,7 @@ class CommController extends ChangeNotifier {
       if (texts.length > 50) texts.removeAt(0);
       notifyListeners();
     }));
+    _mumbleSubs.add(m.pluginData.listen((d) => _onPluginData(m, d)));
     notifyListeners();
     try {
       await m.connect(checkCertificate: (fp) => _checkPin(fp));

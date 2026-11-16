@@ -70,6 +70,41 @@ void main() {
     expect(heard.last.last, isTrue);
   }, skip: host == null ? 'set MUMBLE_HOST to run it' : false, timeout: const Timeout(Duration(seconds: 30)));
 
+  test('plugin data goes from one client to another, unseen', () async {
+    final a = MumbleClient(host: host!, username: 'test-plugin-sender', password: password);
+    final b = MumbleClient(host: host, username: 'test-plugin-receiver', password: password);
+    await a.connect();
+    await b.connect();
+    for (var i = 0; i < 20 && !a.users.containsKey(b.mySession); i++) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    final got = <MumblePluginData>[];
+    final texts = <MumbleText>[];
+    final subs = [b.pluginData.listen(got.add), b.texts.listen(texts.add)];
+    a.sendPluginData([b.mySession!], 'dronelab-test', Uint8List.fromList([1, 2, 3]));
+    await Future.delayed(const Duration(milliseconds: 500));
+    expect(got.length, 1);
+    expect(got.first.sender, a.mySession);
+    expect(got.first.id, 'dronelab-test');
+    expect(got.first.data, [1, 2, 3]);
+
+    // How many of a quick run get through: the server's limit
+    got.clear();
+    for (var i = 0; i < 10; i++) {
+      a.sendPluginData([b.mySession!], 'dronelab-test', Uint8List.fromList([i]));
+    }
+    await Future.delayed(const Duration(milliseconds: 1500));
+    // ignore: avoid_print
+    print('plugin data: ${got.length} of 10 sent at once got through');
+    for (final s in subs) {
+      await s.cancel();
+    }
+    a.close();
+    b.close();
+    expect(texts, isEmpty, reason: 'nothing shows in the chat');
+  }, skip: host == null ? 'set MUMBLE_HOST to run it' : false, timeout: const Timeout(Duration(seconds: 30)));
+
   test('a wrong password is turned away', () async {
     final c = MumbleClient(host: host!, username: 'test-wrong', password: 'not-the-password');
     await expectLater(c.connect(), throwsA(isA<MumbleException>()));
