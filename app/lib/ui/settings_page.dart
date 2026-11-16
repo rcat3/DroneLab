@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
@@ -6,7 +7,7 @@ import '../comm/comm_controller.dart';
 import 'groups_page.dart';
 import 'server_page.dart';
 
-/// What's set once and left: the server, the board's comm settings, direct
+/// What's set once and left: your avatar, the server, the board's comm settings, direct
 /// comms, and who's muted.
 class CommSettingsPage extends StatelessWidget {
   final CommController comm;
@@ -31,11 +32,13 @@ class CommSettingsPage extends StatelessWidget {
           appBar: AppBar(title: const Text('Comm Settings')),
           body: ListView(
             children: [
+              header('You'),
+              _AvatarTile(comm: comm),
               header('Server'),
               ListTile(
                 leading: const Icon(Icons.dns),
                 title: Text(comm.server.host.isEmpty ? 'Set up the server' : comm.server.host),
-                subtitle: const Text('Address, your name, password, avatar and buffer'),
+                subtitle: const Text('Address, your name, password and buffer'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () =>
                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => ServerPage(comm: comm))),
@@ -156,6 +159,61 @@ class CommSettingsPage extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Your avatar, for the server and direct comms alike.
+class _AvatarTile extends StatefulWidget {
+  final CommController comm;
+  const _AvatarTile({required this.comm});
+
+  @override
+  State<_AvatarTile> createState() => _AvatarTileState();
+}
+
+class _AvatarTileState extends State<_AvatarTile> {
+  bool _picking = false;
+
+  Future<void> _pick() async {
+    setState(() => _picking = true);
+    try {
+      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (file == null) return;
+      final ok = await widget.comm.setAvatar(await file.readAsBytes());
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("That doesn't look like a picture")));
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final avatar = widget.comm.avatar;
+    return ListTile(
+      leading: Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(border: Border.all(color: Theme.of(context).colorScheme.outline)),
+        child: avatar == null
+            ? const Icon(Icons.person, size: 32)
+            : Image.memory(avatar, fit: BoxFit.cover, gaplessPlayback: true),
+      ),
+      title: Text(avatar == null ? 'Choose an avatar' : 'Your avatar'),
+      subtitle: const Text("Shown on the others' displays while you talk, on the server and over direct comms. "
+          'Cut square from the middle'),
+      isThreeLine: true,
+      enabled: !_picking,
+      onTap: _pick,
+      trailing: avatar == null
+          ? null
+          : IconButton(
+              tooltip: 'Remove',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => widget.comm.setAvatar(null),
+            ),
     );
   }
 }
