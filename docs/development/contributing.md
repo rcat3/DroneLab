@@ -16,6 +16,6 @@ For a bigger change, like a new feature or a new board, it's worth opening an is
 By sending a pull request, you agree that:
 
 - **Code** you contribute is licensed to Rubber Cat under the [MIT License](https://opensource.org/license/mit), and is shared with everyone else under the project's [PolyForm Noncommercial License](../../LICENSE), like the rest of the code.
-- **Hardware designs** you contribute to `hardware/` are under the license of the folder they go in, given in its README.
+- **Hardware designs** you contribute to `hardware/` are licensed to Rubber Cat under the MIT License too, and shared with everyone else under the license of the folder they go in, given in its README.  The exceptions are folders based on someone else's design, like `hardware/deprecated/` and `hardware/masks/msa_millennium/vendor/`, where a change stays under that folder's license, as the original's license requires.
 
 The MIT license to Rubber Cat lets the project keep its license, or change it later, without having to ask each contributor.  You keep the copyright in your work, and you're free to use it however you like.

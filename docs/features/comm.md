@@ -17,7 +17,7 @@ flowchart LR
 
 ## On the display
 
-Switch on the *Phone App* page in [Settings](settings.md), after Brightness.  The board starts advertising over Bluetooth for the app to connect, under the board's name (`DroneLab-` and four letters, the same as its WiFi hotspot's), shown at the bottom of the page, with the app's version once it's connected.  It stays on, or off, from one startup to the next.  The voice effect has to run the whole time it's on, so it uses more battery than with the voice effect off.
+Switch on the *Phone App* page in [Settings](settings.md), after Brightness.  The board starts advertising over Bluetooth for the app to connect, under the board's name (`DroneLab-` and four letters, the same as its WiFi hotspot's), shown at the bottom of the page, with the app's version once it's connected.  It stays on, or off, from one startup to the next.  The voice effect has to run the whole time it's on, so it uses more battery than with the voice effect off: the 1.75" speaker housing's 2000 mAh battery runs it for about 9.5 hours with comms on, against about 13.5 without.
 
 Everything else is in the *Comm* feature, swiping up and down, after Sound.  It's left out on boards without the comm channel.
 

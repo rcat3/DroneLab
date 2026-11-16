@@ -36,4 +36,4 @@ Run `./render.sh` in this folder to render both cases to the `stl/` folder (it n
 
 ## Credits and License
 
-These cases are an original design.  Their clasp works the same way as the older 1.28" and 1.46" travel cases' clasp, a lever with a C that snaps round a bar, but it's drawn from scratch, not taken from those files.  Like the housings, they're licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).  This is separate from the license of the rest of the repository.
+These cases are an original design.  Their clasp works the same way as the older 1.28" and 1.46" travel cases' clasp, a lever with a C that snaps round a bar, but it's drawn from scratch, not taken from those files.  Like the housings, they're by Rubber Cat, and licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).  This is separate from the license of the rest of the repository.

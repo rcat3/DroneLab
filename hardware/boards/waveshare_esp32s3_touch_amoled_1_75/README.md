@@ -72,7 +72,7 @@ These come from the 3D model, not from a print, so check them with test prints:
 - Behind the board is a chamber 7.1 mm deep, for a 603040 battery (6 x 30 x 40 mm, about 700-850 mAh) lying on its side and taped to the back.  It fits between the board's battery socket below it, its pin header above it, and the microphones to its right.  The battery's plug goes into the socket from behind, beside the battery rather than in front of it, so the battery can sit just behind the back plate, with 0.8 mm to spare (`battery_gap`) for foam tape.  Its outline is engraved on the front of the back, to show where to tape it.  That's what makes the housing thin.  It runs the board for about 4.5-5.5 hours.  The board charges it at 400 mA, about half its capacity an hour, the standard rate in LiPo datasheets, and it charges in about 2.5 hours.
 - There's no speaker.  The board's speaker socket is left empty, and the speaker and battery marks beside the two sockets show which is the battery's.  The sound player and the voice effects need a speaker, so this housing is for images, the voice displays, Lovense control and the phone remote.
 - The microphones don't need the speaker housing's cell, walled off from the chamber, as there's no speaker to keep out.  They keep its sleeves, sealed against the board by foam rings, so they hear the chamber, and not the gap behind the board, which is open to the outside through the USB-C and micro SD openings.  The chamber opens into the voice port through an opening in the back beside the battery, about 4 x 23 mm.
-- The thread is part of the back, so the whole housing turns as it's screwed in.  Where it ends up depends on where the thread starts, which is the same on every Millennium, so `thread_phase` turns the thread to bring the housing level.  It's 123 degrees, from the deprecated [1.28" housing](../../deprecated/waveshare_touch_lcd_1_28/), whose thread is fixed to its back in the same way.  Shallow ridges around the back of the side (`grip_count`, `grip_depth`) give a grip for screwing it in.
+- The thread is part of the back, so the whole housing turns as it's screwed in.  Where it ends up depends on where the thread starts, so `thread_phase` turns the thread to bring the housing level.  It's 133 degrees: 123 put a printed housing with the older thread level, and the current thread stops about 10 degrees sooner.  It also depends on where the mask's metal voice port adapter sits, which moves if the adapter is unscrewed by accident (see [Fitting the MSA Millennium Mask](../../masks/msa_millennium/README.md#the-thread)), so it may need setting to suit a mask.  Shallow ridges around the back of the side (`grip_count`, `grip_depth`) give a grip for screwing it in.
 - The back is held on with four M2 x 8 socket head screws, whose heads sit in counterbores under the mask's rim.  They're placed around the battery in a lopsided pattern, so the back only goes on one way, with the thread and the opening behind the microphones in the right place.
 
 ### Parts
@@ -86,7 +86,7 @@ These come from the 3D model, not from a print, so check them with test prints:
 #### Test prints
 
 - **`lp_lens_fit`** - The front 3 mm of the body around the display, to check the glass's fit.
-- **`lp_phase_test`** - The thread with a scale on its front.  Screw it all the way into the mask, hold the mask upright, and read the number at the top.  If it isn't 123, set `thread_phase` to it.  If the housing only sits a little crooked, there's no need for the test: if it sits turned clockwise, make `thread_phase` smaller by that many degrees, and if it's turned counter-clockwise, make it larger.
+- **`lp_phase_test`** - The thread with a scale on its front.  Make sure the mask's metal adapter is screwed firmly home, screw the test all the way in, hold the mask upright, and read the number at the top.  Where the test and a housing stop haven't always agreed, so trust the housing where you have one.  If the housing sits a little crooked: if it sits turned clockwise, make `thread_phase` smaller by that many degrees, and if it's turned counter-clockwise, make it larger.
 - **`plunger_test`** - The same as the speaker housing's.
 
 #### Screws
@@ -125,8 +125,8 @@ See the [build guide](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75
 
 ## Credits and License
 
-The housings are based on the 1.46" board's speaker housing, now in [`../../deprecated`](../../deprecated/waveshare_esp32s3_touch_lcd_1_46_speaker_housing/), which in turn is based on [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa) by whyrlpool.
+The housings grew out of the 1.46" board's speaker housing, now in [`../../deprecated`](../../deprecated/waveshare_esp32s3_touch_lcd_1_46_speaker_housing/), whose first version was built around the voice port thread from [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa) by whyrlpool.  None of whyrlpool's design is in them now: they screw in with the thread drawn in [`voice_port.scad`](../../masks/msa_millennium/voice_port.scad).
 
-Like the designs it's based on, everything in this folder is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).  This is separate from the license of the rest of the repository.
+Everything in this folder is by Rubber Cat, and is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).  This is separate from the license of the rest of the repository.
 
 Board dimensions come from Waveshare's published drawing and 3D model of the ESP32-S3-Touch-AMOLED-1.75.

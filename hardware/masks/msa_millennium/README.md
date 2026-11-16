@@ -4,9 +4,10 @@ What every housing made to fit the MSA Millennium mask shares, whichever board i
 
 ## Files
 
-- `voice_port.scad` - The voice port thread (`vpu_thread()`), its fit settings, and `thread_test()`, the thin rings for finding the right fit.
-- `vpu_thread_mesh.scad` - Loads the thread's mesh.  It's in a file of its own so the mesh is found from any board's folder.
-- `vendor/vpu_thread.stl` - The thread, taken from the 1.28" design (see Credits).  It's been cleaned up into a single solid, and the original's inner lip has been removed so the inside is a plain 42 mm bore.
+- `voice_port.scad` - The voice port thread (`vpu_thread()`), with its settings, and `thread_test()`, thin rings for checking the fit.
+- `thread_test.scad` - Test rings with a dial on the front, for seeing where the thread stops in a mask, and the plain rings from `thread_test()`.
+- `render.sh` - Renders the test rings to STL files, in `stl/`: `./render.sh` for the drawn dial ring, or name the parts (`drawn_dial`, `mesh_dial`, `dial_rings`, `fit_rings`).  The housings render the collar with their own parts.
+- `vendor/` - The older thread's mesh, from the 1.28" housing, with its own credits and license (see [`vendor/README.md`](vendor/README.md)).
 - `turning_collar.scad` - The collar that carries the thread and turns freely on the back of a housing, with its washer, gasket and the posts it turns on.  The housing can then be held level while only the collar is screwed in.
 - `keepout.scad` - The parts of the mask around the voice port that a housing mustn't hang into, for previews.
 
@@ -17,6 +18,8 @@ Include these from a housing with, for example, `include <../../masks/msa_millen
 `thread_scale` is 99.7%, which fit best in a mask out of three test rings at 99.4%, 99.7% and 100% (an earlier round found 98% too loose and 102% too tight).  The start of the thread is beveled (`thread_lead_in`) so it catches more easily.  Changing either changes every housing's thread.
 
 The thread reaches 8 mm into the port.  When it's screwed all the way in, the back of the collar's grip sits on the front of the port's threaded rim, so a housing's `z_grip` is where the rim ends up.
+
+The threaded rim the housings screw into is a metal adapter, which itself screws into the body of the mask.  It's easy to unscrew the adapter by accident when taking a housing out, and it stops in a slightly different place each time it's screwed back in, so where a housing ends up isn't the same every time.  A housing on the turning collar doesn't mind, as it's held level while the collar is screwed in.  For one with the thread fixed to it, hold the adapter still while unscrewing the housing, and make sure the adapter is screwed firmly home before putting one in.
 
 ## Around the voice port
 
@@ -32,6 +35,6 @@ Anything within about 38 mm of the port's center clears all of it.  Further down
 
 ## Credits and License
 
-The thread is from [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa) by whyrlpool, which adapted it from the [Gas Mask VPU Cover (MSA compatible)](https://cults3d.com/en/3d-model/various/gas-mask-vpu-cover-msa-compatible).
+The older thread in [`vendor/`](vendor/) is from [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa) by whyrlpool, which adapted it from the [Gas Mask VPU Cover (MSA compatible)](https://cults3d.com/en/3d-model/various/gas-mask-vpu-cover-msa-compatible), and is under its own license.
 
-Like the design it's from, everything in this folder is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).  This is separate from the license of the rest of the repository.
+The rest of this folder is by Rubber Cat, and is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).  This is separate from the license of the rest of the repository.

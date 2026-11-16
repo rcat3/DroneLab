@@ -25,6 +25,7 @@ hardware/boards/*/stl/
 hardware/**/stl/
 hardware/deprecated/*/*.stl
 hardware/deprecated/*/stl/
+hardware/masks/*/*.stl
 
 # KiCad local settings and backups
 *.kicad_prl

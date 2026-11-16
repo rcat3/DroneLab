@@ -53,6 +53,12 @@ Make `masks/<mask>/` with its port's thread and the shape of the mask around the
 
 ## Licenses
 
-The housings are based on whyrlpool's RP2040-LCD-1.28-MSA design, and like it, everything here is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/), unless its folder says otherwise.  The 1.75" housings' travel cases, and the generator in `common/travel_case.scad`, are an original design under the same license as the housings.  The deprecated boards' travel cases are under the [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/), like the design they're based on.  All of these are separate from the license of the rest of the repository.
+Everything here is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/), but not all of it is by the same people:
+
+- **By Rubber Cat:** the current housings in `boards/`, with their travel cases, `common/`, and `masks/msa_millennium/` apart from its `vendor/` folder.  These are original designs, including the voice port thread they screw in with, which is drawn in `masks/msa_millennium/voice_port.scad`.
+- **Based on whyrlpool's [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa):** the older voice port thread in `masks/msa_millennium/vendor/`, and the housings in `deprecated/`, which were printed with it.  They're under the same license as whyrlpool's design.
+- **Based on other designs:** the deprecated boards' travel cases are under the [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/), like the design they're based on.
+
+Each folder's README gives its credits.  All of these are separate from the license of the rest of the repository.
 
 These are independent designs, not made, sponsored or endorsed by MSA Safety Incorporated, which owns the MSA and Millennium trademarks.  The names are used only to say which mask the housings fit.

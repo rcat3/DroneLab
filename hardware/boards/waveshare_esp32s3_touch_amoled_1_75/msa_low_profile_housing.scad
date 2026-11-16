@@ -30,12 +30,11 @@
 //    wall on the left, as on the speaker housing.
 //
 // The whole housing turns as it's screwed in, so how it ends up sitting
-// depends on where the thread starts, which is the same on every Millennium.
-// thread_phase turns the thread on the back so the housing ends up level. It
-// comes from the 1.28" housing (now in hardware/deprecated), which has the
-// same thread, fixed to its back in the same way. To check it on a mask,
-// screw phase_test all the way in, hold the mask upright, and read the
-// number at the top of its scale.
+// depends on where the thread starts, and on where the mask's metal voice
+// port adapter sits, which moves if it's unscrewed by accident. thread_phase
+// turns the thread on the back so the housing ends up level. 123 put a
+// printed housing with the older mesh thread level; the drawn thread stops
+// about 10 degrees sooner, so it's 10 more.
 //
 // The board is turned a quarter turn from its usual way up, as in the
 // speaker housing, so its USB-C port faces right, out through the side, and
@@ -77,8 +76,8 @@ battery_outline = [0.8, 0.4];   // an outline engraved on the front of the back,
 
 /* [Layout] */
 board_rot = 90;             // USB-C to the right, buttons and micro SD to the left
-thread_phase = 123;         // degrees, counter-clockwise seen from the front. From the 1.28"
-                            // housing, screwed into a mask
+thread_phase = 133;         // degrees, counter-clockwise seen from the front. 123 for the mesh
+                            // thread, from a printed housing, plus 10 for the drawn thread
 body_r = 34;                // the same as the speaker housing's, big enough for the battery's corners
 body_wall = 3.0;
 edge_chamfer = 1.0;         // back edge of the body
