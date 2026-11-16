@@ -62,7 +62,7 @@ The board remembers it.  The remote goes to sleep after a minute or so; pressing
 
 ## The app
 
-The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now.  The Comm tab shows the board, the server and direct comms, one line each, with the talk button, the channel's people and the boards nearby; what's set once is in *Comm Settings*, behind the gear.  Set up the server there (its address, your name, the server password and your avatar), connect to it, then *Find* the board and pick yours.  The app passes the board's voice on to the server and plays the others to your headphones, and tells the board who's talking, for its status screen.  It has its own *Hold to talk*, and the board's settings can be changed in *Comm Settings* too: the mode, the [Comm Voice](#comm-voice), *Speaker off while talking*, when to show the Comm screen, and [direct comms](direct.md) and its group.
+The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now.  The Comm tab shows the board, the server and direct comms, one line each, with the talk button, the channel's people and the boards nearby; what's set once is in *Comm Settings*, behind the gear.  Pick your avatar there, and set up the server (its address, your name and the server password), connect to it, then *Find* the board and pick yours.  The app passes the board's voice on to the server and plays the others to your headphones, and tells the board who's talking, for its status screen.  It has its own *Hold to talk*, and the board's settings can be changed in *Comm Settings* too: the mode, the [Comm Voice](#comm-voice), *Speaker off while talking*, when to show the Comm screen, and [direct comms](direct.md) and its group.
 
 The server can have channels, so that several groups can share it: only those in the same channel hear each other.  *Change*, by the channel's name in the app, moves you to another, and the app goes back to it each time it connects.  Channels are made on the server, from Mumble on a computer, logged in as its SuperUser, or as someone it lets make them.
 
@@ -83,6 +83,8 @@ Voice goes to and from the server over UDP, which is quicker on a patchy connect
 The *Buffer* (in the server settings) is how long the others' voices wait before they play, to ride out an uneven connection: 60 ms to start, more on mobile data.  It doesn't grow by itself, so the delay stays put.
 
 The app's *Record* tab records the board's voice to the phone, for videos: see [Recording in the app](voice-lab.md#recording-in-the-app).
+
+The app's *Send* tab sends to the others' boards: a message for their [Terminal](terminal.md#messages-from-others), and commands for their [Lovense](lovense.md) devices (*STOP*, a level for each kind of motor, a pattern and its speed, and a reaction).  They go to everyone in your server channel and your direct comms group, or to those you pick, and each board only takes them if its wearer has allowed you, in a list for each: see [Commands from others](lovense.md#commands-from-others).  Over the server they go as Mumble plugin data, which the Mumble apps don't show, so it needs a server from Mumble 1.4 on.
 
 See [`app/README.md`](../../app/README.md) to build it.
 

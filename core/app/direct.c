@@ -20,8 +20,10 @@
 #include "mbedtls/sha256.h"
 
 #include "app/comm.h"
+#include "app/others.h"
 #include "app/settings.h"
 #include "hal.h"
+#include "lvgl.h"
 
 // 1 for a board that only echoes back what it hears, as itself, for trying
 // direct comms with one board that can send (set by -DRCAT_DIRECT_ECHO=1).
@@ -48,6 +50,7 @@
 #define TYPE_VOICE          0x01
 #define TYPE_HELLO          0x02
 #define TYPE_AVATAR         0x03
+#define TYPE_COMMAND        0x04
 #define BEACON              'G'         // a group says it's here, not encrypted
 #define BEACON_LR           0x01
 #define HELLO_TALKING       0x01
@@ -63,6 +66,9 @@
 #define TASK_BUSY_MS        2
 #define VOICE_QUEUE         8           // the wearer's voice, waiting to go
 #define REPEATS             2           // packets sent again in each after them
+#define COMMAND_QUEUE       4           // commands for others, waiting to go
+#define COMMAND_SENDS       3           // each is sent this many times, as nothing says it came
+#define COMMAND_GAP_MS      100         // this far apart
 
 // Relaying
 #define HOPS                1           // how many times a broadcast may be passed on
@@ -108,6 +114,14 @@ typedef struct
     uint8_t len;
     uint8_t opus[MAX_OPUS];
 } voice_t;
+
+typedef struct
+{
+    uint8_t targets;
+    uint32_t target[DIRECT_COMMAND_TARGETS];
+    uint8_t len;
+    uint8_t cmd[OTHERS_CMD_MAX];
+} command_t;
 
 static bool started;
 static volatile bool running;
@@ -182,6 +196,14 @@ static uint32_t avatar_piece_ms;
 // The wearer's voice: one writer (the comm channel's encoder), one reader
 static voice_t *voice_queue;
 static volatile uint32_t voice_write, voice_read;
+
+// Commands for others to send: one writer (the UI loop), one reader; the
+// one going out, and how many more times it's to go
+static command_t *command_queue;       // COMMAND_QUEUE of them, and the one going out after
+static volatile uint32_t command_write, command_read;
+static command_t *command_out;
+static int command_sends_left;
+static uint32_t command_sent_ms;
 
 #if DIRECT_DEBUG
 static volatile uint32_t dbg_queued, dbg_queue_full;
@@ -410,6 +432,39 @@ static void send_voice(const voice_t *v)
 }
 
 /* The peer that sent this, made if it's new: the weakest or oldest goes. */
+/* A command for others, for the boards it's for (all of them, with none). */
+static void send_command(const command_t *l)
+{
+    uint8_t plain[2 + 4 * DIRECT_COMMAND_TARGETS + OTHERS_CMD_MAX];
+    plain[0] = TYPE_COMMAND;
+    plain[1] = l->targets;
+    memcpy(plain + 2, l->target, 4 * l->targets);
+    size_t at = 2 + 4 * l->targets;
+    memcpy(plain + at, l->cmd, l->len);
+    send_sealed(plain, at + l->len);
+}
+
+/* A command heard: passed on, with who it's from, if it's for us. */
+static void heard_command(const peer_t *p, const uint8_t *plain, size_t len)
+{
+    if (len < 2 || 2 + 4 * (size_t)plain[1] > len)
+    {
+        return;
+    }
+    bool ours = plain[1] == 0;
+    for (int i = 0; i < plain[1] && !ours; i++)
+    {
+        uint32_t t;
+        memcpy(&t, plain + 2 + 4 * i, 4);
+        ours = t == own_id;
+    }
+    if (ours)
+    {
+        size_t at = 2 + 4 * (size_t)plain[1];
+        others_queue(p->name, plain + at, len - at);
+    }
+}
+
 static peer_t *find_peer(uint32_t id, uint32_t now)
 {
     peer_t *spare = NULL;
@@ -752,6 +807,10 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
         {
             heard_avatar_piece(p, plain, plain_len);
         }
+        else if (plain[0] == TYPE_COMMAND)
+        {
+            heard_command(p, plain, plain_len);
+        }
     }
     __atomic_add_fetch(&peers_seq, 1, __ATOMIC_SEQ_CST);
 
@@ -824,6 +883,21 @@ static void direct_task(void *arg)
             heard(msg, len, rssi, now);
         }
         relay_due(now);
+
+        // Commands for others, each a few times over
+        if (command_sends_left == 0 && command_read != __atomic_load_n(&command_write, __ATOMIC_ACQUIRE))
+        {
+            *command_out = command_queue[command_read % COMMAND_QUEUE];
+            __atomic_store_n(&command_read, command_read + 1, __ATOMIC_RELEASE);
+            command_sends_left = COMMAND_SENDS;
+            command_sent_ms = now - COMMAND_GAP_MS;
+        }
+        if (command_sends_left > 0 && now - command_sent_ms >= COMMAND_GAP_MS)
+        {
+            command_sent_ms = now;
+            command_sends_left--;
+            send_command(command_out);
+        }
 
         // Scanning: a couple of seconds on each channel, then back
         if (scan_wanted && scan_at < 0)
@@ -926,6 +1000,9 @@ void direct_init(void)
 {
     own_id = rcat_hal_random();
     voice_queue = calloc(VOICE_QUEUE, sizeof(voice_t));
+    // Out of internal RAM, which WiFi and Bluetooth need (PSRAM first)
+    command_queue = lv_malloc((COMMAND_QUEUE + 1) * sizeof(command_t));
+    command_out = command_queue != NULL ? &command_queue[COMMAND_QUEUE] : NULL;
     // Big enough to go in PSRAM
     own_avatar = calloc(AVATAR_PIXELS, sizeof(uint16_t));
     avatar_order = calloc(AVATAR_PIXELS, sizeof(uint16_t));
@@ -1131,6 +1208,26 @@ void direct_set_voice_cb(direct_voice_cb_t cb, void *user_data)
     voice_cb = cb;
 }
 
+bool direct_send_command(const uint32_t *targets, int count, const uint8_t *cmd, size_t len)
+{
+    if (!running || command_queue == NULL || count < 0 || count > DIRECT_COMMAND_TARGETS || len > OTHERS_CMD_MAX)
+    {
+        return false;
+    }
+    uint32_t w = command_write;
+    if (w - __atomic_load_n(&command_read, __ATOMIC_ACQUIRE) >= COMMAND_QUEUE)
+    {
+        return false;
+    }
+    command_t *l = &command_queue[w % COMMAND_QUEUE];
+    l->targets = (uint8_t)count;
+    memcpy(l->target, targets, 4 * (size_t)count);
+    l->len = (uint8_t)len;
+    memcpy(l->cmd, cmd, len);
+    __atomic_store_n(&command_write, w + 1, __ATOMIC_RELEASE);
+    return true;
+}
+
 void direct_group_id(uint8_t out[4])
 {
     memcpy(out, group_id, 4);
@@ -1274,6 +1371,11 @@ void direct_send_voice(uint16_t seq, uint8_t flags, const uint8_t *opus, size_t 
 
 void direct_set_voice_cb(direct_voice_cb_t cb, void *user_data)
 {
+}
+
+bool direct_send_command(const uint32_t *targets, int count, const uint8_t *cmd, size_t len)
+{
+    return false;
 }
 
 void direct_group_id(uint8_t out[4])

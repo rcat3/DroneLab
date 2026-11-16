@@ -1,6 +1,7 @@
 /*
- * The settings block (see hal.h), kept as a blob in NVS, and the battery log,
- * in a partition of its own, for the ESP32 boards
+ * The settings block and the other stored blocks (see hal.h), kept as blobs
+ * in NVS, and the battery log, in a partition of its own, for the ESP32
+ * boards
  */
 
 #include <string.h>
@@ -57,6 +58,35 @@ bool rcat_hal_settings_write(const void *data, size_t len)
     }
 
     esp_err_t err = nvs_set_blob(nvs, NVS_SETTINGS_KEY, data, len);
+    if (err == ESP_OK)
+    {
+        err = nvs_commit(nvs);
+    }
+    nvs_close(nvs);
+    return err == ESP_OK;
+}
+
+size_t rcat_hal_store_read(const char *name, void *data, size_t len)
+{
+    nvs_handle_t nvs;
+    if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK)
+    {
+        return 0;
+    }
+    size_t stored_len = len;
+    esp_err_t err = nvs_get_blob(nvs, name, data, &stored_len);
+    nvs_close(nvs);
+    return err == ESP_OK ? stored_len : 0;
+}
+
+bool rcat_hal_store_write(const char *name, const void *data, size_t len)
+{
+    nvs_handle_t nvs;
+    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK)
+    {
+        return false;
+    }
+    esp_err_t err = nvs_set_blob(nvs, name, data, len);
     if (err == ESP_OK)
     {
         err = nvs_commit(nvs);

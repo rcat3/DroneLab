@@ -41,6 +41,11 @@
  *            All of it soon after a new board's heard and every few
  *            minutes, and the coarsest two layers every half minute; a
  *            piece at a time, and never while talking
+ *     command: 04, how many boards it's for (1, 0 for every board in the
+ *            group), their ids (4 bytes each), then a command for the
+ *            others (see others.h). Sent three times, 100 ms apart, as nothing
+ *            says it came; the command says which it is, so it's only done
+ *            once
  *   then an 8-byte tag.
  * A board ignores the group's broadcasts from a sender whose counter hasn't
  * gone up, so a recorded one can't be played back.
@@ -75,6 +80,7 @@
 #define DIRECT_GROUPS_MAX       8
 #define DIRECT_KEY_ROUNDS       20000   // PBKDF2's, for direct_key
 #define DIRECT_AVATAR_PX        112     // the avatars sent over the air
+#define DIRECT_COMMAND_TARGETS  DIRECT_PEERS_MAX    // boards a command's for, at most
 #define DIRECT_CHANNEL_DEFAULT  6       // and the open group's
 
 #define DIRECT_FIRST            0x01    // voice flags, as the comm channel's
@@ -124,6 +130,12 @@ void direct_key(const char *group, const char *passphrase, uint8_t key[DIRECT_KE
 
 /* Broadcast one packet of the wearer's voice. From any one task. */
 void direct_send_voice(uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len);
+
+/* Send a command for others (others.h) to the boards with these ids
+ * (direct_peer_t's), or, with count 0, to every board in the group. From the
+ * UI loop. Returns false if it can't go: not running, or a few are waiting
+ * to go already. */
+bool direct_send_command(const uint32_t *targets, int count, const uint8_t *cmd, size_t len);
 
 /* Called with each packet of the others' voice, on direct comms' own task:
  * quick, and no LVGL. */

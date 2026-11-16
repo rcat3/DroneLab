@@ -9,11 +9,15 @@
  * smaller than AUTO_MIN_SCALE, to stay readable. When it doesn't fit, it
  * scrolls like a terminal: the newest lines stay on screen and the oldest go
  * off the top.
+ *
+ * Others in the comm channel can send messages to it too, from the app (see
+ * app/others.h): its second page says who may.
  */
 #include <string.h>
 
 #include "app/message.h"
 #include "app/settings.h"
+#include "ui/others_page.h"
 #include "ui/ui_internal.h"
 
 #define COLOR_PHOSPHOR      lv_color_hex(0x33ff33)
@@ -325,6 +329,7 @@ static bool build(ui_feature_t *feature)
     add_scanlines();
 
     ui_add_startup_choice(feature, page, "Terminal", "terminal");
+    ui_others_page_add(feature, OTHERS_TERMINAL);
     lv_timer_create(tick_cb, TICK_MS, NULL);
     tick_cb(NULL);
     return true;

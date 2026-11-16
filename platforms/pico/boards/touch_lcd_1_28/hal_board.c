@@ -241,6 +241,23 @@ bool rcat_hal_settings_write(const void *data, size_t len)
     return flash_safe_execute(settings_write_cb, &w, 100) == PICO_OK;
 }
 
+/* Nothing here needs more than the settings block. */
+size_t rcat_hal_store_read(const char *name, void *data, size_t len)
+{
+    (void)name;
+    (void)data;
+    (void)len;
+    return 0;
+}
+
+bool rcat_hal_store_write(const char *name, const void *data, size_t len)
+{
+    (void)name;
+    (void)data;
+    (void)len;
+    return false;
+}
+
 bool rcat_hal_log_read(void *data, size_t len)
 {
     if (len > RCAT_HAL_LOG_SIZE)

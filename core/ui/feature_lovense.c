@@ -18,6 +18,8 @@
  *             reactive.h), on top of any pattern.
  *   Options:  Motor Hold: on, a motor keeps its level when you let go of its
  *             knob; off, it goes back to 0.
+ *   Others:   who may send commands from the comm channel (see
+ *             app/others.h and others_page.h).
  *
  * The connections keep running while you look at other features, so the
  * levels stay as they were set. Everything here can also be done from a
@@ -30,6 +32,7 @@
 #include "app/patterns.h"
 #include "app/reactive.h"
 #include "app/settings.h"
+#include "ui/others_page.h"
 #include "ui/ui_internal.h"
 
 #define POLL_MS             50
@@ -1087,6 +1090,7 @@ static bool build(ui_feature_t *feature)
     add_patterns_page(feature);
     add_react_page(feature);
     add_options_page(feature);
+    ui_others_page_add(feature, OTHERS_LOVENSE);
     show_control();
     lv_timer_create(poll_timer_cb, POLL_MS, NULL);
     return true;

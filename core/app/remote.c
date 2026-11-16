@@ -22,6 +22,11 @@
  *     POST /api/scan?on=<1 or 0>
  *     POST /api/connect?d=<slot>      connect, or disconnect if connected
  *     POST /api/stop                  everything, as the Stop button
+*     POST /api/others?kind=<0 Lovense, 1 Terminal>[&accept=<1 or 0>][&name=<who>&via=<0 server, 1 direct>
+*                       &allow=<1 or 0>][&forget=1][&unnamed=<1 or 0: the Terminal's unnamed messages shown>]
+*                                     commands from others in the comm channel
+*                                     (app/others.h): take them or not, and
+*                                     who may send them
  *     POST /api/show?f=<feature>&p=<page>     bring a page on screen
  *     POST /api/message?append=<1 or 0>&show=<1 or 0>   the body (UTF-8) to
  *                                     the Terminal feature, and show it there
@@ -56,6 +61,7 @@
 #include "app/comm.h"
 #include "app/direct.h"
 #include "app/lovense.h"
+#include "app/others.h"
 #include "app/message.h"
 #include "app/patterns.h"
 #include "app/reactive.h"
@@ -483,6 +489,32 @@ static void write_state(json_t *j)
         }
         jprintf(j, "]}");
     }
+    jprintf(j, "]");
+
+    // Commands from others in the comm channel, a list for each kind
+    jprintf(j, ",\"others\":[");
+    for (int k = 0; k < OTHERS_KIND_COUNT; k++)
+    {
+        uint32_t age = 0;
+        const char *last = others_last((others_kind_t)k, now, &age);
+        jprintf(j, "%s{\"accept\":%d,", k ? "," : "", others_accepting((others_kind_t)k) ? 1 : 0);
+        if (k == OTHERS_TERMINAL)
+        {
+            jprintf(j, "\"unnamed\":%d,", others_unnamed_shown() ? 1 : 0);
+        }
+        jprintf(j, "\"last\":");
+        jstring(j, last != NULL ? last : "");
+        jprintf(j, ",\"age\":%lu,\"senders\":[", (unsigned long)(age / 1000));
+        others_sender_t senders[OTHERS_SENDERS_MAX];
+        int n = others_senders((others_kind_t)k, senders, OTHERS_SENDERS_MAX);
+        for (int i = 0; i < n && i < OTHERS_SENDERS_MAX; i++)
+        {
+            jprintf(j, "%s{\"name\":", i ? "," : "");
+            jstring(j, senders[i].name);
+            jprintf(j, ",\"via\":%d,\"allowed\":%d}", (int)senders[i].via, senders[i].allowed ? 1 : 0);
+        }
+        jprintf(j, "]}");
+    }
     jprintf(j, "]}");
 }
 
@@ -842,6 +874,37 @@ static bool run_command(const char *name, const char *query, const char *body, s
     {
         lovense_stop_all();
         reactive_set_mode(REACTIVE_OFF);
+    }
+    else if (strcmp(name, "others") == 0)
+    {
+        int kind = query_int(query, "kind", -1);
+        if (kind < 0 || kind >= OTHERS_KIND_COUNT)
+        {
+            return true;
+        }
+        int accept = query_int(query, "accept", -1);
+        if (accept >= 0)
+        {
+            others_set_accepting((others_kind_t)kind, accept != 0);
+        }
+        int unnamed = query_int(query, "unnamed", -1);
+        if (unnamed >= 0 && kind == OTHERS_TERMINAL)
+        {
+            others_set_unnamed_shown(unnamed != 0);
+        }
+        char who[COMM_NAME_MAX];
+        int via = query_int(query, "via", -1);
+        if (query_str(query, "name", who, sizeof(who)) && via >= 0 && via < COMM_TALK_COUNT)
+        {
+            if (query_int(query, "forget", 0))
+            {
+                others_forget((others_kind_t)kind, (comm_transport_t)via, who);
+            }
+            else
+            {
+                others_allow((others_kind_t)kind, (comm_transport_t)via, who, query_int(query, "allow", 0) != 0);
+            }
+        }
     }
     else if (strcmp(name, "show") == 0)
     {

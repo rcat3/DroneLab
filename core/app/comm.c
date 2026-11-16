@@ -26,6 +26,7 @@
 #include "opus.h"
 
 #include "app/direct.h"
+#include "app/others.h"
 #include "app/remote.h"
 #include "app/settings.h"
 #include "app/talk_button.h"
@@ -99,6 +100,8 @@
 #define MSG_RECORD          0x0A    // both ways: start or stop recording, and what's recorded
 #define RECORD_SPEAKER      0x01    // the speaker's voice effect, not the comm voice
 #define RECORD_BEEP         0x02    // with a sync beep to start
+#define MSG_COMMAND         0x0B    // from the phone: a command for others, in from the server or out over direct
+#define COMMAND_FROM_SERVER 0x01
 // The beep comes out of the speaker about this long after the speaker's
 // task makes it (as voice_lab.c), so it's put in the recording then too
 #define BEEP_OUT_DELAY_MS   25
@@ -1254,8 +1257,48 @@ uint32_t comm_pairing_left(uint32_t now_ms)
     return pairing_open ? pairing_until - now_ms : 0;
 }
 
+/* A command for others (others.h): from someone on the server, for this
+ * board, or from the wearer, to send over direct comms. */
+static void receive_command(const uint8_t *msg, size_t len)
+{
+    if (len < 3)
+    {
+        return;
+    }
+    if (msg[1] & COMMAND_FROM_SERVER)
+    {
+        size_t n = msg[2];
+        if (3 + n > len || n >= COMM_NAME_MAX)
+        {
+            return;
+        }
+        char from[COMM_NAME_MAX];
+        memcpy(from, msg + 3, n);
+        from[n] = '\0';
+        others_receive(COMM_TALK_SERVER, from, msg + 3 + n, len - 3 - n);
+    }
+    else
+    {
+        int count = msg[2];
+        if (count > DIRECT_COMMAND_TARGETS || 3 + 4 * (size_t)count > len)
+        {
+            return;
+        }
+        uint32_t targets[DIRECT_COMMAND_TARGETS];
+        for (int i = 0; i < count; i++)
+        {
+            const uint8_t *t = msg + 3 + 4 * i;
+            targets[i] = t[0] | (t[1] << 8) | (t[2] << 16) | ((uint32_t)t[3] << 24);
+        }
+        size_t at = 3 + 4 * (size_t)count;
+        direct_send_command(targets, count, msg + at, len - at);
+    }
+}
+
 void comm_poll(uint32_t now_ms)
 {
+    others_poll(now_ms);
+
     // Shut pairing when its time's up, or once a phone's paired with a code
     static bool code_shown;
     if (pairing_open && rcat_hal_ble_peer_passkey() >= 0)
@@ -1312,6 +1355,10 @@ void comm_poll(uint32_t now_ms)
         else if (msg[0] == MSG_AVATAR)
         {
             receive_avatar(msg, len);
+        }
+        else if (msg[0] == MSG_COMMAND)
+        {
+            receive_command(msg, len);
         }
         else if (msg[0] == MSG_RECORD && len >= 3)
         {

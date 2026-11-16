@@ -74,6 +74,14 @@ bool rcat_hal_accel_read(float *x, float *y, float *z);
 bool rcat_hal_settings_read(void *data, size_t len);
 bool rcat_hal_settings_write(const void *data, size_t len);
 
+/* Persistent storage for other small blocks, apart from the settings, each by
+ * a name of up to 15 characters, such as the lists of who may send this
+ * board commands (app/others.h). rcat_hal_store_read returns how
+ * many bytes it read, or 0 if nothing's stored (or the board can't store
+ * them). The caller validates the contents. */
+size_t rcat_hal_store_read(const char *name, void *data, size_t len);
+bool rcat_hal_store_write(const char *name, const void *data, size_t len);
+
 /* Storage for the battery log (see app/battery_log.h): one block of up to
  * RCAT_HAL_LOG_SIZE bytes, kept apart from the settings, in a fixed place in
  * flash so tools/battery_log.py can read it straight out over USB. The

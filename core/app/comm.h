@@ -56,6 +56,13 @@
  *                  the slot afresh. The phone sends them without waiting
  *                  for a response, a few at a time, waiting for the ack of
  *                  the last of each few, so as not to overrun the board.
+ *     0x0B command: 0B, flags (bit 0 from the server), then a command for
+ *                  the others (see others.h). From the server: who it's from,
+ *                  their name's length (1) then their name, in UTF-8, then
+ *                  the command, for this board's devices. Otherwise it's
+ *                  the wearer's, to send over direct comms: how many boards
+ *                  it's for (1, 0 for all of them), their ids (4 bytes each,
+ *                  little endian, as 0x08's), then the command.
  *   Messages from the phone are at most RCAT_HAL_BLE_PEER_MSG_MAX bytes (244),
  *   and no more than the MTU allows; before COMM_VERSION 3, 64.
  *
@@ -114,8 +121,9 @@
  *      code; the status's bit 2, the talk button
  *   3  server (0x04), hearing (0x05) and avatars (0x06), from the phone, in
  *      messages up to 244 bytes; direct comms (0x07 to 0x09); recording
- *      (0x0A) */
-#define COMM_VERSION            3
+ *      (0x0A)
+ *   4  commands for the others (0x0B) */
+#define COMM_VERSION            4
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4
