@@ -5,6 +5,7 @@ This is for working on the firmware itself: how it's put together, and how to ad
 - [Adding a feature](adding-a-feature.md): a new section of the display, like Images or Level.
 - [The hardware abstraction layer](hardware-abstraction.md): how the application reaches the hardware, and how to give it something new.
 - [Adding a board](adding-a-board.md): supporting another display, in the firmware and with a housing.
+- [Contributing](contributing.md): sending a change as a pull request, and how contributions are licensed.
 
 ## How it's put together
 

@@ -60,3 +60,9 @@ See [Developing](docs/development/README.md) for how it fits together, and how t
 ## Acknowledgement
 
 The first housing for the 1.28" display was the [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa) model by whyrlpool.  Their voice port thread has been reused by every housing in this project.  The housings are under their own Creative Commons licenses, which are described in [`hardware/`](hardware/README.md#licenses).
+
+## License
+
+The firmware, app and tools are licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).  You're free to build them, flash them to your own boards, change them and share them, as long as it isn't for a commercial purpose, and as long as you pass on the license and the copyright notice with anything based on them.  Selling them, or devices running them, needs permission.  Third-party code keeps its own license, and the housings in `hardware/` have their own Creative Commons licenses, as above.
+
+Contributions are welcome as pull requests.  Code you contribute is licensed to Rubber Cat under the MIT License (see [Contributing](docs/development/contributing.md)).
