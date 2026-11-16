@@ -1,4 +1,4 @@
-# MSA Millennium Housing for the ESP32-S3-Touch-LCD-1.46 (deprecated)
+# Housing for the ESP32-S3-Touch-LCD-1.46 (deprecated)
 
 **This housing is no longer supported.**  The [ESP32-S3-Touch-AMOLED-1.75](../../boards/waveshare_esp32s3_touch_amoled_1_75/) and its housings replace it: they need no soldering to charge their batteries safely, as the 1.75" board's charger is set by the firmware, where this board's needs a tiny resistor changed.  The design is kept here for anyone who wants to build it.  The firmware still supports the board (see [Other Boards](../../../docs/other-boards.md)).
 

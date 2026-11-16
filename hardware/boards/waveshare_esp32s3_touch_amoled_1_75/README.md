@@ -1,4 +1,4 @@
-# MSA Millennium Housings for the ESP32-S3-Touch-AMOLED-1.75
+# Housings for the ESP32-S3-Touch-AMOLED-1.75
 
 3D printable housings that screw the [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/esp32-s3-touch-amoled-1.75.htm) into the voice port of an MSA Millennium mask.  They're for the bare board, not the -B version that comes in its own case.  There are two:
 

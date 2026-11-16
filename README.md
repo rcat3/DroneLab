@@ -67,3 +67,7 @@ The first housing for the 1.28" display was the [RP2040-LCD-1.28-MSA](https://ww
 The firmware, app and tools are licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).  You're free to build them, flash them to your own boards, change them and share them, as long as it isn't for a commercial purpose, and as long as you pass on the license and the copyright notice with anything based on them.  Selling them, or devices running them, needs permission.  Third-party code keeps its own license, and the housings in `hardware/` have their own Creative Commons licenses, as above.
 
 Contributions are welcome as pull requests.  Code you contribute is licensed to Rubber Cat under the MIT License (see [Contributing](docs/development/contributing.md)).
+
+## Trademarks
+
+MSA and Millennium are trademarks of MSA Safety Incorporated.  DroneLab is an independent project, not made, sponsored or endorsed by MSA, and its housings aren't MSA products or accessories.  "For the MSA Millennium" here only means a housing is made to fit that mask's voice port.  Likewise, Waveshare, Lovense, Mumble and the other product and company names here are trademarks of their owners.  They're used only to say what the project is built on or works with, and none of those companies makes, sponsors or endorses DroneLab.

@@ -1,4 +1,4 @@
-# MSA Millennium Housing for the RP2040/RP2350-Touch-LCD-1.28 (deprecated)
+# Housing for the RP2040/RP2350-Touch-LCD-1.28 (deprecated)
 
 **This housing is no longer supported.**  The [ESP32-S3-Touch-AMOLED-1.75](../../boards/waveshare_esp32s3_touch_amoled_1_75/) and its housings replace it.  This one needs a switch soldered into the battery's lead, and a tiny resistor on the board changed to charge its small battery safely, where the 1.75" board has a power button and a charger set by the firmware.  The design is kept here for anyone who wants to build it.  The firmware still supports the boards (see [Other Boards](../../../docs/other-boards.md)).
 

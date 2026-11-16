@@ -1,6 +1,6 @@
-# MSA Millennium
+# Fitting the MSA Millennium Mask
 
-What every housing for the MSA Millennium mask shares, whichever board is in it.
+What every housing made to fit the MSA Millennium mask shares, whichever board is in it.  The thread and measurements here were taken from a mask and test prints, not from MSA's drawings, and MSA Safety Incorporated has nothing to do with this project.
 
 ## Files
 
