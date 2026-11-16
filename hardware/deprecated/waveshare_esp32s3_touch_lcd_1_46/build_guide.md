@@ -41,7 +41,7 @@ In [this folder](./), run `./render.sh` (it needs [OpenSCAD](https://openscad.or
 3. Screw the board to the back plate with the three M2 screws, from the back, through the inside of the thread, into the standoffs on the board.
 4. Plug the battery into the extension and tuck it into the space inside the thread.
 
-To use USB (to charge, or for the first flash with [updates over WiFi](../../../docs/building-firmware.md#updating-over-wifi), after which new firmware can go over WiFi), take the board out and unplug the battery first.  To print the housing with an opening for the port, set `usb_access = true` in the design.
+To use USB (to charge, or for the first flash with [updates over WiFi](../../../docs/updating-over-wifi.md), after which new firmware can go over WiFi), take the board out and unplug the battery first.  To print the housing with an opening for the port, set `usb_access = true` in the design.
 
 ## Travel case
 

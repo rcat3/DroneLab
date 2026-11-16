@@ -64,4 +64,4 @@ The log stays in flash, and the last run's stays there until the new one's been 
 
 ## Firmware Update
 
-On the ESP32-S3 boards, lets new firmware be sent over the board's hotspot from a computer, with `tools/update.py`.  Switching it on shows a code for the script, and the hotspot's name and password.  See [Updating over WiFi](../building-firmware.md#updating-over-wifi).
+On the ESP32-S3 boards, lets new firmware be sent over the board's hotspot from a computer, with `tools/update.py`.  Switching it on shows a code for the script, and the hotspot's name and password.  Flashing over USB is simpler and is the recommended way to update (see [Building the Firmware](../building-firmware.md#updating)); this is for a board whose USB port can't be reached.  See [Updating over WiFi](../updating-over-wifi.md).
