@@ -19,6 +19,6 @@ flutter build apk --release
 flutter install                                # to a phone with USB debugging on
 ```
 
-Release builds are signed with the key that `android/key.properties` names (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`); it and the keystore stay out of the repo.  Without it they're signed with the debug key, and won't install over a properly signed copy.  For handing the app out, `flutter build apk --release --split-per-abi` makes one smaller APK per CPU type; most phones want the arm64-v8a one.
+Release builds are signed with the key that `android/key.properties` names (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`); it and the keystore stay out of the repo.  Without it they're signed with the debug key, and won't install over a properly signed copy.  For handing the app out, `flutter build apk --release --split-per-abi` makes one smaller APK per CPU type; most phones want the arm64-v8a one.  Debug builds are a separate app, `io.github.rcat3.dronelab.debug` named "DroneLab dev", so they install beside a released copy with their own settings.
 
 The Mumble test logs two clients in to a real server and sends voice from one to the other.

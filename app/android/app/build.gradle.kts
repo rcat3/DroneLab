@@ -35,6 +35,7 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["appLabel"] = "DroneLab"
     }
 
     // The release key is kept out of the repo: android/key.properties names it.
@@ -51,6 +52,11 @@ android {
     }
 
     buildTypes {
+        // Debug builds are a separate app, so one can sit beside the released one.
+        debug {
+            applicationIdSuffix = ".debug"
+            manifestPlaceholders["appLabel"] = "DroneLab dev"
+        }
         release {
             signingConfig = if (keystoreProperties.isNotEmpty())
                 signingConfigs.getByName("release")
