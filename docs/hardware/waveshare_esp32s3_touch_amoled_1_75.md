@@ -29,8 +29,9 @@ Below the voice port is the mask's filter mount.  The speaker housing's pod stay
 - A [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75), the bare board
 - A speaker module, 35 x 25 x 6.5 mm sealed box with an oval cone on the front, 4 ohm, with an MX1.25 2-pin plug (or one crimped on)
 - A LiPo battery up to 50.5 x 34 x 9.9 mm (a 103450, 2000 mAh) with an MX1.25 2-pin plug.  Check its polarity against the board before plugging it in.
-- Plasticine (modeling clay that never hardens), a piece about the size of a grape
+- Plasticine (modeling clay that never hardens), about 20 g, a piece about the size of a walnut
 - Thin foam tape, about 1 mm, and a scrap of soft foam about 2 mm thick, such as craft foam
+- A piece of open-cell foam (soft and sponge-like, that air passes through, as used behind speaker grilles), enough to fill the microphones' cell
 - M2 socket head screws: four M2 x 8 for the back, four M2 x 6 for the washer, and four M2 x 8 for the chin
 - Three M2 x 5 countersunk screws for the board
 
@@ -55,10 +56,14 @@ The speaker and battery sockets stand up off the back of the board, so their plu
 1. Push the plungers in from inside the display's pocket.  Cut two small squares of the soft foam, about 4 mm across, poke a hole through the middle of each with a toothpick, and put one over the end of each microphone sleeve on the back plate, lined up with its hole.  They seal the sleeves against the board, so the microphones only hear the voice port.  Then fit the board and screw it to the back plate with the countersunk screws.
 2. Push the speaker's plug through the opening at the inner end of the pocket, into the chamber.  Then stick the speaker into its pocket from the back of the pod, with its wire in the notch in the side of the pocket, and run the wire behind the speaker to the opening.  Spread a thin layer of plasticine (modeling clay that never hardens) over the back of the speaker, so it fills the space between the speaker and the chin, and screw the chin on.
 3. Plug the speaker into the board's speaker socket, through the opening in the back plate.  Then press plasticine into the opening between the speaker's pocket and the chamber, all round the wire, so it's sealed.  The microphones listen into the chamber, so the less of the speaker reaches it, the louder the voice effect can go before it feeds back: sealing it, and the plasticine behind the speaker, cut the speaker's sound in the microphones by 5 dB, and what's left after echo cancelling by 11 dB.  Keep the plasticine off the board and out of the sockets.
-4. Stick foam tape along the tops of the ribs that wall off the microphones, on the right.  Plug in the battery the same way as the speaker, and tape it to the back, standing upright, so it presses on the foam.  Press a little plasticine into any gap where the ribs meet the battery's side, so the microphones' cell is sealed, and fill any space left around the battery with thin foam, so it can't rattle.
-5. Screw the back on with the M2 x 8 screws.
-6. Put the gasket over the posts, then the collar, grip first.
-7. Drop each half of the washer in through the threaded end, line its holes up with two posts, and screw it down with the M2 x 6 screws.  Stop when the collar turns firmly but smoothly.
+4. Stick foam tape along the tops of the ribs that wall off the microphones, on the right.  Cut a block of the open-cell foam to fill the microphones' cell, between the ribs and the wall, and push it in.  It has to be open-cell foam, which sound passes through, as the microphones hear the voice port through it; it soaks up the sound bouncing around in the cell.
+5. Press plasticine around the inside of the chamber's wall, all the way round where the battery will go, in a band about as deep as the battery: it fills the empty space around the battery, so less of the speaker's sound echoes around the chamber, and holds the battery in place.  Keep it off the board's sockets, the openings in the back plate and the screw holes.
+6. Plug in the battery the same way as the speaker, and tape it to the back, standing upright, inside the ring of plasticine, so its side presses on the foam tape on the ribs.  Press a little more plasticine into any gap where the ribs meet the battery's side, so the microphones' cell is sealed.
+
+   ![The chamber, with the battery out: plasticine around the wall, and foam in the microphones' cell on the left, seen from the back](../images/speaker_housing_1_75_chamber.jpg)
+7. Screw the back on with the M2 x 8 screws.
+8. Put the gasket over the posts, then the collar, grip first.
+9. Drop each half of the washer in through the threaded end, line its holes up with two posts, and screw it down with the M2 x 6 screws.  Stop when the collar turns firmly but smoothly.
 
 The USB-C port is reachable through a pocket in the right-hand side, for charging and flashing, with a small plug to cover it when it's not in use.
 
