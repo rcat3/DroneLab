@@ -51,6 +51,7 @@ See [Developing](docs/development/README.md) for how it fits together, and how t
 
 - **[Building one](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md):** the parts to buy, printing, wiring, putting it together, and building and flashing the firmware, for either housing.
 - **[Building the Firmware](docs/building-firmware.md):** getting the code, setting up ESP-IDF, building, flashing, and choosing which features to build.
+- **[Installing the App](docs/installing-the-app.md):** getting the DroneLab phone app onto an Android phone, and pairing it with the board.
 - **[Using the Display](docs/using-the-display.md):** finding your way around, and turning it on and off.
 - **[Features](docs/features/README.md):** each feature in detail, with what it needs.
 - **[Developing](docs/development/README.md):** how it's put together, [adding a feature](docs/development/adding-a-feature.md), [the hardware abstraction layer](docs/development/hardware-abstraction.md) and [adding a board](docs/development/adding-a-board.md).
