@@ -6,7 +6,7 @@ What started as a simple application to display images on Waveshare displays has
 
 ![The housings, to scale](docs/images/housings_to_scale.png)
 
-*The two housings, to scale: the low-profile housing (left) and the speaker housing (right).*
+*The two housings, to scale: the speaker housing (left) and the low-profile housing (right).*
 
 ## What it does
 
@@ -32,8 +32,8 @@ There are two 3D printable housings for it that screw into the mask's voice port
 
 | | |
 |---|---|
-| ![The low-profile housing](docs/images/low_profile_housing_1_75.png) | **[Low-profile housing](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md#the-low-profile-housing)** (designed, not printed yet): the entry-level build, without a speaker, for images, voice displays, Lovense control and the phone remote.  A flat battery for about 4.5-5.5 hours and the thread fixed to the back, standing about 23 mm out of the mask. |
 | ![The speaker housing](docs/images/speaker_housing_1_75.png) | **[Speaker housing](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md#the-speaker-housing)**: every feature, including sound and voice effects, with a speaker below the display that faces out, and a 2000 mAh battery for about 13.5 hours.  A turning collar holds it level. |
+| ![The low-profile housing](docs/images/low_profile_housing_1_75.png) | **[Low-profile housing](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md#the-low-profile-housing)** (designed, not printed yet): the entry-level build, without a speaker, for images, voice displays, Lovense control and the phone remote.  A flat battery for about 4.5-5.5 hours and the thread fixed to the back, standing about 23 mm out of the mask. |
 
 The housings' designs are in [`hardware/`](hardware/), in [OpenSCAD](https://openscad.org/).  The firmware also runs on a few other Waveshare round displays, which may be useful for other projects (see [Other Boards](docs/other-boards.md)).
 
