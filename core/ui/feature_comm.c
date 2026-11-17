@@ -3,7 +3,7 @@
  * channel's doing, at a glance, and its settings.
  *
  * The first page is the status screen, a green screen like the Terminal's:
- * "Comms" and an antenna at the top, which is struck through in red with no
+ * "HiveMind" and an antenna at the top, which is struck through in red with no
  * uplink (the phone's app), yellow without its waves while there's no server,
  * and green with its waves once everything's connected. In the middle, an
  * avatar in a frame: whoever's talking (RX), in full color, or the wearer,
@@ -60,7 +60,7 @@ static bool build(ui_feature_t *feature);
 static void on_navigate(void);
 
 const ui_feature_def_t feature_comm = {
-    .name = "Comm",
+    .name = "HiveMind",
     .build = build,
     .on_navigate = on_navigate,
 };
@@ -510,7 +510,7 @@ static lv_obj_t *add_bracket(lv_obj_t *parent, lv_align_t align, lv_border_side_
 
 static void add_status_page(ui_feature_t *feature)
 {
-    status_page = ui_feature_add_page(feature, "Comm", true);
+    status_page = ui_feature_add_page(feature, "HiveMind", true);
     lv_obj_set_scrollable(status_page, false);
 
     tx_ring = lv_obj_create(status_page);
@@ -522,7 +522,7 @@ static void add_status_page(ui_feature_t *feature)
     lv_obj_set_clickable(tx_ring, false);
     lv_obj_center(tx_ring);
 
-    // The top: the antenna, and "Comms" in the Terminal's letters
+    // The top: the antenna, and "HiveMind" in the Terminal's letters
     lv_obj_t *top = lv_obj_create(status_page);
     lv_obj_remove_style_all(top);
     lv_obj_set_size(top, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -541,7 +541,7 @@ static void add_status_page(ui_feature_t *feature)
     title = lv_label_create(top);
     lv_obj_set_style_text_font(title, &terminal_font_2, 0);
     lv_obj_set_style_text_letter_space(title, ui_px(2), 0);
-    lv_label_set_text(title, "Comms");
+    lv_label_set_text(title, "HiveMind");
 
     // The avatar, in a frame with corner brackets
     avatar_px = ui_px(AVATAR_DESIGN_PX) / AVATAR_SCALE;
@@ -614,7 +614,7 @@ static void add_status_page(ui_feature_t *feature)
     lv_label_set_text(name_label, "");
 
     show_status();
-    ui_add_startup_choice(feature, status_page, "Comm", "comm");
+    ui_add_startup_choice(feature, status_page, "HiveMind", "comm");   // "comm" is what's saved
 }
 
 /* ----- Coming to the status screen by itself ----- */
@@ -719,11 +719,11 @@ static void options_event_cb(lv_event_t *e)
 
 static void add_setup_page(ui_feature_t *feature)
 {
-    setup_page = ui_feature_add_page(feature, "Comm Setup", false);
+    setup_page = ui_feature_add_page(feature, "HiveMind Setup", false);
     lv_obj_set_scrollable(setup_page, false);
 
     lv_obj_t *t = lv_label_create(setup_page);
-    lv_label_set_text(t, "Comm Setup");
+    lv_label_set_text(t, "HiveMind Setup");
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, ui_px(28));
 
     // Push to talk, or talk whenever it hears you
@@ -740,7 +740,7 @@ static void add_setup_page(ui_feature_t *feature)
     lv_obj_add_event_cb(mute_switch, options_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     lv_obj_t *show_label = lv_label_create(setup_page);
-    lv_label_set_text(show_label, "Show Comm while");
+    lv_label_set_text(show_label, "Show HiveMind while");
     lv_obj_set_style_text_color(show_label, COLOR_MUTED, 0);
     lv_obj_align(show_label, LV_ALIGN_CENTER, 0, ui_px(36));
 
@@ -773,11 +773,11 @@ static void voice_roller_cb(lv_event_t *e)
 
 static void add_voice_page(ui_feature_t *feature)
 {
-    voice_page = ui_feature_add_page(feature, "Comm Voice", false);
+    voice_page = ui_feature_add_page(feature, "HiveMind Voice", false);
     lv_obj_set_scrollable(voice_page, false);
 
     lv_obj_t *t = lv_label_create(voice_page);
-    lv_label_set_text(t, "Comm Voice");
+    lv_label_set_text(t, "HiveMind Voice");
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, ui_px(28));
 
     size_t len = 32;
