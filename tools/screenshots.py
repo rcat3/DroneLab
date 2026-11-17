@@ -209,6 +209,10 @@ def doc_shots(board, out):
     take("lovense_react", "Lovense", 3)
     board.api("POST", "/api/stop")
     take("settings_level", "Settings", info["features"][-1][1].index("Level"))
+    # Rotation at 90 degrees, as the housings need
+    board.api("POST", "/api/display?rot=1")
+    take("settings_rotation", "Settings", info["features"][-1][1].index("Rotation"))
+    board.api("POST", f"/api/display?rot={before['display']['rotation']}")
 
     # Put things back as they were
     board.api("POST", "/api/clear")

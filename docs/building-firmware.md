@@ -1,8 +1,10 @@
 # Installing the Firmware
 
-<img src="images/katcorp_mark.png" width="96" align="right" alt="KatCorp">
+<img src="images/katcorp_mark.png" width="72" align="left" alt="KatCorp">
 
-*KatCorp Drone Systems: loading the DroneLab operating firmware.*
+**KatCorp Drone Systems**<br>DroneLab: Loading the Operating Firmware
+
+<br clear="left">
 
 The firmware is what makes the board a DroneLab unit.  There are three ways to put it on the board, all over USB:
 
@@ -10,7 +12,7 @@ The firmware is what makes the board a DroneLab unit.  There are three ways to p
 2. **[Flashing a release by hand](#flashing-a-release-by-hand)**, with Espressif's `esptool`.
 3. **[Building it yourself](#building-it-yourself)**, from the source code, to change it or to run the newest code before it's released.
 
-Whichever you use, you'll need a USB-C cable that carries data, not just charge.  The board can stay in its housing: the USB-C port is on its right side, under the small plug.
+Whichever you use, you'll need a USB-C cable that carries data, not just charge.  The board can stay in its housing: the USB-C port is on its right side (under its cover, if you printed one).
 
 Back to the [Build Guide](build/README.md).
 
@@ -139,7 +141,8 @@ Two more settings are fixed when the firmware is built:
 
 ## Other boards
 
-The same firmware builds for the [other boards](other-boards.md) it runs on.
+> [!NOTE]
+> **These boards aren't supported.**  DroneLab is built and tested for the ESP32-S3-Touch-AMOLED-1.75, and its housings are only for that board.  The firmware still builds for the [other boards](other-boards.md) below, for anyone who wants to use them in a project of their own, but they're not tested with each release, they have fewer features, and there are no ready-made firmware downloads for them.
 
 ### ESP32-S3-Touch-LCD-1.46
 

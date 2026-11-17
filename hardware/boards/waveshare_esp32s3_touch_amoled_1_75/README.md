@@ -33,7 +33,7 @@ The board has its own amplifier, speaker socket, microphones and battery charger
 - **`back`** - Closes the chamber, with the posts the collar turns on.  Use 4 or more walls so the posts are solid.
 - **`collar`**, **`washer`** and **`gasket`** - The turning collar, as on the 1.46" board's deprecated speaker housing.  The gasket is TPU, or cut from 1 mm rubber or craft foam.
 - **`plungers`** - Two pins that press the board's side buttons through the wall.  Behind each one, a small mark is engraved in the side wall (`button_marks`): a power symbol for PWR, the lower one, nearer the pod, and a download arrow for BOOT, which is held down to flash the board.
-- **`usb_plug`** - Covers the USB-C port when it's not in use, flush with the outside of the housing.  A tongue on its back pushes into the slot for the plug, and the notch at its top edge is for a fingernail to pull it out.  It's a tight push fit, best printed in TPU.  In PLA or PETG, loosen it with the second number in `usb_tongue` if it's too tight.
+- **`usb_plug`** (optional) - Covers the USB-C port when it's not in use, flush with the outside of the housing.  A tongue on its back pushes into the slot for the plug, and the notch at its top edge is for a fingernail to pull it out.  It's a tight push fit, best printed in TPU.  In PLA or PETG, loosen it with the second number in `usb_tongue` if it's too tight.
 #### Test prints
 
 These are worth printing first on a new printer (`./render.sh tests`):
@@ -64,7 +64,7 @@ These come from the 3D model, not from a print, so check them with test prints:
 
 ## The low-profile housing
 
-**Status: designed, not printed yet.**  It's the speaker housing without the pod, with a smaller battery, and with the thread fixed to the back in place of the turning collar.  The display's cup, the micro SD and USB-C openings, the plungers, the USB-C plug, the microphones' sleeves and the marks are the speaker housing's, so they've been checked with a print.  What's new is the battery's place, the thread's position (`thread_phase`), the grip and the back.
+**Status: printed, waiting on parts for its first assembly.**  It's the speaker housing without the pod, with a smaller battery, and with the thread fixed to the back in place of the turning collar.  The display's cup, the micro SD and USB-C openings, the plungers, the USB-C plug, the microphones' sleeves and the marks are the speaker housing's, so they've been checked with a print.  What's new is the battery's place, the thread's position (`thread_phase`), the grip and the back.
 
 ### How it goes together
 

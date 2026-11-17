@@ -1,8 +1,10 @@
 # Build Guide
 
-<img src="../images/katcorp_mark.png" width="96" align="right" alt="KatCorp">
+<img src="../images/katcorp_mark.png" width="72" align="left" alt="KatCorp">
 
-*KatCorp Drone Systems: owner assembly instructions.*
+**KatCorp Drone Systems**<br>DroneLab: Owner Assembly Instructions
+
+<br clear="left">
 
 DroneLab units aren't sold.  They're built by their owners, from a Waveshare display board, a battery, a 3D printed housing and a handful of screws.  Nothing needs soldering: the battery and the speaker plug straight into the board.  This guide takes you from nothing to a unit in your mask.
 
@@ -19,15 +21,15 @@ DroneLab units aren't sold.  They're built by their owners, from a Waveshare dis
 
 ![The two models, to scale: the speaker model (left) and the low-profile model (right)](../images/housings_to_scale.png)
 
-| | Speaker model | Low-profile model |
+| | [Speaker model](speaker-housing.md) | [Low-profile model](low-profile-housing.md) |
 |---|---|---|
 | Voice effects and sound | Yes | No speaker |
 | Everything else (images, visualizers, comms, Lovense, terminal, remote) | Yes | Yes |
 | Battery | 2000 mAh, about 13.5 hours (9.5 with comms on) | 700-850 mAh, about 4.5-5.5 hours |
 | Stands out of the mask | About 33 mm | About 23 mm |
 | Levelling | A turning collar: hold the display level and screw the collar in | The whole housing screws in; set once in the design |
-| Printed parts | 8, two of them in TPU | 4, one of them in TPU |
-| Status | Built, worn and working | Designed, not printed yet |
+| Printed parts | 7, one of them in TPU, and an optional USB port cover | 3, and an optional USB port cover |
+| Status | Built, worn and working | Printed, waiting on parts for its first assembly |
 
 **Pick the speaker model** if you want the voice effects: they're the headline feature, and the comms send your voice through them.  **Pick the low-profile model** for a slimmer, simpler, cheaper unit that still shows images, lights up as you talk, and does comms and device control.  (Comms on the low-profile model still works: your voice goes to the others through the effect, you just don't hear it out loud.)
 
@@ -35,7 +37,7 @@ DroneLab units aren't sold.  They're built by their owners, from a Waveshare dis
 
 Each model's page has its own parts list.  On top of that:
 
-- **A 3D printer** that prints PLA, and ideally TPU for two small parts (they can be PLA at a pinch).  No special settings, but the [test prints](speaker-housing.md#2-print-the-parts) are worth doing first on a printer you haven't used for these before.
+- **A 3D printer** that prints PLA, and ideally TPU for the speaker model's gasket and the optional USB port cover (they can be PLA at a pinch, or the gasket cut from craft foam).  No special settings, but the [test prints](speaker-housing.md#2-print-the-parts) are worth doing first on a printer you haven't used for these before.
 - **Small tools:** a hex key or screwdriver to fit M2 screws, a craft knife, scissors and a toothpick.
 - **A USB-C cable that carries data**, not just charging, and a computer (Linux, macOS or Windows) to [install the firmware](../building-firmware.md).
 - **A micro SD card** (optional), for your own images, sounds and Lovense patterns.
@@ -47,4 +49,4 @@ Both models are built around the [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://
 
 ## Also available
 
-- **[Travel case](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case/):** a hinged, clip-shut case for either model, shaped to it, that prints with no supports.  Designed, not printed yet.
+- **[Travel case](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case/):** a hinged, clip-shut case for either model, shaped to it, that prints with no supports.  The speaker model's case is printed and works; the low-profile model's is designed, not printed yet.

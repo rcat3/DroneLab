@@ -1,8 +1,10 @@
 # Building the Speaker Model
 
-<img src="../images/katcorp_mark.png" width="96" align="right" alt="KatCorp">
+<img src="../images/katcorp_mark.png" width="72" align="left" alt="KatCorp">
 
-*KatCorp Drone Systems, DroneLab speaker model: owner assembly instructions.  Status: built, worn and working.*
+**KatCorp Drone Systems**<br>DroneLab Speaker Model: Owner Assembly Instructions<br>Status: Built, worn and working
+
+<br clear="left">
 
 ![The speaker model](../images/speaker_housing_1_75.png)
 
@@ -27,7 +29,8 @@ Back to the [Build Guide](README.md).
 | Soft foam sheet | A scrap | About 2 mm thick, such as craft foam |
 | Open-cell foam | A small block | Soft and spongy, that air passes through, as used behind speaker grilles |
 
-> **Check the battery's polarity.**  MX1.25 batteries aren't all wired the same way round.  Before plugging one in, check its red wire goes to the positive side of the board's battery socket, as Waveshare's documentation for the board shows it, and swap the pins in the plug if it doesn't.  A battery plugged in backwards can damage the board.
+> [!WARNING]
+> ⚠️ **Check the battery's polarity before plugging it in.**  MX1.25 batteries aren't all wired the same way round, and a battery plugged in backwards can damage the board.  Check its red wire goes to the positive side of the board's battery socket, as Waveshare's documentation for the board shows it, and swap the pins in the plug if it doesn't.
 
 ## 2. Print the parts
 
@@ -50,7 +53,7 @@ Then the parts:
 | `washer` | PLA or PLA+ | Two halves, flat |
 | `gasket` | TPU | Flat.  Or cut it from 1 mm rubber or craft foam |
 | `plungers` | PLA or PLA+ | Two small pins |
-| `usb_plug` | TPU | A cover for the USB-C port.  In PLA, loosen it with the second number of `usb_tongue` |
+| `usb_plug` (optional) | TPU | A cover for the USB-C port, to keep dust out.  Not needed.  In PLA, loosen it with the second number of `usb_tongue` |
 
 The [design's README](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/README.md) explains how the housing works, with every setting worth knowing about.
 
@@ -85,7 +88,7 @@ Here's how the parts go together, front to back: the board drops into the front 
 9. **Seal the speaker off.**  Press plasticine into the opening between the speaker's pocket and the chamber, all round the wire.  The microphones listen into the chamber, so the less of the speaker that reaches it, the louder the voice effect can go before it feeds back.  Keep plasticine off the board and out of its sockets.
 10. **Fill the microphones' cell.**  Stick foam tape along the tops of the ribs on the right, which wall off the microphones.  Cut a block of the open-cell foam to fill the cell between the ribs and the wall, and push it in.  It must be open-cell foam, which sound passes through: the microphones hear you through it.
 11. **Line the chamber with plasticine.**  Press plasticine around the inside of the chamber's wall, all the way round where the battery will go, in a band about as deep as the battery.  It fills the space around the battery, so less of the speaker's sound echoes around, and holds the battery in place.  Keep it off the sockets, the openings in the back plate and the screw holes.
-12. **Fit the battery.**  [Check its polarity](#1-order-the-parts), plug it into the socket marked with a battery, and press it in, standing upright, inside the ring of plasticine, so its side presses on the foam tape on the ribs.  Press a little more plasticine into any gap where the ribs meet the battery, so the microphones' cell is sealed.
+12. **Fit the battery.**  ⚠️ [Check its polarity first](#1-order-the-parts), plug it into the socket marked with a battery, and press it in, standing upright, inside the ring of plasticine, so its side presses on the foam tape on the ribs.  Press a little more plasticine into any gap where the ribs meet the battery, so the microphones' cell is sealed.
 
     ![The chamber, with the battery out: plasticine around the wall, and foam in the microphones' cell, seen from the back](../images/speaker_housing_1_75_chamber.jpg)
 
@@ -96,7 +99,7 @@ Here's how the parts go together, front to back: the board drops into the front 
     > **Photo to come:** the back with the gasket and collar on, the washer halves beside it.
 
 15. **Fit the washer.**  Drop each half of the washer into the collar through its threaded end, line its holes up with two of the posts, and screw it down with two M2 x 6 screws.  Tighten them evenly, and stop when the collar turns firmly but smoothly: the gasket's friction is what keeps the housing from turning by itself once it's in the mask.
-16. **Fit the USB plug.**  Push the USB plug into the port's pocket on the right side.  The notch at its top edge is for a fingernail to pull it out again.
+16. **Fit the USB plug** (optional).  If you printed it, push it into the port's pocket on the right side.  The notch at its top edge is for a fingernail to pull it out again.
 
 ## 4. Into the mask
 

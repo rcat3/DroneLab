@@ -8,7 +8,7 @@ This is the design side.  To build one, start with the [Build Guide](../docs/bui
 
 | Board | Firmware | Housings, for the MSA Millennium's voice port | Other hardware |
 |---|---|---|---|
-| [Waveshare ESP32-S3-Touch-AMOLED-1.75](boards/waveshare_esp32s3_touch_amoled_1_75/) | Yes | Speaker housing with one speaker below the display; low-profile housing without a speaker (designed, not printed yet) | Travel cases for both housings (designed, not printed yet) |
+| [Waveshare ESP32-S3-Touch-AMOLED-1.75](boards/waveshare_esp32s3_touch_amoled_1_75/) | Yes | Speaker housing with one speaker below the display; low-profile housing without a speaker (printed, not yet assembled) | Travel cases for both housings (the speaker housing's printed and working; the low-profile one's not printed yet) |
 
 The housings for the 1.28" and 1.46" boards are [deprecated](#deprecated-designs).
 

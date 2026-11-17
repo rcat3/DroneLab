@@ -1,14 +1,16 @@
 # Building the Low-Profile Model
 
-<img src="../images/katcorp_mark.png" width="96" align="right" alt="KatCorp">
+<img src="../images/katcorp_mark.png" width="72" align="left" alt="KatCorp">
 
-*KatCorp Drone Systems, DroneLab low-profile model: owner assembly instructions.  Status: designed, not printed yet.*
+**KatCorp Drone Systems**<br>DroneLab Low-Profile Model: Owner Assembly Instructions<br>Status: Printed, waiting on parts for its first assembly
+
+<br clear="left">
 
 ![The low-profile model](../images/low_profile_housing_1_75.png)
 
 The entry-level unit: the display in a slim round housing that stands only about 23 mm out of the mask, with a flat battery behind it for about 4.5-5.5 hours.  There's no speaker, so no [voice effects](../features/voice-effects.md) or [sound](../features/sound.md), but everything else works: images, the visualizers, the voice ring, [comms](../features/comms.md), [Lovense](../features/lovense.md) control, the terminal and the remote.  The thread is part of the back, so the whole housing screws in, with fewer parts and screws than the speaker model.
 
-It shares the display's pocket, the openings, the plungers and the microphones' sleeves with the [speaker model](speaker-housing.md), which have been checked with a print.  The battery's place, the thread and the back are new, and haven't been printed yet.
+It shares the display's pocket, the openings, the plungers and the microphones' sleeves with the [speaker model](speaker-housing.md), which have been checked with a print.  The battery's place, the thread and the back are new: they've been printed, but not yet assembled with a battery and tried in a mask.
 
 Back to the [Build Guide](README.md).
 
@@ -25,7 +27,8 @@ Back to the [Build Guide](README.md).
 | Double-sided foam tape | A few cm | About 0.8 mm thick, to hold the battery |
 | Soft foam sheet | A scrap | About 2 mm thick, such as craft foam |
 
-> **Check the battery's polarity.**  MX1.25 batteries aren't all wired the same way round.  Before plugging one in, check its red wire goes to the positive side of the board's battery socket, as Waveshare's documentation for the board shows it, and swap the pins in the plug if it doesn't.  A battery plugged in backwards can damage the board.
+> [!WARNING]
+> ⚠️ **Check the battery's polarity before plugging it in.**  MX1.25 batteries aren't all wired the same way round, and a battery plugged in backwards can damage the board.  Check its red wire goes to the positive side of the board's battery socket, as Waveshare's documentation for the board shows it, and swap the pins in the plug if it doesn't.
 
 ## 2. Print the parts
 
@@ -44,7 +47,7 @@ Then the parts:
 | `lp_body` | PLA or PLA+ | Back down, with supports only for the openings in the side |
 | `lp_back` | PLA or PLA+ | On its front, thread pointing up, no supports.  4 or more walls so the thread is solid |
 | `plungers` | PLA or PLA+ | Two small pins |
-| `usb_plug` | TPU | A cover for the USB-C port.  In PLA, loosen it with the second number of `usb_tongue` |
+| `usb_plug` (optional) | TPU | A cover for the USB-C port, to keep dust out.  Not needed.  In PLA, loosen it with the second number of `usb_tongue` |
 
 ## 3. Put it together
 
@@ -58,9 +61,9 @@ Front to back: the board drops into the front of the body, then the battery, tap
 4. **Tape the battery to the back.**  Stick it to the front of the back with the foam tape, inside the outline engraved there, with its leads towards the opening beside it.
    > **Photo to come:** the battery taped inside the outline on the back.
 
-5. **Plug in the battery.**  [Check its polarity](#1-order-the-parts), and plug it into the socket marked with a battery, through the opening in the back plate below the middle of the board.  The socket beside it, marked with a speaker, stays empty.  Tuck the wires in beside the battery, below it.
+5. **Plug in the battery.**  ⚠️ [Check its polarity first](#1-order-the-parts), and plug it into the socket marked with a battery, through the opening in the back plate below the middle of the board.  The socket beside it, marked with a speaker, stays empty.  Tuck the wires in beside the battery, below it.
 6. **Close the back.**  Screw it on with the four M2 x 8 screws.  It only goes on one way round.
-7. **Fit the USB plug.**  Push it into the port's pocket on the right side.
+7. **Fit the USB plug** (optional).  If you printed it, push it into the port's pocket on the right side.
 
 ## 4. Into the mask
 
