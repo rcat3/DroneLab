@@ -61,13 +61,19 @@ class Board:
         self.ser.write(text.encode() + b"\n")
 
     def api(self, method, target, body=""):
-        self.send(f"api {method} {target} {body}".rstrip())
-        for line in self._lines(5):
-            if line.startswith("CONSOLE: "):
-                answer = line[len("CONSOLE: "):]
-                if answer == "-1":
-                    raise RuntimeError(f"{method} {target}: no such request")
-                return json.loads(answer)
+        # Now and then a line from the board arrives garbled, so a GET is
+        # asked again; a POST isn't, as it may have been done already
+        for _ in range(3 if method == "GET" else 1):
+            self.send(f"api {method} {target} {body}".rstrip())
+            for line in self._lines(5):
+                if line.startswith("CONSOLE: "):
+                    answer = line[len("CONSOLE: "):]
+                    if answer == "-1":
+                        raise RuntimeError(f"{method} {target}: no such request")
+                    try:
+                        return json.loads(answer)
+                    except ValueError:
+                        break
         raise RuntimeError(f"{method} {target}: no answer")
 
     def _shot_line(self, text, lines):
@@ -209,8 +215,8 @@ def doc_shots(board, out):
     take("lovense_react", "Lovense", 3)
     board.api("POST", "/api/stop")
     take("settings_level", "Settings", info["features"][-1][1].index("Level"))
-    # Rotation at 90 degrees, as the housings need
-    board.api("POST", "/api/display?rot=1")
+    # Rotation at 180 degrees, as the housings need
+    board.api("POST", "/api/display?rot=2")
     take("settings_rotation", "Settings", info["features"][-1][1].index("Rotation"))
     board.api("POST", f"/api/display?rot={before['display']['rotation']}")
 

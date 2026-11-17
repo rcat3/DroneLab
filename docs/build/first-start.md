@@ -28,9 +28,9 @@ Swipe **up and down** to move between features, and **left and right** between a
 
 ## 4. Turn the picture the right way round
 
-<img src="../images/screens/settings_rotation.png" width="180" align="right" alt="The Rotation page, set to 90 degrees">
+<img src="../images/screens/settings_rotation.png" width="180" align="right" alt="The Rotation page, set to 180 degrees">
 
-In the housing, the board sits a quarter turn round from its usual way up, so its USB-C port faces the side.  Swipe to **Settings**, then to **Rotation**, and scroll the roller to **90°**.  The picture turns about a second after you stop scrolling.
+In the housing, the board sits turned from its usual way up, with its USB-C port facing the side, so the picture needs turning to match.  Swipe to **Settings**, then to **Rotation**, and scroll the roller to **180°**.  The picture turns about a second after you stop scrolling.
 
 <br clear="right">
 
