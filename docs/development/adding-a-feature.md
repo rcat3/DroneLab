@@ -10,7 +10,7 @@ A feature is one of the sections you swipe up and down between, like Images or C
 2. Add the name to `RCAT_FEATURES` in [`core/features.cmake`](../../core/features.cmake).
 3. Add it to the list in [`core/ui/ui.c`](../../core/ui/ui.c), inside `#if RCAT_FEATURE_<NAME>`, above Settings.  Settings stays last so it can list every feature's startup choices.
 4. Add a line for it to each platform's `features.cmake`, `ON` or `OFF`.
-5. Add a page for it in [`docs/features/`](../features/), and a row in the table in its [README](../features/README.md) and in the [top-level README](../../README.md#what-it-does).
+5. Add a page for it in [`docs/features/`](../features/), and a row in the table in its [README](../features/README.md) and, if it's one people will want to hear about, in the [top-level README's features](../../README.md#features).
 
 ## Settings and build options
 

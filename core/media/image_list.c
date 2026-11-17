@@ -17,9 +17,8 @@
 
 #define IMAGE(name, is_gif) { #name, &name, is_gif }
 
-LV_IMAGE_DECLARE(home);
+LV_IMAGE_DECLARE(hexcorp);
 LV_IMAGE_DECLARE(RCatLogo);
-LV_IMAGE_DECLARE(nonbinary);
 LV_IMAGE_DECLARE(hal9000);
 LV_IMAGE_DECLARE(evileye);
 #if RCAT_LARGE_IMAGES
@@ -27,9 +26,8 @@ LV_IMAGE_DECLARE(radar3c);     // full screen, about 140kB to play on a 240x240 
 #endif
 
 const builtin_image_t builtin_images[] = {
-    IMAGE(home,      false),
+    IMAGE(hexcorp,   false),
     IMAGE(RCatLogo,  false),
-    IMAGE(nonbinary, false),
     IMAGE(hal9000,   false),
     IMAGE(evileye,   true),
 #if RCAT_LARGE_IMAGES

@@ -6,6 +6,10 @@ The Lovense feature controls up to three Lovense devices at once, over Bluetooth
 
 It talks to the devices over Bluetooth itself, without Lovense's app.  It isn't made, supported or endorsed by Lovense, and a firmware update on a device could change how it responds.
 
+| ![Control](../images/screens/lovense_control.png) | ![Devices](../images/screens/lovense_devices.png) | ![Patterns](../images/screens/lovense_patterns.png) | ![React to](../images/screens/lovense_react.png) |
+|:-:|:-:|:-:|:-:|
+| Control | Devices | Patterns | React to |
+
 Its pages, left to right:
 
 - **Control**: a ring around the edge for each of the device's motors (vibration, rotation, the Max's air pump and so on), with the level on its knob, 0 to 20 for most.  Drag a knob around its ring to set the level.  Only the knobs respond, so you can swipe from anywhere else.  The device's name is in the middle, with arrows either side to step through the connected devices.  **STOP** stops every device, and any pattern, as soon as you touch it.
@@ -13,17 +17,17 @@ Its pages, left to right:
 - **Patterns**: tap a pattern to play it, and tap it again to stop it.  The arrows at the top pick which device it plays on, or all of them, and **-**/**+** at the bottom set the speed.  While a pattern plays, each ring on the Control page sets how high that motor goes, and a thin line inside the ring shows the level as it plays.  Six patterns are built in, and you can add your own (see [Patterns on the SD card](#patterns-on-the-sd-card)).
 - **React to**: drives the devices from your voice or how you move, on top of any pattern.  *Voice* follows how loud you talk.  *Moving* runs while you move and stops soon after you stop.  *Still* runs only once you've held still with the display upright for a second (set the display's [Rotation](settings.md#rotation) first, so upright is right).  *Motion* gets stronger the more you move, and *Tilt* the further you tilt from upright.  Tap the one that's on to turn it off.  The line under the list shows what it's sensing.  As with patterns, the rings on the Control page set how high each motor goes.  **STOP** turns the reaction off too.
 - **Options**: *Motor Hold*: on, a motor keeps its level when you let go of its knob; off, it springs back to 0.
-- **Others**: who may send commands to your devices over the [comm channel](comm.md) (see [Commands from others](#commands-from-others)).  *Accept* off ignores them all.  Tap someone to allow them (they turn green, with a tick), or tap again to stop allowing them; hold them to take them off the list.  The line at the bottom says who sent the last command that was done.
+- **Others**: who may send commands to your devices over the [comms](comms.md) (see [Commands from others](#commands-from-others)).  *Accept* off ignores them all.  Tap someone to allow them (they turn green, with a tick), or tap again to stop allowing them; hold them to take them off the list.  The line at the bottom says who sent the last command that was done.
 
 ## Commands from others
 
-*The ESP32-S3-Touch-AMOLED-1.75, with the comm channel*
+*The ESP32-S3-Touch-AMOLED-1.75, with comms*
 
-Others in your comm group can send commands to your devices, from the *Send* tab of the DroneLab app: stop, set each kind of motor (all your vibrators, say) to a level, play a pattern, change the patterns' speed, or start a reaction (*React to*), to your own voice or movement, as your board senses them.  They come over the Mumble server, through your phone, or board to board over [direct comms](direct.md).  Your board does them as if you'd used its own controls, and they stay set until they're changed: **STOP**, on the Control page, stops them as it stops everything else, and a STOP sent by someone else stops reactions too.
+Others in your hive can send commands to your devices, from the *Send* tab of the DroneLab app: stop, set each kind of motor (all your vibrators, say) to a level, play a pattern, change the patterns' speed, or start a reaction (*React to*), to your own voice or movement, as your board senses them.  They come over the Mumble server, through your phone, or board to board over [direct mode](comms.md#direct-mode).  Your board does them as if you'd used its own controls, and they stay set until they're changed: **STOP**, on the Control page, stops them as it stops everything else, and a STOP sent by someone else stops reactions too.
 
 Only those you've allowed are obeyed.  The first time someone sends you a command, they're added to the list on the *Others* page, not allowed, and you tick them there, or under *From others* in the remote's *Toys* tab (in the app's *Remote* tab too).  With *Accept* off, commands are ignored and nobody's added.  The list remembers up to 12 people, kept when the board's switched off.  It's the Lovense feature's own: the [Terminal](terminal.md#messages-from-others) has a separate one, for messages.
 
-Someone's known by their name, and whether they're heard over the server or direct comms, so the same person can be on the list twice.  A name can be borrowed: in a direct comms group with a passphrase only its members can send anything, but in the open group, or on a server anyone can join, someone could use the name of a person you've allowed.
+Someone's known by their name, and whether they're heard in cloud or direct mode, so the same person can be on the list twice.  A name can be borrowed: in a direct group with a passphrase only its members can send anything, but in the open group, or on a server anyone can join, someone could use the name of a person you've allowed.
 
 A pattern plays if your board has one by the same name: the six built-in ones always do, and patterns on the SD card only if yours has one with that name too.  A level of 20 is each motor's top, so the air pump's 3.
 

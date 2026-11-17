@@ -6,6 +6,8 @@
 #include "app/patterns.h"
 #include "app/settings.h"
 #include "app/updater.h"
+#include "app/screenshot.h"
+#include "app/console.h"
 #include "audio/audio_level.h"
 #include "audio/audio_player.h"
 #include "audio/voice_lab.h"
@@ -140,6 +142,8 @@ void app_run(void)
     splash_hide(&splash);
     ui_init();
     updater_init();
+    screenshot_init(storage_path);      // PWR held and BOOT pressed
+    console_init();                     // only with RCAT_SERIAL_CONSOLE
 
     while (1)
     {

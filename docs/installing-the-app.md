@@ -1,6 +1,6 @@
 # Installing the App
 
-The DroneLab app is the phone's side of the [comm channel](features/comm.md), with the [remote](features/phone-remote.md) and recording over Bluetooth.  It's for Android for now, and it isn't on the Play Store: it's installed from an APK file on the project's [releases page](https://github.com/rcat3/DroneLab/releases/latest).  To build it yourself instead, see [`app/README.md`](../app/README.md).
+The DroneLab app is the phone's side of the [comms](features/comms.md), with the [remote](features/phone-remote.md) and recording over Bluetooth.  It's for Android for now, and it isn't on the Play Store: it's installed from an APK file on the project's [releases page](https://github.com/rcat3/DroneLab/releases/latest).  To build it yourself instead, see [`app/README.md`](../app/README.md).
 
 ## Installing a release
 
@@ -28,4 +28,4 @@ If Android says the app conflicts with one that's installed, the copy on the pho
 2. In the app's *Comm Settings*, behind the gear on the Comm tab, *Find* the board and pick yours, by the name on the *Phone App* page.
 3. The phone asks to pair, and the board shows a 6-digit code: type it into the phone.
 
-After that, they remember each other.  Setting up the server, and the rest of the app, are in [Comm](features/comm.md#the-app).
+After that, they remember each other.  Setting up the server, and the rest of the app, are in [Comms](features/comms.md#the-app).

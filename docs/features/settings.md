@@ -18,7 +18,7 @@ The percentage is worked out from the voltage, along a discharge curve the board
 
 *The ESP32-S3-Touch-AMOLED-1.75*
 
-The Bluetooth link to the DroneLab app on a phone: the [comm channel](comm.md), sending your voice to the group, and the remote, run from the app.  The app is the better remote, as the phone stays on the internet.  The comm channel's own settings, its modes and the talk button, are in the [Comm](comm.md#on-the-display) feature.
+The Bluetooth link to the DroneLab app on a phone: [comms](comms.md), sending your voice to the hive, and the remote, run from the app.  The app is the better remote, as the phone stays on the internet.  The comms's own settings, its modes and the talk button, are in the [Comm](comms.md#getting-started) feature.
 
 ## Paired Phones
 
@@ -44,7 +44,7 @@ A spirit level, for lining the display up on the mask.  See [Level](level.md).
 
 ## Startup
 
-What's shown when the display turns on: any image (see [Images](images.md)), the blank page, the [Visualizer](visualizer.md), the [Terminal](terminal.md) or the [Comm](comm.md) status screen, depending on what the board has.
+What's shown when the display turns on: any image (see [Images](images.md)), the blank page, the [Visualizer](visualizer.md), the [Terminal](terminal.md) or the [HiveMind](comms.md) status screen, depending on what the board has.
 
 ## Battery Log
 
@@ -64,4 +64,4 @@ The log stays in flash, and the last run's stays there until the new one's been 
 
 ## Firmware Update
 
-On the ESP32-S3 boards, lets new firmware be sent over the board's hotspot from a computer, with `tools/update.py`.  Switching it on shows a code for the script, and the hotspot's name and password.  Flashing over USB is simpler and is the recommended way to update (see [Building the Firmware](../building-firmware.md#updating)); this is for a board whose USB port can't be reached.  See [Updating over WiFi](../updating-over-wifi.md).
+On the ESP32-S3 boards, lets new firmware be sent over the board's hotspot from a computer, with `tools/update.py`.  Switching it on shows a code for the script, and the hotspot's name and password.  Flashing over USB is simpler and is the recommended way to update (see [Installing the Firmware](../building-firmware.md#updating)); this is for a board whose USB port can't be reached.  See [Updating over WiFi](../updating-over-wifi.md).

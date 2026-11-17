@@ -1,11 +1,11 @@
 # Housings for the ESP32-S3-Touch-AMOLED-1.75
 
-3D printable housings that screw the [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/esp32-s3-touch-amoled-1.75.htm) into the voice port of an MSA Millennium mask.  They're for the bare board, not the -B version that comes in its own case.  There are two:
+3D printable housings that screw the [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/esp32-s3-touch-amoled-1.75.htm) into the voice port of a compatible gas mask, made to fit the MSA Millennium's (see the [trademark note](../../README.md#licenses)).  They're for the bare board, not the -B version that comes in its own case.  There are two:
 
 - **The speaker housing** (`msa_speaker_housing.scad`): a speaker in a pod below the display, for sound and voice effects, and a 2000 mAh battery in a chamber behind it, with a turning collar.
 - **The low-profile housing** (`msa_low_profile_housing.scad`): no speaker, a flat 700-850 mAh battery in a shallow chamber, and the thread fixed to the back.  It stands about 23 mm out of the mask, where the speaker housing stands about 33 mm out, and it has fewer parts and screws.
 
-This README is about the design files.  For the whole build, with the parts to buy, wiring and putting it together, see the [build guide](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md).
+This README is about the design files.  For the whole build, with the parts to buy and putting it together, see the build guides for the [speaker model](../../../docs/build/speaker-housing.md) and the [low-profile model](../../../docs/build/low-profile-housing.md).
 
 ## The speaker housing
 
@@ -16,7 +16,7 @@ The board has its own amplifier, speaker socket, microphones and battery charger
 ### How it goes together
 
 - The board sits in a cup at the front, with its glass flush with the front, and screws to the cup's back plate with three M2 countersunk screws (about M2 x 5) into the standoffs on its back.
-- It's turned a quarter turn from its usual way up, so its USB-C port faces right, out through the side of the housing.  The port is in a pocket in the side, only about 3 mm behind the pocket's floor, so any cable's plug reaches it, not just the slimmest.  Its side buttons and micro SD slot are on the left, and its pin header is at the top.  Set Rotation to 90 degrees in the settings to match.
+- It's turned a quarter turn from its usual way up, so its USB-C port faces right, out through the side of the housing.  The port is in a pocket in the side, only about 3 mm behind the pocket's floor, so any cable's plug reaches it, not just the slimmest.  Its side buttons and micro SD slot are on the left, and its pin header is at the top.  Set Rotation to 180 degrees in the settings to match.
 - The speaker sits in a shallow pod below the display.  Right below the voice port is the mask's filter mount, so the pod is only as deep as the speaker needs, and the **chin** behind it slopes back to the body, over the mount.  From the scan, the chin clears the mount by about 4.7 mm at its closest, at the mount's top edge, and the pod by about 8 mm.
 - The speaker goes in from the back of the pod before the chin goes on, and the adhesive frame on its front sticks it to the grille.  Its wire comes out of a notch in the middle of either short side of the pocket, and runs in a 2 mm gap behind it to the pocket's inner end, where an opening 7 mm wide lets its plug through into the chamber, to the board's speaker socket.  That end of the pocket reaches over the chamber's edge, and a 1.6 mm floor (`pocket_floor`) closes it off, so the opening is the only way through.  Plasticine seals the opening around the wire, and fills the gap behind the speaker, so less of the speaker reaches the microphones.
 - The chamber behind the board holds a 2000 mAh battery, standing upright and taped to the back.  The back's four screws are either side of it.  The board's speaker and battery sockets stand up off the back of the board, and their plugs go in through openings in the back plate, from the chamber.  The two sockets look the same, and the plate hides their labels, so a speaker and a battery are engraved in the plate beside them (`socket_marks`).
@@ -33,7 +33,7 @@ The board has its own amplifier, speaker socket, microphones and battery charger
 - **`back`** - Closes the chamber, with the posts the collar turns on.  Use 4 or more walls so the posts are solid.
 - **`collar`**, **`washer`** and **`gasket`** - The turning collar, as on the 1.46" board's deprecated speaker housing.  The gasket is TPU, or cut from 1 mm rubber or craft foam.
 - **`plungers`** - Two pins that press the board's side buttons through the wall.  Behind each one, a small mark is engraved in the side wall (`button_marks`): a power symbol for PWR, the lower one, nearer the pod, and a download arrow for BOOT, which is held down to flash the board.
-- **`usb_plug`** - Covers the USB-C port when it's not in use, flush with the outside of the housing.  A tongue on its back pushes into the slot for the plug, and the notch at its top edge is for a fingernail to pull it out.  It's a tight push fit, best printed in TPU.  In PLA or PETG, loosen it with the second number in `usb_tongue` if it's too tight.
+- **`usb_plug`** (optional) - Covers the USB-C port when it's not in use, flush with the outside of the housing.  A tongue on its back pushes into the slot for the plug, and the notch at its top edge is for a fingernail to pull it out.  It's a tight push fit, best printed in TPU.  In PLA or PETG, loosen it with the second number in `usb_tongue` if it's too tight.
 #### Test prints
 
 These are worth printing first on a new printer (`./render.sh tests`):
@@ -64,11 +64,11 @@ These come from the 3D model, not from a print, so check them with test prints:
 
 ## The low-profile housing
 
-**Status: designed, not printed yet.**  It's the speaker housing without the pod, with a smaller battery, and with the thread fixed to the back in place of the turning collar.  The display's cup, the micro SD and USB-C openings, the plungers, the USB-C plug, the microphones' sleeves and the marks are the speaker housing's, so they've been checked with a print.  What's new is the battery's place, the thread's position (`thread_phase`), the grip and the back.
+**Status: printed, waiting on parts for its first assembly.**  It's the speaker housing without the pod, with a smaller battery, and with the thread fixed to the back in place of the turning collar.  The display's cup, the micro SD and USB-C openings, the plungers, the USB-C plug, the microphones' sleeves and the marks are the speaker housing's, so they've been checked with a print.  What's new is the battery's place, the thread's position (`thread_phase`), the grip and the back.
 
 ### How it goes together
 
-- The board sits in the cup and screws to its back plate, as in the speaker housing, turned a quarter turn with its USB-C port in a pocket on the right, and its side buttons and micro SD slot on the left.  Set Rotation to 90 degrees in the settings to match.
+- The board sits in the cup and screws to its back plate, as in the speaker housing, turned a quarter turn with its USB-C port in a pocket on the right, and its side buttons and micro SD slot on the left.  Set Rotation to 180 degrees in the settings to match.
 - Behind the board is a chamber 7.1 mm deep, for a 603040 battery (6 x 30 x 40 mm, about 700-850 mAh) lying on its side and taped to the back.  It fits between the board's battery socket below it, its pin header above it, and the microphones to its right.  The battery's plug goes into the socket from behind, beside the battery rather than in front of it, so the battery can sit just behind the back plate, with 0.8 mm to spare (`battery_gap`) for foam tape.  Its outline is engraved on the front of the back, to show where to tape it.  That's what makes the housing thin.  It runs the board for about 4.5-5.5 hours.  The board charges it at 400 mA, about half its capacity an hour, the standard rate in LiPo datasheets, and it charges in about 2.5 hours.
 - There's no speaker.  The board's speaker socket is left empty, and the speaker and battery marks beside the two sockets show which is the battery's.  The sound player and the voice effects need a speaker, so this housing is for images, the voice displays, Lovense control and the phone remote.
 - The microphones don't need the speaker housing's cell, walled off from the chamber, as there's no speaker to keep out.  They keep its sleeves, sealed against the board by foam rings, so they hear the chamber, and not the gap behind the board, which is open to the outside through the USB-C and micro SD openings.  The chamber opens into the voice port through an opening in the back beside the battery, about 4 x 23 mm.
@@ -113,15 +113,17 @@ These come from the 3D model, not from a print, so check them with test prints:
 
 ## Making the STL files
 
+Each [release](https://github.com/rcat3/DroneLab/releases/latest) has them ready-made, rendered with the default settings: one zip per model, with its travel case and test prints.  To change a setting, render them yourself.
+
 Run `./render.sh` in this folder to render both housings' parts to the `stl/` folder.  It needs [OpenSCAD](https://openscad.org/).  `./render.sh speaker` or `./render.sh low_profile` renders one housing, `./render.sh tests` the test prints, and `./render.sh body chin` just those parts.  The low-profile housing's own parts are named `lp_body` and so on, so their files don't mix with the speaker housing's.  A single part can also be rendered by hand with, for example, `openscad -D 'part="body"' -o body.stl msa_speaker_housing.scad`.  The parts are all turned the right way up to print.
 
 ## Travel cases
 
 There's a hinged case to carry each housing in, with the board in it, in [`travel_case`](travel_case/).  Each is made from its housing's design, so it fits it closely.
 
-## Parts to buy, wiring and putting it together
+## Parts to buy and putting it together
 
-See the [build guide](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md).
+See the [Build Guide](../../../docs/build/README.md).
 
 ## Credits and License
 

@@ -5,7 +5,12 @@ Hinged cases that carry either of the 1.75" housings with the board in it, so th
 - `low_profile_case.scad` - for the [low-profile housing](../#the-low-profile-housing): round, about 74 x 88 mm across, counting the hinge and clasp, and 36 mm tall.
 - `speaker_case.scad` - for the [speaker housing](../#the-speaker-housing): shaped like it, with room for the pod below the display, about 76 x 112 mm across, counting the hinge and clasp, and 47 mm tall.
 
-**Status: designed, not printed yet.**
+| | Closed | Open, with the housing in it |
+|---|---|---|
+| **Speaker housing's case** | <img src="../../../../docs/images/speaker_case_1_75.png" width="260" alt="The speaker housing's travel case, closed"> | <img src="../../../../docs/images/speaker_case_1_75_open.png" width="260" alt="The speaker housing's travel case, open, with the housing in it"> |
+| **Low-profile housing's case** | <img src="../../../../docs/images/low_profile_case_1_75.png" width="260" alt="The low-profile housing's travel case, closed"> | <img src="../../../../docs/images/low_profile_case_1_75_open.png" width="260" alt="The low-profile housing's travel case, open, with the housing in it"> |
+
+**Status:** the speaker housing's case is printed and works.  The low-profile housing's is designed, not printed yet.
 
 ## How they work
 
@@ -19,7 +24,7 @@ The pocket is made from the housing's own design file (`../msa_low_profile_housi
 
 ## Printing
 
-Run `./render.sh` in this folder to render both cases to the `stl/` folder (it needs [OpenSCAD](https://openscad.org/)), or `./render.sh low_profile` or `./render.sh speaker` for one.  The parts come out turned the right way up to print, with no supports:
+The cases' STL files come with each model's parts, in the `travel_case/` folder of the zip on the [latest release](https://github.com/rcat3/DroneLab/releases/latest) ([speaker](https://github.com/rcat3/DroneLab/releases/latest/download/DroneLab-speaker-model-stl.zip), [low-profile](https://github.com/rcat3/DroneLab/releases/latest/download/DroneLab-low-profile-model-stl.zip)).  Or run `./render.sh` in this folder to render both cases to the `stl/` folder (it needs [OpenSCAD](https://openscad.org/)), or `./render.sh low_profile` or `./render.sh speaker` for one.  The parts come out turned the right way up to print, with no supports:
 
 - **`lp_case_bottom`** or **`speaker_case_bottom`** - Printed standing on its floor.
 - **`lp_case_lid`** or **`speaker_case_lid`** - Printed on its top.

@@ -26,7 +26,7 @@ Build it with `-DBOARD=<board>` and its own build folder.  The [ESP32-S3-Touch-A
 ### Then
 
 - Check which features it can run, and set them in the platform's `features.cmake` if a feature needs switching off for the whole platform.
-- Add it to the tables in the [top-level README](../../README.md#hardware) and in [`docs/features/README.md`](../features/README.md), and give it a build guide in [`docs/hardware/`](../hardware/).
+- Add it to [Other Boards](../other-boards.md), with its features, and give it board notes in [`docs/hardware/`](../hardware/).  A board with a housing for the mask gets a build guide in [`docs/build/`](../build/README.md), and a place in the [top-level README](../../README.md#the-two-models).
 
 ## A housing for it
 

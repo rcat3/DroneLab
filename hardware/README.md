@@ -2,13 +2,13 @@
 
 3D printable housings and other hardware for the displays the firmware runs on.
 
-This is the design side.  To build one, start with the [build guide](../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md), which has the parts to buy, printing, wiring and putting it together.
+This is the design side.  To build one, start with the [Build Guide](../docs/build/README.md), which has the parts to buy, printing and putting it together.
 
 ## What fits what
 
-| Board | Firmware | Housings that fit the MSA Millennium mask | Other hardware |
+| Board | Firmware | Housings, for the MSA Millennium's voice port | Other hardware |
 |---|---|---|---|
-| [Waveshare ESP32-S3-Touch-AMOLED-1.75](boards/waveshare_esp32s3_touch_amoled_1_75/) | Yes | Speaker housing with one speaker below the display; low-profile housing without a speaker (designed, not printed yet) | Travel cases for both housings (designed, not printed yet) |
+| [Waveshare ESP32-S3-Touch-AMOLED-1.75](boards/waveshare_esp32s3_touch_amoled_1_75/) | Yes | Speaker housing with one speaker below the display; low-profile housing without a speaker (printed, not yet assembled) | Travel cases for both housings (the speaker housing's printed and working; the low-profile one's not printed yet) |
 
 The housings for the 1.28" and 1.46" boards are [deprecated](#deprecated-designs).
 
@@ -31,7 +31,7 @@ The board folders have the same names as the firmware's board folders in `platfo
 
 - `board.scad` - The board's dimensions, in the coordinates of the maker's 3D model: the front of the glass at z = 0, the board towards -z, and x/y seen from the front with the USB port at the bottom.  Every housing for the board includes it.
 - `<mask>_<kind>.scad` - A housing, named for the mask it fits and what it is, such as `msa_speaker_housing.scad`.  Each has a `part` setting that picks which part to render.
-- `render.sh` - Renders a housing's parts to STL files in `stl/`.  The STL files are made from the `.scad` files, so they aren't kept in the repository.
+- `render.sh` - Renders a housing's parts to STL files in `stl/`.  The STL files are made from the `.scad` files, so they aren't kept in the repository: each release has them ready-made (see [Releases](../docs/development/README.md#releases)).
 - `README.md` - How it goes together, what to buy, what's been checked with a print, and which parts need a material other than PLA (such as TPU for gaskets).
 - A subfolder for anything else, such as a case (`travel_case/`).
 
@@ -58,6 +58,8 @@ Everything here is licensed under the [Creative Commons Attribution-NonCommercia
 - **By Rubber Cat:** the current housings in `boards/`, with their travel cases, `common/`, and `masks/msa_millennium/` apart from its `vendor/` folder.  These are original designs, including the voice port thread they screw in with, which is drawn in `masks/msa_millennium/voice_port.scad`.
 - **Based on whyrlpool's [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa):** the older voice port thread in `masks/msa_millennium/vendor/`, and the housings in `deprecated/`, which were printed with it.  They're under the same license as whyrlpool's design.
 - **Based on other designs:** the deprecated boards' travel cases are under the [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/), like the design they're based on.
+
+**Having parts printed is fine.**  As their author, Rubber Cat gives this permission on top of the license, for the designs by Rubber Cat above (every current housing and travel case): you can pay a print shop, an online printing service, a makerspace or a friend to print them for you, as long as the parts are for your own non-commercial use.  Selling prints, or devices built with them, to other people still needs permission.  The designs based on other people's work aren't covered by this, since they aren't only Rubber Cat's to give.
 
 Each folder's README gives its credits.  All of these are separate from the license of the rest of the repository.
 

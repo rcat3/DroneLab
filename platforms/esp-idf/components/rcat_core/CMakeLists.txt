@@ -71,6 +71,12 @@ if(RCAT_DIRECT_ECHO)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_DIRECT_ECHO=1)
 endif()
 
+# -DRCAT_SERIAL_CONSOLE=1 for a console on the USB serial port, for
+# development (see core/app/console.h): tools/screenshots.py uses it.
+if(RCAT_SERIAL_CONSOLE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_SERIAL_CONSOLE=1)
+endif()
+
 # Images and sounds can be loaded from the SD card
 target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_HAVE_FILESYSTEM=1)
 # and the voice lab streams over WiFi with BSD sockets

@@ -8,6 +8,8 @@
 
 #include "driver/gpio.h"
 #include "driver/sdmmc_host.h"
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
 #include "esp_app_desc.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -95,7 +97,18 @@ bool rcat_hal_task_start(const char *name, void (*fn)(void *arg), void *arg, siz
 #define BUTTON_GPIO         GPIO_NUM_0
 #define BUTTON_SETTLE_US    30000       // a press or release has to last this long, for the contacts' bounce
 
-bool rcat_hal_button_pressed(void)
+static bool (*power_key_held)(void);
+static bool button_press;               // pressed since rcat_hal_button_pressed() last said so
+static bool screenshot_press;           // pressed with PWR held, since rcat_hal_screenshot_pressed() last said so
+
+void rcat_esp32_set_power_key(bool (*held)(void))
+{
+    power_key_held = held;
+}
+
+/* Watch the button, and note each press, as an ordinary one or, with PWR
+ * held, a screenshot. Either of its two readers keeps it going. */
+static void button_poll(void)
 {
     static bool ready;
     static bool down;           // what it's settled at
@@ -112,7 +125,7 @@ bool rcat_hal_button_pressed(void)
         // Held from startup doesn't count as a press.
         down = gpio_get_level(BUTTON_GPIO) == 0;
         ready = true;
-        return false;
+        return;
     }
 
     bool now_down = gpio_get_level(BUTTON_GPIO) == 0;
@@ -120,20 +133,66 @@ bool rcat_hal_button_pressed(void)
     if (now_down == down)
     {
         changed_us = 0;
-        return false;
+        return;
     }
     if (changed_us == 0)
     {
         changed_us = now;
-        return false;
+        return;
     }
     if (now - changed_us < BUTTON_SETTLE_US)
     {
-        return false;
+        return;
     }
     down = now_down;
     changed_us = 0;
-    return down;
+    if (down)
+    {
+        if (power_key_held != NULL && power_key_held())
+        {
+            screenshot_press = true;
+        }
+        else
+        {
+            button_press = true;
+        }
+    }
+}
+
+bool rcat_hal_button_pressed(void)
+{
+    button_poll();
+    bool pressed = button_press;
+    button_press = false;
+    return pressed;
+}
+
+bool rcat_hal_screenshot_pressed(void)
+{
+    button_poll();
+    bool pressed = screenshot_press;
+    screenshot_press = false;
+    return pressed;
+}
+
+size_t rcat_hal_console_read(char *buf, size_t cap)
+{
+    static bool ready;
+
+    if (!ready)
+    {
+        // The log goes out through the driver from here on, so it doesn't
+        // get in the way of reading.
+        usb_serial_jtag_driver_config_t config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+        if (usb_serial_jtag_driver_install(&config) != ESP_OK)
+        {
+            return 0;
+        }
+        usb_serial_jtag_vfs_use_driver();
+        ready = true;
+    }
+    int n = usb_serial_jtag_read_bytes(buf, cap, 0);
+    return n > 0 ? (size_t)n : 0;
 }
 
 const char *rcat_hal_firmware_version(void)

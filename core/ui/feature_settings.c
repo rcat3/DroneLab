@@ -605,7 +605,7 @@ static void comm_switch_event_cb(lv_event_t *e)
     else if (!on)
     {
         comm_stop();
-        lv_label_set_text(comm_hint, "The DroneLab app, over\nBluetooth: the comm channel\nand the remote");
+        lv_label_set_text(comm_hint, "The DroneLab app, over\nBluetooth: HiveMind\nand the remote");
     }
     show_comm();
 }
@@ -689,7 +689,7 @@ static void add_comm_page(ui_feature_t *feature)
 
     // Off, what it's for; on, which board this is
     comm_hint = lv_label_create(comm_page);
-    lv_label_set_text(comm_hint, "The DroneLab app, over\nBluetooth: the comm channel\nand the remote");
+    lv_label_set_text(comm_hint, "The DroneLab app, over\nBluetooth: HiveMind\nand the remote");
     lv_obj_set_style_text_align(comm_hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(comm_hint, COLOR_MUTED, 0);
     lv_obj_align(comm_hint, LV_ALIGN_CENTER, 0, ui_px(14));

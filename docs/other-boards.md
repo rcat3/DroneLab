@@ -15,7 +15,7 @@ DroneLab is built around the [Waveshare ESP32-S3-Touch-AMOLED-1.75](hardware/wav
 | Battery charging | 1 A, set by a resistor | 1 A, set by a resistor | Up to 2 A, set by a resistor |
 | Power button | | | Yes |
 
-Their housings for the MSA Millennium mask are no longer supported.  They're kept, with their build guides, in [`hardware/deprecated`](../hardware/deprecated/): the [1.28" housing](../hardware/deprecated/waveshare_touch_lcd_1_28/) and the [1.46" housing](../hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46/).
+Their gas mask housings are no longer supported.  They're kept, with their build guides, in [`hardware/deprecated`](../hardware/deprecated/): the [1.28" housing](../hardware/deprecated/waveshare_touch_lcd_1_28/) and the [1.46" housing](../hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46/).
 
 ## Which features run on them
 
@@ -32,7 +32,7 @@ Their housings for the MSA Millennium mask are no longer supported.  They're kep
 | [Lovense](features/lovense.md) | | | Yes |
 | [Level](features/level.md) | | | Yes |
 | [Terminal](features/terminal.md) | | | Yes |
-| [Comm](features/comm.md) | | | |
+| [Comms](features/comms.md) | | | |
 | [WiFi Hotspot Remote](features/phone-remote.md) | | | Yes |
 | [Settings](features/settings.md) | Yes | Yes | Yes |
 
@@ -46,11 +46,11 @@ The ESP32-S3-Touch-LCD-1.46 has no voice effects: it can't hear what its speaker
 
 - **Power:** they have no power button.  They run from USB-C, or from a 3.7 V LiPo on their JST 1.25 mm battery socket, and are switched on and off by connecting the battery, so a switch in its lead is the usual way.  Check the battery's polarity against the board before plugging it in: many batteries are wired the other way.
 - **Charging:** they charge their battery at 1 A, set by R15 (160k) next to the charger chip, and the firmware can't change it.  That's too much for a small battery, so change R15 (560k gives about 0.3 A), or charge the battery separately.  R15 is an 0201 surface mount part, 0.6 x 0.3 mm: changing it takes a microscope, a capable soldering station and advanced soldering skills.  The [1.28" build guide](../hardware/deprecated/waveshare_touch_lcd_1_28/build_guide.md#charging) has the details.
-- **Flashing:** see [Building the Firmware](building-firmware.md#rp2040-and-rp2350-boards).  The images are built into the firmware, so changing them means rebuilding it.
+- **Flashing:** see [Installing the Firmware](building-firmware.md#rp2040-and-rp2350-boards).  The images are built into the firmware, so changing them means rebuilding it.
 
 ### ESP32-S3-Touch-LCD-1.46
 
 - **Power:** it runs from USB-C or from a 3.7 V LiPo on its MX1.25 socket (check the polarity first).  Press `PWR` to turn it on, and hold it for 2 seconds to turn it off.
 - **Charging:** it charges its battery at up to 2 A, set by R8 (82k) next to the charger chip, and the firmware can't change it.  That's too much for most small batteries, so change R8 (390k gives about 0.4 A).  R8 is an 0201 surface mount part, 0.6 x 0.3 mm: changing it takes a microscope, a capable soldering station and advanced soldering skills.  The [1.46" build guide](../hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46/build_guide.md#board-notes) has the details.
 - **Speaker:** the small round trimmer on the back of the board sets the built-in speaker's volume, on top of the volume setting.
-- **Flashing:** see [Building the Firmware](building-firmware.md#esp32-s3-boards), with `build-s3-146` and `-DBOARD=waveshare_esp32s3_touch_lcd_1_46`.  Images for this board are 412 pixels across.
+- **Flashing:** see [Installing the Firmware](building-firmware.md#esp32-s3-touch-lcd-146), with `build-s3-146` and `-DBOARD=waveshare_esp32s3_touch_lcd_1_46`.  Images for this board are 412 pixels across.

@@ -4,6 +4,16 @@
 
 The Visualizer fills the screen with a moving picture of your voice, and of whatever the speaker is playing while it's on: the [voice effect](voice-effects.md) or a [sound](sound.md) file.  Its pages, left to right, are the visualizer itself, a page to choose which one, and the [Voice Ring](voice-ring.md)'s settings, as the ring is a picture of your voice too.  Tapping the visualizer also moves on to the next one.  The choice is saved, and the visualizer can be picked to show when the display turns on, in [Settings](settings.md#startup).  The [WiFi Hotspot Remote](phone-remote.md) lists them on its Screen tab, and shows the one you tap.
 
+| ![KITT](../images/screens/visualizer_kitt.png) | ![Terrain](../images/screens/visualizer_terrain.png) | ![Scope](../images/screens/visualizer_scope.png) | ![Halo](../images/screens/visualizer_halo.png) |
+|:-:|:-:|:-:|:-:|
+| KITT | Terrain | Scope | Halo |
+
+| ![Aurora](../images/screens/visualizer_aurora.png) | ![Orbit](../images/screens/visualizer_orbit.png) | ![Ripples](../images/screens/visualizer_ripples.png) |
+|:-:|:-:|:-:|
+| Aurora | Orbit | Ripples |
+
+*Playing Mr. Roboto on the speaker.*
+
 | Visualizer | What it shows |
 |---|---|
 | **KITT** | Three columns of red bars that light up from the middle, like KITT's voice box in Knight Rider |
