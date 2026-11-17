@@ -1,0 +1,217 @@
+<!doctype html>
+<!-- The README's How it works diagram. make_diagram.py fills in @FONTS@ and
+     @ASSETS@ (the units, with screens on them) and turns it into a picture.
+     Everything is placed on a 1600 x 900 canvas. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: Orbitron; src: url("@FONTS@/Orbitron[wght].ttf"); font-weight: 400 900; }
+  @font-face { font-family: Mono; src: url("@FONTS@/ShareTechMono-Regular.ttf"); }
+  :root {
+    --green: #33ff33;
+    --green-dim: #1f9f3a;
+    --pink: #ff40c0;
+    --text: #d8f5d8;
+    --muted: #7fa88a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1600px; height: 900px; overflow: hidden; background: #000; }
+  body {
+    position: relative;
+    font-family: Mono, monospace;
+    color: var(--text);
+    background:
+      radial-gradient(ellipse at 30% 50%, rgba(51, 255, 51, 0.07), transparent 55%),
+      radial-gradient(ellipse at 85% 50%, rgba(255, 64, 192, 0.08), transparent 50%),
+      linear-gradient(rgba(51, 255, 51, 0.045) 1px, transparent 1px) 0 0 / 40px 40px,
+      linear-gradient(90deg, rgba(51, 255, 51, 0.045) 1px, transparent 1px) 0 0 / 40px 40px,
+      #020403;
+  }
+  .abs { position: absolute; }
+  svg.links { position: absolute; left: 0; top: 0; }
+  .g { stroke: var(--green); filter: drop-shadow(0 0 4px rgba(51, 255, 51, 0.9)); }
+  .p { stroke: var(--pink); filter: drop-shadow(0 0 5px rgba(255, 64, 192, 0.9)); }
+  .icon { filter: drop-shadow(0 0 6px rgba(51, 255, 51, 0.8)); }
+  .icon.pink { filter: drop-shadow(0 0 7px rgba(255, 64, 192, 0.85)); }
+
+  .header { left: 40px; top: 30px; }
+  .header .kicker { font-size: 17px; color: var(--green-dim); letter-spacing: 0.08em; }
+  .header .title {
+    font-family: Orbitron; font-weight: 800; font-size: 34px; letter-spacing: 0.12em;
+    color: var(--green); text-shadow: 0 0 10px rgba(51, 255, 51, 0.8), 0 0 24px rgba(51, 255, 51, 0.4);
+    margin-top: 2px;
+  }
+  .status { right: 40px; top: 36px; text-align: right; font-size: 17px; color: var(--green-dim); letter-spacing: 0.08em; line-height: 1.5; }
+  .status b { color: var(--pink); font-weight: normal; text-shadow: 0 0 8px rgba(255, 64, 192, 0.8); }
+
+  .label { text-align: center; }
+  .label .name {
+    font-family: Orbitron; font-weight: 700; font-size: 19px; letter-spacing: 0.1em; color: var(--green);
+    text-shadow: 0 0 8px rgba(51, 255, 51, 0.7);
+  }
+  .label.pink .name { color: var(--pink); text-shadow: 0 0 8px rgba(255, 64, 192, 0.8); }
+  .label .sub { font-size: 16px; color: var(--muted); margin-top: 3px; line-height: 1.3; }
+  .tag {
+    font-size: 15px; letter-spacing: 0.14em; color: var(--green); background: #020403;
+    padding: 1px 8px; border: 1px solid rgba(51, 255, 51, 0.5); border-radius: 3px;
+    transform: translate(-50%, -50%); white-space: nowrap;
+  }
+  .tag.pink { color: var(--pink); border-color: rgba(255, 64, 192, 0.6); }
+
+  .unit { filter: drop-shadow(0 0 18px rgba(255, 64, 192, 0.35)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.25)); }
+  .unit.small { filter: drop-shadow(0 0 10px rgba(255, 64, 192, 0.4)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.3)); }
+  .main-label .name { font-size: 26px; font-weight: 900; }
+
+  .phone {
+    left: 782px; top: 296px; width: 116px; height: 214px; border-radius: 18px;
+    border: 3px solid var(--green); box-shadow: 0 0 10px rgba(51, 255, 51, 0.8), inset 0 0 10px rgba(51, 255, 51, 0.25);
+    background: #030a05; overflow: hidden;
+  }
+  .phone .notch { position: absolute; left: 40px; top: 7px; width: 30px; height: 5px; border-radius: 3px; background: var(--green-dim); }
+  .phone .app { position: absolute; left: 10px; right: 10px; top: 22px; font-size: 11px; color: var(--green); letter-spacing: 0.08em; }
+  .phone .app .hdr { color: var(--pink); text-shadow: 0 0 6px rgba(255, 64, 192, 0.9); margin-bottom: 7px; }
+  .phone .row { display: flex; align-items: center; gap: 6px; margin: 6px 0; color: var(--text); font-size: 11px; }
+  .phone .dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--green); }
+  .phone .dot.on { border-color: var(--pink); box-shadow: 0 0 6px var(--pink); background: rgba(255, 64, 192, 0.35); }
+  .phone .bars { display: flex; gap: 2px; align-items: flex-end; height: 14px; margin-left: auto; }
+  .phone .bars i { display: block; width: 3px; background: var(--pink); box-shadow: 0 0 4px var(--pink); }
+  .phone .talk {
+    position: absolute; left: 12px; right: 12px; bottom: 14px; height: 40px; border-radius: 20px;
+    border: 2px solid var(--pink); color: var(--pink); font-size: 10px; letter-spacing: 0.06em; white-space: nowrap;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 0 8px rgba(255, 64, 192, 0.6);
+  }
+</style>
+</head>
+<body>
+
+<div class="abs header">
+  <div class="kicker">KATCORP // DRONE SYSTEMS DIVISION</div>
+  <div class="title">HOW IT WORKS</div>
+</div>
+<div class="abs status">DRONELAB SYSTEM MAP<br><b>HIVEMIND LINK ACTIVE</b></div>
+
+<!-- Links, under everything else -->
+<svg class="links" width="1600" height="900" viewBox="0 0 1600 900" fill="none" stroke-linecap="round">
+  <defs>
+    <marker id="ag" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#33ff33"/>
+    </marker>
+    <marker id="ap" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ff40c0"/>
+    </marker>
+  </defs>
+  <!-- Voice in, through the mask -->
+  <path class="g" d="M182 262 C 240 262, 250 300, 300 318" stroke-width="3" marker-end="url(#ag)"/>
+  <!-- The voice effect, out of the speaker -->
+  <path class="g" d="M368 600 C 300 600, 250 560, 186 548" stroke-width="3" marker-end="url(#ag)"/>
+  <!-- Lovense, over Bluetooth -->
+  <path class="p" d="M340 668 C 290 700, 240 730, 176 738" stroke-width="3" stroke-dasharray="2 9" marker-end="url(#ap)"/>
+  <!-- Unit to phone, over Bluetooth -->
+  <path class="g" d="M664 404 L 770 404" stroke-width="3" stroke-dasharray="2 9" marker-start="url(#ag)" marker-end="url(#ag)"/>
+  <!-- Phone to headphones -->
+  <path class="g" d="M840 290 L 840 240" stroke-width="3" marker-end="url(#ag)"/>
+  <!-- Cloud mode: phone, server, hive -->
+  <path class="p" d="M910 404 L 1046 404" stroke-width="3.5" marker-start="url(#ap)" marker-end="url(#ap)"/>
+  <path class="p" d="M1216 404 C 1250 404, 1260 380, 1296 372" stroke-width="3.5" marker-start="url(#ap)" marker-end="url(#ap)"/>
+  <!-- Direct mode: unit to unit over the radio -->
+  <path class="p" d="M610 668 C 760 760, 1150 770, 1340 640" stroke-width="3.5" stroke-dasharray="14 10" marker-start="url(#ap)" marker-end="url(#ap)"/>
+</svg>
+
+<!-- The unit -->
+<img class="abs unit" src="@ASSETS@/unit_main.png" style="left: 236px; top: 140px; height: 560px;">
+<div class="abs label main-label" style="left: 258px; top: 708px; width: 380px;">
+  <div class="name">DRONELAB UNIT</div>
+  <div class="sub">1.75" round AMOLED display, ESP32-S3,<br>two mics, speaker, in a printed housing</div>
+</div>
+
+<!-- Voice in -->
+<svg class="abs icon" style="left: 72px; top: 196px;" width="80" height="80" viewBox="0 0 80 80" fill="none" stroke="#33ff33" stroke-width="4" stroke-linecap="round">
+  <rect x="28" y="6" width="24" height="42" rx="12"/>
+  <path d="M16 36 a24 24 0 0 0 48 0"/>
+  <path d="M40 60 v12 M28 74 h24"/>
+</svg>
+<div class="abs label" style="left: 20px; top: 282px; width: 186px;">
+  <div class="name">YOUR VOICE</div>
+  <div class="sub">heard through<br>the mask</div>
+</div>
+
+<!-- Voice out -->
+<svg class="abs icon" style="left: 70px; top: 486px;" width="90" height="80" viewBox="0 0 90 80" fill="none" stroke="#33ff33" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+  <path d="M8 28 h14 l20 -16 v56 l-20 -16 h-14 z"/>
+  <path d="M54 28 a14 14 0 0 1 0 24 M62 18 a26 26 0 0 1 0 44 M70 8 a38 38 0 0 1 0 64"/>
+</svg>
+<div class="abs label" style="left: 20px; top: 570px; width: 186px;">
+  <div class="name">VOICE EFFECT</div>
+  <div class="sub">out loud, from<br>the speaker model</div>
+</div>
+
+<!-- Lovense -->
+<svg class="abs icon pink" style="left: 72px; top: 704px;" width="84" height="70" viewBox="0 0 84 70" fill="none" stroke="#ff40c0" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M42 62 C 10 40, 12 10, 30 10 C 38 10, 42 18, 42 22 C 42 18, 46 10, 54 10 C 72 10, 74 40, 42 62 z"/>
+  <path d="M6 22 q-5 10 0 20 M78 22 q5 10 0 20"/>
+</svg>
+<div class="abs label pink" style="left: 10px; top: 782px; width: 206px;">
+  <div class="name">LOVENSE TOYS</div>
+  <div class="sub">up to three,<br>over Bluetooth</div>
+</div>
+
+<!-- Phone and headphones -->
+<div class="abs tag" style="left: 717px; top: 382px;">BLUETOOTH</div>
+<div class="abs phone">
+  <div class="notch"></div>
+  <div class="app">
+    <div class="hdr">HIVEMIND</div>
+    <div class="row"><span class="dot on"></span>0451<span class="bars"><i style="height:6px"></i><i style="height:12px"></i><i style="height:9px"></i><i style="height:14px"></i></span></div>
+    <div class="row"><span class="dot"></span>0632</div>
+    <div class="row"><span class="dot"></span>0815</div>
+  </div>
+  <div class="talk">HOLD TO TALK</div>
+</div>
+<div class="abs label" style="left: 700px; top: 520px; width: 280px;">
+  <div class="name">PHONE + APP</div>
+  <div class="sub">the DroneLab app runs the<br>unit, and links it to the hive</div>
+</div>
+<svg class="abs icon" style="left: 784px; top: 112px;" width="112" height="120" viewBox="0 0 112 120" fill="none" stroke="#33ff33" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M14 78 V58 a42 42 0 0 1 84 0 V78"/>
+  <rect x="6" y="66" width="22" height="40" rx="9"/>
+  <rect x="84" y="66" width="22" height="40" rx="9"/>
+</svg>
+<div class="abs label" style="left: 906px; top: 130px; width: 240px; text-align: left;">
+  <div class="name">HEADPHONES</div>
+  <div class="sub">the hive's voices<br>in your ears</div>
+</div>
+
+<!-- Cloud mode -->
+<div class="abs tag pink" style="left: 978px; top: 382px;">INTERNET</div>
+<svg class="abs icon pink" style="left: 1050px; top: 346px;" width="164" height="112" viewBox="0 0 164 112" fill="none" stroke="#ff40c0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M40 100 h86 a28 28 0 0 0 4 -55.7 a40 40 0 0 0 -76 -8 a32 32 0 0 0 -14 63.7 z"/>
+  <path d="M62 64 h40 M62 78 h40" stroke-width="4"/>
+  <circle cx="54" cy="64" r="2" fill="#ff40c0"/><circle cx="54" cy="78" r="2" fill="#ff40c0"/>
+</svg>
+<div class="abs label pink" style="left: 1010px; top: 466px; width: 244px;">
+  <div class="name">MUMBLE SERVER</div>
+  <div class="sub">cloud mode: the hive<br>meets here, from anywhere</div>
+</div>
+
+<!-- The hive -->
+<img class="abs unit small" src="@ASSETS@/unit_hive1.png" style="left: 1300px; top: 250px; height: 190px;">
+<img class="abs unit small" src="@ASSETS@/unit_hive2.png" style="left: 1450px; top: 300px; height: 170px;">
+<img class="abs unit small" src="@ASSETS@/unit_hive3.png" style="left: 1356px; top: 456px; height: 180px;">
+<div class="abs label pink" style="left: 1290px; top: 660px; width: 300px;">
+  <div class="name">THE HIVE</div>
+  <div class="sub">other DroneLab units, and<br>anyone on a Mumble app</div>
+</div>
+
+<!-- Direct mode -->
+<svg class="abs icon pink" style="left: 948px; top: 702px;" width="100" height="56" viewBox="0 0 100 56" fill="none" stroke="#ff40c0" stroke-width="4" stroke-linecap="round">
+  <circle cx="50" cy="40" r="5" fill="#ff40c0"/>
+  <path d="M36 26 a20 20 0 0 1 28 0 M26 16 a34 34 0 0 1 48 0 M16 6 a48 48 0 0 1 68 0"/>
+</svg>
+<div class="abs label pink" style="left: 820px; top: 790px; width: 360px;">
+  <div class="name">DIRECT MODE</div>
+  <div class="sub">unit to unit over the radio:<br>no server, internet or signal</div>
+</div>
+
+</body>
+</html>

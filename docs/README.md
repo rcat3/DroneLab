@@ -25,4 +25,4 @@ New here?  Start with the [project page](../README.md).
 - [The app's source](../app/README.md): building the app yourself.
 - [Other Boards](other-boards.md): the other displays the firmware runs on.
 
-The pictures of the housings and travel cases in `images/` are rendered from their designs by `tools/doc_renders/render.sh`.
+The pictures of the housings and travel cases in `images/` are rendered from their designs by `tools/doc_renders/render.sh`, and the README's How it works diagram by `tools/doc_renders/make_diagram.py`.

@@ -76,10 +76,11 @@ A few ideas run through it:
 - `tools/mumble/` - Runs comms' [Mumble](https://www.mumble.info) server with Docker.
 - `tools/gen_terminal_font.py` - Makes the [Terminal](../features/terminal.md)'s font, `core/ui/terminal_font.c`.
 - `tools/gen_lv_conf.py` - Generates the platforms' `lv_conf.h` files (LVGL's settings) from LVGL's template.  Run it after updating the LVGL submodule.
-- `tools/doc_renders/render.sh` - Renders the pictures of the housings and travel cases in `docs/images/`.  Run it after changing a housing's or a case's design.
+- `tools/doc_renders/render.sh` - Renders the pictures of the housings, their parts and the travel cases in `docs/images/`.  Run it after changing a housing's or a case's design.
 - `tools/gen_logo.py` - Draws the DroneLab logo shown at startup, `core/ui/assets/dronelab_logo.png`, and prints where its blinking cursor goes (`SPLASH_CURSOR` in `core/app/app.c`).  It needs two free fonts from Google Fonts, listed at its top.
 - `tools/gen_app_icon.py` - Draws the app's icon from the logo, for Android and the iPhone.  It needs the same fonts.
 - `tools/doc_renders/gen_doc_logos.py` - Draws the documentation's logos in `docs/images/`: the DroneLab banner, and KatCorp's logo and mark, from the cat in `imgs/RCatLogo.bmp`.  It needs the same fonts.
+- `tools/doc_renders/make_diagram.py` - Draws the README's How it works diagram (`docs/images/how_it_works.jpg`) from `tools/doc_renders/diagram/`, with the unit rendered from its design and screenshots on its display, and the Features page's tiles for the features with no screen of their own.  It needs OpenSCAD, Google Chrome and the same fonts.  Run it after retaking the screenshots or changing the speaker housing.
 - `tools/screenshots.py` - Takes screenshots over USB, and the documentation's set in `docs/images/screens/` (see [Screenshots](#screenshots)).
 - `tools/release/build_firmware.sh` - Builds a release's firmware and the web installer (see [Releases](#releases)).
 - `tools/release/build_models.sh` - Renders a release's printable parts, one zip per model (see [Releases](#releases)).

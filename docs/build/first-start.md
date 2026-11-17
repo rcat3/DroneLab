@@ -1,6 +1,6 @@
 # First Start
 
-<img src="../images/katcorp_mark.png" width="72" align="left" alt="KatCorp">
+<a href="../../README.md#about-katcorp"><img src="../images/katcorp_mark.png" width="72" align="left" alt="KatCorp"></a>
 
 **KatCorp Drone Systems**<br>DroneLab: Commissioning Your Unit
 
@@ -28,7 +28,7 @@ Swipe **up and down** to move between features, and **left and right** between a
 
 ## 4. Turn the picture the right way round
 
-<img src="../images/screens/settings_rotation.png" width="180" align="right" alt="The Rotation page, set to 180 degrees">
+<a href="../features/settings.md#rotation"><img src="../images/screens/settings_rotation.png" width="180" align="right" alt="The Rotation page, set to 180 degrees"></a>
 
 In the housing, the board sits turned from its usual way up, with its USB-C port facing the side, so the picture needs turning to match.  Swipe to **Settings**, then to **Rotation**, and scroll the roller to **180°**.  The picture turns about a second after you stop scrolling.
 
@@ -36,7 +36,7 @@ In the housing, the board sits turned from its usual way up, with its USB-C port
 
 ## 5. Level it in the mask
 
-<img src="../images/screens/settings_level.png" width="180" align="right" alt="The Level page, level">
+<a href="../features/level.md"><img src="../images/screens/settings_level.png" width="180" align="right" alt="The Level page, level"></a>
 
 Screw the unit into the mask, put the mask on (or set it upright on a head form), and go to the **Level** page in Settings.  The line across the screen stays level with the ground, and turns green when the display is within a degree of level.
 
@@ -47,7 +47,7 @@ Screw the unit into the mask, put the mask on (or set it upright on a head form)
 
 <br clear="right">
 
-<img src="../images/screens/voice_effect.png" width="180" align="right" alt="The Voice Effect page">
+<a href="../features/voice-effects.md"><img src="../images/screens/voice_effect.png" width="180" align="right" alt="The Voice Effect page"></a>
 
 Swipe to the **Voice** feature, and to the **Voice Effect** page.  Pick a preset, and switch **Play on speaker** on.  The **Effect Volume** page, next to it, sets how loud.  Every preset holds at 100% in a finished housing, but anything close in front of the mask reflects sound back into it: if it starts to howl, turn it down.  The `BOOT` button, the upper one on the left side, switches the speaker off and on, to stop feedback quickly.
 

@@ -1,0 +1,76 @@
+<!doctype html>
+<!-- Round tiles for the features with no screen of their own, drawn like the
+     display's screenshots. make_diagram.py renders it once per tile, with
+     the tile's name after the # in the address. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: Orbitron; src: url("@FONTS@/Orbitron[wght].ttf"); font-weight: 400 900; }
+  @font-face { font-family: Mono; src: url("@FONTS@/ShareTechMono-Regular.ttf"); }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 466px; height: 466px; overflow: hidden; background: #000; }
+  .face {
+    position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
+    background: radial-gradient(circle at 50% 45%, #06140a, #000 70%);
+    font-family: Mono, monospace; color: #33ff33; text-align: center;
+  }
+  .face::after {
+    content: ""; position: absolute; inset: 0;
+    background: repeating-linear-gradient(transparent 0 3px, rgba(0, 0, 0, 0.25) 3px 4px);
+  }
+  .tile { display: none; }
+  .title {
+    position: absolute; left: 0; right: 0; top: 64px; font-family: Orbitron; font-weight: 800; font-size: 25px;
+    letter-spacing: 0.12em; text-shadow: 0 0 10px rgba(51, 255, 51, 0.8);
+  }
+  .pink { color: #ff40c0; text-shadow: 0 0 10px rgba(255, 64, 192, 0.85); }
+  .caption { position: absolute; left: 0; right: 0; bottom: 78px; font-size: 22px; letter-spacing: 0.1em; color: #7fdc8a; }
+  svg { position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%); }
+  .glow { filter: drop-shadow(0 0 8px rgba(51, 255, 51, 0.85)); }
+  .pglow { filter: drop-shadow(0 0 8px rgba(255, 64, 192, 0.9)); }
+</style>
+</head>
+<body>
+<div class="face">
+
+  <div class="tile" id="remote">
+    <div class="title">REMOTE</div>
+    <svg width="300" height="230" viewBox="0 0 300 230" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <g class="glow" stroke="#33ff33" stroke-width="6">
+        <rect x="104" y="40" width="92" height="170" rx="14"/>
+        <path d="M138 54 h24"/>
+        <rect x="118" y="74" width="64" height="18" rx="4" stroke-width="3"/>
+        <rect x="118" y="100" width="64" height="18" rx="4" stroke-width="3"/>
+        <rect x="118" y="126" width="64" height="18" rx="4" stroke-width="3"/>
+        <circle cx="150" cy="182" r="11" stroke-width="4"/>
+      </g>
+      <g class="pglow" stroke="#ff40c0" stroke-width="6">
+        <path d="M60 70 a40 40 0 0 1 0 60 M38 52 a66 66 0 0 1 0 96"/>
+        <path d="M240 70 a40 40 0 0 0 0 60 M262 52 a66 66 0 0 0 0 96"/>
+      </g>
+    </svg>
+    <div class="caption">WIFI HOTSPOT</div>
+  </div>
+
+  <div class="tile" id="voice_lab">
+    <div class="title">VOICE LAB</div>
+    <svg width="330" height="200" viewBox="0 0 330 200" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <g class="glow" stroke="#33ff33" stroke-width="6">
+        <path d="M10 100 h30 l12 -40 l14 90 l14 -120 l14 140 l14 -110 l14 80 l14 -50 l12 30 l12 -10 h30"/>
+      </g>
+      <g class="pglow">
+        <circle cx="262" cy="70" r="18" fill="#ff40c0"/>
+      </g>
+      <text x="262" y="128" text-anchor="middle" font-family="Orbitron" font-weight="800" font-size="28"
+            fill="#ff40c0" class="pglow">REC</text>
+    </svg>
+    <div class="caption">STREAM &middot; RECORD</div>
+  </div>
+
+</div>
+<script>
+  document.getElementById(location.hash.slice(1)).style.display = "block";
+</script>
+</body>
+</html>

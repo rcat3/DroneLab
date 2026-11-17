@@ -2,7 +2,7 @@
 
 ![DroneLab, from KatCorp Drone Systems Division](docs/images/dronelab_banner.png)
 
-> **Photo to come:** a DroneLab unit worn in a gas mask, the display lit, seen from the front at a slight angle.
+<p align="center"><img src="docs/images/dronelab_worn.jpg" width="420" alt="A DroneLab speaker model worn in a gas mask, its display lit with the KatCorp cat"></p>
 
 ## What is DroneLab?
 
@@ -18,7 +18,7 @@ The DroneLab display unit replaces the mask's voice port cover with a glowing 1.
 
 <table>
 <tr>
-<td width="190" align="center"><img src="docs/images/screens/voice_effect.png" width="170" alt="The Voice Effect page"></td>
+<td width="190" align="center"><a href="docs/features/voice-effects.md"><img src="docs/images/screens/voice_effect.png" width="170" alt="The Voice Effect page"></a></td>
 <td>
 <h3>Voice Changing Effects</h3>
 <p>The speaker model changes the wearer's voice on the unit itself, in real time, and plays it out of a speaker in the housing.  Ten presets, from <i>Natural</i> and <i>Female</i> to <i>Android</i>, <i>Robot</i>, <i>Dalek</i>, <i>Drone</i> and <i>Borg</i>.  The unit hears its own speaker and cancels it out of its microphones, so it goes loud without feedback.</p>
@@ -26,26 +26,26 @@ The DroneLab display unit replaces the mask's voice port cover with a glowing 1.
 </td>
 </tr>
 <tr>
-<td width="190" align="center"><img src="docs/images/screens/comm_status.png" width="170" alt="The Comms status screen"></td>
+<td width="190" align="center"><a href="docs/features/comms.md"><img src="docs/images/screens/comm_status.png" width="170" alt="The Comms status screen"></a></td>
 <td>
 <h3>HiveMind (Comms)</h3>
 <p>Link every drone in the hive into one mind.  Push to talk, or just speak, and your voice, through the effect of your choice, goes straight into every other drone's headphones, while the display shows which drone is transmitting, with its avatar.  Messages and commands travel the same link, so the hive can reach any drone's terminal, or its toys, if that drone has allowed it.  A cheap Bluetooth camera remote makes a talk button.</p>
 <p>HiveMind can operate in two modes:</p>
-    <ul><li><b>Cloud mode:</b> through the wearer's phone to the hive's Mumble server, so distance doesn't matter, and people without a mask join from any Mumble app.</li><li><b>Direct mode</b> <i>(in development)</i>: unit to unit over the radio, with no server, internet or phone signal.  Encrypted groups, Long Range, and relaying through the drones in between.</li></ul>
+    <ul><li><b>Cloud mode:</b> through the wearer's phone to the hive's <a href="https://www.mumble.info">Mumble</a> server, so distance doesn't matter, and people without a mask join from any Mumble app.</li><li><b>Direct mode</b> <i>(in development)</i>: unit to unit over the radio, with no server, internet or phone signal.  Encrypted groups, Long Range, and relaying through the drones in between.</li></ul>
 <p><a href="docs/features/comms.md">HiveMind (Comms) →</a></p>
 </td>
 </tr>
 <tr>
-<td width="190" align="center"><img src="docs/images/screens/visualizer_halo.png" width="170" alt="The Halo visualizer"></td>
+<td width="190" align="center"><a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_halo.png" width="170" alt="The Halo visualizer"></a></td>
 <td>
 <h3>Visualizers</h3>
 <p>Seven animated displays of the wearer's voice and whatever the speaker is playing: KITT's voice box, a 3D spectrum terrain, an oscilloscope, a spinning halo, an aurora, orbits and ripples.</p>
-<p><img src="docs/images/screens/visualizer_kitt.png" width="88" alt="KITT" title="KITT"> <img src="docs/images/screens/visualizer_terrain.png" width="88" alt="Terrain" title="Terrain"> <img src="docs/images/screens/visualizer_scope.png" width="88" alt="Scope" title="Scope"> <img src="docs/images/screens/visualizer_orbit.png" width="88" alt="Orbit" title="Orbit"> <img src="docs/images/screens/visualizer_ripples.png" width="88" alt="Ripples" title="Ripples"></p>
+<p><a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_kitt.png" width="88" alt="KITT" title="KITT"></a> <a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_terrain.png" width="88" alt="Terrain" title="Terrain"></a> <a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_scope.png" width="88" alt="Scope" title="Scope"></a> <a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_orbit.png" width="88" alt="Orbit" title="Orbit"></a> <a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_ripples.png" width="88" alt="Ripples" title="Ripples"></a></p>
 <p><a href="docs/features/visualizer.md">Visualizer →</a></p>
 </td>
 </tr>
 <tr>
-<td width="190" align="center"><img src="docs/images/screens/lovense_control.png" width="170" alt="The Lovense Control page"></td>
+<td width="190" align="center"><a href="docs/features/lovense.md"><img src="docs/images/screens/lovense_control.png" width="170" alt="The Lovense Control page"></a></td>
 <td>
 <h3>Lovense toy control</h3>
 <p>Runs up to three Lovense devices over Bluetooth, with no Lovense app: levels, patterns (including your own), and reactions to the wearer's voice, movement or stillness.  Others in the hive can send commands from their phones, but only once the wearer has authorized them.</p>
@@ -53,7 +53,7 @@ The DroneLab display unit replaces the mask's voice port cover with a glowing 1.
 </td>
 </tr>
 <tr>
-<td width="190" align="center"><img src="docs/images/screens/images_katcorp.png" width="170" alt="The KatCorp logo with the voice ring around it"></td>
+<td width="190" align="center"><a href="docs/features/images.md"><img src="docs/images/screens/images_katcorp.png" width="170" alt="The KatCorp logo with the voice ring around it"></a></td>
 <td>
 <h3>Images and the voice ring</h3>
 <p>Any picture or animated GIF, built in or from a micro SD card, with a glowing ring around the edge that pulses as the wearer speaks.</p>
@@ -61,7 +61,7 @@ The DroneLab display unit replaces the mask's voice port cover with a glowing 1.
 </td>
 </tr>
 <tr>
-<td width="190" align="center"><img src="docs/images/screens/terminal.png" width="170" alt="The Terminal"></td>
+<td width="190" align="center"><a href="docs/features/terminal.md"><img src="docs/images/screens/terminal.png" width="170" alt="The Terminal"></a></td>
 <td>
 <h3>Terminal</h3>
 <p>Text typed on a phone appears on the display as a green-screen terminal, letter by letter.  Authorized handlers can send messages to it from the app.</p>
@@ -85,16 +85,7 @@ See [Features](docs/features/README.md) for everything it does.
 
 Each unit is built around one off-the-shelf board, the [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75).  It has the display, the processor, two microphones, a speaker amplifier, a micro SD card slot, WiFi, Bluetooth, a motion sensor and a battery charger, all on one round circuit board about the size of a coaster.  The DroneLab firmware runs on it.  A 3D printed housing holds it, with a battery and, in the speaker model, a speaker, and screws into the mask's voice port by the same thread as the original cover.
 
-```mermaid
-flowchart LR
-    mic["Microphones<br>(through the mask)"] --> board["DroneLab unit"]
-    board --> screen["1.75 inch AMOLED display"]
-    board --> speaker["Speaker<br>(voice effect, sounds)"]
-    board <-- "Bluetooth" --> phone["Phone + DroneLab app"]
-    phone <-- "internet" --> server["Mumble server<br>(the rest of the hive)"]
-    board <-- "radio, no internet" --> others["Other DroneLab units"]
-    board -- "Bluetooth" --> toys["Lovense devices"]
-```
+![How it works: the DroneLab unit hears your voice through the mask and plays the voice effect out of its speaker; over Bluetooth it runs Lovense toys and links to the DroneLab app on your phone, which plays the hive's voices in your headphones and connects to the hive's Mumble server in cloud mode; in direct mode, units talk to each other over the radio](docs/images/how_it_works.jpg)
 
 ### The two models
 
