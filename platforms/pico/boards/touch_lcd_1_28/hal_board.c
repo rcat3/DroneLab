@@ -593,6 +593,18 @@ bool rcat_hal_button_pressed(void)
     return false;
 }
 
+bool rcat_hal_screenshot_pressed(void)
+{
+    return false;
+}
+
+size_t rcat_hal_console_read(char *buf, size_t cap)
+{
+    (void)buf;
+    (void)cap;
+    return 0;
+}
+
 void rcat_hal_restart(void)
 {
     watchdog_reboot(0, 0, 0);

@@ -380,6 +380,18 @@ void rcat_hal_restart(void);
  * on boards without one. */
 bool rcat_hal_button_pressed(void);
 
+/* True once each time BOOT is pressed while PWR is held down: the screenshot
+ * buttons. That press doesn't count for rcat_hal_button_pressed(), and holding
+ * PWR doesn't turn the board off while it's used like this. Call it often,
+ * every 50 ms or so. Always false on boards without both buttons. */
+bool rcat_hal_screenshot_pressed(void);
+
+/* Whatever's arrived on the USB serial port since the last call, without
+ * waiting: up to cap bytes, returning how many. For the development console
+ * (core/app/console.h), which only builds with RCAT_SERIAL_CONSOLE; the port
+ * isn't read until this is first called. 0 on boards without it. */
+size_t rcat_hal_console_read(char *buf, size_t cap);
+
 void rcat_hal_delay_ms(uint32_t ms);
 
 /* Milliseconds since the board started, from any task. Wraps after 49 days. */

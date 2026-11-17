@@ -1115,9 +1115,17 @@ function:	Power button handling. Holding the button for 2 seconds turns the
             board off.
 parameter:
 ********************************************************************************/
+static volatile bool power_key_down;    // held, in a press that started after startup
+
+static bool power_key_held(void)
+{
+    return power_key_down;
+}
+
 static void power_key_timer_cb(void *arg)
 {
     static bool released_since_boot;
+    static bool with_boot;          // BOOT was pressed during this press: the screenshot buttons
     static uint32_t held_ms;
 
     uint32_t levels = 0;
@@ -1128,6 +1136,8 @@ static void power_key_timer_cb(void *arg)
     if (!(levels & EXIO_PWR_KEY))
     {
         released_since_boot = true;
+        power_key_down = false;
+        with_boot = false;
         held_ms = 0;
         return;
     }
@@ -1135,6 +1145,17 @@ static void power_key_timer_cb(void *arg)
     // The button is usually still held from switching the board on, so
     // only count presses that start after it has been let go.
     if (!released_since_boot)
+    {
+        return;
+    }
+    power_key_down = true;
+
+    // Held for a screenshot, with BOOT, it doesn't turn the board off
+    if (gpio_get_level(GPIO_NUM_0) == 0)
+    {
+        with_boot = true;
+    }
+    if (with_boot)
     {
         return;
     }
@@ -1217,6 +1238,7 @@ static void power_init(void)
     esp_timer_handle_t timer;
     ESP_ERROR_CHECK(esp_timer_create(&timer_args, &timer));
     ESP_ERROR_CHECK(esp_timer_start_periodic(timer, POWER_KEY_POLL_MS * 1000));
+    rcat_esp32_set_power_key(power_key_held);
 }
 
 // Waveshare's initialization for this panel, but starting dark: the app sets

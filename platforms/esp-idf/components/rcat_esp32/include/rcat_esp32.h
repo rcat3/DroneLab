@@ -23,4 +23,9 @@ bool rcat_esp32_sd_mount(int clk, int cmd, int d0, const char **path);
  * It's set up the first time. Returns false if it doesn't answer. */
 bool rcat_esp32_qmi8658_read(i2c_master_bus_handle_t bus, float a[3]);
 
+/* Tell the shared HAL how to read the board's power button, for the
+ * screenshot buttons (PWR held, BOOT pressed). held returns true while it's
+ * held down. Boards without a power button it can read don't call it. */
+void rcat_esp32_set_power_key(bool (*held)(void));
+
 #endif
