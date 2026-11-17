@@ -73,7 +73,7 @@ Front to back: the board drops into the front of the body, then the battery, tap
 
 > **Photo to come:** the finished low-profile model screwed into a mask.
 
-Unscrew the mask's original voice port cover, and screw the housing in by the ridges around its back.  It should end up level, with the USB-C port on the right.
+If anything is screwed into the mask's voice port, other than its metal adapter, take it out first.  Leave the adapter in: the housing screws into it.  Then screw the housing in by the ridges around its back.  It should end up level, with the USB-C port on the right.
 
 The thread screws into a metal adapter in the mask, which itself screws into the mask, and it's easy to unscrew the adapter by accident when taking the housing out.  Hold the adapter still while you unscrew the housing.  If it does come loose, screw it firmly back in before putting the housing back: where it stops changes how level the housing sits.  If the housing sits a little crooked, see `lp_phase_test` in the [design's README](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/README.md#test-prints-1).
 

@@ -43,7 +43,7 @@ Each model's page has its own parts list.  On top of that:
 - **Small tools:** a hex key or screwdriver to fit M2 screws, a craft knife, scissors and a toothpick.
 - **A USB-C cable that carries data**, not just charging, and a computer (Linux, macOS or Windows) to [install the firmware](../building-firmware.md).
 - **A micro SD card** (optional), for your own images, sounds and Lovense patterns.
-- **A compatible gas mask**, of course: the housings are made to fit the voice port of the MSA Millennium (an MSA trademark; DroneLab isn't made or endorsed by MSA).  The housing screws into its voice port in place of the cover.  With it fitted, the mask is a costume, not a respirator: don't rely on it for protection.
+- **A compatible gas mask**, of course: the housings are made to fit the voice port of the MSA Millennium (an MSA trademark; DroneLab isn't made or endorsed by MSA).  The housing screws into its voice port.  With it fitted, the mask is a costume, not a respirator: don't rely on it for protection.
 
 ## No 3D printer?
 

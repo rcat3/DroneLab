@@ -8,7 +8,7 @@
 
 KatCorp Drone Systems Division is pleased to announce DroneLab: a display and voice upgrade for drones with compatible gas masks.¹
 
-The DroneLab display unit replaces the mask's voice port cover with a glowing 1.75" round touch screen.  It shows designation, images and animations, lights up as your drone speaks, and in the speaker model gives your drone a new voice: synthetic, robotic, or a collective of many.  Units link into a HiveMind with the rest of their hive, and take orders from a phone or from authorized handlers.
+The DroneLab display unit screws into the mask's voice port: a glowing 1.75" round touch screen.  It shows designation, images and animations, lights up as your drone speaks, and in the speaker model gives your drone a new voice: synthetic, robotic, or a collective of many.  Units link into a HiveMind with the rest of their hive, and take orders from a phone or from authorized handlers.
 
 **Who it's for:** latex and rubber drones that require an upgrade to the latest hive networking protocols and speech coding units... and anyone else with a compatible mask (cosplayers, costume and prop makers) who needs some tech bling.
 
@@ -153,4 +153,4 @@ KatCorp is fictional and is not a real company.  DroneLab is a hobby project by 
 
 ¹ MSA and Millennium are trademarks of MSA Safety Incorporated.  DroneLab is an independent project.  It isn't made, licensed, approved, sponsored or endorsed by MSA, and its housings aren't MSA products, parts or accessories.  The name is used only to say which mask's voice port the housings are made to fit: "compatible" means that, and nothing more.
 
-**Not protective equipment.**  Fitting DroneLab replaces the mask's voice port cover with a 3D printed part, so a mask with it fitted is a costume, not a respirator: don't rely on it for protection from anything.  Likewise, Waveshare, Lovense, Mumble and the other product and company names here are trademarks of their owners.  They're used only to say what the project is built on or works with, and none of those companies makes, sponsors or endorses DroneLab.
+**Not protective equipment.**  Fitting DroneLab puts a 3D printed part in the mask's voice port, so a mask with it fitted is a costume, not a respirator: don't rely on it for protection from anything.  Likewise, Waveshare, Lovense, Mumble and the other product and company names here are trademarks of their owners.  They're used only to say what the project is built on or works with, and none of those companies makes, sponsors or endorses DroneLab.
