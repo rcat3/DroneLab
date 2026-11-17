@@ -1,8 +1,8 @@
-# Comms
+# HiveMind (Comms)
 
 *The ESP32-S3-Touch-AMOLED-1.75, with the DroneLab app on an Android phone.  New: cloud mode works end to end and is still being tried out; direct mode is in development.*
 
-Comms lets a hive talk to each other, like a radio.  Each unit sends its wearer's voice, through the [voice effect](voice-effects.md), and the others' voices come back to the wearer's headphones, through their phone.  The display shows who's talking, with their avatar.  The unit only sends while the wearer talks: with *Push to talk*, while the talk button is held, and in *Voice* mode, whenever it hears them speak.
+HiveMind links every drone in the hive into one mind: they talk to each other, like a radio.  On the unit and in the app it's called *Comm*.  Each unit sends its wearer's voice, through the [voice effect](voice-effects.md), and the others' voices come back to the wearer's headphones, through their phone.  The display shows who's talking, with their avatar.  The unit only sends while the wearer talks: with *Push to talk*, while the talk button is held, and in *Voice* mode, whenever it hears them speak.
 
 It has two modes, which can be on together:
 

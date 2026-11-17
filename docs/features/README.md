@@ -5,7 +5,7 @@ The display is organized into features.  You swipe up and down to move between t
 | Feature | What it does |
 |---|---|
 | [Voice Effects](voice-effects.md) | Changes your voice: female, robot, Dalek, Borg and more.  Needs the speaker model |
-| [Comms](comms.md) | Talks with the hive, like a radio, with a status screen showing who's talking.  Cloud mode goes through a phone and a Mumble server; direct mode goes unit to unit over the radio (in development) |
+| [HiveMind (Comms)](comms.md) | Links the hive's drones into one mind: they talk to each other, like a radio, with a status screen showing who's talking.  Cloud mode goes through a phone and a Mumble server; direct mode goes unit to unit over the radio (in development) |
 | [Visualizer](visualizer.md) | Moving pictures of your voice and the speaker: KITT, a 3D spectrum, an oscilloscope and more |
 | [Lovense](lovense.md) | Controls up to three Lovense devices over Bluetooth, with patterns and reactions to your voice and movement |
 | [Images](images.md) | Shows still images and animated GIFs, built in or from a micro SD card |

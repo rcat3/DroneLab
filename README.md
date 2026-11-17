@@ -14,7 +14,7 @@ DroneLab is a round, glowing touch screen that screws into the voice port on the
 
 **Who it's for:** latex and rubber drones who want their mask to look and sound like a piece of corporate hardware, and anyone else with a compatible mask (cosplayers, costume and prop makers) who wants a voice port that does something.
 
-**What it is, really:** an open-source project: firmware, a phone app and 3D printable housings for an off-the-shelf Waveshare display board.  KatCorp isn't a real company, and DroneLab isn't sold.  You build your own (see [Get a unit](#get-a-unit) below), and nothing needs soldering.
+**What it is, really:** a hobby project with its source published: firmware, a phone app and 3D printable housings for an off-the-shelf Waveshare display board, free to build, change and share for non-commercial use (see [License](#license)).  KatCorp isn't a real company, and DroneLab isn't sold.  You build your own (see [Get a unit](#get-a-unit) below), and nothing needs soldering.
 
 ## Features
 
@@ -22,7 +22,7 @@ DroneLab is a round, glowing touch screen that screws into the voice port on the
 <tr>
 <td width="190" align="center"><img src="docs/images/screens/voice_effect.png" width="170" alt="The Voice Effect page"></td>
 <td>
-<h3>Voice modulation</h3>
+<h3>Voice Changing Effects</h3>
 <p>The speaker model changes the wearer's voice on the unit itself, in real time, and plays it out of a speaker in the housing.  Ten presets, from <i>Natural</i> and <i>Female</i> to <i>Android</i>, <i>Robot</i>, <i>Dalek</i>, <i>Drone</i> and <i>Borg</i>.  The unit hears its own speaker and cancels it out of its microphones, so it goes loud without howling.</p>
 <p><a href="docs/features/voice-effects.md">Voice effects →</a></p>
 </td>
@@ -30,8 +30,8 @@ DroneLab is a round, glowing touch screen that screws into the voice port on the
 <tr>
 <td width="190" align="center"><img src="docs/images/screens/comm_status.png" width="170" alt="The Comms status screen"></td>
 <td>
-<h3>Hive comms</h3>
-<p>Drones talk to each other like a radio, in the voice effect of their choice: push to talk, or just speak.  The hive hears it in their headphones, and the display shows who's transmitting, with their avatar.  A cheap Bluetooth camera remote makes a talk button.</p><ul><li><b>Cloud mode:</b> through the wearer's phone to the hive's Mumble server, so distance doesn't matter, and people without a mask join from any Mumble app.</li><li><b>Direct mode</b> <i>(in development)</i>: unit to unit over the radio, with no server, internet or phone signal.  Encrypted groups, Long Range, and relaying through the drones in between.</li></ul>
+<h3>HiveMind (Comms)</h3>
+<p>Link every drone in the hive into one mind.  Push to talk, or just speak, and your voice, through the effect of your choice, goes straight into every other drone's headphones, while the display shows which drone is transmitting, with its avatar.  Messages and commands travel the same link, so the hive can reach any drone's terminal, or its toys, if that drone has allowed it.  A cheap Bluetooth camera remote makes a talk button.</p><ul><li><b>Cloud mode:</b> through the wearer's phone to the hive's Mumble server, so distance doesn't matter, and people without a mask join from any Mumble app.</li><li><b>Direct mode</b> <i>(in development)</i>: unit to unit over the radio, with no server, internet or phone signal.  Encrypted groups, Long Range, and relaying through the drones in between.</li></ul>
 <p><a href="docs/features/comms.md">Comms →</a></p>
 </td>
 </tr>
@@ -103,7 +103,7 @@ flowchart LR
 
 | | |
 |---|---|
-| ![The speaker model](docs/images/speaker_housing_1_75.png) | **The speaker model** is the full upgrade: every feature, with a speaker facing out below the display for voice modulation and sound, and a 2000 mAh battery for about 13.5 hours.  The display is held level by a turning collar while it's screwed in.  It stands about 33 mm out of the mask, and its sloped chin clears the filter mount below the port.  **Status: built, worn and working.** |
+| ![The speaker model](docs/images/speaker_housing_1_75.png) | **The speaker model** is the full upgrade: every feature, with a speaker facing out below the display for voice changing effects and sound, and a 2000 mAh battery for about 13.5 hours.  The display is held level by a turning collar while it's screwed in.  It stands about 33 mm out of the mask, and its sloped chin clears the filter mount below the port.  **Status: built, worn and working.** |
 | ![The low-profile model](docs/images/low_profile_housing_1_75.png) | **The low-profile model** is the entry-level unit: no speaker, so no voice effects or sound, but everything else, in a slim round housing that stands only about 23 mm out of the mask.  Fewer parts, a smaller battery for about 4.5-5.5 hours, and the quickest build.  **Status: printed, waiting on parts for its first assembly.** |
 
 ### Specifications
