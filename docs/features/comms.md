@@ -33,13 +33,23 @@ You hear both modes at once: the app plays the server's voices and the direct on
 ## Getting started
 
 1. [Install the app](../installing-the-app.md) and pair it with your unit: on the unit, switch on the *Phone App* page in [Settings](settings.md), after Brightness.
-2. **For cloud mode**, set up the server in the app's *Comm Settings*, behind the gear on the Comm tab: its address, your name and the server password, then connect.  [`tools/mumble/`](../../tools/mumble/) runs a Mumble server with Docker, for a hive that wants its own.
+2. **For cloud mode**, the hive needs a Mumble server (see [Setting up a Mumble server](#setting-up-a-mumble-server)).  Enter it in the app's *Comm Settings*, behind the gear on the Comm tab: its address, your name and the server password, then connect.
 3. **For direct mode**, switch on *Direct*: on the unit's *Direct* page, in the Comm feature, or on the *Direct* line of the app's Comm tab.  Then [pick a group](#groups).
 4. Talk: hold the talk button, or set *Voice* mode and just speak.
 
 The *Phone App* stays on, or off, from one startup to the next.  The voice effect has to run the whole time it's on, so it uses more battery: the [speaker model](../build/speaker-housing.md)'s 2000 mAh battery runs about 9.5 hours with comms on, against about 13.5 without.  Direct mode costs a little more again, as the radio has to listen the whole time.
 
 Everything else is in the *Comm* feature on the unit, swiping up and down, after Sound.
+
+## Setting up a Mumble server
+
+Cloud mode needs one [Mumble](https://www.mumble.info) server for the whole hive: one person sets it up, and everyone else just connects to it.  Mumble is free, open-source voice chat, and its server is small enough for a Raspberry Pi.  There are three ways to get one:
+
+- **Use one someone already runs.**  If anyone in the hive, or a friendly community, has a Mumble server, ask for its address and password.  A server can have channels, so several hives can share one.
+- **Rent one.**  Many hosting companies rent Mumble servers, priced by how many people can be on at once; a small one costs little.  Search for *Mumble server hosting*.
+- **Run your own**, on any computer that stays on: a home server, a Raspberry Pi, or a small cloud server.  [`tools/mumble/`](../../tools/mumble/) has a ready-made Docker setup and instructions: copy one file, set two passwords, and start it.  To reach it from outside your home, forward port 64738 (TCP and UDP) on the router.  Mumble's own [server documentation](https://www.mumble.info/documentation/mumble-server/) covers installing it without Docker, and every setting.
+
+Whichever you use, everyone needs its **address**, its **port** (64738, unless it says otherwise) and its **password**, if it has one.  The server should be Mumble 1.4 or newer for the app's *Send* tab.  Channels are made from Mumble on a computer, logged in as the server's *SuperUser*.
 
 ## On the display
 

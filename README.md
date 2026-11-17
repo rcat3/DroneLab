@@ -18,48 +18,67 @@ DroneLab is a round, glowing touch screen that screws into the voice port on the
 
 ## Features
 
-<img src="docs/images/screens/voice_effect.png" width="150" align="right" alt="The Voice Effect page">
+<table>
+<tr>
+<td width="190" align="center"><img src="docs/images/screens/voice_effect.png" width="170" alt="The Voice Effect page"></td>
+<td>
+<h3>Voice modulation</h3>
+<p>The speaker model changes the wearer's voice on the unit itself, in real time, and plays it out of a speaker in the housing.  Ten presets, from <i>Natural</i> and <i>Female</i> to <i>Android</i>, <i>Robot</i>, <i>Dalek</i>, <i>Drone</i> and <i>Borg</i>.  The unit hears its own speaker and cancels it out of its microphones, so it goes loud without howling.</p>
+<p><a href="docs/features/voice-effects.md">Voice effects →</a></p>
+</td>
+</tr>
+<tr>
+<td width="190" align="center"><img src="docs/images/screens/comm_status.png" width="170" alt="The Comms status screen"></td>
+<td>
+<h3>Hive comms</h3>
+<p>Drones talk to each other like a radio, in the voice effect of their choice: push to talk, or just speak.  The hive hears it in their headphones, and the display shows who's transmitting, with their avatar.  A cheap Bluetooth camera remote makes a talk button.</p><ul><li><b>Cloud mode:</b> through the wearer's phone to the hive's Mumble server, so distance doesn't matter, and people without a mask join from any Mumble app.</li><li><b>Direct mode</b> <i>(in development)</i>: unit to unit over the radio, with no server, internet or phone signal.  Encrypted groups, Long Range, and relaying through the drones in between.</li></ul>
+<p><a href="docs/features/comms.md">Comms →</a></p>
+</td>
+</tr>
+<tr>
+<td width="190" align="center"><img src="docs/images/screens/visualizer_halo.png" width="170" alt="The Halo visualizer"></td>
+<td>
+<h3>Visualizers</h3>
+<p>Seven animated displays of the wearer's voice and whatever the speaker is playing: KITT's voice box, a 3D spectrum terrain, an oscilloscope, a spinning halo, an aurora, orbits and ripples.</p>
+<p><img src="docs/images/screens/visualizer_kitt.png" width="88" alt="KITT" title="KITT"> <img src="docs/images/screens/visualizer_terrain.png" width="88" alt="Terrain" title="Terrain"> <img src="docs/images/screens/visualizer_scope.png" width="88" alt="Scope" title="Scope"> <img src="docs/images/screens/visualizer_orbit.png" width="88" alt="Orbit" title="Orbit"> <img src="docs/images/screens/visualizer_ripples.png" width="88" alt="Ripples" title="Ripples"></p>
+<p><a href="docs/features/visualizer.md">Visualizer →</a></p>
+</td>
+</tr>
+<tr>
+<td width="190" align="center"><img src="docs/images/screens/lovense_control.png" width="170" alt="The Lovense Control page"></td>
+<td>
+<h3>Device control</h3>
+<p>Runs up to three Lovense devices over Bluetooth, with no Lovense app: levels, patterns (including your own), and reactions to the wearer's voice, movement or stillness.  Others in the hive can send commands from their phones, but only once the wearer has authorized them.</p>
+<p><a href="docs/features/lovense.md">Lovense →</a></p>
+</td>
+</tr>
+<tr>
+<td width="190" align="center"><img src="docs/images/screens/images_home.png" width="170" alt="An image with the voice ring around it"></td>
+<td>
+<h3>Images and the voice ring</h3>
+<p>Any picture or animated GIF, built in or from a micro SD card, with a glowing ring around the edge that pulses as the wearer speaks.</p>
+<p><a href="docs/features/images.md">Images →</a> · <a href="docs/features/voice-ring.md">Voice Ring →</a></p>
+</td>
+</tr>
+<tr>
+<td width="190" align="center"><img src="docs/images/screens/terminal.png" width="170" alt="The Terminal"></td>
+<td>
+<h3>Terminal</h3>
+<p>Text typed on a phone appears on the display as a green-screen terminal, letter by letter.  Authorized handlers can send messages to it from the app.</p>
+<p><a href="docs/features/terminal.md">Terminal →</a></p>
+</td>
+</tr>
+</table>
 
-**Voice modulation.**  The speaker model changes the wearer's voice on the unit itself and plays it out of a speaker in the housing, in real time: ten presets from *Natural* and *Female* to *Android*, *Robot*, *Dalek*, *Drone* and *Borg*.  The unit hears its own speaker and cancels it out of its microphones, so it goes loud without howling.  [More](docs/features/voice-effects.md)
+### Also on board
 
-<img src="docs/images/screens/comm_status.png" width="150" align="right" alt="The Comm status screen">
-
-**Hive comms.**  Drones talk to each other like a radio, in the voice effect of their choice.  Push to talk, or just speak, and the hive hears it in their headphones, while the display shows who's transmitting, with their avatar.  A cheap Bluetooth camera remote makes a talk button.  Two modes, which run together:
-
-- **Cloud:** through the wearer's phone to the hive's [Mumble](https://www.mumble.info) server, so distance doesn't matter, and people without a mask join from any Mumble app.
-- **Direct** *(in development)*: unit to unit over the radio, with no server, internet or phone signal: encrypted groups, Long Range mode, and relaying through the drones in between.
-
-[More](docs/features/comms.md)
-
-**Visualizers.**  Seven animated displays of the wearer's voice and the speaker: KITT's voice box, a 3D spectrum terrain, an oscilloscope, a spinning halo, an aurora, orbits and ripples.  [More](docs/features/visualizer.md)
-
-| ![Halo](docs/images/screens/visualizer_halo.png) | ![KITT](docs/images/screens/visualizer_kitt.png) | ![Terrain](docs/images/screens/visualizer_terrain.png) | ![Scope](docs/images/screens/visualizer_scope.png) |
-|:-:|:-:|:-:|:-:|
-| Halo | KITT | Terrain | Scope |
-
-<img src="docs/images/screens/lovense_control.png" width="150" align="right" alt="The Lovense Control page">
-
-**Device control.**  Runs up to three Lovense devices over Bluetooth, with no Lovense app: levels, patterns (including your own), and reactions to the wearer's voice, movement or stillness.  Others in the hive can send commands from their phones, but only once the wearer has authorized them.  [More](docs/features/lovense.md)
-
-<img src="docs/images/screens/images_home.png" width="150" align="right" alt="An image with the voice ring around it">
-
-**Images and animations.**  Any picture or animated GIF, built in or from a micro SD card, with a glowing ring around the edge that pulses as the wearer speaks.  [Images](docs/features/images.md), [Voice Ring](docs/features/voice-ring.md)
-
-<img src="docs/images/screens/terminal.png" width="150" align="right" alt="The Terminal">
-
-**Terminal.**  Text typed on a phone appears on the display as a green-screen terminal, letter by letter.  Authorized handlers can send messages to it from the app.  [More](docs/features/terminal.md)
-
-<br clear="right">
+- **Remote operation:** the DroneLab app for Android runs the whole unit from a phone over Bluetooth.  Phones without the app (iPhones, for now) can run it through the unit's own WiFi hotspot, in a web browser.  [The app](docs/installing-the-app.md) · [Hotspot remote](docs/features/phone-remote.md)
+- **Sound:** plays WAV, MP3 and FLAC files from the SD card through the speaker.  [Sound](docs/features/sound.md)
+- **Recording:** records the modulated voice to the phone or a computer for videos, or feeds it to a video call as a microphone.  [Voice Lab](docs/features/voice-lab.md)
+- **All-day battery:** the speaker model runs about 13.5 hours on a charge, or about 9.5 with comms on, and charges over USB-C without leaving the mask.
+- **Screenshots:** hold `PWR` and press `BOOT` to save what's on the display to the SD card.
 
 > **Screenshot to come:** the DroneLab app's Comm tab and Remote tab, side by side.
-
-**Remote operation.**  The DroneLab app for Android runs the whole unit from a phone over Bluetooth: comms, recording, messages and the remote.  Phones without the app (iPhones, for now) can run it through the unit's own WiFi hotspot, in a web browser.  [The app](docs/installing-the-app.md), [the hotspot remote](docs/features/phone-remote.md)
-
-**Sound.**  Plays WAV, MP3 and FLAC files from the SD card through the speaker.  [More](docs/features/sound.md)
-
-**Recording.**  Records the modulated voice to the phone or a computer for videos, or feeds it to a video call as a microphone.  [More](docs/features/voice-lab.md)
-
-**All-day operation.**  The speaker model runs about 13.5 hours on a charge, or about 9.5 with comms on, and charges over USB-C without leaving the mask.
 
 See [Features](docs/features/README.md) for everything it does.
 
@@ -70,7 +89,7 @@ Each unit is built around one off-the-shelf board, the [Waveshare ESP32-S3-Touch
 ```mermaid
 flowchart LR
     mic["Microphones<br>(through the mask)"] --> board["DroneLab unit"]
-    board --> screen["1.75&quot; AMOLED display"]
+    board --> screen["1.75 inch AMOLED display"]
     board --> speaker["Speaker<br>(voice effect, sounds)"]
     board <-- "Bluetooth" --> phone["Phone + DroneLab app"]
     phone <-- "internet" --> server["Mumble server<br>(the rest of the hive)"]
