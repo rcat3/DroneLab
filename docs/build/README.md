@@ -71,3 +71,5 @@ Both models are built around the [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://
 ## Also available
 
 - **[Travel case](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case/):** a hinged, clip-shut case for either model, shaped to it, that prints with no supports.  The speaker model's case is printed and works; the low-profile model's is designed, not printed yet.
+
+  <img src="../images/speaker_case_1_75.png" height="200" alt="The speaker model's travel case, closed"> <img src="../images/speaker_case_1_75_open.png" height="200" alt="The speaker model's travel case, open, with the unit in it">

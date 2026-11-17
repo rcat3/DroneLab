@@ -5,6 +5,11 @@ Hinged cases that carry either of the 1.75" housings with the board in it, so th
 - `low_profile_case.scad` - for the [low-profile housing](../#the-low-profile-housing): round, about 74 x 88 mm across, counting the hinge and clasp, and 36 mm tall.
 - `speaker_case.scad` - for the [speaker housing](../#the-speaker-housing): shaped like it, with room for the pod below the display, about 76 x 112 mm across, counting the hinge and clasp, and 47 mm tall.
 
+| | Closed | Open, with the housing in it |
+|---|---|---|
+| **Speaker housing's case** | <img src="../../../../docs/images/speaker_case_1_75.png" width="260" alt="The speaker housing's travel case, closed"> | <img src="../../../../docs/images/speaker_case_1_75_open.png" width="260" alt="The speaker housing's travel case, open, with the housing in it"> |
+| **Low-profile housing's case** | <img src="../../../../docs/images/low_profile_case_1_75.png" width="260" alt="The low-profile housing's travel case, closed"> | <img src="../../../../docs/images/low_profile_case_1_75_open.png" width="260" alt="The low-profile housing's travel case, open, with the housing in it"> |
+
 **Status:** the speaker housing's case is printed and works.  The low-profile housing's is designed, not printed yet.
 
 ## How they work
