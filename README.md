@@ -2,17 +2,15 @@
 
 ![DroneLab, from KatCorp Drone Systems Division](docs/images/dronelab_banner.png)
 
-**A KatCorp Drone Systems upgrade for the discerning drone.**
-
 > **Photo to come:** a DroneLab unit worn in a gas mask, the display lit, seen from the front at a slight angle.
 
 ## What is DroneLab?
 
-KatCorp Drone Systems Division is pleased to announce DroneLab: a display and voice upgrade for drones in compatible gas masks.¹
+KatCorp Drone Systems Division is pleased to announce DroneLab: a display and voice upgrade for drones with compatible gas masks.¹
 
-The unit replaces the mask's voice port cover with a glowing 1.75" round touch screen.  It shows your designation, images and animations, lights up as you speak, and in the speaker model gives you a new voice: synthetic, robotic, or a collective of many.  Units link into a HiveMind with the rest of your hive, and take orders from a phone or from authorized handlers.
+The DroneLab display unit replaces the mask's voice port cover with a glowing 1.75" round touch screen.  It shows designation, images and animations, lights up as your drone speaks, and in the speaker model gives your drone a new voice: synthetic, robotic, or a collective of many.  Units link into a HiveMind with the rest of their hive, and take orders from a phone or from authorized handlers.
 
-**Who it's for:** latex and rubber drones who want their mask to look and sound like a piece of corporate hardware, and anyone else with a compatible mask (cosplayers, costume and prop makers) who wants a voice port that does something.
+**Who it's for:** latex and rubber drones that require an upgrade to the latest hive networking protocols and speech coding units... and anyone else with a compatible mask (cosplayers, costume and prop makers) who needs some tech bling.
 
 **What it is, really:** a hobby project with its source published: firmware, a phone app and 3D printable housings for an off-the-shelf Waveshare display board, free to build, change and share for non-commercial use (see [License](#license)).  KatCorp isn't a real company, and DroneLab isn't sold.  You build your own (see [Get a unit](#get-a-unit) below), and nothing needs soldering.
 
@@ -23,7 +21,7 @@ The unit replaces the mask's voice port cover with a glowing 1.75" round touch s
 <td width="190" align="center"><img src="docs/images/screens/voice_effect.png" width="170" alt="The Voice Effect page"></td>
 <td>
 <h3>Voice Changing Effects</h3>
-<p>The speaker model changes the wearer's voice on the unit itself, in real time, and plays it out of a speaker in the housing.  Ten presets, from <i>Natural</i> and <i>Female</i> to <i>Android</i>, <i>Robot</i>, <i>Dalek</i>, <i>Drone</i> and <i>Borg</i>.  The unit hears its own speaker and cancels it out of its microphones, so it goes loud without howling.</p>
+<p>The speaker model changes the wearer's voice on the unit itself, in real time, and plays it out of a speaker in the housing.  Ten presets, from <i>Natural</i> and <i>Female</i> to <i>Android</i>, <i>Robot</i>, <i>Dalek</i>, <i>Drone</i> and <i>Borg</i>.  The unit hears its own speaker and cancels it out of its microphones, so it goes loud without feedback.</p>
 <p><a href="docs/features/voice-effects.md">Voice effects →</a></p>
 </td>
 </tr>
@@ -31,8 +29,10 @@ The unit replaces the mask's voice port cover with a glowing 1.75" round touch s
 <td width="190" align="center"><img src="docs/images/screens/comm_status.png" width="170" alt="The Comms status screen"></td>
 <td>
 <h3>HiveMind (Comms)</h3>
-<p>Link every drone in the hive into one mind.  Push to talk, or just speak, and your voice, through the effect of your choice, goes straight into every other drone's headphones, while the display shows which drone is transmitting, with its avatar.  Messages and commands travel the same link, so the hive can reach any drone's terminal, or its toys, if that drone has allowed it.  A cheap Bluetooth camera remote makes a talk button.</p><ul><li><b>Cloud mode:</b> through the wearer's phone to the hive's Mumble server, so distance doesn't matter, and people without a mask join from any Mumble app.</li><li><b>Direct mode</b> <i>(in development)</i>: unit to unit over the radio, with no server, internet or phone signal.  Encrypted groups, Long Range, and relaying through the drones in between.</li></ul>
-<p><a href="docs/features/comms.md">Comms →</a></p>
+<p>Link every drone in the hive into one mind.  Push to talk, or just speak, and your voice, through the effect of your choice, goes straight into every other drone's headphones, while the display shows which drone is transmitting, with its avatar.  Messages and commands travel the same link, so the hive can reach any drone's terminal, or its toys, if that drone has allowed it.  A cheap Bluetooth camera remote makes a talk button.</p>
+<p>HiveMind can operate in two modes:</p>
+    <ul><li><b>Cloud mode:</b> through the wearer's phone to the hive's Mumble server, so distance doesn't matter, and people without a mask join from any Mumble app.</li><li><b>Direct mode</b> <i>(in development)</i>: unit to unit over the radio, with no server, internet or phone signal.  Encrypted groups, Long Range, and relaying through the drones in between.</li></ul>
+<p><a href="docs/features/comms.md">HiveMind (Comms) →</a></p>
 </td>
 </tr>
 <tr>
@@ -47,9 +47,9 @@ The unit replaces the mask's voice port cover with a glowing 1.75" round touch s
 <tr>
 <td width="190" align="center"><img src="docs/images/screens/lovense_control.png" width="170" alt="The Lovense Control page"></td>
 <td>
-<h3>Device control</h3>
+<h3>Lovense toy control</h3>
 <p>Runs up to three Lovense devices over Bluetooth, with no Lovense app: levels, patterns (including your own), and reactions to the wearer's voice, movement or stillness.  Others in the hive can send commands from their phones, but only once the wearer has authorized them.</p>
-<p><a href="docs/features/lovense.md">Lovense →</a></p>
+<p><a href="docs/features/lovense.md">Lovense toy control →</a></p>
 </td>
 </tr>
 <tr>
@@ -72,11 +72,10 @@ The unit replaces the mask's voice port cover with a glowing 1.75" round touch s
 
 ### Also on board
 
-- **Remote operation:** the DroneLab app for Android runs the whole unit from a phone over Bluetooth.  Phones without the app (iPhones, for now) can run it through the unit's own WiFi hotspot, in a web browser.  [The app](docs/installing-the-app.md) · [Hotspot remote](docs/features/phone-remote.md)
+- **Remote operation:** the DroneLab app for Android runs the whole display unit from a phone over Bluetooth.  Change what's displayed on the screen and operate features without having to see the display.  Phones without the app (including iPhones) can run it through the display unit's own WiFi hotspot, in a web browser.  [The app](docs/installing-the-app.md) · [Hotspot remote](docs/features/phone-remote.md)
 - **Sound:** plays WAV, MP3 and FLAC files from the SD card through the speaker.  [Sound](docs/features/sound.md)
-- **Recording:** records the modulated voice to the phone or a computer for videos, or feeds it to a video call as a microphone.  [Voice Lab](docs/features/voice-lab.md)
-- **All-day battery:** the speaker model runs about 13.5 hours on a charge, or about 9.5 with comms on, and charges over USB-C without leaving the mask.
-- **Screenshots:** hold `PWR` and press `BOOT` to save what's on the display to the SD card.
+- **Recording:** records voice effect output to the phone or a computer for videos, or feeds it to a video call or streaming software as a microphone.  [Voice Lab](docs/features/voice-lab.md)
+- **All-day battery:** the speaker model runs about 13.5 hours on a charge, or about 9.5 with HiveMind comms on, and charges over USB-C without leaving the mask.
 
 > **Screenshot to come:** the DroneLab app's Comm tab and Remote tab, side by side.
 
@@ -104,7 +103,7 @@ flowchart LR
 | | |
 |---|---|
 | ![The speaker model](docs/images/speaker_housing_1_75.png) | **The speaker model** is the full upgrade: every feature, with a speaker facing out below the display for voice changing effects and sound, and a 2000 mAh battery for about 13.5 hours.  The display is held level by a turning collar while it's screwed in.  It stands about 33 mm out of the mask, and its sloped chin clears the filter mount below the port.  **Status: built, worn and working.** |
-| ![The low-profile model](docs/images/low_profile_housing_1_75.png) | **The low-profile model** is the entry-level unit: no speaker, so no voice effects or sound, but everything else, in a slim round housing that stands only about 23 mm out of the mask.  Fewer parts, a smaller battery for about 4.5-5.5 hours, and the quickest build.  **Status: printed, waiting on parts for its first assembly.** |
+| ![The low-profile model](docs/images/low_profile_housing_1_75.png) | **The low-profile model** is the entry-level unit: no speaker, so no voice effects or sound, but everything else, in a slim round housing that stands only about 23 mm out of the mask.  Fewer parts, a smaller battery for about 4.5-5.5 hours, and the quickest build.  **Status: printed, waiting on parts for validation testing.** |
 
 ### Specifications
 
@@ -149,7 +148,7 @@ Questions, build reports, or a unit of your own to show off? Post them in [Discu
 
 ## License
 
-The firmware, app and tools are licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).  You're free to build them, flash them to your own boards, change them and share them, as long as it isn't for a commercial purpose, and as long as you pass on the license and the copyright notice with anything based on them.  Selling them, or devices running them, needs permission.  Third-party code keeps its own license, and the housings in `hardware/` have their own Creative Commons licenses, some of them based on other people's designs (see [`hardware/`](hardware/README.md#licenses)).
+DroneLab is the realization of some fun ideas I've been thinking about for some time.  I'd love to see the community enjoy it.  The firmware, app and tools are licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).  You're free to build them, flash them to your own boards, change them and share them, as long as it isn't for a commercial purpose, and as long as you pass on the license and the copyright notice with anything based on them.  Selling them, or devices running them, needs permission.  Third-party code keeps its own license, and the housings in `hardware/` have their own Creative Commons licenses, some of them based on other people's designs (see [`hardware/`](hardware/README.md#licenses)).
 
 Contributions are welcome as pull requests.  Code you contribute is licensed to Rubber Cat under the MIT License (see [Contributing](docs/development/contributing.md)).
 
@@ -157,7 +156,7 @@ Contributions are welcome as pull requests.  Code you contribute is licensed to 
 
 <img src="docs/images/katcorp_logo.png" width="360" alt="KatCorp Drone Systems Division">
 
-KatCorp is fictional: a bit of fun, not a company, and DroneLab is a hobby project by Rubber Cat.
+KatCorp is fictional and is not a real company.  DroneLab is a hobby project by Rubber Cat.
 
 ## Trademarks
 
