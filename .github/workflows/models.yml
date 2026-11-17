@@ -1,0 +1,51 @@
+# Render the 1.75" housings and travel cases for each release, and attach
+# them to it as one zip per model (tools/release/build_models.sh), so people
+# without OpenSCAD, or sending the files to a print service, can download
+# them ready to print.
+#
+# It can also be run by hand, from the Actions tab: on its own it leaves the
+# zips as the run's artifact, and given a release's tag it attaches them to
+# that release too.
+
+name: Models
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Attach to this release (a tag, like v0.9.1), or leave empty"
+        required: false
+        default: ""
+
+permissions:
+  contents: write     # to attach the models to the release
+
+concurrency:
+  group: models
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the tags, for the version
+      - name: Install OpenSCAD
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openscad zip
+      - name: Render
+        run: tools/release/build_models.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: models
+          path: dist/*.zip
+      - name: Attach to the release
+        if: github.event_name == 'release' || inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: gh release upload "$TAG" dist/*.zip --clobber --repo "${{ github.repository }}"

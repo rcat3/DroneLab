@@ -19,7 +19,7 @@ The pocket is made from the housing's own design file (`../msa_low_profile_housi
 
 ## Printing
 
-Run `./render.sh` in this folder to render both cases to the `stl/` folder (it needs [OpenSCAD](https://openscad.org/)), or `./render.sh low_profile` or `./render.sh speaker` for one.  The parts come out turned the right way up to print, with no supports:
+The cases' STL files come with each model's parts, in the `travel_case/` folder of the zip on the [latest release](https://github.com/rcat3/DroneLab/releases/latest) ([speaker](https://github.com/rcat3/DroneLab/releases/latest/download/DroneLab-speaker-model-stl.zip), [low-profile](https://github.com/rcat3/DroneLab/releases/latest/download/DroneLab-low-profile-model-stl.zip)).  Or run `./render.sh` in this folder to render both cases to the `stl/` folder (it needs [OpenSCAD](https://openscad.org/)), or `./render.sh low_profile` or `./render.sh speaker` for one.  The parts come out turned the right way up to print, with no supports:
 
 - **`lp_case_bottom`** or **`speaker_case_bottom`** - Printed standing on its floor.
 - **`lp_case_lid`** or **`speaker_case_lid`** - Printed on its top.

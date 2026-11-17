@@ -6,7 +6,7 @@ This is for working on the firmware itself: how it's put together, and how to ad
 - [The hardware abstraction layer](hardware-abstraction.md): how the application reaches the hardware, and how to give it something new.
 - [Adding a board](adding-a-board.md): supporting another display, in the firmware and with a housing.
 - [Contributing](contributing.md): sending a change as a pull request, and how contributions are licensed.
-- [Releases](#releases): how the firmware and the web installer are published.
+- [Releases](#releases): how the firmware, the web installer and the printable parts are published.
 
 ## How it's put together
 
@@ -82,6 +82,7 @@ A few ideas run through it:
 - `tools/doc_renders/gen_doc_logos.py` - Draws the documentation's logos in `docs/images/`: the DroneLab banner, and KatCorp's logo and mark, from the cat in `imgs/RCatLogo.bmp`.  It needs the same fonts.
 - `tools/screenshots.py` - Takes screenshots over USB, and the documentation's set in `docs/images/screens/` (see [Screenshots](#screenshots)).
 - `tools/release/build_firmware.sh` - Builds a release's firmware and the web installer (see [Releases](#releases)).
+- `tools/release/build_models.sh` - Renders a release's printable parts, one zip per model (see [Releases](#releases)).
 
 ## Screenshots
 
@@ -104,7 +105,9 @@ A release is published on GitHub, with a tag like `v0.9.2`.  The app's APKs are 
 
 The web installer is [ESP Web Tools](https://esphome.github.io/esp-web-tools/), with the page in [`tools/release/flasher/`](../../tools/release/flasher/) and a manifest the script writes.  It writes the bootloader, partition table, firmware and OTA data at their own addresses, from the build's `flash_args`, and leaves the rest of the flash alone, so an update keeps the settings.  The one-file image skips the OTA data, which would pad it out to 14 MB, and is for writing to an erased board.
 
-To try it locally, run `tools/release/build_firmware.sh` and serve `dist/flasher` over `http://localhost` (`python3 -m http.server -d dist/flasher`), which browsers allow to reach USB like https.
+The printable parts are rendered by the [Models workflow](../../.github/workflows/models.yml), also when the release is published: it runs `tools/release/build_models.sh` with Ubuntu's OpenSCAD, and attaches `DroneLab-speaker-model-stl.zip` and `DroneLab-low-profile-model-stl.zip`.  Each has the housing's parts with the designs' default settings, its travel case in `travel_case/`, the test prints in `tests/`, and a `README.txt` with the materials and license.  It takes about 10 minutes.  Run by hand from the Actions tab, it leaves the zips as the run's artifact, or attaches them to the release whose tag you give it, to add them to an older release.  The docs link to the zips by name through `releases/latest/download/`, so keep the names.
+
+To try the installer locally, run `tools/release/build_firmware.sh` and serve `dist/flasher` over `http://localhost` (`python3 -m http.server -d dist/flasher`), which browsers allow to reach USB like https.
 
 ## Threads
 

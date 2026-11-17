@@ -45,12 +45,17 @@ Each model's page has its own parts list.  On top of that:
 
 ## No 3D printer?
 
-You don't need one of your own.  The parts are ready to print, as STL files in the housing's [`stl/` folder](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/stl/) (the travel case's are in [its own](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case/stl/)), so anyone with a printer can make them:
+You don't need one of your own.  Each [release](https://github.com/rcat3/DroneLab/releases/latest) has the parts ready to print, as STL files in one zip per model, so anyone with a printer can make them:
+
+- [**Speaker model parts**](https://github.com/rcat3/DroneLab/releases/latest/download/DroneLab-speaker-model-stl.zip) (`DroneLab-speaker-model-stl.zip`)
+- [**Low-profile model parts**](https://github.com/rcat3/DroneLab/releases/latest/download/DroneLab-low-profile-model-stl.zip) (`DroneLab-low-profile-model-stl.zip`)
+
+Each zip has the housing's parts, its [travel case](#also-available) in `travel_case/`, the test prints in `tests/`, and a `README.txt` saying what to print each part in.  Then:
 
 - **A friend, a makerspace or a library.**  Many makerspaces and public libraries have 3D printers members can use, or will print for you for the cost of the plastic.  This is usually the cheapest way, and someone there can help if a part doesn't come out right.
 - **An online printing service.**  Upload the STL files, pick a material, and the parts come in the post, usually within a week or two.  [Craftcloud](https://craftcloud3d.com/) compares prices across many print shops at once; [JLC3DP](https://jlc3dp.com/) and [PCBWay](https://www.pcbway.com/rapid-prototyping/3D-Printing/) are cheap, if slower to ship.  Expect to pay more than the plastic would cost, mostly for the body.
 
-Which files to send: see your model's page for the list, [speaker model](speaker-housing.md#2-print-the-parts) or [low-profile model](low-profile-housing.md#2-print-the-parts).  Order the parts it lists, but not the test pieces: they're for tuning your own printer.  When you choose a material:
+Which files to send: the ones at the top of the zip, and the travel case if you want it.  Leave out `tests/`: those are for tuning your own printer.  The usb_plug is optional.  When you choose a material:
 
 - **FDM in PLA or PETG** is what the parts were designed and tested in, and the cheapest.  The print shop takes care of supports.
 - **Nylon (SLS or MJF)** is a good choice too: tough, with no supports to clean up, though it costs more.  It comes out a little rougher, and the fit around the display might be slightly different.

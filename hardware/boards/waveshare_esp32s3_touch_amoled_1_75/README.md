@@ -113,6 +113,8 @@ These come from the 3D model, not from a print, so check them with test prints:
 
 ## Making the STL files
 
+Each [release](https://github.com/rcat3/DroneLab/releases/latest) has them ready-made, rendered with the default settings: one zip per model, with its travel case and test prints.  To change a setting, render them yourself.
+
 Run `./render.sh` in this folder to render both housings' parts to the `stl/` folder.  It needs [OpenSCAD](https://openscad.org/).  `./render.sh speaker` or `./render.sh low_profile` renders one housing, `./render.sh tests` the test prints, and `./render.sh body chin` just those parts.  The low-profile housing's own parts are named `lp_body` and so on, so their files don't mix with the speaker housing's.  A single part can also be rendered by hand with, for example, `openscad -D 'part="body"' -o body.stl msa_speaker_housing.scad`.  The parts are all turned the right way up to print.
 
 ## Travel cases

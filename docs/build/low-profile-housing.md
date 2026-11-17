@@ -34,9 +34,11 @@ Back to the [Build Guide](README.md).
 
 No 3D printer?  See [having it printed for you](README.md#no-3d-printer).
 
-The design is [`msa_low_profile_housing.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/msa_low_profile_housing.scad), in [OpenSCAD](https://openscad.org/).  To make the STL files, run `./render.sh low_profile` in [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/).  The parts come out turned the right way up to print.
+**Download the parts**, ready to print: [**Low-profile model parts**](https://github.com/rcat3/DroneLab/releases/latest/download/DroneLab-low-profile-model-stl.zip) from the latest release.  The zip has the parts below, the [travel case](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case/) in `travel_case/`, and the test pieces in `tests/`.
 
-**Print the test pieces first** (`./render.sh lp_lens_fit lp_phase_test plunger_test`):
+Or make them yourself, to change a setting: the design is [`msa_low_profile_housing.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/msa_low_profile_housing.scad), in [OpenSCAD](https://openscad.org/).  To make the STL files, run `./render.sh low_profile` in [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/).  The parts come out turned the right way up to print.
+
+**Print the test pieces first** (in the zip's `tests/`, or `./render.sh lp_lens_fit lp_phase_test plunger_test`):
 
 - **`lp_lens_fit`**: the front of the housing around the display.  The board's glass should drop in with a little play, but not rattle.  If it doesn't, change `clearance` in [`board.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/board.scad).
 - **`lp_phase_test`**: the thread, with a scale on its front, to check the housing will end up level in your mask.  Screw the mask's metal voice port adapter firmly home, screw the test all the way in, hold the mask upright, and read the number at the top.  The [design's README](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/README.md#test-prints-1) says what to do with it.

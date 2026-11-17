@@ -36,9 +36,11 @@ Back to the [Build Guide](README.md).
 
 No 3D printer?  See [having it printed for you](README.md#no-3d-printer).
 
-The design is [`msa_speaker_housing.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/msa_speaker_housing.scad), in [OpenSCAD](https://openscad.org/).  To make the STL files, run `./render.sh speaker` in [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/) (or open the file in OpenSCAD, set `part`, render and export).  The parts come out turned the right way up to print.
+**Download the parts**, ready to print: [**Speaker model parts**](https://github.com/rcat3/DroneLab/releases/latest/download/DroneLab-speaker-model-stl.zip) from the latest release.  The zip has the parts below, the [travel case](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case/) in `travel_case/`, and the test pieces in `tests/`.
 
-**Print the test pieces first** (`./render.sh tests`), on a printer you haven't printed these on before.  They're small and quick, and save a wasted body:
+Or make them yourself, to change a setting: the design is [`msa_speaker_housing.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/msa_speaker_housing.scad), in [OpenSCAD](https://openscad.org/).  To make the STL files, run `./render.sh speaker` in [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/) (or open the file in OpenSCAD, set `part`, render and export).  The parts come out turned the right way up to print.
+
+**Print the test pieces first** (in the zip's `tests/`, or `./render.sh tests`), on a printer you haven't printed these on before.  They're small and quick, and save a wasted body:
 
 - **`lens_fit`**: the front of the housing around the display.  The board's glass should drop in with a little play, but not rattle.  If it doesn't, change `clearance` in [`board.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/board.scad).
 - **`plunger_test`**: button plungers in three lengths.  Pick the length that presses the board's buttons best, and set `plunger_proud` to it.
