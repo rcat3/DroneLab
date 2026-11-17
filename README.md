@@ -145,6 +145,8 @@ The [**Build Guide**](docs/build/README.md) walks you through it, step by step:
 - **[Hardware designs](hardware/README.md):** the housings' OpenSCAD designs, and how they're organized.
 - **[Other Boards](docs/other-boards.md):** the other Waveshare displays the firmware runs on, for projects of your own.
 
+Questions, build reports, or a unit of your own to show off? Post them in [Discussions](https://github.com/rcat3/DroneLab/discussions). Found a bug? Open an [issue](https://github.com/rcat3/DroneLab/issues).
+
 ## License
 
 The firmware, app and tools are licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).  You're free to build them, flash them to your own boards, change them and share them, as long as it isn't for a commercial purpose, and as long as you pass on the license and the copyright notice with anything based on them.  Selling them, or devices running them, needs permission.  Third-party code keeps its own license, and the housings in `hardware/` have their own Creative Commons licenses, some of them based on other people's designs (see [`hardware/`](hardware/README.md#licenses)).
