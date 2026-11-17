@@ -1,0 +1,69 @@
+# Build the firmware for each release, attach it to the release, and put the
+# web flasher (tools/release/flasher/) on the project's GitHub Pages site.
+#
+# Pages has to be switched on once, in the repository's Settings, Pages,
+# with "GitHub Actions" as the source. It can also be run by hand, from the
+# Actions tab, which updates the flasher without a release.
+
+name: Firmware
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write     # to attach the firmware to the release
+  pages: write
+  id-token: write
+
+concurrency:
+  group: firmware
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0          # the tags, for the version
+      - name: Build
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          . "$IDF_PATH/export.sh"
+          python -m pip install pillow
+          tools/release/build_firmware.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: dist/DroneLab-firmware-1.75.bin
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/flasher
+
+  release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" DroneLab-firmware-1.75.bin --clobber --repo "${{ github.repository }}"
+
+  flasher:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DroneLab Firmware Installer</title>
+<meta name="description" content="Install the DroneLab firmware on a Waveshare ESP32-S3-Touch-AMOLED-1.75 from the browser, over USB.">
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --bg: #050506;
+    --panel: #111014;
+    --line: #2a2630;
+    --text: #e9e4ee;
+    --muted: #a59cad;
+    --green: #33ff33;
+    --pink: #ff40c0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  .banner { display: block; width: 100%; height: auto; border-radius: 12px; }
+  h1 { font-size: 1.6rem; margin: 28px 0 4px; letter-spacing: 0.02em; }
+  .version { color: var(--muted); font-family: ui-monospace, "Share Tech Mono", monospace; margin: 0 0 24px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin: 0 0 20px;
+  }
+  .panel h2 { font-size: 1.1rem; margin: 0 0 10px; color: var(--green); font-family: ui-monospace, monospace; }
+  ol, ul { margin: 0; padding-left: 1.3em; }
+  li { margin: 6px 0; }
+  .install { text-align: center; padding: 28px 22px; }
+  .install button {
+    font: 600 1.15rem system-ui, sans-serif;
+    color: #fff;
+    background: var(--pink);
+    border: 0;
+    border-radius: 999px;
+    padding: 14px 40px;
+    cursor: pointer;
+    box-shadow: 0 0 24px rgba(255, 64, 192, 0.45);
+  }
+  .install button:hover { filter: brightness(1.1); }
+  .install .note { color: var(--muted); font-size: 0.92rem; margin: 14px 0 0; }
+  .warn { color: #ffb0d8; }
+  a { color: var(--pink); }
+  code { font-family: ui-monospace, monospace; background: #1c1a21; padding: 1px 5px; border-radius: 4px; }
+  footer { color: var(--muted); font-size: 0.85rem; margin-top: 36px; }
+</style>
+</head>
+<body>
+<main>
+  <img class="banner" src="dronelab_banner.png" alt="DroneLab, by KatCorp Drone Systems Division" width="1280" height="360">
+
+  <h1>DroneLab firmware installer</h1>
+  <p class="version">KatCorp Drone Systems &middot; firmware @VERSION@ &middot; ESP32-S3-Touch-AMOLED-1.75</p>
+
+  <div class="panel">
+    <h2>&gt; BEFORE YOU START</h2>
+    <ul>
+      <li>Use <strong>Chrome or Edge on a computer</strong> (Windows, macOS, Linux or a Chromebook). Other browsers, and phones, can't reach USB devices.</li>
+      <li>Use a <strong>USB-C cable that carries data</strong>. Many charging cables don't.</li>
+      <li>The unit can stay in its housing: the USB-C port is on its right side, under the small plug.</li>
+    </ul>
+  </div>
+
+  <div class="panel install">
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">Install DroneLab</button>
+      <span slot="unsupported" class="warn">This browser can't reach USB devices. Open this page in Chrome or Edge on a computer.</span>
+      <span slot="not-allowed" class="warn">The page has to be opened over https to reach USB devices.</span>
+    </esp-web-install-button>
+    <p class="note">Takes about a minute. Don't unplug the unit until it says it's done.</p>
+  </div>
+
+  <div class="panel">
+    <h2>&gt; INSTALLATION PROTOCOL</h2>
+    <ol>
+      <li>Plug the unit into the computer.</li>
+      <li>Press <strong>Install DroneLab</strong>, and pick the unit from the list: it's called <code>USB JTAG/serial debug unit</code>, or something with <code>ttyACM</code>, <code>usbmodem</code> or <code>COM</code> in it.</li>
+      <li>On a <strong>new unit</strong>, tick <strong>Erase device</strong> when it asks. To <strong>update</strong> a unit, leave it unticked, and its settings are kept.</li>
+      <li>When it's done, the unit restarts with the DroneLab logo. Continue with <a href="https://github.com/rcat3/DroneLab/blob/master/docs/build/first-start.md">First Start</a>.</li>
+    </ol>
+  </div>
+
+  <div class="panel">
+    <h2>&gt; IF IT DOESN'T WORK</h2>
+    <ul>
+      <li><strong>The unit isn't in the list:</strong> try another cable or USB port. If it still isn't, unplug it, hold the <strong>BOOT</strong> button (the upper one on its left side) while plugging it back in, and try again. Afterwards, press <strong>PWR</strong> or unplug it and plug it back in to start it.</li>
+      <li><strong>On Linux, it can't open the port:</strong> add yourself to the <code>dialout</code> group, then log out and back in.</li>
+      <li>To flash by hand instead, download <code>DroneLab-firmware-1.75.bin</code> from the <a href="https://github.com/rcat3/DroneLab/releases/latest">latest release</a> and see <a href="https://github.com/rcat3/DroneLab/blob/master/docs/building-firmware.md">Installing the Firmware</a>.</li>
+    </ul>
+  </div>
+
+  <footer>
+    DroneLab is an open-source hobby project. KatCorp is fictional. Not made, licensed, sponsored or endorsed by MSA, Waveshare, Lovense or Espressif, whose names are their trademarks. Not protective equipment.
+    Installer by <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>.
+  </footer>
+</main>
+</body>
+</html>

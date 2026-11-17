@@ -1,6 +1,10 @@
 # Build output
-build/
-build-*/
+/build/
+/build-*/
+app/android/build/
+
+# Release builds (tools/release/build_firmware.sh)
+dist/
 
 # CMake files from accidental in-source builds
 CMakeFiles/
