@@ -37,11 +37,27 @@ DroneLab units aren't sold.  They're built by their owners, from a Waveshare dis
 
 Each model's page has its own parts list.  On top of that:
 
-- **A 3D printer** that prints PLA, and ideally TPU for the speaker model's gasket and the optional USB port cover (they can be PLA at a pinch, or the gasket cut from craft foam).  No special settings, but the [test prints](speaker-housing.md#2-print-the-parts) are worth doing first on a printer you haven't used for these before.
+- **A 3D printer** (or [someone to print for you](#no-3d-printer)) that prints PLA, and ideally TPU for the speaker model's gasket and the optional USB port cover (they can be PLA at a pinch, or the gasket cut from craft foam).  No special settings, but the [test prints](speaker-housing.md#2-print-the-parts) are worth doing first on a printer you haven't used for these before.
 - **Small tools:** a hex key or screwdriver to fit M2 screws, a craft knife, scissors and a toothpick.
 - **A USB-C cable that carries data**, not just charging, and a computer (Linux, macOS or Windows) to [install the firmware](../building-firmware.md).
 - **A micro SD card** (optional), for your own images, sounds and Lovense patterns.
 - **A compatible gas mask**, of course: the housings are made to fit the voice port of the MSA Millennium (an MSA trademark; DroneLab isn't made or endorsed by MSA).  The housing screws into its voice port in place of the cover.  With it fitted, the mask is a costume, not a respirator: don't rely on it for protection.
+
+## No 3D printer?
+
+You don't need one of your own.  The parts are ready to print, as STL files in the housing's [`stl/` folder](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/stl/) (the travel case's are in [its own](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case/stl/)), so anyone with a printer can make them:
+
+- **A friend, a makerspace or a library.**  Many makerspaces and public libraries have 3D printers members can use, or will print for you for the cost of the plastic.  This is usually the cheapest way, and someone there can help if a part doesn't come out right.
+- **An online printing service.**  Upload the STL files, pick a material, and the parts come in the post, usually within a week or two.  [Craftcloud](https://craftcloud3d.com/) compares prices across many print shops at once; [JLC3DP](https://jlc3dp.com/) and [PCBWay](https://www.pcbway.com/rapid-prototyping/3D-Printing/) are cheap, if slower to ship.  Expect to pay more than the plastic would cost, mostly for the body.
+
+Which files to send: see your model's page for the list, [speaker model](speaker-housing.md#2-print-the-parts) or [low-profile model](low-profile-housing.md#2-print-the-parts).  Order the parts it lists, but not the test pieces: they're for tuning your own printer.  When you choose a material:
+
+- **FDM in PLA or PETG** is what the parts were designed and tested in, and the cheapest.  The print shop takes care of supports.
+- **Nylon (SLS or MJF)** is a good choice too: tough, with no supports to clean up, though it costs more.  It comes out a little rougher, and the fit around the display might be slightly different.
+- **Avoid standard resin (SLA)** for the collar and back: it's brittle, and the thread and screw posts can crack.
+- **The gasket** is meant to be TPU, which not every service offers.  Cut it from 1 mm craft foam or rubber instead: the `gasket.stl` outline makes a good template.  The USB port cover is optional, so it can be left out.
+
+Having a print shop or service print the parts for your own unit is fine under the housings' license: see [Licenses](../../hardware/README.md#licenses).
 
 ## About the board
 

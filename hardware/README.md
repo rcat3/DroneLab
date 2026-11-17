@@ -59,6 +59,8 @@ Everything here is licensed under the [Creative Commons Attribution-NonCommercia
 - **Based on whyrlpool's [RP2040-LCD-1.28-MSA](https://www.printables.com/model/538771-rp2040-lcd-128-msa):** the older voice port thread in `masks/msa_millennium/vendor/`, and the housings in `deprecated/`, which were printed with it.  They're under the same license as whyrlpool's design.
 - **Based on other designs:** the deprecated boards' travel cases are under the [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/), like the design they're based on.
 
+**Having parts printed is fine.**  As their author, Rubber Cat gives this permission on top of the license, for the designs by Rubber Cat above (every current housing and travel case): you can pay a print shop, an online printing service, a makerspace or a friend to print them for you, as long as the parts are for your own non-commercial use.  Selling prints, or devices built with them, to other people still needs permission.  The designs based on other people's work aren't covered by this, since they aren't only Rubber Cat's to give.
+
 Each folder's README gives its credits.  All of these are separate from the license of the rest of the repository.
 
 These are independent designs, not made, sponsored or endorsed by MSA Safety Incorporated, which owns the MSA and Millennium trademarks.  The names are used only to say which mask the housings fit.

@@ -34,6 +34,8 @@ Back to the [Build Guide](README.md).
 
 ## 2. Print the parts
 
+No 3D printer?  See [having it printed for you](README.md#no-3d-printer).
+
 The design is [`msa_speaker_housing.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/msa_speaker_housing.scad), in [OpenSCAD](https://openscad.org/).  To make the STL files, run `./render.sh speaker` in [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/) (or open the file in OpenSCAD, set `part`, render and export).  The parts come out turned the right way up to print.
 
 **Print the test pieces first** (`./render.sh tests`), on a printer you haven't printed these on before.  They're small and quick, and save a wasted body:

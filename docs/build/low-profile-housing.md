@@ -32,6 +32,8 @@ Back to the [Build Guide](README.md).
 
 ## 2. Print the parts
 
+No 3D printer?  See [having it printed for you](README.md#no-3d-printer).
+
 The design is [`msa_low_profile_housing.scad`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/msa_low_profile_housing.scad), in [OpenSCAD](https://openscad.org/).  To make the STL files, run `./render.sh low_profile` in [`hardware/boards/waveshare_esp32s3_touch_amoled_1_75`](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/).  The parts come out turned the right way up to print.
 
 **Print the test pieces first** (`./render.sh lp_lens_fit lp_phase_test plunger_test`):

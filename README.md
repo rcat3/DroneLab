@@ -121,12 +121,12 @@ flowchart LR
 
 ## Get a unit
 
-DroneLab isn't sold.  KatCorp's units are built by their owners, from parts anyone can buy, and a 3D printer.  No soldering, no electronics experience: the battery and speaker plug straight into the board.  If you can follow a recipe and use a screwdriver, you can build one.
+DroneLab isn't sold.  KatCorp's units are built by their owners, from parts anyone can buy and a 3D printed housing: your own printer, a makerspace's, or a [print service](docs/build/README.md#no-3d-printer).  No soldering, no electronics experience: the battery and speaker plug straight into the board.  If you can follow a recipe and use a screwdriver, you can build one.
 
 The [**Build Guide**](docs/build/README.md) walks you through it, step by step:
 
 1. **[Choose a model and order the parts](docs/build/README.md)**: the board, a battery, a speaker for the speaker model, screws and a few craft supplies.
-2. **Print the housing**: PLA, plus a little TPU.  See the [speaker model](docs/build/speaker-housing.md#2-print-the-parts) or the [low-profile model](docs/build/low-profile-housing.md#2-print-the-parts).
+2. **Print the housing**: PLA, plus a little TPU, or [have it printed](docs/build/README.md#no-3d-printer).  See the [speaker model](docs/build/speaker-housing.md#2-print-the-parts) or the [low-profile model](docs/build/low-profile-housing.md#2-print-the-parts).
 3. **Put it together**: the [speaker model](docs/build/speaker-housing.md#3-put-it-together) or the [low-profile model](docs/build/low-profile-housing.md#3-put-it-together).
 4. **[Install the firmware](docs/building-firmware.md)** over USB, straight from the browser with the [web installer](https://rcat3.github.io/DroneLab/).
 5. **[Set it up](docs/build/first-start.md)**: rotation, levelling it in the mask, and your images and sounds on an SD card.
