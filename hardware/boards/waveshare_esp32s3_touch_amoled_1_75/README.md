@@ -1,11 +1,11 @@
 # Housings for the ESP32-S3-Touch-AMOLED-1.75
 
-3D printable housings that screw the [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/esp32-s3-touch-amoled-1.75.htm) into the voice port of an MSA Millennium mask.  They're for the bare board, not the -B version that comes in its own case.  There are two:
+3D printable housings that screw the [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/esp32-s3-touch-amoled-1.75.htm) into the voice port of a compatible gas mask, made to fit the MSA Millennium's (see the [trademark note](../../README.md#licenses)).  They're for the bare board, not the -B version that comes in its own case.  There are two:
 
 - **The speaker housing** (`msa_speaker_housing.scad`): a speaker in a pod below the display, for sound and voice effects, and a 2000 mAh battery in a chamber behind it, with a turning collar.
 - **The low-profile housing** (`msa_low_profile_housing.scad`): no speaker, a flat 700-850 mAh battery in a shallow chamber, and the thread fixed to the back.  It stands about 23 mm out of the mask, where the speaker housing stands about 33 mm out, and it has fewer parts and screws.
 
-This README is about the design files.  For the whole build, with the parts to buy, wiring and putting it together, see the [build guide](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md).
+This README is about the design files.  For the whole build, with the parts to buy and putting it together, see the build guides for the [speaker model](../../../docs/build/speaker-housing.md) and the [low-profile model](../../../docs/build/low-profile-housing.md).
 
 ## The speaker housing
 
@@ -119,9 +119,9 @@ Run `./render.sh` in this folder to render both housings' parts to the `stl/` fo
 
 There's a hinged case to carry each housing in, with the board in it, in [`travel_case`](travel_case/).  Each is made from its housing's design, so it fits it closely.
 
-## Parts to buy, wiring and putting it together
+## Parts to buy and putting it together
 
-See the [build guide](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md).
+See the [Build Guide](../../../docs/build/README.md).
 
 ## Credits and License
 

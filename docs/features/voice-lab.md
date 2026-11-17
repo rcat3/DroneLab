@@ -65,9 +65,9 @@ The Voice Lab is off whenever the board starts, and WiFi is off while it's off. 
 
 ## Recording in the app
 
-The DroneLab app's *Record* tab records the board's voice, after the effect, straight to the phone, over the same Bluetooth link as the [comm channel](comm.md), with no computer or WiFi.  Pick the *Speaker voice* (the effect the board plays) or the *Comm voice* (the [Comm Voice](comm.md#comm-voice), if it's different), and, if you like, a *Sync beep*: the board beeps as it starts, and the same beep's in the recording, for lining it up with video.  The microphone's left out of the recording while it beeps, and a moment after, so the beep it picks up from the speaker doesn't follow as a second one.
+The DroneLab app's *Record* tab records the board's voice, after the effect, straight to the phone, over the same Bluetooth link as the [comms](comms.md), with no computer or WiFi.  Pick the *Speaker voice* (the effect the board plays) or the *Comm voice* (the [Comm Voice](comms.md#comm-voice), if it's different), and, if you like, a *Sync beep*: the board beeps as it starts, and the same beep's in the recording, for lining it up with video.  The microphone's left out of the recording while it beeps, and a moment after, so the beep it picks up from the speaker doesn't follow as a second one.
 
-Each recording is a 48 kHz mono WAV, the voice sent at 48 kb/s (the effect itself runs at 16 kHz, so that's as much as there is to hear).  The list under the button plays, shares (to Google Drive, email and the rest, from Android's share sheet) and deletes them.  Comms stop while it records, the server and direct comms, and start again after; the board shows REC.  The voice is evened out by the comm channel's automatic gain, as on the channel.
+Each recording is a 48 kHz mono WAV, the voice sent at 48 kb/s (the effect itself runs at 16 kHz, so that's as much as there is to hear).  The list under the button plays, shares (to Google Drive, email and the rest, from Android's share sheet) and deletes them.  Comms stop while it records, in both modes, and start again after; the board shows REC.  The voice is evened out by comms's automatic gain, as on the channel.
 
 ## Recording over Bluetooth
 

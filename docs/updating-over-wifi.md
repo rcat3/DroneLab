@@ -1,12 +1,12 @@
 # Updating over WiFi
 
-*The ESP32-S3 boards.  Not recommended: flash over USB instead, as in [Building the Firmware](building-firmware.md#updating).*
+*The ESP32-S3 boards.  Not recommended: flash over USB instead, as in [Installing the Firmware](building-firmware.md#updating).*
 
 Every supported housing leaves the board's USB-C port reachable, so new firmware is best flashed over USB.  Updates over WiFi were made for the [1.46" speaker housing](../hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46_speaker_housing/), whose USB port couldn't be reached, and are kept for boards in housings like that.  Over WiFi, a board doesn't get a new flash layout (partition table): the [core dump](development/README.md#crashes-and-hangs) partition, for one, is only made by flashing over USB.
 
 ## Sending an update
 
-Once a board has firmware with updates over WiFi in it (flashed over USB once, as in [Building the Firmware](building-firmware.md#flashing)), later firmware can go over its hotspot, with the board still in its housing:
+Once a board has firmware with updates over WiFi in it (flashed over USB once, as in [Installing the Firmware](building-firmware.md#4-flash-it)), later firmware can go over its hotspot, with the board still in its housing:
 
 1. On the board, go to Settings, **Firmware Update**, and switch it on.  It shows a six digit code, and the name and password of the board's hotspot, which it starts if it isn't on already.
 2. Join the hotspot from your computer.

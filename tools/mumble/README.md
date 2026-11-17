@@ -1,6 +1,6 @@
 # Mumble server
 
-A [Mumble](https://www.mumble.info) voice server for the [comm channel](../../docs/features/comm.md), run with Docker.  Mumble is open source, uses the Opus codec, and has push-to-talk built in.  People can join from the Mumble app on a computer or from Mumla on Android.
+A [Mumble](https://www.mumble.info) voice server for the [comms](../../docs/features/comms.md), run with Docker.  Mumble is open source, uses the Opus codec, and has push-to-talk built in.  People can join from the Mumble app on a computer or from Mumla on Android.
 
 ## Running it
 

@@ -6,6 +6,10 @@ Any image, or the blank page, can be picked to show when the display turns on, i
 
 While the Images feature is on screen, the [Voice Ring](voice-ring.md) can glow around the edge with your voice.
 
+| ![With the voice ring](../images/screens/images_home.png) | ![A built-in image](../images/screens/images_hal9000.png) |
+|:-:|:-:|
+| With the voice ring | A built-in image |
+
 The images built into the firmware are in the `imgs/` folder.  The ESP32-S3 boards can also show images from their micro SD card, which come first.
 
 ## Adding or changing built-in images
@@ -22,7 +26,7 @@ The images built into the firmware are in the `imgs/` folder.  The ESP32-S3 boar
    };
    ```
 
-3. Rebuild and flash (see [Building the Firmware](../building-firmware.md)).  The build converts the images automatically, for the board's screen size.
+3. Rebuild and flash (see [Installing the Firmware](../building-firmware.md)).  The build converts the images automatically, for the board's screen size.
 
 The image name is also what shows up in the *Startup* setting.  To remove an image, just take it out of the list.  Images in `imgs/` that aren't in the list don't take up any space in the firmware.
 
@@ -32,7 +36,7 @@ Images are drawn for a 240x240 screen.  On a bigger screen they're scaled up by 
 
 Animated GIFs that need resizing are re-encoded, without transparent pixels and with a black background, so a resized GIF can come out bigger than the original file.  GIFs that are already the right size are used as they are.
 
-The conversion is done by `tools/img2c.py`.  You don't normally need to run it yourself, but you can (for example `python3 tools/img2c.py imgs/home.bmp --size 412 --out home.c`) to see what it produces.
+The conversion is done by `tools/img2c.py`.  You don't normally need to run it yourself, but you can (for example `python3 tools/img2c.py imgs/home.bmp --size 466 --out home.c`) to see what it produces.
 
 ## Animated GIF memory use
 
@@ -62,7 +66,7 @@ The images from the card come first, sorted by file name, followed by the built-
 Images are sized for the screen the same way as the built-in images.  Still images are resized once, when they're loaded.  Animated GIFs are scaled while they play, which costs a little time on every frame and looks slightly softer.  For the best results, prepare images on your computer first with `tools/prepare_sd.py`.  It resizes GIFs and still images ahead of time and marks them as prepared, so the board shows them as they are:
 
 ```
-python3 tools/prepare_sd.py my_images/*.gif my_images/*.png --size 412 --out /media/you/SDCARD/images
+python3 tools/prepare_sd.py my_images/*.gif my_images/*.png --size 466 --out /media/you/SDCARD/images
 ```
 
 Use the path where your card is mounted.  `--size` is the board's screen size: 466 for the ESP32-S3-Touch-AMOLED-1.75 (or 412 for the [ESP32-S3-Touch-LCD-1.46](../other-boards.md)).

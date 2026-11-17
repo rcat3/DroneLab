@@ -2,6 +2,8 @@
 
 *Boards with a speaker: the ESP32-S3 boards*
 
+<img src="../images/screens/sound_player.png" width="220" alt="The Sound player">
+
 The Sound feature plays sound files from the SD card.  Its pages are:
 
 - **Player**: the track that's playing, with how far through it is in the middle, and previous, play/pause and next buttons below.  Drag the bar to move through the track; the times either side show where it'll go.  In an MP3, it goes to the same share of the file, which is exact if the bitrate is constant, and close if not.  Sound keeps playing in the background while you look at images or anything else.

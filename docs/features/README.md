@@ -4,18 +4,16 @@ The display is organized into features.  You swipe up and down to move between t
 
 | Feature | What it does |
 |---|---|
-| [Images](images.md) | Shows still images and animated GIFs that you swipe through |
-| [Images on the SD card](images.md#images-on-the-sd-card) | Adds images from a micro SD card, without rebuilding the firmware |
+| [Voice Effects](voice-effects.md) | Changes your voice: female, robot, Dalek, Borg and more.  Needs the speaker model |
+| [Comms](comms.md) | Talks with the hive, like a radio, with a status screen showing who's talking.  Cloud mode goes through a phone and a Mumble server; direct mode goes unit to unit over the radio (in development) |
 | [Visualizer](visualizer.md) | Moving pictures of your voice and the speaker: KITT, a 3D spectrum, an oscilloscope and more |
+| [Lovense](lovense.md) | Controls up to three Lovense devices over Bluetooth, with patterns and reactions to your voice and movement |
+| [Images](images.md) | Shows still images and animated GIFs, built in or from a micro SD card |
 | [Voice Ring](voice-ring.md) | A glowing ring round the edge that lights up with your voice, over the images |
-| [Voice Effects](voice-effects.md) | Changes your voice: female, robot, Dalek, Borg and more.  Needs the speaker housing |
-| [Voice Lab](voice-lab.md) | Streams the microphone to a computer, for trying out voice effects |
-| [Sound](sound.md) | Plays sound files from the SD card.  Needs the speaker housing |
 | [Terminal](terminal.md) | Shows text typed on a phone, like a green screen terminal |
-| [Lovense](lovense.md) | Controls up to three Lovense devices over Bluetooth |
 | [WiFi Hotspot Remote](phone-remote.md) | Runs the display from a phone's web browser |
-| [Comm](comm.md) | Talks to a group through a phone and the DroneLab app, like a radio, with a status screen showing who's talking |
-| [Direct Comms](direct.md) | The comm channel board to board over the radio, with no internet: in development |
-| [Settings](settings.md) | Brightness, rotation, the [Level](level.md), what's shown at startup, and the battery voltage |
+| [Sound](sound.md) | Plays sound files from the SD card.  Needs the speaker model |
+| [Voice Lab](voice-lab.md) | Streams and records the voice effect on a computer or phone |
+| [Settings](settings.md) | Brightness, the phone app, rotation, the [Level](level.md), what's shown at startup, and the battery |
 
-Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp32s3_touch_amoled_1_75.md).  The low-profile housing has no speaker, so sound and voice effects need the speaker housing.  The firmware also runs on a few [other boards](../other-boards.md), which have fewer features.
+Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp32s3_touch_amoled_1_75.md).  The [low-profile model](../build/low-profile-housing.md) has no speaker, so sound and voice effects need the [speaker model](../build/speaker-housing.md).  The firmware also runs on a few [other boards](../other-boards.md), which have fewer features.

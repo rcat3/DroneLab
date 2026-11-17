@@ -2,11 +2,11 @@
 
 3D printable housings and other hardware for the displays the firmware runs on.
 
-This is the design side.  To build one, start with the [build guide](../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md), which has the parts to buy, printing, wiring and putting it together.
+This is the design side.  To build one, start with the [Build Guide](../docs/build/README.md), which has the parts to buy, printing and putting it together.
 
 ## What fits what
 
-| Board | Firmware | Housings that fit the MSA Millennium mask | Other hardware |
+| Board | Firmware | Housings, for the MSA Millennium's voice port | Other hardware |
 |---|---|---|---|
 | [Waveshare ESP32-S3-Touch-AMOLED-1.75](boards/waveshare_esp32s3_touch_amoled_1_75/) | Yes | Speaker housing with one speaker below the display; low-profile housing without a speaker (designed, not printed yet) | Travel cases for both housings (designed, not printed yet) |
 

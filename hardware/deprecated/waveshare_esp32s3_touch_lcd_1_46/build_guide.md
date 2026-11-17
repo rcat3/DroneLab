@@ -1,6 +1,6 @@
 # Building with the ESP32-S3-Touch-LCD-1.46 (deprecated)
 
-**This housing is no longer supported.**  Build the [ESP32-S3-Touch-AMOLED-1.75](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md) instead.  This guide is kept for anyone who wants to build it anyway.  The firmware still supports this board: see [Other Boards](../../../docs/other-boards.md).
+**This housing is no longer supported.**  Build one of the [ESP32-S3-Touch-AMOLED-1.75 units](../../../docs/build/README.md) instead.  This guide is kept for anyone who wants to build it anyway.  The firmware still supports this board: see [Other Boards](../../../docs/other-boards.md).
 
 The [Waveshare ESP32-S3-Touch-LCD-1.46](https://docs.waveshare.com/ESP32-S3-Touch-LCD-1.46) is a 1.46" round touch screen (412x412) on an ESP32-S3 with 8 MB of PSRAM, a microphone, a built-in speaker, a micro SD card slot, WiFi, Bluetooth, an accelerometer and a battery charger.  Every [feature](../../../docs/features/README.md) but the voice effects runs on it.  Get the version **with the cover glass**: the housing is made for it.
 
@@ -8,7 +8,7 @@ The housing screws into the voice port of an MSA Millennium mask:
 
 ![The housing](images/housing_1_46.png)
 
-It's one printed part, with the board in front and a small battery inside the thread, and there's no soldering.  The board's built-in speaker faces into the mask, so it's best for images, the voice displays, Lovense control and the phone remote, rather than for sound.  It doesn't have [voice effects](../../../docs/features/voice-effects.md): the speaker would feed back long before an effect was loud enough to hear.  For voice effects, build the [ESP32-S3-Touch-AMOLED-1.75](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md).
+It's one printed part, with the board in front and a small battery inside the thread, and there's no soldering.  The board's built-in speaker faces into the mask, so it's best for images, the voice displays, Lovense control and the phone remote, rather than for sound.  It doesn't have [voice effects](../../../docs/features/voice-effects.md): the speaker would feed back long before an effect was loud enough to hear.  For voice effects, build the [speaker model](../../../docs/build/speaker-housing.md).
 
 There was also a speaker housing for this board, with two speakers and their own amplifiers.  It's no longer supported, and the 1.75" board replaces it.  Its design is kept in [`hardware/deprecated`](../waveshare_esp32s3_touch_lcd_1_46_speaker_housing/).
 
@@ -49,7 +49,7 @@ There's a hinged case to carry the housing in, in [`travel_case`](travel_case/).
 
 ## Building the firmware
 
-Set up ESP-IDF as described in [Building the Firmware](../../../docs/building-firmware.md#esp32-s3-boards), then from the top of the repo:
+Set up ESP-IDF as described in [Installing the Firmware](../../../docs/building-firmware.md#esp32-s3-touch-lcd-146), then from the top of the repo:
 
 ```
 idf.py -C platforms/esp-idf -B build-s3-146 -DBOARD=waveshare_esp32s3_touch_lcd_1_46 build

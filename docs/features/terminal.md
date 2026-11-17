@@ -4,6 +4,8 @@
 
 The Terminal shows what's typed on the [WiFi Hotspot Remote](phone-remote.md) like an old green-screen terminal: blocky green letters that type themselves out behind a block cursor, which blinks once they're done, with faint scan lines over the screen.  It shows a `>` prompt until something's sent.
 
+<img src="../images/screens/terminal.png" width="220" alt="The Terminal">
+
 The letter size is picked on the phone.  *Auto* uses the biggest letters the whole message fits in (so a word or two fills the screen), down to 16 px, or pick one of 8, 16, 24, 32, 40 or 48 px.  A message too long for the size scrolls like a terminal, keeping the newest lines on screen.
 
 The display only has plain letters, numbers and punctuation, so curly quotes and dashes become straight ones, and anything else (emoji, accents) becomes `?`.
@@ -12,9 +14,9 @@ It can be picked to show when the display turns on, in [Settings](settings.md#st
 
 ## Messages from others
 
-*The ESP32-S3-Touch-AMOLED-1.75, with the comm channel*
+*The ESP32-S3-Touch-AMOLED-1.75, with comms*
 
-Others in your comm group can send you messages from the *Send* tab of the DroneLab app, over the server or [direct comms](direct.md).  Each one is added on a line of its own, after the sender's name (`Ann: hello`), and the Terminal comes on screen.  The sender can leave their name off (*Show my name*, in the app), and then it's just the message, so nobody looking at your display can tell who it's from.  The *Others* page still says who sent the last one.
+Others in your hive can send you messages from the *Send* tab of the DroneLab app, in cloud or [direct mode](comms.md#direct-mode).  Each one is added on a line of its own, after the sender's name (`Ann: hello`), and the Terminal comes on screen.  The sender can leave their name off (*Show my name*, in the app), and then it's just the message, so nobody looking at your display can tell who it's from.  The *Others* page still says who sent the last one.
 
 Unnamed messages are shown to start with.  *Unnamed* off, on the *Others* page (or *Showing unnamed messages* in the remote's Terminal tab), leaves them off the display.
 

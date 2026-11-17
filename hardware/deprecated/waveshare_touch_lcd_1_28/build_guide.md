@@ -1,6 +1,6 @@
 # Building with the RP2040-Touch-LCD-1.28 or RP2350-Touch-LCD-1.28 (deprecated)
 
-**This housing is no longer supported.**  Build the [ESP32-S3-Touch-AMOLED-1.75](../../../docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md) instead.  This guide is kept for anyone who wants to build it anyway.  The firmware still supports these boards: see [Other Boards](../../../docs/other-boards.md).
+**This housing is no longer supported.**  Build one of the [ESP32-S3-Touch-AMOLED-1.75 units](../../../docs/build/README.md) instead.  This guide is kept for anyone who wants to build it anyway.  The firmware still supports these boards: see [Other Boards](../../../docs/other-boards.md).
 
 The [Waveshare RP2040-Touch-LCD-1.28](https://www.waveshare.com/wiki/RP2040-Touch-LCD-1.28) and [RP2350-Touch-LCD-1.28](https://www.waveshare.com/wiki/RP2350-Touch-LCD-1.28) are the same shape: a 1.28" round touch screen (240x240) with a battery charger and an accelerometer.  They show [images](../../../docs/features/images.md) and [settings](../../../docs/features/settings.md); they have no microphone, speaker, SD card slot, WiFi or Bluetooth.  They were the cheapest build, and the smallest on the mask.
 
@@ -72,7 +72,7 @@ There's a hinged case to carry the housing in, in [`travel_case`](travel_case/).
 
 ## Building and flashing the firmware
 
-Set up pico-sdk as described in [Building the Firmware](../../../docs/building-firmware.md#rp2040-and-rp2350-boards), then from the top of the repo, for the RP2350 board:
+Set up pico-sdk as described in [Installing the Firmware](../../../docs/building-firmware.md#rp2040-and-rp2350-boards), then from the top of the repo, for the RP2350 board:
 
 ```
 cmake -S platforms/pico -B build-rp2350 -DBOARD=waveshare_rp2350_touch_lcd_1_28

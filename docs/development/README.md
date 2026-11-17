@@ -6,6 +6,7 @@ This is for working on the firmware itself: how it's put together, and how to ad
 - [The hardware abstraction layer](hardware-abstraction.md): how the application reaches the hardware, and how to give it something new.
 - [Adding a board](adding-a-board.md): supporting another display, in the firmware and with a housing.
 - [Contributing](contributing.md): sending a change as a pull request, and how contributions are licensed.
+- [Releases](#releases): how the firmware and the web installer are published.
 
 ## How it's put together
 
@@ -49,7 +50,7 @@ A few ideas run through it:
 - `core/` - The application itself.  This code doesn't depend on any particular board.
   - `core/include/hal.h` - The functions each board has to provide.
   - `core/ui/` - The features (`feature_<name>.c`), the navigation between them, and shared UI parts.
-  - `core/app/` - Settings, the Lovense devices and patterns, the WiFi hotspot remote and its web page, the comm channel and its talk button, messages for the Terminal.
+  - `core/app/` - Settings, the Lovense devices and patterns, the WiFi hotspot remote and its web page, comms and the talk button, messages for the Terminal.
   - `core/audio/` - The microphone level, voice effects, the Voice Lab stream, and the sound player and its decoders.
   - `core/media/` - The built-in images and the SD card's images.
   - `core/features.cmake` - The list of optional features.  Each platform's `features.cmake` picks which ones to build.
@@ -58,7 +59,7 @@ A few ideas run through it:
 - `hardware/` - The 3D printable housings, PCBs and cases, by board (see [its README](../../hardware/)).
 - `third_party/lvgl/` - The [LVGL](https://lvgl.io) graphics library (git submodule).
 - `third_party/dr_libs/` - The [dr_libs](https://github.com/mackron/dr_libs) WAV, MP3 and FLAC decoders (git submodule).
-- `app/` - The DroneLab phone app, in Flutter: the [comm channel](../features/comm.md) and the remote, over Bluetooth (see [its README](../../app/README.md)).
+- `app/` - The DroneLab phone app, in Flutter: the [comms](../features/comms.md) and the remote, over Bluetooth (see [its README](../../app/README.md)).
 - `imgs/` - The built-in images.
 - `docs/` - This documentation.
 - `tools/` - Scripts, below.
@@ -71,13 +72,39 @@ A few ideas run through it:
 - `tools/gen_remote_page.py` - Turns `core/app/remote_page.html`, the [WiFi Hotspot Remote](../features/phone-remote.md)'s page, into the C file that's built in, and copies it into the app.  Run it after changing the page.
 - `tools/ble_record.py` - Records the board's voice effect on a computer over Bluetooth, as the app's Record tab does, or plays it to a sound device (a video call's microphone, through a virtual audio cable), with no hotspot to join (see [Recording over Bluetooth](../features/voice-lab.md#recording-over-bluetooth)).
 - `tools/ble_pair.py` - Pairs a Linux computer with a board over Bluetooth, asking for the code the board shows, for `ble_record.py` and `comm_bridge.py`.
-- `tools/comm_bridge.py` - Stands in for the phone app on a computer, for trying the [comm channel](../features/comm.md): plays or saves what the board sends, or passes it on to a Mumble server.
-- `tools/mumble/` - Runs the comm channel's [Mumble](https://www.mumble.info) server with Docker.
+- `tools/comm_bridge.py` - Stands in for the phone app on a computer, for trying the [comms](../features/comms.md): plays or saves what the board sends, or passes it on to a Mumble server.
+- `tools/mumble/` - Runs comms' [Mumble](https://www.mumble.info) server with Docker.
 - `tools/gen_terminal_font.py` - Makes the [Terminal](../features/terminal.md)'s font, `core/ui/terminal_font.c`.
 - `tools/gen_lv_conf.py` - Generates the platforms' `lv_conf.h` files (LVGL's settings) from LVGL's template.  Run it after updating the LVGL submodule.
 - `tools/doc_renders/render.sh` - Renders the pictures of the housings in `docs/images/`.  Run it after changing a housing's design.
 - `tools/gen_logo.py` - Draws the DroneLab logo shown at startup, `core/ui/assets/dronelab_logo.png`, and prints where its blinking cursor goes (`SPLASH_CURSOR` in `core/app/app.c`).  It needs two free fonts from Google Fonts, listed at its top.
 - `tools/gen_app_icon.py` - Draws the app's icon from the logo, for Android and the iPhone.  It needs the same fonts.
+- `tools/doc_renders/gen_doc_logos.py` - Draws the documentation's logos in `docs/images/`: the DroneLab banner, and KatCorp's logo and mark, from the cat in `imgs/RCatLogo.bmp`.  It needs the same fonts.
+- `tools/screenshots.py` - Takes screenshots over USB, and the documentation's set in `docs/images/screens/` (see [Screenshots](#screenshots)).
+- `tools/release/build_firmware.sh` - Builds a release's firmware and the web installer (see [Releases](#releases)).
+
+## Screenshots
+
+On the board, holding `PWR` and pressing `BOOT` saves a screenshot to the SD card ([`core/app/screenshot.c`](../../core/app/screenshot.c)).  It has LVGL draw the whole screen again and copies each part as it's flushed (`LV_EVENT_FLUSH_START`), so the picture is exactly what's on the display, overlays and Rotation included, on any board.  The HAL reports the buttons with `rcat_hal_screenshot_pressed()`; the 1.75" board tells the shared ESP32 code how to read `PWR` with `rcat_esp32_set_power_key()`, and doesn't turn off while `PWR` is held for one.
+
+For the documentation, `tools/screenshots.py` takes them over USB instead, with no SD card or buttons.  It needs firmware built with the development console ([`core/app/console.h`](../../core/app/console.h)), which takes the [remote's API](../../core/app/remote.h) requests and screenshot commands on the USB serial port:
+
+```
+idf.py -C platforms/esp-idf -B build-s3-175-console -DBOARD=waveshare_esp32s3_touch_amoled_1_75 -DRCAT_SERIAL_CONSOLE=1 build flash
+python3 tools/screenshots.py shot out.png                 # what's on screen now
+python3 tools/screenshots.py show Visualizer 0 vis.png    # a feature's page
+python3 tools/screenshots.py docs                         # the documentation's set
+```
+
+`docs` plays a track on the speaker for the visualizers (one with "Roboto" in its name, if the card has it), uses a connected Lovense device if there is one, and puts the settings it changed back afterwards.  The Level wants the board standing upright.  The console isn't in release builds: it takes internal RAM, which the SD card and the radio need.
+
+## Releases
+
+A release is published on GitHub, with a tag like `v0.9.2`.  The app's APKs are built and attached by hand (see [`app/README.md`](../../app/README.md)).  The firmware is built by the [Firmware workflow](../../.github/workflows/firmware.yml) when the release is published: it runs `tools/release/build_firmware.sh` in Espressif's ESP-IDF container, attaches `DroneLab-firmware-1.75.bin` to the release, and puts the web installer on the project's GitHub Pages site, <https://rcat3.github.io/DroneLab/>.  The workflow can also be run by hand from the Actions tab, to update the installer without a release.
+
+The web installer is [ESP Web Tools](https://esphome.github.io/esp-web-tools/), with the page in [`tools/release/flasher/`](../../tools/release/flasher/) and a manifest the script writes.  It writes the bootloader, partition table, firmware and OTA data at their own addresses, from the build's `flash_args`, and leaves the rest of the flash alone, so an update keeps the settings.  The one-file image skips the OTA data, which would pad it out to 14 MB, and is for writing to an erased board.
+
+To try it locally, run `tools/release/build_firmware.sh` and serve `dist/flasher` over `http://localhost` (`python3 -m http.server -d dist/flasher`), which browsers allow to reach USB like https.
 
 ## Threads
 
@@ -110,4 +137,4 @@ Things to know:
 
 ## Checking a change
 
-Build every platform the change touches, as described in [Building the Firmware](../building-firmware.md).  A change to `core/` or `hal.h` touches all of them: the RP2040, the RP2350 and both ESP32-S3 boards.  Every build should finish without warnings.  It's also worth building once with the new feature switched off.
+Build every platform the change touches, as described in [Installing the Firmware](../building-firmware.md).  A change to `core/` or `hal.h` touches all of them: the RP2040, the RP2350 and both ESP32-S3 boards.  Every build should finish without warnings.  It's also worth building once with the new feature switched off.
