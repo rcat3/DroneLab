@@ -15,7 +15,7 @@ image bigger than 240x240 is treated as full screen artwork and scaled to fit
 the screen.
 
 Usage:
-    python3 tools/img2c.py imgs/home.bmp --size 412 --out build/home.c
+    python3 tools/img2c.py imgs/hexcorp.bmp --size 412 --out build/hexcorp.c
 
 The C variable name is the file name without its extension (or --name).
 That name is what goes in core/media/image_list.c.
