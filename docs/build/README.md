@@ -1,6 +1,6 @@
 # Build Guide
 
-<img src="../images/katcorp_mark.png" width="72" align="left" alt="KatCorp">
+<a href="../../README.md#about-katcorp"><img src="../images/katcorp_mark.png" width="72" align="left" alt="KatCorp"></a>
 
 **KatCorp Drone Systems**<br>DroneLab: Owner Assembly Instructions
 
@@ -19,7 +19,9 @@ DroneLab units aren't sold.  They're built by their owners, from a Waveshare dis
 
 ## Choose a model
 
-![The two models, to scale: the speaker model (left) and the low-profile model (right)](../images/housings_to_scale.png)
+<p><a href="speaker-housing.md"><img src="../images/speaker_housing_1_75_to_scale.png" height="300" alt="The speaker model, to scale with the low-profile model"></a> <a href="low-profile-housing.md"><img src="../images/low_profile_housing_1_75_to_scale.png" height="300" alt="The low-profile model, to scale with the speaker model"></a></p>
+
+<sub>To scale: the speaker model (left) and the low-profile model (right).  Click one for its build guide.</sub>
 
 | | [Speaker model](speaker-housing.md) | [Low-profile model](low-profile-housing.md) |
 |---|---|---|
@@ -72,4 +74,4 @@ Both models are built around the [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://
 
 - **[Travel case](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case/):** a hinged, clip-shut case for either model, shaped to it, that prints with no supports.  The speaker model's case is printed and works; the low-profile model's is designed, not printed yet.
 
-  <img src="../images/speaker_case_1_75.png" height="200" alt="The speaker model's travel case, closed"> <img src="../images/speaker_case_1_75_open.png" height="200" alt="The speaker model's travel case, open, with the unit in it">
+  <a href="../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case/"><img src="../images/speaker_case_1_75.png" height="200" alt="The speaker model's travel case, closed"></a> <a href="../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/travel_case/"><img src="../images/speaker_case_1_75_open.png" height="200" alt="The speaker model's travel case, open, with the unit in it"></a>

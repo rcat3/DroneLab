@@ -27,7 +27,7 @@ The *Effect Volume* page, next to it, sets how loud the effect is on the speaker
 
 The board's **BOOT** button switches *Play on speaker* off and on, to stop feedback quickly.  (BOOT only matters at startup: held while the board starts, it waits for new firmware over USB.)  The [WiFi Hotspot Remote](phone-remote.md) has all of these too, with the volume in exact steps.
 
-*Play on speaker* is always off at startup, in case it feeds back.  The speaker in the board's housing faces away from the mask, but some of it still reaches the microphones.  The board cancels most of that, because its audio chip hears what the speaker is playing (see its [board notes](../hardware/waveshare_esp32s3_touch_amoled_1_75.md#board-notes)), so it can go much louder before it feeds back.
+*Play on speaker* is always off at startup, in case it feeds back.  The speaker in the board's housing faces away from the mask, but some of it still reaches the microphones.  The board cancels most of that, because its audio chip hears what the speaker is playing (see its [board notes](../hardware/waveshare_esp32s3_touch_amoled_1_75.md#board-notes)), so it can go much louder before it feeds back.  The rest depends on the plasticine sealing the speaker off inside the housing (see [the speaker model's assembly](../build/speaker-housing.md#3-put-it-together)): if it feeds back at low volume, check that first.
 
 The voice effects need the [speaker model](../build/speaker-housing.md): the low-profile model has no speaker.  The [other boards](../other-boards.md) the firmware runs on don't have them.
 

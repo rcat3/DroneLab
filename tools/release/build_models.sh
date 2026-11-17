@@ -66,7 +66,7 @@ Build guide: $GUIDE/speaker-housing.md
 No printer: $GUIDE/README.md#no-3d-printer
 
 Housing (the parts come out turned the right way up to print):
-  body.stl       PLA or PLA+. On one of its sides, with tree supports,
+  body.stl       PLA or PLA+. Tilted up at an angle, with tree supports,
                  including the ribs inside
   chin.stl       PLA or PLA+. On its flat face, no supports
   back.stl       PLA or PLA+. As it comes, 4 or more walls

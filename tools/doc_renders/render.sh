@@ -3,7 +3,8 @@
 # Render the pictures of the housings in docs/images/: each housing on its
 # own, at an angle, all of them side by side from the same angle, to scale,
 # and each pulled apart in the order it goes together, for the build guides.
-# Also each travel case, closed, and open with its housing in it.
+# Also each travel case, closed, and open with its housing in it, and each
+# part on its own, for the design README's table of parts.
 # Run it after changing a housing's design. It needs OpenSCAD, and Python 3
 # with Pillow.
 
@@ -40,6 +41,17 @@ for c in "${CASES[@]}"; do
     openscad -D 'part="none"' -D 'open=true' --camera=$center,55,0,150,$dist \
              --imgsize=1400,1400 --colorscheme=Tomorrow -o "$OUT/${scene}_open.png" "$scene.scad" &
 done
+# Each part on its own, for the design README's table of parts. Each is: the
+# scene, the part, and the camera's tilt (58 from the front and above, 122
+# from the back and below, 40 for the flat parts)
+PARTS=(speaker_parts_1_75:{body:58,chin:122,back:122,collar:122,washer:40,gasket:40,plungers:40,usb_plug:40}
+       low_profile_parts_1_75:{lp_body:58,lp_back:122})
+mkdir -p "$OUT/parts"
+for p in "${PARTS[@]}"; do
+    IFS=: read -r scene part tilt <<<"$p"
+    openscad -D 'part="none"' -D "show=\"$part\"" --camera=0,0,0,$tilt,0,-25,0 --viewall --autocenter \
+             --imgsize=1600,1600 --colorscheme=Tomorrow -o "$OUT/parts/$part.png" "$scene.scad" &
+done
 wait
 
 python3 - "$OUT" "${SCENES[@]}" -- "${CASES[@]%% *}" <<'PY'
@@ -69,6 +81,16 @@ for c in cases:
         im = Image.open(path).convert("RGB")
         crop(im, content_box(im), 20).save(path)
 
+# The parts, trimmed and set in the middle of a square, all the same size
+import glob
+for path in glob.glob(f"{out}/parts/*.png"):
+    im = Image.open(path).convert("RGB")
+    part = crop(im, content_box(im), 0)
+    side = max(part.size)
+    square = Image.new("RGB", (side * 10 // 9, side * 10 // 9), im.getpixel((0, 0)))
+    square.paste(part, ((square.width - part.width) // 2, (square.height - part.height) // 2))
+    square.resize((400, 400), Image.LANCZOS).save(path, optimize=True)
+
 # Side by side: the lineup views were all rendered with the same camera, so
 # they're at the same scale; they're trimmed to the same height and set next
 # to each other
@@ -84,5 +106,9 @@ for p in parts:
     line.paste(p, (x, 0))
     x += p.width
 line.save(f"{out}/housings_to_scale.png")
+# and each on its own, the same height, so they can be shown side by side, to
+# scale, each linking to its own page
+for s, p in zip(scenes, parts):
+    p.save(f"{out}/{s}_to_scale.png")
 PY
 echo "Rendered the pictures in $OUT"
