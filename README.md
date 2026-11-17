@@ -8,9 +8,9 @@
 
 ## What is DroneLab?
 
-Your drone's voice port has been sitting there doing nothing but letting sound out.  KatCorp thinks it can do more.
+KatCorp Drone Systems Division is pleased to announce DroneLab: a display and voice upgrade for drones in compatible gas masks.¹
 
-DroneLab is a round, glowing touch screen that screws into the voice port on the front of a compatible gas mask: its housings are made to fit the voice port of the MSA Millennium.¹  It replaces the plain port cover with a 1.75" AMOLED display that shows images and animations, lights up as the wearer speaks, and, in the speaker model, turns their voice into something else entirely: a synthetic female voice, a monotone robot, a Dalek, a Borg collective.  It links up with other drones over the radio, takes commands from a phone, and can run a wearer's Lovense devices.
+The unit replaces the mask's voice port cover with a glowing 1.75" round touch screen.  It shows your designation, images and animations, lights up as you speak, and in the speaker model gives you a new voice: synthetic, robotic, or a collective of many.  Units link into a HiveMind with the rest of your hive, and take orders from a phone or from authorized handlers.
 
 **Who it's for:** latex and rubber drones who want their mask to look and sound like a piece of corporate hardware, and anyone else with a compatible mask (cosplayers, costume and prop makers) who wants a voice port that does something.
 
@@ -53,7 +53,7 @@ DroneLab is a round, glowing touch screen that screws into the voice port on the
 </td>
 </tr>
 <tr>
-<td width="190" align="center"><img src="docs/images/screens/images_home.png" width="170" alt="An image with the voice ring around it"></td>
+<td width="190" align="center"><img src="docs/images/screens/images_katcorp.png" width="170" alt="The KatCorp logo with the voice ring around it"></td>
 <td>
 <h3>Images and the voice ring</h3>
 <p>Any picture or animated GIF, built in or from a micro SD card, with a glowing ring around the edge that pulses as the wearer speaks.</p>

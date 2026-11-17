@@ -6,7 +6,7 @@ Any image, or the blank page, can be picked to show when the display turns on, i
 
 While the Images feature is on screen, the [Voice Ring](voice-ring.md) can glow around the edge with your voice.
 
-| ![With the voice ring](../images/screens/images_home.png) | ![A built-in image](../images/screens/images_hal9000.png) |
+| ![With the voice ring](../images/screens/images_katcorp.png) | ![A built-in image](../images/screens/images_hal9000.png) |
 |:-:|:-:|
 | With the voice ring | A built-in image |
 
@@ -36,7 +36,7 @@ Images are drawn for a 240x240 screen.  On a bigger screen they're scaled up by 
 
 Animated GIFs that need resizing are re-encoded, without transparent pixels and with a black background, so a resized GIF can come out bigger than the original file.  GIFs that are already the right size are used as they are.
 
-The conversion is done by `tools/img2c.py`.  You don't normally need to run it yourself, but you can (for example `python3 tools/img2c.py imgs/home.bmp --size 466 --out home.c`) to see what it produces.
+The conversion is done by `tools/img2c.py`.  You don't normally need to run it yourself, but you can (for example `python3 tools/img2c.py imgs/hexcorp.bmp --size 466 --out hexcorp.c`) to see what it produces.
 
 ## Animated GIF memory use
 

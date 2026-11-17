@@ -2,7 +2,7 @@
 
 *The ESP32-S3-Touch-AMOLED-1.75, with the DroneLab app on an Android phone.  New: cloud mode works end to end and is still being tried out; direct mode is in development.*
 
-HiveMind links every drone in the hive into one mind: they talk to each other, like a radio.  On the unit and in the app it's called *Comm*.  Each unit sends its wearer's voice, through the [voice effect](voice-effects.md), and the others' voices come back to the wearer's headphones, through their phone.  The display shows who's talking, with their avatar.  The unit only sends while the wearer talks: with *Push to talk*, while the talk button is held, and in *Voice* mode, whenever it hears them speak.
+HiveMind links every drone in the hive into one mind: they talk to each other, like a radio.  On the unit it's the *HiveMind* feature; in the app it's still the *Comm* tab.  Each unit sends its wearer's voice, through the [voice effect](voice-effects.md), and the others' voices come back to the wearer's headphones, through their phone.  The display shows who's talking, with their avatar.  The unit only sends while the wearer talks: with *Push to talk*, while the talk button is held, and in *Voice* mode, whenever it hears them speak.
 
 It has two modes, which can be on together:
 
@@ -34,12 +34,12 @@ You hear both modes at once: the app plays the server's voices and the direct on
 
 1. [Install the app](../installing-the-app.md) and pair it with your unit: on the unit, switch on the *Phone App* page in [Settings](settings.md), after Brightness.
 2. **For cloud mode**, the hive needs a Mumble server (see [Setting up a Mumble server](#setting-up-a-mumble-server)).  Enter it in the app's *Comm Settings*, behind the gear on the Comm tab: its address, your name and the server password, then connect.
-3. **For direct mode**, switch on *Direct*: on the unit's *Direct* page, in the Comm feature, or on the *Direct* line of the app's Comm tab.  Then [pick a group](#groups).
+3. **For direct mode**, switch on *Direct*: on the unit's *Direct* page, in the HiveMind feature, or on the *Direct* line of the app's Comm tab.  Then [pick a group](#groups).
 4. Talk: hold the talk button, or set *Voice* mode and just speak.
 
 The *Phone App* stays on, or off, from one startup to the next.  The voice effect has to run the whole time it's on, so it uses more battery: the [speaker model](../build/speaker-housing.md)'s 2000 mAh battery runs about 9.5 hours with comms on, against about 13.5 without.  Direct mode costs a little more again, as the radio has to listen the whole time.
 
-Everything else is in the *Comm* feature on the unit, swiping up and down, after Sound.
+Everything else is in the *HiveMind* feature on the unit, swiping up and down, after Sound.
 
 ## Setting up a Mumble server
 
@@ -53,15 +53,15 @@ Whichever you use, everyone needs its **address**, its **port** (64738, unless i
 
 ## On the display
 
-| ![The status screen](../images/screens/comm_status.png) | ![Comm Setup](../images/screens/comm_setup.png) |
+| ![The status screen](../images/screens/comm_status.png) | ![HiveMind Setup](../images/screens/comm_setup.png) |
 |:-:|:-:|
-| The status screen | Comm Setup |
+| The status screen | HiveMind Setup |
 
 ### The status screen
 
 The first page shows how comms are doing at a glance, as a green screen like the [Terminal](terminal.md)'s:
 
-- At the top, *Comms* and an antenna: red and struck through with no uplink (the phone running the app), yellow without its waves while the app's connected but the server isn't, and green with its waves once everything's connected.
+- At the top, *HiveMind* and an antenna: red and struck through with no uplink (the phone running the app), yellow without its waves while the app's connected but the server isn't, and green with its waves once everything's connected.
 - In the middle, an avatar in a frame, with a tag on its bottom edge:
   - **RX**: whoever's talking, their avatar in full color and the frame lit up, with their name underneath, and "+1" and so on for others talking at once.
   - **TX**: your own avatar, in full color, the frame white-hot, and a ring round the edge of the screen.  A cloud (cloud mode) or a handheld radio (direct mode) shows where it's going, with the channel's or group's name.
@@ -71,13 +71,13 @@ Holding the avatar talks, for trying it out with the display in hand.  It waits 
 
 The status screen can be picked to show when the display turns on, in [Settings](settings.md#startup).
 
-### Comm Setup
+### HiveMind Setup
 
 - *Push to talk* or *Voice*: in *Push to talk*, the unit sends while the talk button (or the app's, or the avatar) is held, and in *Voice*, whenever it hears you speak.
 - *Speaker off while talking*: the speaker goes quiet while the unit's sending, voice effect and sound files alike, so those nearby don't hear what goes to the hive.
-- *Show Comm while*: *Talk*, *Hear* or *Both* comes to the status screen by itself while the unit's sending, while someone else is talking, or both, and goes back to the page you were on two seconds after it stops.  If you swipe somewhere else in the meantime, it stays where you went.  It waits while you're touching the screen.
+- *Show HiveMind while*: *Talk*, *Hear* or *Both* comes to the status screen by itself while the unit's sending, while someone else is talking, or both, and goes back to the page you were on two seconds after it stops.  If you swipe somewhere else in the meantime, it stays where you went.  It waits while you're touching the screen.
 
-### Comm Voice
+### HiveMind Voice
 
 The voice effect for what the hive hears: *Same as speaker*, or any of the [voice effects](voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.  With two different effects the voice runs through both, which takes more of the unit's processor: the heaviest two together take about 70% of one of its cores.
 
@@ -89,7 +89,7 @@ Talking goes one way at a time: cloud (*Server*) or *Direct*.  *Talk on*, above 
 
 A Bluetooth camera shutter remote can be the talk button: hold it to talk, in either mode.  It has to be a Bluetooth LE one, which shows up as a keyboard, and one that reports the button being held, not just pressed.  The cheap *AB Shutter3* remotes work.  The ATUMTEK one pairs, but only sends a press, so it can't hold the channel open.
 
-1. On the *Talk Button* page, after *Comm Setup*, tap *Pair a button*.
+1. On the *Talk Button* page, after *HiveMind Setup*, tap *Pair a button*.
 2. Put the remote in pairing mode: switch it on, or hold its button until it blinks.  The unit pairs with the nearest one it finds, and shows its name.
 
 The unit remembers it.  The remote goes to sleep after a minute or so; pressing it wakes it, the unit connects again, and that press counts, a moment late.  It's only used while the Phone App is on.  *Forget it* unpairs it.  A remote usually remembers only the last thing it paired with, so pairing it with the unit unpairs it from a computer or phone it was used with.
@@ -124,7 +124,7 @@ The app trusts the server's certificate the first time it connects, and if the c
 
 Direct mode carries the hive's voices unit to unit over the radio, with no internet, server or phone signal in between: for halls, basements and the middle of nowhere.  Each unit broadcasts its wearer's voice, through the voice effect, to the units in range, and passes what it hears from the others to its phone, which plays it to your headphones.  So a phone is still needed to listen, but it doesn't need any signal.
 
-The unit's *Direct* page, in the Comm feature, switches it on, and lists the units it hears, strongest first, with bars for how well.  It talks the same way as in cloud mode: the talk button, holding the avatar on the status screen, voice mode, or the app's Hold to talk.
+The unit's *Direct* page, in the HiveMind feature, switches it on, and lists the units it hears, strongest first, with bars for how well.  It talks the same way as in cloud mode: the talk button, holding the avatar on the status screen, voice mode, or the app's Hold to talk.
 
 ### Groups
 
@@ -154,7 +154,7 @@ The radio has to listen the whole time direct mode is on, which costs about 80 m
 
 The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now: see [Installing the App](../installing-the-app.md) to get it.
 
-The **Comm tab** shows the unit, the server and direct mode, one line each, with the talk button, the channel's people and the units nearby.  What's set once is in *Comm Settings*, behind the gear: your avatar, the server, the unit's comms settings (the mode, the [Comm Voice](#comm-voice), *Speaker off while talking*, when to show the Comm screen), and direct mode and its group.  It has its own *Hold to talk*, and keeps going with the screen off, with a notification while it's on.
+The **Comm tab** shows the unit, the server and direct mode, one line each, with the talk button, the channel's people and the units nearby.  What's set once is in *Comm Settings*, behind the gear: your avatar, the server, the unit's comms settings (the mode, the [HiveMind Voice](#hivemind-voice), *Speaker off while talking*, when to show the HiveMind screen), and direct mode and its group.  It has its own *Hold to talk*, and keeps going with the screen off, with a notification while it's on.
 
 The first time the app connects, the phone asks to pair, and the unit shows a 6-digit code over whatever's on its screen: type it into the phone.  The unit only talks to a phone that's paired like that, so nobody else nearby can listen in or take over, and the phone and unit remember each other after that.  A new phone can only pair while pairing's open: for two minutes after the *Phone App* is switched on, or after *Pair a phone* on the *Paired Phones* page in Settings, and until a phone's paired.  The rest of the time, a phone that isn't paired is turned away before any code's shown, as the screen faces outward while the mask's worn, where anyone could read it.  With several units about, pick yours by its name, shown on the *Phone App* page (`DroneLab-` and four letters): if you pick someone else's, the code shows on theirs, not yours.
 

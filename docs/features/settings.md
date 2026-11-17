@@ -44,7 +44,7 @@ A spirit level, for lining the display up on the mask.  See [Level](level.md).
 
 ## Startup
 
-What's shown when the display turns on: any image (see [Images](images.md)), the blank page, the [Visualizer](visualizer.md), the [Terminal](terminal.md) or the [Comm](comms.md) status screen, depending on what the board has.
+What's shown when the display turns on: any image (see [Images](images.md)), the blank page, the [Visualizer](visualizer.md), the [Terminal](terminal.md) or the [HiveMind](comms.md) status screen, depending on what the board has.
 
 ## Battery Log
 

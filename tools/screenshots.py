@@ -178,7 +178,7 @@ def doc_shots(board, out):
     info = board.api("GET", "/api/info")
     images = dict(info["features"])["Images"]
 
-    take("images_home", "Images", images.index("home"))
+    take("images_katcorp", "Images", images.index("RCatLogo"))
     take("images_hal9000", "Images", images.index("hal9000"))
 
     # Something for the visualizers to show: a track on the speaker
@@ -195,8 +195,8 @@ def doc_shots(board, out):
 
     take("voice_effect", "Voice", 0)
     take("voice_effect_volume", "Voice", 1)
-    take("comm_status", "Comm", 0)
-    take("comm_setup", "Comm", 1)
+    take("comm_status", "HiveMind", 0)
+    take("comm_setup", "HiveMind", 1)
     # 24 px letters, which keep the words whole; a line at a time, as the
     # console takes a line at a time
     board.api("POST", "/api/termsize?s=3")
