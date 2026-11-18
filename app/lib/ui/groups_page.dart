@@ -44,7 +44,7 @@ class _GroupsPageState extends State<GroupsPage> {
         final scanning = direct?.scanning ?? false;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Direct Comms Groups'),
+            title: const Text('Direct Channels'),
             actions: [
               if (usable && direct.on)
                 scanning
@@ -52,7 +52,7 @@ class _GroupsPageState extends State<GroupsPage> {
                         padding: EdgeInsets.all(16),
                         child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
                     : IconButton(
-                        tooltip: 'Look for groups on every channel',
+                        tooltip: 'Look for channels on every frequency',
                         icon: const Icon(Icons.refresh),
                         onPressed: comm.scanDirect),
             ],
@@ -61,18 +61,18 @@ class _GroupsPageState extends State<GroupsPage> {
               ? FloatingActionButton.extended(
                   onPressed: () => createGroup(context, comm),
                   icon: const Icon(Icons.add),
-                  label: const Text('Create a group'),
+                  label: const Text('Create a channel'),
                 )
               : null,
           body: ListView(
             children: [
               if (!usable)
-                const ListTile(title: Text('Connect to the board to choose its group')),
+                const ListTile(title: Text('Connect to the board to choose its channel')),
               if (usable && !direct.on)
                 ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: const Text('Direct comms is off'),
-                  subtitle: const Text('Switch it on to hear the groups nearby'),
+                  subtitle: const Text('Switch it on to hear the channels nearby'),
                   trailing: Switch(value: false, onChanged: comm.setDirect),
                 ),
               header('Open'),
@@ -80,11 +80,11 @@ class _GroupsPageState extends State<GroupsPage> {
                 context,
                 selected: usable && !direct.keyed,
                 icon: Icons.lock_open,
-                title: 'Open group',
+                title: 'Open channel',
                 subtitle: 'Any board nearby can hear it. ${radioText(6, true)}',
                 onTap: usable ? comm.joinOpenGroup : null,
               ),
-              header('Your groups'),
+              header('Your channels'),
               if (saved.isEmpty)
                 const ListTile(
                     title: Text('None yet'),
@@ -110,7 +110,7 @@ class _GroupsPageState extends State<GroupsPage> {
               if (usable && direct.on) ...[
                 header('Heard nearby'),
                 if (heard.isEmpty)
-                  ListTile(title: Text(scanning ? 'Listening on every channel...' : 'No other groups heard')),
+                  ListTile(title: Text(scanning ? 'Listening on every frequency...' : 'No other channels heard')),
                 for (final h in heard)
                   _choice(
                     context,
@@ -181,7 +181,7 @@ Future<void> joinHeardGroup(BuildContext context, CommController comm, HeardGrou
 
 /// Make a new group, asking for its name and passphrase.
 Future<void> createGroup(BuildContext context, CommController comm) async {
-  final got = await _ask(context, title: 'Create a group', askName: true, action: 'Create');
+  final got = await _ask(context, title: 'Create a channel', askName: true, action: 'Create');
   if (got == null || !context.mounted) return;
   await _busy(context, comm.createGroup(got.name, got.passphrase, got.channel, got.longRange));
 }
@@ -244,7 +244,7 @@ Future<GroupAnswer?> _ask(BuildContext context,
               if (askName) ...[
                 const SizedBox(height: 16),
                 Row(children: [
-                  const Expanded(child: Text('Channel')),
+                  const Expanded(child: Text('Frequency')),
                   SegmentedButton<int>(
                     showSelectedIcon: false,
                     segments: const [
@@ -258,7 +258,7 @@ Future<GroupAnswer?> _ask(BuildContext context,
                 ]),
                 const Padding(
                   padding: EdgeInsets.only(top: 4),
-                  child: Text('Another from the open group (6) keeps the two from crowding each other',
+                  child: Text('Another from the open channel (6) keeps the two from crowding each other',
                       style: TextStyle(fontSize: 12)),
                 ),
                 SwitchListTile(

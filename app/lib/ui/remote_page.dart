@@ -151,7 +151,10 @@ class _RemotePageState extends State<RemotePage> {
   Widget build(BuildContext context) {
     final web = _web;
     return Scaffold(
-      appBar: AppBar(title: const Text('DroneLab Remote')),
+      appBar: AppBar(
+        title: const Text('Remote'),
+        actions: const [Padding(padding: EdgeInsets.only(right: 16), child: Text('over Bluetooth'))],
+      ),
       body: _wasConnected && _tooOld
           ? const Center(
               child: Padding(
@@ -169,7 +172,7 @@ class _RemotePageState extends State<RemotePage> {
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: Text(
-                  'Connect to the board on the HiveMind tab first.\n\n'
+                  'Connect to the board first: tap the status strip at the top.\n\n'
                   'The remote runs the board over Bluetooth, as the board\'s own WiFi remote does, '
                   'so the phone keeps its internet.',
                   textAlign: TextAlign.center,

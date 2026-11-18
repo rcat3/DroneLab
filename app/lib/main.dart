@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'comm/comm_controller.dart';
-import 'ui/comm_page.dart';
+import 'ui/control_page.dart';
+import 'ui/hivemind_page.dart';
+import 'ui/people.dart';
 import 'ui/record_page.dart';
 import 'ui/remote_page.dart';
-import 'ui/send_page.dart';
+import 'ui/status_strip.dart';
+import 'ui/terminal_page.dart';
+import 'ui/theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,51 +25,75 @@ class DroneLabApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Dark, with pink controls, like the board
-    final scheme = ColorScheme.fromSeed(seedColor: Colors.pink, brightness: Brightness.dark);
     return MaterialApp(
       title: 'DroneLab',
-      theme: ThemeData(colorScheme: scheme, useMaterial3: true),
+      theme: Kc.theme(),
+      darkTheme: Kc.theme(),
+      themeMode: ThemeMode.dark,
       home: WithForegroundTask(child: HomePage(comm: comm)),
     );
   }
 }
 
-/// HiveMind, sending to others, recording and the remote, each kept
-/// running while another shows.
-class HomePage extends StatefulWidget {
+/// HiveMind, the Terminal, controlling others, recording and the remote, each
+/// kept running while another shows, under the links' status strip.
+class HomePage extends StatelessWidget {
   final CommController comm;
   const HomePage({super.key, required this.comm});
 
   @override
-  State<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> {
-  int _tab = 0;
-
-  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _tab,
-        children: [
-          CommPage(comm: widget.comm),
-          SendPage(comm: widget.comm),
-          RecordPage(comm: widget.comm),
-          RemotePage(comm: widget.comm),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.headset_mic), label: 'HiveMind'),
-          NavigationDestination(icon: Icon(Icons.send), label: 'Send'),
-          NavigationDestination(icon: Icon(Icons.fiber_manual_record), label: 'Record'),
-          NavigationDestination(icon: Icon(Icons.tune), label: 'Remote'),
-        ],
-      ),
+    return ListenableBuilder(
+      listenable: Listenable.merge([appTab, comm]),
+      builder: (context, _) {
+        final unread = comm.unread;
+        return Scaffold(
+          body: Column(
+            children: [
+              SafeArea(bottom: false, child: StatusStrip(comm: comm)),
+              Expanded(
+                child: MediaQuery.removePadding(
+                  context: context,
+                  removeTop: true,
+                  child: IndexedStack(
+                    index: appTab.value,
+                    children: [
+                      HiveMindPage(comm: comm),
+                      TerminalPage(comm: comm),
+                      ControlPage(comm: comm),
+                      RecordPage(comm: comm),
+                      RemotePage(comm: comm),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: appTab.value,
+            onDestinationSelected: (i) {
+              appTab.value = i;
+              if (i == tabTerminal) comm.markTerminalRead();
+            },
+            destinations: [
+              const NavigationDestination(icon: Icon(Icons.hexagon_outlined), label: 'HIVEMIND'),
+              NavigationDestination(
+                icon: Badge(
+                  isLabelVisible: unread > 0 && appTab.value != tabTerminal,
+                  label: Text('$unread'),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  textColor: Theme.of(context).colorScheme.onPrimary,
+                  child: const Icon(Icons.terminal),
+                ),
+                label: 'TERMINAL',
+              ),
+              const NavigationDestination(icon: Icon(Icons.tune), label: 'CONTROL'),
+              const NavigationDestination(icon: Icon(Icons.fiber_manual_record_outlined), label: 'RECORD'),
+              const NavigationDestination(icon: Icon(Icons.phone_android), label: 'REMOTE'),
+            ],
+          ),
+        );
+      },
     );
   }
 }

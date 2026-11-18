@@ -74,8 +74,8 @@ class DirectGroup {
       j['key'] as String, j['mine'] == true, (j['channel'] as num?)?.toInt() ?? 6, j['lr'] as bool? ?? true);
 }
 
-/// How a group's radio is set up, to show: "ch 6, Long Range".
-String radioText(int channel, bool longRange) => 'ch $channel${longRange ? ', Long Range' : ''}';
+/// How a channel's radio is set up, to show: "frequency 6, Long Range".
+String radioText(int channel, bool longRange) => 'frequency $channel${longRange ? ', Long Range' : ''}';
 
 /// A group heard about over direct comms.
 class HeardGroup {
@@ -431,7 +431,7 @@ class CommController extends ChangeNotifier {
   /// Make a new group, with a passphrase for the others to join with.
   Future<String?> createGroup(String name, String passphrase, int channel, bool longRange) async {
     final clash = heardGroups.values.any((h) => h.name == name.trim());
-    if (clash) return 'A group by that name is about already';
+    if (clash) return 'A channel by that name is about already';
     return joinGroup(name, passphrase, mine: true, channel: channel, longRange: longRange);
   }
 
