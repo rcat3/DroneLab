@@ -191,6 +191,9 @@ static uint16_t *avatars[COMM_AVATAR_SLOTS];        // allocated as they come; b
 static uint32_t avatar_got[COMM_AVATAR_SLOTS];      // bytes so far
 static bool avatar_ready[COMM_AVATAR_SLOTS];
 static uint32_t avatar_changes;
+// A new start of the app, maybe on the same link: it's to have the avatars
+// of the boards heard over direct comms again
+static bool app_started;
 static bool speaker_muted;
 static bool pairing_open;
 static uint32_t pairing_until;
@@ -907,6 +910,7 @@ static void answer_request(void)
                 memcpy(app_os, os == NULL ? "" : os + 3, n);
                 app_os[n] = '\0';
                 printf("comm: app version %s %s\n", app_version, app_os);
+                app_started = true;
             }
             len = snprintf(answer + 4, ANSWER_MAX - 4,
                            "{\"firmware\":\"%s\",\"built\":\"%s\",\"comm\":%d,\"avatar\":%d,\"avatars\":%d}",
@@ -1248,9 +1252,10 @@ static int avatar_out_piece = -1;
 
 static void send_direct_avatars(uint32_t now_ms)
 {
-    if (!comm_phone_connected() || !direct_running())
+    if (!comm_phone_connected() || !direct_running() || app_started)
     {
-        memset(peer_avatar, 0, sizeof(peer_avatar));    // all again for the next phone
+        app_started = false;
+        memset(peer_avatar, 0, sizeof(peer_avatar));    // all again for the next phone, or app
         avatar_out_piece = -1;
         return;
     }
