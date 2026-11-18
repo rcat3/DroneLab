@@ -5,7 +5,8 @@ import '../comm/release_check.dart';
 import 'theme.dart';
 
 /// Under the status strip, while a newer release of the app is out: to
-/// download it from the releases page, or to put off until the next one.
+/// download it from the releases page, or to put off until the app next
+/// starts.
 class ReleaseBanner extends StatelessWidget {
   final ReleaseCheck check;
   const ReleaseBanner({super.key, required this.check});

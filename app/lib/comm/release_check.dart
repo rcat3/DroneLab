@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firmware_update.dart';
 
@@ -15,18 +14,16 @@ import 'firmware_update.dart';
 class ReleaseCheck extends ChangeNotifier {
   static const _latest = 'https://api.github.com/repos/rcat3/DroneLab/releases/latest';
   static const _every = Duration(hours: 24);
-  static const _dismissedKey = 'releaseDismissed';
 
   /// The newer release's version ("0.9.7") and page, while there's one to
-  /// show: newer than this app, and not dismissed.
+  /// show: newer than this app, and not put off since the app started.
   String? version;
   String? page;
 
   Timer? _timer;
-  SharedPreferences? _prefs;
+  bool _dismissed = false;
 
   Future<void> start() async {
-    _prefs = await SharedPreferences.getInstance();
     await check();
     _timer = Timer.periodic(_every, (_) => check());
   }
@@ -49,8 +46,7 @@ class ReleaseCheck extends ChangeNotifier {
       if (mine == null || theirs == null || j['draft'] == true || j['prerelease'] == true) return;
       final newer = compareReleases(theirs, mine) > 0;
       final name = tag.startsWith('v') ? tag.substring(1) : tag;
-      final dismissed = _prefs?.getString(_dismissedKey) == name;
-      version = newer && !dismissed ? name : null;
+      version = newer && !_dismissed ? name : null;
       page = j['html_url'] as String?;
       notifyListeners();
     } catch (_) {
@@ -58,11 +54,10 @@ class ReleaseCheck extends ChangeNotifier {
     }
   }
 
-  /// Hide it until a newer one than this comes out.
+  /// Hide it until the app next starts.
   void dismiss() {
-    final v = version;
-    if (v == null) return;
-    _prefs?.setString(_dismissedKey, v);
+    if (version == null) return;
+    _dismissed = true;
     version = null;
     notifyListeners();
   }
