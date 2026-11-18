@@ -759,6 +759,37 @@ static void capture_task(void *arg)
 }
 #endif
 
+/* Sound levels for the seal test (rcat_hal_audio_levels): sums of squares,
+ * added to by the audio task and taken by the UI loop */
+static portMUX_TYPE levels_lock = portMUX_INITIALIZER_UNLOCKED;
+static double levels_sum[5];        // mics, speaker, cancelled, mic1, mic2
+static uint32_t levels_n;           // samples in the first, second, fourth and fifth
+static uint32_t levels_n_out;       // and in the third
+
+bool rcat_hal_audio_levels(rcat_hal_audio_levels_t *levels)
+{
+    double sum[5];
+    uint32_t n, n_out;
+    taskENTER_CRITICAL(&levels_lock);
+    memcpy(sum, levels_sum, sizeof(sum));
+    n = levels_n;
+    n_out = levels_n_out;
+    memset(levels_sum, 0, sizeof(levels_sum));
+    levels_n = levels_n_out = 0;
+    taskEXIT_CRITICAL(&levels_lock);
+
+    const double full = 32768.0 * 32768.0;
+    *levels = (rcat_hal_audio_levels_t){
+        .mics = n ? sum[0] / n / full : 0,
+        .speaker = n ? sum[1] / n / full : 0,
+        .cancelled = n_out ? sum[2] / n_out / full : 0,
+        .mic1 = n ? sum[3] / n / full : 0,
+        .mic2 = n ? sum[4] / n / full : 0,
+        .samples = n,
+    };
+    return true;
+}
+
 /* A peaking filter (RBJ cookbook), for the feedback cut */
 typedef struct
 {
@@ -868,10 +899,15 @@ static void audio_task(void *arg)
         int64_t t0 = esp_timer_get_time();
         float block_in = 0, block_ref = 0, block_out = 0;
 #endif
+        float level_in = 0, level_ref = 0, level_mic1 = 0, level_mic2 = 0;
         for (size_t i = 0; i < frames; i++)
         {
             const int16_t *f = &raw[AUDIO_SLOTS * i];
             samples[i] = (int16_t)(((int32_t)f[SLOT_MIC1] + f[SLOT_MIC2]) / 2);
+            level_in += (float)samples[i] * samples[i];
+            level_ref += (float)f[SLOT_REF] * f[SLOT_REF];
+            level_mic1 += (float)f[SLOT_MIC1] * f[SLOT_MIC1];
+            level_mic2 += (float)f[SLOT_MIC2] * f[SLOT_MIC2];
 #if AUDIO_DEBUG
             block_in += (float)samples[i] * samples[i];
             block_ref += (float)f[SLOT_REF] * f[SLOT_REF];
@@ -922,6 +958,20 @@ static void audio_task(void *arg)
 #if AUDIO_DEBUG
         aec_us += esp_timer_get_time() - t0;    // mixing, halving, cancelling and doubling
 #endif
+        float level_out = 0;
+        for (size_t k = 0; k < n; k++)
+        {
+            level_out += (float)up[k] * up[k];
+        }
+        taskENTER_CRITICAL(&levels_lock);
+        levels_sum[0] += level_in;
+        levels_sum[1] += level_ref;
+        levels_sum[2] += level_out;
+        levels_sum[3] += level_mic1;
+        levels_sum[4] += level_mic2;
+        levels_n += frames;
+        levels_n_out += n;
+        taskEXIT_CRITICAL(&levels_lock);
         deliver(up, n);
 #endif
 #if AUDIO_DEBUG

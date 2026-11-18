@@ -430,6 +430,12 @@ static void speaker_task(void *arg)
     }
 }
 
+bool rcat_hal_audio_levels(rcat_hal_audio_levels_t *levels)
+{
+    (void)levels;
+    return false;   // no speaker signal to measure against
+}
+
 bool rcat_hal_audio_out_start(rcat_hal_audio_fill_cb_t cb, void *user_data)
 {
     if (spk_channel != NULL)

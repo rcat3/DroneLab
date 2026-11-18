@@ -29,6 +29,12 @@ The board's **BOOT** button switches *Play on speaker* off and on, to stop feedb
 
 *Play on speaker* is always off at startup, in case it feeds back.  The speaker in the board's housing faces away from the mask, but some of it still reaches the microphones.  The board cancels most of that, because its audio chip hears what the speaker is playing (see its [board notes](../hardware/waveshare_esp32s3_touch_amoled_1_75.md#board-notes)), so it can go much louder before it feeds back.  The rest depends on the plasticine sealing the speaker off inside the housing (see [the speaker model's assembly](../build/speaker-housing.md#3-put-it-together)): if it feeds back at low volume, check that first.
 
+## Seal Test
+
+The *Seal Test* page, the last in the Voice feature, checks how well the housing seals the speaker off from the microphones.  It listens to the room, plays a hiss through the speaker and measures how much of it the microphones hear (the leak) and how much is left after echo cancelling, then beeps and listens to you say "aaah" to check the two microphones hear you equally.  Each is graded *good*, *fair* or *check* against the first two speaker models built, with advice on what to check.  See [The Seal Test](../build/seal-test.md) for what each result means and what to check.
+
+The remote's API can start it too, with `POST /api/seal?start=1` (`start=0` stops it), and `/api/state` has its progress and result under `seal`.  The board's serial log prints each result in full.
+
 The voice effects need the [speaker model](../build/speaker-housing.md): the low-profile model has no speaker.  The [other boards](../other-boards.md) the firmware runs on don't have them.
 
 The presets are the same as the effects in `tools/voice_monitor.py`, so they can be tried and tuned on a computer first.  The pitch-following presets add about 15-20 ms of delay, the others less.

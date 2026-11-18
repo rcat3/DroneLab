@@ -1,6 +1,7 @@
 /*
  * Voice feature (boards with a microphone): the voice effect and its volume,
- * and the voice lab (boards with WiFi).
+ * the seal test (boards that can measure the speaker's echo), and the voice
+ * lab (boards with WiFi).
  *
  * The voice ring's settings page is the last of the Visualizer's pages, as
  * the ring is a picture of the voice too (feature_voice_add_ring_page). It
@@ -10,10 +11,12 @@
  * The voice ring itself is drawn over the images feature, and over its own
  * settings page so the color can be previewed.
  */
+#include <stdio.h>
 #include <string.h>
 
 #include "app/settings.h"
 #include "audio/audio_level.h"
+#include "audio/seal_test.h"
 #include "audio/voice_fx.h"
 #include "audio/voice_lab.h"
 #include "hal.h"
@@ -268,6 +271,159 @@ static void button_timer_cb(lv_timer_t *t)
     }
 }
 
+/* ----- Seal test ----- */
+
+static lv_obj_t *seal_page;
+static lv_obj_t *seal_status_label;
+static lv_obj_t *seal_big_label;
+static lv_obj_t *seal_button_label;
+
+static void seal_show(seal_phase_t phase, int seconds_left)
+{
+    switch (phase)
+    {
+    // While it runs, big and short, to read in a mirror with the mask on
+    case SEAL_QUIET:
+    case SEAL_NOISE:
+        lv_label_set_text(seal_big_label, "Quiet");
+        lv_obj_set_style_text_color(seal_big_label, lv_color_white(), 0);
+        lv_label_set_text_fmt(seal_status_label, "%d", seconds_left);
+        break;
+    case SEAL_VOICE:
+        lv_label_set_text(seal_big_label, "Say\n\"aaah\"");
+        lv_obj_set_style_text_color(seal_big_label, lv_palette_main(LV_PALETTE_PINK), 0);
+        lv_label_set_text_fmt(seal_status_label, "%d", seconds_left);
+        break;
+    case SEAL_DONE:
+    {
+        const seal_result_t *r = seal_test_result();
+        char balance[24];
+        if (r->balance == SEAL_SKIPPED)
+        {
+            snprintf(balance, sizeof(balance), "-");
+        }
+        else
+        {
+            snprintf(balance, sizeof(balance), "%+.0f dB %s", r->balance_db, seal_test_grade_name(r->balance));
+        }
+        if (r->leak == SEAL_SKIPPED)
+        {
+            lv_label_set_text(seal_status_label, r->advice);
+        }
+        else
+        {
+            // LVGL's own formatting has no floats
+            char text[200];
+            snprintf(text, sizeof(text), "Leak %+.0f dB %s\nEcho %+.0f dB %s\nMics %s\n\n%s", r->leak_db,
+                     seal_test_grade_name(r->leak), r->cancelled_db, seal_test_grade_name(r->cancelled), balance,
+                     r->advice);
+            lv_label_set_text(seal_status_label, text);
+        }
+        break;
+    }
+    default:
+        lv_label_set_text(seal_status_label, "Checks the speaker is\nsealed off from the\nmicrophones. Put the\nmask somewhere quiet.");
+        break;
+    }
+    bool running = phase != SEAL_IDLE && phase != SEAL_DONE;
+    lv_label_set_text(seal_button_label, running ? "Stop" : "Start");
+    // While it runs, the countdown's as big as the instruction above it
+    if (running)
+    {
+        lv_obj_set_style_text_font(seal_status_label, lv_obj_get_style_text_font(seal_big_label, 0), 0);
+    }
+    else
+    {
+        lv_obj_remove_local_style_prop(seal_status_label, LV_STYLE_TEXT_FONT, 0);
+    }
+    if (running)
+    {
+        lv_obj_remove_flag(seal_big_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_align(seal_status_label, LV_ALIGN_CENTER, 0, ui_px(40));
+    }
+    else
+    {
+        lv_obj_add_flag(seal_big_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_align(seal_status_label, LV_ALIGN_CENTER, 0, ui_px(-10));
+    }
+}
+
+/* Runs the test, however it was started (here, or by the phone remote) */
+static void seal_timer_cb(lv_timer_t *t)
+{
+    static seal_phase_t shown = SEAL_IDLE;
+    int left;
+    seal_phase_t phase = seal_test_tick(&left);
+    if (phase == shown && (phase == SEAL_DONE || phase == SEAL_IDLE))
+    {
+        return;
+    }
+    if (phase == SEAL_DONE || phase == SEAL_IDLE)
+    {
+        sync_timer_cb(NULL);    // the speaker switch is back as it was
+    }
+    else if (shown == SEAL_IDLE || shown == SEAL_DONE)
+    {
+        ui_show_page(seal_page);    // started by the phone remote: show it
+    }
+    shown = phase;
+    seal_show(phase, left);
+}
+
+static void seal_button_event_cb(lv_event_t *e)
+{
+    seal_phase_t phase = seal_test_phase();
+    if (phase == SEAL_IDLE || phase == SEAL_DONE)
+    {
+        seal_test_start();
+    }
+    else
+    {
+        seal_test_cancel();
+        sync_timer_cb(NULL);
+    }
+    seal_show(seal_test_phase(), seal_test_seconds_left());
+}
+
+static void add_seal_page(ui_feature_t *feature)
+{
+    lv_obj_t *page = ui_feature_add_page(feature, "Seal Test", false);
+    seal_page = page;
+
+    lv_obj_t *title = lv_label_create(page);
+    lv_label_set_text(title, "Seal Test");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(32));
+
+    seal_status_label = lv_label_create(page);
+    lv_label_set_long_mode(seal_status_label, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_width(seal_status_label, ui_px(190));
+    lv_obj_set_style_text_align(seal_status_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(seal_status_label, LV_ALIGN_CENTER, 0, ui_px(-10));
+
+    // The instruction while it runs, as big as the board has
+    seal_big_label = lv_label_create(page);
+    lv_obj_set_style_text_align(seal_big_label, LV_TEXT_ALIGN_CENTER, 0);
+#if LV_FONT_MONTSERRAT_48
+    if (ui_px(240) >= 360)
+    {
+        lv_obj_set_style_text_font(seal_big_label, &lv_font_montserrat_48, 0);
+    }
+#endif
+    lv_obj_align(seal_big_label, LV_ALIGN_CENTER, 0, ui_px(-12));
+    lv_obj_add_flag(seal_big_label, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t *button = lv_button_create(page);
+    lv_obj_set_size(button, ui_px(120), ui_px(38));
+    lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
+    lv_obj_align(button, LV_ALIGN_BOTTOM_MID, 0, ui_px(-26));
+    lv_obj_add_event_cb(button, seal_button_event_cb, LV_EVENT_CLICKED, NULL);
+    seal_button_label = lv_label_create(button);
+    lv_obj_center(seal_button_label);
+
+    lv_timer_create(seal_timer_cb, 1000, NULL);
+    seal_show(SEAL_IDLE, 0);
+}
+
 /* ----- Voice lab ----- */
 
 static void lab_timer_cb(lv_timer_t *t)
@@ -380,6 +536,10 @@ static bool build(ui_feature_t *feature)
         any = true;
         add_effect_page(feature);
         add_volume_page(feature);
+        if (seal_test_available())
+        {
+            add_seal_page(feature);
+        }
         lv_timer_create(button_timer_cb, BUTTON_MS, NULL);
     }
     lv_timer_create(sync_timer_cb, SYNC_MS, NULL);

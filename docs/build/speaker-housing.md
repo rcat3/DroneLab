@@ -129,4 +129,4 @@ The thread screws into a metal adapter in the mask, which itself screws into the
 
 ## Next
 
-[Install the firmware](../building-firmware.md), if you haven't already, then [set it up](first-start.md).
+[Install the firmware](../building-firmware.md), if you haven't already, then [set it up](first-start.md).  Its [Seal Test](seal-test.md) checks the plasticine and foam went in well.

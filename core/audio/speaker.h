@@ -16,6 +16,11 @@ bool speaker_start(void);
  * task. */
 void speaker_set_muted(bool muted);
 
+/* Play a steady test noise in place of everything else, or stop it. The
+ * seal test (seal_test.h) plays it to hear how much of the speaker reaches
+ * the microphones. Call it from any task. */
+void speaker_set_test_noise(bool on);
+
 /* A short beep, for lining recordings up with video (see voice_lab.h). It
  * plays over whatever the speaker is playing, after SPEAKER_BEEP_LEAD_MS of
  * silence so the amplifier is on in time. Call it from any task. */

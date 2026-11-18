@@ -17,6 +17,7 @@ static bool beeping;                    // the rest only by the speaker's task
 static uint32_t beep_pos;               // samples into the beep, lead included
 static uint32_t beep_rate;
 static volatile bool muted;             // set by any task
+static volatile bool test_noise;        // set by any task
 static float mute_gain = 1.0f;          // by the speaker's task: 1 playing, 0 silent
 
 #define MUTE_FADE_MS    10
@@ -91,10 +92,48 @@ static size_t mix_beep(int16_t *frames, size_t count, size_t max_frames, uint32_
     return count;
 }
 
+/* The seal test's noise: pink, like speech and music have more low than high,
+ * with the lows the small speaker can't play taken out, at a steady level.
+ * Pink from white by Paul Kellet's filter, white from a xorshift. */
+#define TEST_NOISE_RATE     32000
+#define TEST_NOISE_LEVEL    0.1f    // RMS, of full scale: -20 dBFS
+#define TEST_NOISE_HP_HZ    200.0f
+
+static size_t fill_test_noise(int16_t *frames, size_t max_frames, uint32_t *sample_rate)
+{
+    static uint32_t seed = 0x2545F491;
+    static float b0, b1, b2, hp_in, hp_out;
+    const float hp = 1.0f / (1.0f + 2.0f * (float)M_PI * TEST_NOISE_HP_HZ / TEST_NOISE_RATE);
+    *sample_rate = TEST_NOISE_RATE;
+    for (size_t i = 0; i < max_frames; i++)
+    {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        float white = (float)(int32_t)seed / 2147483648.0f;      // -1 to 1, RMS 0.58
+        b0 = 0.99765f * b0 + white * 0.0990f;
+        b1 = 0.96300f * b1 + white * 0.2965f;
+        b2 = 0.57000f * b2 + white * 1.0526f;
+        float pink = b0 + b1 + b2 + white * 0.1848f;
+        // A one-pole high-pass
+        hp_out = hp * (hp_out + pink - hp_in);
+        hp_in = pink;
+        float v = hp_out * (TEST_NOISE_LEVEL / 1.19f) * 32767.0f;     // the filtered noise has an RMS of 1.19
+        int16_t s = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+        frames[2 * i] = s;
+        frames[2 * i + 1] = s;
+    }
+    return max_frames;
+}
+
 static size_t fill_cb(int16_t *frames, size_t max_frames, uint32_t *sample_rate, void *user_data)
 {
     size_t count;
-    if (voice_fx_speaker_on())
+    if (test_noise)
+    {
+        count = fill_test_noise(frames, max_frames, sample_rate);
+    }
+    else if (voice_fx_speaker_on())
     {
         count = voice_fx_speaker_fill(frames, max_frames, sample_rate);
     }
@@ -123,6 +162,14 @@ bool speaker_start(void)
 void speaker_set_muted(bool m)
 {
     muted = m;
+}
+
+void speaker_set_test_noise(bool on)
+{
+    if (speaker_start())
+    {
+        test_noise = on;
+    }
 }
 
 void speaker_beep(void)

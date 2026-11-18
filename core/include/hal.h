@@ -121,6 +121,24 @@ typedef size_t (*rcat_hal_audio_fill_cb_t)(int16_t *frames, size_t max_frames, u
  * has no speaker. */
 bool rcat_hal_audio_out_start(rcat_hal_audio_fill_cb_t cb, void *user_data);
 
+/* Sound levels, for the seal test (see core/audio/seal_test.h): each is the
+ * mean square of the samples since the last call, as a fraction of full scale
+ * squared. Only boards that hear the speaker's own signal alongside the
+ * microphones, and cancel its echo, have them. */
+typedef struct
+{
+    float mics;         // the microphones, mixed, before echo cancelling
+    float speaker;      // the speaker's own signal
+    float cancelled;    // the microphones after echo cancelling
+    float mic1;         // each microphone on its own
+    float mic2;
+    uint32_t samples;   // how many went into them: 0 if the microphone isn't running
+} rcat_hal_audio_levels_t;
+
+/* The levels since the last call, which starts the next measurement. Returns
+ * false if the board can't measure them. Call it from the UI loop. */
+bool rcat_hal_audio_levels(rcat_hal_audio_levels_t *levels);
+
 /* Join a WiFi network, and keep rejoining it if the connection drops, until
  * rcat_hal_wifi_disconnect(). Once connected, the core talks to the network
  * with ordinary BSD sockets. Returns false if the board has no WiFi. */

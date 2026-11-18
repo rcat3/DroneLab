@@ -52,6 +52,7 @@
  *   Each request has its own connection ("Connection: close"), which keeps
  *   this simple, and is quick enough on the board's own network.
  */
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -68,6 +69,7 @@
 #include "app/remote.h"
 #include "app/settings.h"
 #include "audio/audio_player.h"
+#include "audio/seal_test.h"
 #include "audio/voice_fx.h"
 #include "audio/voice_lab.h"
 #include "hal.h"
@@ -455,6 +457,19 @@ static void write_state(json_t *j)
     {
         jprintf(j, ",\"voice\":{\"preset\":%u,\"speaker\":%d,\"volume\":%u}", s->voice_effect,
                 voice_fx_speaker_on() ? 1 : 0, s->voice_volume);
+    }
+    if (seal_test_available())
+    {
+        const seal_result_t *r = seal_test_result();
+        jprintf(j, ",\"seal\":{\"phase\":%d,\"left\":%d", (int)seal_test_phase(), seal_test_seconds_left());
+        if (seal_test_phase() == SEAL_DONE)
+        {
+            jprintf(j, ",\"room\":%.1f,\"leak\":%.1f,\"echo\":%.1f,\"mics\":%.1f,\"grades\":[%d,%d,%d],\"advice\":",
+                    r->room_db, r->leak_db, r->cancelled_db, isnan(r->balance_db) ? 0.0f : r->balance_db,
+                    (int)r->leak, (int)r->cancelled, (int)r->balance);
+            jstring(j, r->advice);
+        }
+        jprintf(j, "}");
     }
     if (audio_player_available())
     {
@@ -1007,6 +1022,18 @@ static bool run_command(const char *name, const char *query, const char *body, s
             volume = volume > 100 ? 100 : volume;
             voice_fx_set_volume((uint8_t)volume);
             settings_set_voice_volume((uint8_t)volume);
+        }
+    }
+    else if (strcmp(name, "seal") == 0 && seal_test_available())
+    {
+        // start=1 runs the seal test, start=0 stops it
+        if (query_int(query, "start", -1) == 1)
+        {
+            seal_test_start();
+        }
+        else if (query_int(query, "start", -1) == 0)
+        {
+            seal_test_cancel();
         }
     }
     else if (strcmp(name, "sound") == 0 && audio_player_available())

@@ -342,6 +342,12 @@ bool rcat_hal_audio_out_start(rcat_hal_audio_fill_cb_t cb, void *user_data)
     return false;
 }
 
+bool rcat_hal_audio_levels(rcat_hal_audio_levels_t *levels)
+{
+    (void)levels;
+    return false;   // no speaker signal to measure against
+}
+
 bool rcat_hal_wifi_connect(const char *ssid, const char *password)
 {
     // No WiFi on this board.

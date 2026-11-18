@@ -45,7 +45,19 @@ Screw the unit into the mask, put the mask on (or set it upright on a head form)
 - **Speaker model:** turn the housing on its collar until it's level.
 - **Low-profile model:** it should be level once screwed in.  If it's a little crooked, see `lp_phase_test` in the [design's README](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/README.md#test-prints-1).
 
-## 6. Try the voice effect (speaker model)
+## 6. Test the seal (speaker model)
+
+<a href="seal-test.md"><img src="../images/screens/seal_test_result.png" width="180" align="right" alt="The Seal Test's results"></a>
+
+The speaker and the microphones share one small housing, so how well the plasticine and foam seal them off decides how loud the voice effects can go.  The **Seal Test** page, the last in the **Voice** feature, checks it in about 20 seconds.
+
+Screw the unit into the mask, put the mask on, somewhere quiet, and tap **Start**.  Keep quiet and still while the screen says **Quiet**, then after the beep, say **"aaah"** steadily until it finishes.  It shows three results, **Leak**, **Echo** and **Mics**, each *good*, *fair* or *check*, and what to look at if one isn't good.
+
+See [The Seal Test](seal-test.md) for what each result measures, the numbers behind the grades, and what to check for each.
+
+<br clear="right">
+
+## 7. Try the voice effect (speaker model)
 
 <br clear="right">
 
@@ -57,7 +69,7 @@ Swipe to the **Voice** feature, and to the **Voice Effect** page.  Pick a preset
 
 <br clear="right">
 
-## 7. Add your own images and sounds
+## 8. Add your own images and sounds
 
 Format a micro SD card as FAT32 (most come that way), and make these folders on it:
 
@@ -67,11 +79,11 @@ Format a micro SD card as FAT32 (most come that way), and make these folders on 
 
 Put the card in the slot on the left side and restart the unit: it reads the card while the logo shows.
 
-## 8. Pick what it shows at startup
+## 9. Pick what it shows at startup
 
 In Settings, **Startup** picks what's on screen when the unit turns on: any image, a visualizer, the terminal, or the comm status screen.
 
-## 9. Connect your phone (optional)
+## 10. Connect your phone (optional)
 
 [Install the DroneLab app](../installing-the-app.md) on an Android phone, and pair it with the unit, for [comms](../features/comms.md), recording, sending messages and running the unit from the phone.  Without the app, any phone can run it through the unit's [WiFi hotspot](../features/phone-remote.md).
 
@@ -79,4 +91,4 @@ In Settings, **Startup** picks what's on screen when the unit turns on: any imag
 
 - **The picture's shifted, or touches land in the wrong place:** connect it over USB, run `idf.py ... monitor` as in [Installing the Firmware](../building-firmware.md#4-flash-it), and [open an issue](https://github.com/rcat3/DroneLab/issues) with the log.
 - **It restarted by itself:** see [Troubleshooting](../building-firmware.md#troubleshooting).
-- **The voice effect howls at low volume:** check the plasticine seals around the speaker's wire and the battery, and the foam in the microphones' cell (steps 9 to 12 of the [speaker model's assembly](speaker-housing.md#the-chamber)).
+- **The voice effect howls at low volume:** run the [Seal Test](#6-test-the-seal-speaker-model), and check what it points to.
