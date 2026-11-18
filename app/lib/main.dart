@@ -2,21 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'comm/comm_controller.dart';
+import 'comm/release_check.dart';
 import 'ui/control_page.dart';
 import 'ui/firmware_ui.dart';
 import 'ui/hivemind_page.dart';
 import 'ui/people.dart';
 import 'ui/record_page.dart';
+import 'ui/release_banner.dart';
 import 'ui/remote_page.dart';
 import 'ui/status_strip.dart';
 import 'ui/terminal_page.dart';
 import 'ui/theme.dart';
+
+/// Whether a newer release of the app is out (see release_check.dart).
+final releaseCheck = ReleaseCheck();
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterForegroundTask.initCommunicationPort();
   final comm = CommController();
   comm.init();
+  releaseCheck.start();
   runApp(DroneLabApp(comm: comm));
 }
 
@@ -54,6 +60,7 @@ class HomePage extends StatelessWidget {
             body: Column(
               children: [
                 SafeArea(bottom: false, child: StatusStrip(comm: comm)),
+                ReleaseBanner(check: releaseCheck),
                 Expanded(
                   child: MediaQuery.removePadding(
                     context: context,
