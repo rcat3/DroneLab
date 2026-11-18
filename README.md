@@ -73,15 +73,16 @@ The DroneLab display unit screws into the mask's voice port: a glowing 1.75" rou
 ### Also on board
 
 - **Remote operation:** the DroneLab app for Android runs the whole display unit from a phone over Bluetooth.  Change what's displayed on the screen and operate features without having to see the display.  Phones without the app (including iPhones) can run it through the display unit's own WiFi hotspot, in a web browser.  [The app](docs/installing-the-app.md) · [Hotspot remote](docs/features/phone-remote.md)
-- **Sound:** plays WAV, MP3 and FLAC files from the SD card through the speaker.  [Sound](docs/features/sound.md)
-- **Recording:** records voice effect output to the phone or a computer for videos, or feeds it to a video call or streaming software as a microphone.  [Voice Lab](docs/features/voice-lab.md)
-- **All-day battery:** the speaker model runs about 13.5 hours on a charge, or about 9.5 with HiveMind comms on, and charges over USB-C without leaving the mask.
 
 <p align="center">
 <a href="docs/installing-the-app.md"><img src="docs/images/app_hivemind.png" width="270" alt="The DroneLab app's HiveMind tab: the hive on the server and a unit heard directly, each with their avatar, and the talk button"></a>
 &nbsp;
 <a href="docs/installing-the-app.md"><img src="docs/images/app_remote.png" width="270" alt="The DroneLab app's Remote tab, running the display unit's screen over Bluetooth"></a>
 </p>
+
+- **Sound:** plays WAV, MP3 and FLAC files from the SD card through the speaker.  [Sound](docs/features/sound.md)
+- **Recording:** records voice effect output to the phone or a computer for videos, or feeds it to a video call or streaming software as a microphone.  [Voice Lab](docs/features/voice-lab.md)
+- **All-day battery:** the speaker model runs about 13.5 hours on a charge, or about 9.5 with HiveMind comms on, and charges over USB-C without leaving the mask.
 
 See [Features](docs/features/README.md) for everything it does.
 
