@@ -3,7 +3,8 @@
 /// Board to phone, notified on [toPhoneUuid]:
 ///   sound   [0x01][seq LE16][flags][opus]   flags: 1 first, 2 last (no opus)
 ///   status  [0x02][version][mode][flags]([battery])
-///           flags: 1 sending, 2 hears the voice, 4 the talk button is connected, 8 recording
+///           flags: 1 sending, 2 hears the voice, 4 the talk button is connected, 8 recording,
+///           16 someone talking in another direct comms group nearby
 ///           battery: percent, 0x80 while charging, 0xFF not known (commVersion 6)
 ///   recorded [0x0A][seq LE16][flags][opus]  as sound, while recording
 /// Phone to board, written to [fromPhoneUuid]:
@@ -106,8 +107,9 @@ class BoardStatus {
   final bool recording;
   final int? battery;       // percent, null if not known
   final bool charging;
+  final bool otherVoice;    // someone's talking in another direct comms group nearby
   BoardStatus(this.version, this.mode, this.sending, this.hearsVoice, this.buttonConnected,
-      [this.recording = false, this.battery, this.charging = false]);
+      [this.recording = false, this.battery, this.charging = false, this.otherVoice = false]);
 }
 
 /// The board's voice while recording: as [BoardSound], kept apart from it.
@@ -182,7 +184,7 @@ Object? parseBoardMessage(Uint8List data) {
       final mode = data[2] < BoardMode.values.length ? BoardMode.values[data[2]] : BoardMode.pushToTalk;
       final charge = data.length >= 5 && data[4] != 0xFF ? data[4] : null;
       return BoardStatus(data[1], mode, data[3] & 1 != 0, data[3] & 2 != 0, data[3] & 4 != 0, data[3] & 8 != 0,
-          charge == null ? null : charge & 0x7F, charge != null && charge & 0x80 != 0);
+          charge == null ? null : charge & 0x7F, charge != null && charge & 0x80 != 0, data[3] & 16 != 0);
     case _msgRecord:
       return RecordedSound(BoardSound(data[1] | (data[2] << 8), data[3] & 1 != 0, data[3] & 2 != 0,
           Uint8List.sublistView(data, 4)));

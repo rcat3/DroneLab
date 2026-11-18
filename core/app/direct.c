@@ -752,6 +752,33 @@ static void deliver(uint32_t id, uint16_t seq, uint8_t flags, const uint8_t *opu
     }
 }
 
+/* Another group's broadcasts, to tell when someone's talking in it: voice
+ * comes several to the half second, where the hellos are seconds apart. */
+#define OTHER_WINDOW_MS     500
+#define OTHER_VOICE_COUNT   4
+#define OTHER_VOICE_MS      600         // talking for this long after
+static uint32_t other_window_ms, other_count;
+static volatile uint32_t other_voice_ms;
+
+static void heard_other(uint32_t now)
+{
+    if (now - other_window_ms > OTHER_WINDOW_MS)
+    {
+        other_window_ms = now;
+        other_count = 0;
+    }
+    if (++other_count >= OTHER_VOICE_COUNT)
+    {
+        other_voice_ms = now | 1;   // never 0
+    }
+}
+
+bool direct_other_voice(void)
+{
+    uint32_t at = other_voice_ms;
+    return running && at != 0 && rcat_hal_millis() - at < OTHER_VOICE_MS;
+}
+
 static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
 {
     DBG(dbg_heard++);
@@ -764,6 +791,10 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
         memcmp(msg + 2, group_id, 4) != 0)
     {
         DBG(dbg_other++);
+        if (len >= HEADER_LEN && msg[0] == MAGIC && msg[1] == DIRECT_VERSION)
+        {
+            heard_other(now);
+        }
         return;     // not ours: another version, or another group
     }
     uint32_t id, c;
@@ -1409,6 +1440,11 @@ void direct_group_id(uint8_t out[4])
 int direct_groups(direct_group_t *out, int max)
 {
     return 0;
+}
+
+bool direct_other_voice(void)
+{
+    return false;
 }
 
 int direct_peers(direct_peer_t *out, int max)

@@ -98,6 +98,7 @@
 #define STATUS_HEARD        0x02
 #define STATUS_BUTTON       0x04
 #define STATUS_RECORDING    0x08
+#define STATUS_OTHER_VOICE  0x10    // someone's talking in another direct comms group nearby
 #define MSG_RECORD          0x0A    // both ways: start or stop recording, and what's recorded
 #define RECORD_SPEAKER      0x01    // the speaker's voice effect, not the comm voice
 #define RECORD_BEEP         0x02    // with a sync beep to start
@@ -313,7 +314,8 @@ static void voice_cb(const int16_t *samples, size_t count, void *user_data)
 static uint8_t status_flags(void)
 {
     return (sending ? STATUS_SENDING : 0) | (voice_heard ? STATUS_HEARD : 0) | (recording ? STATUS_RECORDING : 0) |
-           (talk_button_state() == TALK_BUTTON_CONNECTED ? STATUS_BUTTON : 0);
+           (talk_button_state() == TALK_BUTTON_CONNECTED ? STATUS_BUTTON : 0) |
+           (direct_other_voice() ? STATUS_OTHER_VOICE : 0);
 }
 
 static bool send_retrying(const uint8_t *data, size_t len)
@@ -397,7 +399,7 @@ static void encoder_task(void *arg)
     uint16_t seq = 0;
     bool first = false;
     bool tx_record = false;     // the transmission going out is a recording
-    uint8_t last_status = 0xFF;
+    uint16_t last_status = 0xFFFF;
     uint32_t status_ms = 0;
     int16_t pcm[FRAME];
     uint8_t packet[HEADER_BYTES + MAX_OPUS_BYTES];
@@ -421,7 +423,7 @@ static void encoder_task(void *arg)
         }
         if (phone && !connected)
         {
-            last_status = 0xFF;     // tell the new phone how things are
+            last_status = 0xFFFF;     // tell the new phone how things are
         }
         connected = phone;
 
@@ -532,7 +534,7 @@ static void encoder_task(void *arg)
 
         // Status, when it changes and every few seconds
         status_ms += TASK_BUSY_MS;
-        uint8_t now_status = ((uint8_t)mode << 4) | status_flags();
+        uint16_t now_status = (uint16_t)((uint8_t)mode << 8) | status_flags();
         if (phone && (now_status != last_status || status_ms >= STATUS_EVERY_MS))
         {
             last_status = now_status;

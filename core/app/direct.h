@@ -105,6 +105,10 @@ bool direct_start(void);
 void direct_stop(void);
 bool direct_running(void);
 
+/* Whether someone's talking in another group on this channel just now: their
+ * voice is heard on the air, though it can't be listened to. From any task. */
+bool direct_other_voice(void);
+
 /* The group: its key (NULL for the open group), its name to show, this
  * board's name in it ("" for the board's own, comm_name()), and its radio:
  * channel 1, 6 or 11, and Long Range (rcat_hal_direct_set_radio). The open

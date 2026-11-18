@@ -19,7 +19,9 @@
  *                  data, and only says it's over.
  *     0x02 status: 02, version (COMM_VERSION), mode (comm_mode_t), flags
  *                  (bit 0 sending, bit 1 voice heard, bit 2 the talk button
- *                  is connected, see talk_button.h; bit 3 recording), the
+ *                  is connected, see talk_button.h; bit 3 recording; bit 4
+ *                  someone talking in another direct comms group nearby,
+ *                  from COMM_VERSION 6), the
  *                  battery (its percent, bit 7 set while charging; 0xFF
  *                  not known; from COMM_VERSION 6), when the phone turns
  *                  notifications on, when any of it changes, and every few
