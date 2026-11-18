@@ -31,14 +31,9 @@ flutter build apk --release
 
 The Mumble test logs two clients in to a real server and sends voice from one to the other.
 
-For a release, put the release's firmware in the app first, so it can keep boards up to date with it:
+For a release, the app carries the release's firmware, so it can keep boards up to date with it: `tools/release/bundle_firmware.sh` puts it in `assets/firmware/`.  It has to be built from the release's tag, so follow the [release checklist](../docs/development/README.md#release-checklist), which has the order and the names the APKs need.
 
-```
-tools/release/build_firmware.sh          # from the repo's root, with ESP-IDF's export.sh run
-tools/release/bundle_firmware.sh         # copies it to assets/firmware/
-```
-
-An app built without it works the same, but doesn't offer to update boards.
+An app built without it works the same, but doesn't offer to update boards.  To try updates out with a development build, `tools/release/bundle_firmware.sh --dev build-s3-175` bundles any build (a version later than the board's, to be offered).
 
 The APK is in `build/app/outputs/flutter-apk/app-release.apk`.  For handing the app out, `flutter build apk --release --split-per-abi` makes one smaller APK per CPU type instead; most phones want the arm64-v8a one.
 

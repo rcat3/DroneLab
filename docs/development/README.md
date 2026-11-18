@@ -6,7 +6,7 @@ This is for working on the firmware itself: how it's put together, and how to ad
 - [The hardware abstraction layer](hardware-abstraction.md): how the application reaches the hardware, and how to give it something new.
 - [Adding a board](adding-a-board.md): supporting another display, in the firmware and with a housing.
 - [Contributing](contributing.md): sending a change as a pull request, and how contributions are licensed.
-- [Releases](#releases): how the firmware, the web installer and the printable parts are published.
+- [Releases](#releases): how the firmware, the web installer and the printable parts are published, and the [checklist](#release-checklist) for making one.
 
 ## How it's put together
 
@@ -109,6 +109,32 @@ The web installer is [ESP Web Tools](https://esphome.github.io/esp-web-tools/), 
 The printable parts are rendered by the [Models workflow](../../.github/workflows/models.yml), also when the release is published: it runs `tools/release/build_models.sh` with Ubuntu's OpenSCAD, and attaches `DroneLab-speaker-model-stl.zip` and `DroneLab-low-profile-model-stl.zip`.  Each has the housing's parts with the designs' default settings, its travel case in `travel_case/`, the test prints in `tests/`, and a `README.txt` with the materials and license.  It takes about 10 minutes.  Run by hand from the Actions tab, it leaves the zips as the run's artifact, or attaches them to the release whose tag you give it, to add them to an older release.  The docs link to the zips by name through `releases/latest/download/`, so keep the names.
 
 To try the installer locally, run `tools/release/build_firmware.sh` and serve `dist/flasher` over `http://localhost` (`python3 -m http.server -d dist/flasher`), which browsers allow to reach USB like https.
+
+### Release checklist
+
+The app carries the release's firmware, to keep boards up to date with it, so it's built after the release is tagged, from that tag, and attached when the release is published.  Built in another order, its firmware says a version like `v0.9.6-3-gabc123-dirty`, and the app takes boards on the real release for newer than its own; `tools/release/bundle_firmware.sh` refuses such a build.  With version `X.Y.Z`, and the next version code `N` (one more than the last release's):
+
+1. **Start from `master` with everything in it, pushed, and nothing changed** (`git status` shows nothing modified).
+2. **The app's version:** set `version: X.Y.Z+N` in `app/pubspec.yaml`, commit it as "App version X.Y.Z", and push.
+3. **Tag it:** `git tag -a vX.Y.Z -m "DroneLab X.Y.Z (test build)"`, then `git push origin vX.Y.Z`.  Push the tag before making the release, so it's made from this commit.
+4. **The firmware for the app**, in a terminal where ESP-IDF's `export.sh` has been run:
+   ```
+   tools/release/build_firmware.sh
+   tools/release/bundle_firmware.sh
+   ```
+   The second should say `Bundled vX.Y.Z`.
+5. **The APKs**, in `app/`, with the release key in place (see [`app/README.md`](../../app/README.md)):
+   ```
+   flutter build apk --release --split-per-abi
+   ```
+   Copy `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` to `DroneLab.apk` and `app-armeabi-v7a-release.apk` to `DroneLab-armv7.apk`.  Keep those names: the app's QR code and the docs link to `releases/latest/download/DroneLab.apk`.  Always build with `--split-per-abi`: its version codes (`N` plus 1000 or 2000) are what installed copies have, and a plain build's are lower, so it won't install over them.
+6. **Publish** it as a full release, not a pre-release or a draft, so `releases/latest` finds it, with the notes in a file:
+   ```
+   gh release create vX.Y.Z --title "DroneLab X.Y.Z (test build)" --notes-file notes.md DroneLab.apk DroneLab-armv7.apk
+   ```
+7. **Check** the [Firmware](../../.github/workflows/firmware.yml) and [Models](../../.github/workflows/models.yml) workflows pass (about 10 minutes): the release ends up with five files, the two APKs, `DroneLab-firmware-1.75.bin` and the two model zips, and the web installer shows `vX.Y.Z`.
+
+The workflow builds the release's firmware again, for the web installer and the release, so it's not byte for byte the app's copy.  That doesn't matter: both are built from the same tag, and boards are compared by version.
 
 ## Threads
 
