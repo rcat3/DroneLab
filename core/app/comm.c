@@ -153,6 +153,7 @@ static uint8_t answer_id;
 static bool answering;
 static uint32_t last_state_hash;    // of the last /api/state sent, to say "unchanged"
 static char app_version[24];        // what the app said it is
+static char app_os[12];             // and what it runs on: "Android", "iPhone"
 static comm_server_t server_state;  // what the app says about the server
 static bool server_udp;
 static int server_others;
@@ -751,6 +752,11 @@ const char *comm_app_version(void)
     return app_version;
 }
 
+const char *comm_app_os(void)
+{
+    return app_os;
+}
+
 comm_server_t comm_server(void)
 {
     return server_state;
@@ -861,7 +867,12 @@ static void answer_request(void)
                 n = n < sizeof(app_version) - 1 ? n : sizeof(app_version) - 1;
                 memcpy(app_version, v + 4, n);
                 app_version[n] = '\0';
-                printf("comm: app version %s\n", app_version);
+                const char *os = strstr(target, "os=");
+                n = os == NULL ? 0 : strcspn(os + 3, "&");
+                n = n < sizeof(app_os) - 1 ? n : sizeof(app_os) - 1;
+                memcpy(app_os, os == NULL ? "" : os + 3, n);
+                app_os[n] = '\0';
+                printf("comm: app version %s %s\n", app_version, app_os);
             }
             len = snprintf(answer + 4, ANSWER_MAX - 4,
                            "{\"firmware\":\"%s\",\"built\":\"%s\",\"comm\":%d,\"avatar\":%d,\"avatars\":%d}",
@@ -1107,6 +1118,7 @@ static void forget_phone(void)
     {
         set_recording(false, false, false);     // nor recording
     }
+    app_os[0] = '\0';
     app_version[0] = '\0';
     answering = false;
     request_open = false;
@@ -1197,14 +1209,23 @@ static void send_direct_peers(uint32_t now_ms)
     int n = direct_peers(peers, DIRECT_PEERS_MAX);
     for (int i = 0; i < n; i++)
     {
-        uint8_t msg[7 + DIRECT_NAME_MAX];
-        size_t len = strlen(peers[i].name);
+        uint8_t msg[7 + 2 * DIRECT_VERSION_MAX + DIRECT_NAME_MAX];
         msg[0] = MSG_DIRECT_PEER;
         memcpy(msg + 1, &peers[i].id, 4);
         msg[5] = (uint8_t)peers[i].rssi;
-        msg[6] = peers[i].talking ? 1 : 0;
-        memcpy(msg + 7, peers[i].name, len);
-        rcat_hal_ble_peer_send(msg, 7 + len);
+        msg[6] = (peers[i].talking ? 1 : 0) | 2;
+        size_t at = 7;
+        const char *versions[2] = { peers[i].firmware, peers[i].app };
+        for (int k = 0; k < 2; k++)
+        {
+            size_t v = strlen(versions[k]);
+            msg[at++] = (uint8_t)v;
+            memcpy(msg + at, versions[k], v);
+            at += v;
+        }
+        size_t len = strlen(peers[i].name);
+        memcpy(msg + at, peers[i].name, len);
+        rcat_hal_ble_peer_send(msg, at + len);
     }
     direct_group_t groups[DIRECT_GROUPS_MAX];
     n = direct_groups(groups, DIRECT_GROUPS_MAX);
@@ -1478,6 +1499,11 @@ const char *comm_name(void)
 }
 
 const char *comm_app_version(void)
+{
+    return "";
+}
+
+const char *comm_app_os(void)
 {
     return "";
 }

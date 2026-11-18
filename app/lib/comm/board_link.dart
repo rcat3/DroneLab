@@ -5,6 +5,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -209,7 +210,7 @@ class BoardLink extends ChangeNotifier {
       status = msg;
       if (old == null && msg.version >= commVersionRemote) {
         // Paired and talking: swap versions
-        request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}').then((a) {
+        request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}&os=${Platform.isIOS ? 'iPhone' : 'Android'}').then((a) {
           if (a.status == 200) {
             final v = jsonDecode(a.body) as Map<String, dynamic>;
             firmware = v['firmware'] as String?;

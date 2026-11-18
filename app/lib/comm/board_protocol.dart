@@ -23,7 +23,8 @@
 ///           flags: 1 it's all there, 2 the right size
 ///   direct sound [0x07][sender LE32][seq LE16][flags][opus]
 ///           another board's voice, heard over direct comms (core/app/direct.h)
-///   direct peer [0x08][id LE32][rssi][flags: 1 talking][name]
+///   direct peer [0x08][id LE32][rssi][flags: 1 talking, 2 versions follow]
+///           ([firmware length][firmware][app length][app])[name]
 ///           a board heard over direct comms, every couple of seconds
 ///   direct group [0x09][group id, 4 bytes][rssi][boards][channel][flags: 1 Long Range][name]
 ///           a group heard about over direct comms, from its beacons
@@ -53,6 +54,7 @@ const fromPhoneUuid = 'efe06e1d-a7ff-4823-bfbb-b3a82ea05849';
 const commVersion = 3;
 const commVersionCommands = 4;
 const commVersionRemote = 2;
+const commVersionPeerFirmware = 5;
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -128,7 +130,9 @@ class DirectPeer {
   final int rssi;
   final bool talking;
   final String name;
-  DirectPeer(this.id, this.rssi, this.talking, this.name);
+  final String firmware;    // its version, '' if it didn't say
+  final String app;         // its phone's app's version, '' for none
+  DirectPeer(this.id, this.rssi, this.talking, this.name, [this.firmware = '', this.app = '']);
 }
 
 class DirectGroupHeard {
@@ -170,8 +174,14 @@ Object? parseBoardMessage(Uint8List data) {
         Uint8List.sublistView(data, 8));
   }
   if (data[0] == _msgDirectPeer && data.length >= 7) {
+    var at = 7;
+    final versions = ['', ''];
+    for (var i = 0; i < 2 && data[6] & 2 != 0 && at < data.length && at + 1 + data[at] <= data.length; i++) {
+      versions[i] = utf8.decode(data.sublist(at + 1, at + 1 + data[at]), allowMalformed: true);
+      at += 1 + data[at];
+    }
     return DirectPeer(le32(1), data[5].toSigned(8), data[6] & 1 != 0,
-        utf8.decode(data.sublist(7), allowMalformed: true));
+        utf8.decode(data.sublist(at), allowMalformed: true), versions[0], versions[1]);
   }
   if (data[0] == _msgDirectGroup && data.length >= 9) {
     final id = data.sublist(1, 5).map((b) => b.toRadixString(16).padLeft(2, '0')).join();

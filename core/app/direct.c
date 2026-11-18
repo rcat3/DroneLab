@@ -101,6 +101,8 @@ typedef struct
     uint16_t voice_seq;         // the last voice packet's
     bool voice_seen;
     char name[DIRECT_NAME_MAX];
+    char firmware[DIRECT_VERSION_MAX];
+    char app[DIRECT_VERSION_MAX];
     int8_t rssi;
     bool used;
     uint8_t avatar_version;     // of the avatar coming in, 0 for none
@@ -382,7 +384,7 @@ static bool avatar_ask(uint8_t out[ASK_LEN]);
 /* Who we are, and, if we're missing pieces of a board's avatar, which. */
 static void send_hello(void)
 {
-    uint8_t plain[2 + ASK_LEN + DIRECT_NAME_MAX];
+    uint8_t plain[2 + ASK_LEN + 2 * (1 + DIRECT_VERSION_MAX) + DIRECT_NAME_MAX];
     plain[0] = TYPE_HELLO;
     plain[1] = talking ? HELLO_TALKING : 0;
     size_t at = 2;
@@ -390,6 +392,17 @@ static void send_hello(void)
     {
         plain[1] |= HELLO_ASKS;
         at += ASK_LEN;
+    }
+    char app[DIRECT_VERSION_MAX];
+    snprintf(app, sizeof(app), comm_app_os()[0] ? "%s %s" : "%s%s", comm_app_os(), comm_app_version());
+    const char *versions[2] = { rcat_hal_firmware_version(), app };
+    for (int i = 0; i < 2; i++)
+    {
+        size_t v = strlen(versions[i]);
+        v = v < DIRECT_VERSION_MAX - 1 ? v : DIRECT_VERSION_MAX - 1;
+        plain[at++] = (uint8_t)v;
+        memcpy(plain + at, versions[i], v);
+        at += v;
     }
     size_t n = strlen(own_name);
     memcpy(plain + at, own_name, n);
@@ -794,6 +807,14 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
             {
                 heard_ask(plain + 2);
                 at += ASK_LEN;
+            }
+            char *versions[2] = { p->firmware, p->app };
+            for (int i = 0; i < 2 && at < plain_len && at + 1 + plain[at] <= plain_len; i++)
+            {
+                size_t v = plain[at] < DIRECT_VERSION_MAX - 1 ? plain[at] : DIRECT_VERSION_MAX - 1;
+                memcpy(versions[i], plain + at + 1, v);
+                versions[i][v] = '\0';
+                at += 1 + plain[at];
             }
             size_t n = plain_len - at < DIRECT_NAME_MAX - 1 ? plain_len - at : DIRECT_NAME_MAX - 1;
             memcpy(p->name, plain + at, n);
@@ -1286,6 +1307,8 @@ int direct_peers(direct_peer_t *out, int max)
         direct_peer_t p = { .id = copy[i].id, .rssi = copy[i].rssi,
                             .talking = copy[i].voice_ms != 0 && now - copy[i].voice_ms < TALKING_MS };
         memcpy(p.name, copy[i].name, sizeof(p.name));
+        memcpy(p.firmware, copy[i].firmware, sizeof(p.firmware));
+        memcpy(p.app, copy[i].app, sizeof(p.app));
         // Strongest first
         int at = n++;
         while (at > 0 && out[at - 1].rssi < p.rssi)

@@ -96,7 +96,9 @@ class NearbyBoard {
   int rssi;
   bool talking;
   int seenMs;
-  NearbyBoard(this.id, this.name, this.rssi, this.talking, this.seenMs);
+  String firmware;    // its version, '' if not known
+  String app;         // its phone's app's version, '' for none or not known
+  NearbyBoard(this.id, this.name, this.rssi, this.talking, this.seenMs, [this.firmware = '', this.app = '']);
 }
 
 class CommController extends ChangeNotifier {
@@ -420,10 +422,12 @@ class CommController extends ChangeNotifier {
     final now = DateTime.now().millisecondsSinceEpoch;
     final b = nearby[p.id];
     if (b == null) {
-      nearby[p.id] = NearbyBoard(p.id, p.name, p.rssi, p.talking, now);
+      nearby[p.id] = NearbyBoard(p.id, p.name, p.rssi, p.talking, now, p.firmware, p.app);
     } else {
       b
         ..name = p.name
+        ..firmware = p.firmware.isNotEmpty ? p.firmware : b.firmware
+        ..app = p.app
         ..rssi = p.rssi
         ..talking = p.talking
         ..seenMs = now;

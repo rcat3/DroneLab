@@ -76,8 +76,11 @@
  *                  (16), flags, then the Opus packet: another board's voice,
  *                  heard over direct comms (see direct.h), as 0x01's.
  *     0x08 direct peer: 08, a board's id (32), how strong it's heard (dBm,
- *                  signed), flags (bit 0 talking), then its name: each board
- *                  heard over direct comms, every couple of seconds.
+ *                  signed), flags (bit 0 talking, bit 1 versions follow),
+ *                  then, with bit 1, its firmware's version's length (1) and
+ *                  the version, and its phone's app's (0 long for none), then
+ *                  its name: each board heard over direct comms, every couple
+ *                  of seconds.
  *     0x09 direct group: 09, a group's id (4 bytes), how strong it's heard
  *                  (dBm, signed), how many boards are in it, its channel,
  *                  flags (bit 0 Long Range), then its name:
@@ -92,8 +95,9 @@
  *     0x03 answer: 03, the request's id, flags as above, then a piece of
  *                  "200\n" and the JSON, "304\n" for a GET /api/state that's
  *                  the same as the last one sent, or "404\n".
- *   GET /version?app=<the app's version> tells the board the app's version
- *   (see comm_app_version), and answers {"firmware": rcat_hal_firmware_version,
+ *   GET /version?app=<the app's version>&os=<Android or iPhone> tells the
+ *   board the app's version and what it runs on (see comm_app_version and
+ *   comm_app_os), and answers {"firmware": rcat_hal_firmware_version,
  *   "built": rcat_hal_firmware_built, "comm": COMM_VERSION, "avatar": the
  *   avatars' size in pixels, 0 if it doesn't show them, "avatars":
  *   COMM_AVATAR_SLOTS}.
@@ -122,8 +126,9 @@
  *   3  server (0x04), hearing (0x05) and avatars (0x06), from the phone, in
  *      messages up to 244 bytes; direct comms (0x07 to 0x09); recording
  *      (0x0A)
- *   4  commands for the others (0x0B) */
-#define COMM_VERSION            4
+ *   4  commands for the others (0x0B)
+ *   5  direct peers' firmware and app versions (0x08's bit 1) */
+#define COMM_VERSION            5
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4
@@ -242,6 +247,9 @@ uint32_t comm_pairing_left(uint32_t now_ms);
 
 /* The connected app's version, as it said, or "" if it hasn't. */
 const char *comm_app_version(void);
+/* What the app runs on, as it said: "Android" or "iPhone", "" if it didn't
+ * say. */
+const char *comm_app_os(void);
 
 /* Answer the phone. Call it every 50 ms or so, from the UI loop. */
 void comm_poll(uint32_t now_ms);

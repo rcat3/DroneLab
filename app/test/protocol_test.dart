@@ -143,7 +143,13 @@ void main() {
     final sound = parseBoardMessage(Uint8List.fromList([0x07, 0x78, 0x56, 0x34, 0x12, 0x34, 0x12, 1, 9, 8])) as DirectSound;
     expect([sound.sender, sound.seq, sound.first, sound.last, sound.opus], [0x12345678, 0x1234, true, false, [9, 8]]);
     final peer = parseBoardMessage(Uint8List.fromList([0x08, 1, 0, 0, 0, 0xC4, 1, ...'Pup'.codeUnits])) as DirectPeer;
-    expect([peer.id, peer.rssi, peer.talking, peer.name], [1, -60, true, 'Pup']);
+    expect([peer.id, peer.rssi, peer.talking, peer.name, peer.firmware], [1, -60, true, 'Pup', '']);
+    final versioned = parseBoardMessage(Uint8List.fromList(
+        [0x08, 1, 0, 0, 0, 0xC4, 2, 6, ...'v0.9.4'.codeUnits, 3, ...'1.2'.codeUnits, ...'Pup'.codeUnits])) as DirectPeer;
+    expect([versioned.talking, versioned.firmware, versioned.app, versioned.name], [false, 'v0.9.4', '1.2', 'Pup']);
+    final noPhone = parseBoardMessage(Uint8List.fromList(
+        [0x08, 1, 0, 0, 0, 0xC4, 2, 6, ...'v0.9.4'.codeUnits, 0, ...'Pup'.codeUnits])) as DirectPeer;
+    expect([noPhone.firmware, noPhone.app, noPhone.name], ['v0.9.4', '', 'Pup']);
   });
 
   test('a direct group key is the same for the same name and passphrase', () {

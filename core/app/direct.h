@@ -30,7 +30,13 @@
  *     hello: 02, flags (bit 0 talking, bit 1 asks for pieces of an avatar),
  *            if it asks: whose (the sender's id, 4), its version (1), and
  *            which pieces (16 bytes, a bit each, from bit 0 of the first);
- *            then the board's name, in UTF-8. Every couple of seconds, and
+ *            then its firmware's version's length (1) and the version
+ *            (rcat_hal_firmware_version), then the length (1) and version
+ *            of the app on the phone linked to it, after what the phone is
+ *            ("Android 1.2.0", from comm_app_os and comm_app_version; 0 long
+ *            with none), each UTF-8 and at most DIRECT_VERSION_MAX - 1
+ *            bytes; then the board's name, in UTF-8. Every couple of
+ *            seconds, and
  *            as it starts. A board asked for pieces of its avatar sends
  *            them, between its other broadcasts
  *     avatar: 03, its version (1, never 0), the piece (1), how many pieces
@@ -73,9 +79,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define DIRECT_VERSION          6
+#define DIRECT_VERSION          7       // 7: the hello has the firmware's and app's versions
 #define DIRECT_KEY_LEN          16
 #define DIRECT_NAME_MAX         16      // with its terminating zero
+#define DIRECT_VERSION_MAX      32      // a firmware or app version, with its terminating zero
 #define DIRECT_PEERS_MAX        12
 #define DIRECT_GROUPS_MAX       8
 #define DIRECT_KEY_ROUNDS       20000   // PBKDF2's, for direct_key
@@ -148,6 +155,8 @@ typedef struct
 {
     uint32_t id;
     char name[DIRECT_NAME_MAX];
+    char firmware[DIRECT_VERSION_MAX];      // its version, "" until its hello
+    char app[DIRECT_VERSION_MAX];           // its phone's app's, "" for none
     int8_t rssi;            // dBm
     bool talking;
 } direct_peer_t;
