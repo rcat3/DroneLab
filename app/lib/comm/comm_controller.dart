@@ -229,7 +229,9 @@ class CommController extends ChangeNotifier {
     _soundSub = board.sounds.listen(_onBoardSound);
     await loadOpus();
     notifyListeners();
-    // Back to the board from last time, unless it was disconnected on purpose
+    // Back to the server and the board from last time, unless they were
+    // disconnected on purpose
+    if (server.complete && (p.getBool('serverWanted') ?? false)) connectServer();
     final id = lastBoardId;
     if (id != null && (p.getBool('boardWanted') ?? true)) {
       await board.connect(id, lastBoardName ?? 'Board');
@@ -638,7 +640,7 @@ class CommController extends ChangeNotifier {
     holdToTalk(false);
     _resumeServer = _serverWanted;
     _resumeDirect = boardSettings?.direct?.on ?? false;
-    if (_serverWanted) await disconnectServer();
+    if (_serverWanted) await disconnectServer(forGood: false);
     if (_resumeDirect) await setDirect(false);
     _recorder = await Recorder.start(OpusVoiceDecoder());
     await board.send(recordMessage(true, speakerVoice: recordSpeakerVoice, beep: recordBeep));
@@ -956,6 +958,7 @@ class CommController extends ChangeNotifier {
   Future<void> connectServer() async {
     if (!server.complete) return;
     _serverWanted = true;
+    await _prefs?.setBool('serverWanted', true);
     await _updateBackground();
     await _connectServer();
   }
@@ -1046,8 +1049,11 @@ class CommController extends ChangeNotifier {
     mumble = null;
   }
 
-  Future<void> disconnectServer() async {
+  /// Leave the server: for good, to stay off when the app starts next, or
+  /// just for now, as for a recording.
+  Future<void> disconnectServer({bool forGood = true}) async {
     _serverWanted = false;
+    if (forGood) await _prefs?.setBool('serverWanted', false);
     _reconnect?.cancel();
     _closeMumble();
     _updateHeadset();
@@ -1087,7 +1093,7 @@ class CommController extends ChangeNotifier {
     _directGroupSub?.cancel();
     _recordSub?.cancel();
     _talkingTimer?.cancel();
-    disconnectServer();
+    disconnectServer(forGood: false);
     board.disconnect();
     super.dispose();
   }
