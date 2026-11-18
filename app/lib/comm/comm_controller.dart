@@ -89,6 +89,17 @@ class HeardGroup {
   HeardGroup(this.id, this.name, this.rssi, this.boards, this.channel, this.longRange, this.seenMs);
 }
 
+/// A server text message's HTML, as plain text.
+String plainText(String html) => html
+    .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+    .replaceAll(RegExp(r'<[^>]*>'), '')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&amp;', '&')
+    .trim();
+
 /// A board heard over direct comms.
 class NearbyBoard {
   final int id;
@@ -101,6 +112,21 @@ class NearbyBoard {
   NearbyBoard(this.id, this.name, this.rssi, this.talking, this.seenMs, [this.firmware = '', this.app = '']);
 }
 
+/// A line in the app's Terminal: a message from someone, as the board passed
+/// it on, a server text message, or one we sent.
+class TerminalEntry {
+  final String from;          // '' if they didn't say who it's from
+  final bool mine;
+  final String to;            // ours: who it went to
+  final bool onDisplay;       // shown on the boards' displays too
+  final bool named;           // ours: sent with our name
+  final String text;
+  final DateTime time;
+  TerminalEntry({this.from = '', this.mine = false, this.to = '', this.onDisplay = false, this.named = true,
+      required this.text})
+      : time = DateTime.now();
+}
+
 class CommController extends ChangeNotifier {
   final BoardLink board = BoardLink();
   ServerSettings server = ServerSettings();
@@ -111,6 +137,30 @@ class CommController extends ChangeNotifier {
   Timer? _reconnect;
   String? serverError;
   final List<MumbleText> texts = [];
+
+  /// The app's Terminal, oldest first, and how many have come in since it
+  /// was last looked at.
+  final List<TerminalEntry> terminal = [];
+  int unread = 0;
+  static const _terminalKeep = 100;
+
+  void _addTerminal(TerminalEntry e) {
+    terminal.add(e);
+    if (terminal.length > _terminalKeep) terminal.removeAt(0);
+    if (!e.mine) unread++;
+    notifyListeners();
+  }
+
+  /// The Terminal's been looked at.
+  void markTerminalRead() {
+    if (unread == 0) return;
+    unread = 0;
+    notifyListeners();
+  }
+
+  /// One we've sent, for our own Terminal.
+  void logSent(String text, String to, {required bool onDisplay, required bool named}) =>
+      _addTerminal(TerminalEntry(mine: true, to: to, onDisplay: onDisplay, named: named, text: text));
 
   late final Mixer mixer = Mixer(sampleRate: outputRate, newDecoder: OpusVoiceDecoder.new, targetMs: bufferMs);
   late final AudioOut _audio = AudioOut(mixer);
@@ -161,6 +211,8 @@ class CommController extends ChangeNotifier {
     recordSpeakerVoice = p.getBool('recordSpeakerVoice') ?? true;
     recordBeep = p.getBool('recordBeep') ?? false;
     _directPeerSub = board.directPeers.listen(_onDirectPeer);
+    _messageSub = board.messages
+        .listen((m) => _addTerminal(TerminalEntry(from: m.from, onDisplay: !m.appOnly, text: m.text)));
     // Who's talking, kept up to date whether the voices come from the server
     // or over direct comms
     _talkingTimer ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
@@ -303,6 +355,7 @@ class CommController extends ChangeNotifier {
 
   StreamSubscription<DirectSound>? _directSoundSub;
   StreamSubscription<DirectPeer>? _directPeerSub;
+  StreamSubscription<TerminalMessage>? _messageSub;
   StreamSubscription<DirectGroupHeard>? _directGroupSub;
   final Map<int, (int, int)> _directSeq = {};     // sender: its last seq, and that counted on
 
@@ -878,7 +931,7 @@ class CommController extends ChangeNotifier {
     _mumbleSubs.add(m.texts.listen((t) {
       texts.add(t);
       if (texts.length > 50) texts.removeAt(0);
-      notifyListeners();
+      _addTerminal(TerminalEntry(from: t.from, text: plainText(t.message)));
     }));
     _mumbleSubs.add(m.pluginData.listen((d) => _onPluginData(m, d)));
     notifyListeners();
@@ -981,6 +1034,7 @@ class CommController extends ChangeNotifier {
     _soundSub?.cancel();
     _directSoundSub?.cancel();
     _directPeerSub?.cancel();
+    _messageSub?.cancel();
     _directGroupSub?.cancel();
     _recordSub?.cancel();
     _talkingTimer?.cancel();

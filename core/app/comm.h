@@ -81,6 +81,12 @@
  *                  the version, and its phone's app's (0 long for none), then
  *                  its name: each board heard over direct comms, every couple
  *                  of seconds.
+ *     0x0C message: 0C, flags (bit 0 heard over direct comms, bit 1 for the
+ *                  app only, not shown on the display), the sender's name's
+ *                  length (1, 0 if they didn't say who it's from) and the
+ *                  name, then the text, in UTF-8: a message for the
+ *                  Terminal from someone the wearer's allowed (others.h),
+ *                  for the app's Terminal.
  *     0x09 direct group: 09, a group's id (4 bytes), how strong it's heard
  *                  (dBm, signed), how many boards are in it, its channel,
  *                  flags (bit 0 Long Range), then its name:
@@ -113,6 +119,7 @@
  */
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define COMM_SERVICE_UUID       "efe06e1b-a7ff-4823-bfbb-b3a82ea05849"
@@ -127,8 +134,10 @@
  *      messages up to 244 bytes; direct comms (0x07 to 0x09); recording
  *      (0x0A)
  *   4  commands for the others (0x0B)
- *   5  direct peers' firmware and app versions (0x08's bit 1) */
-#define COMM_VERSION            5
+ *   5  direct peers' firmware and app versions (0x08's bit 1)
+ *   6  messages for the Terminal passed on to the app (0x0C), and messages
+ *      for the app only (others.h) */
+#define COMM_VERSION            6
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4
@@ -199,6 +208,10 @@ int comm_voice_effect(void);
 void comm_set_talk(bool talk);
 
 bool comm_phone_connected(void);
+
+/* Pass a message for the Terminal, from someone allowed, on to the app
+ * (0x0C). from is "" if they didn't say who it's from. From the UI loop. */
+void comm_message_to_phone(comm_transport_t via, const char *from, bool app_only, const uint8_t *text, size_t len);
 
 /* True while it's sending the voice to the phone. */
 bool comm_sending(void);

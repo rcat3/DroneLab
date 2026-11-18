@@ -265,14 +265,20 @@ static void react(uint8_t mode)
 }
 
 /* On the Terminal, after who it's from if they want it to be, and the
- * Terminal on screen. Returns false if it isn't shown: it's unnamed, and
- * those aren't wanted. */
-static bool show_message(const char *from, uint8_t flags, const uint8_t *text, size_t len)
+ * Terminal on screen, unless it's for the app only; and passed on to the app
+ * either way. Returns false if it isn't taken: it's unnamed, and those aren't
+ * wanted. */
+static bool show_message(comm_transport_t via, const char *from, uint8_t flags, const uint8_t *text, size_t len)
 {
     bool named = (flags & OTHERS_NAMED) != 0;
     if (!named && (kinds[OTHERS_TERMINAL].list.options & HIDE_UNNAMED))
     {
         return false;
+    }
+    comm_message_to_phone(via, named ? from : "", (flags & OTHERS_APP_ONLY) != 0, text, len);
+    if (flags & OTHERS_APP_ONLY)
+    {
+        return true;
     }
     char line[COMM_NAME_MAX + OTHERS_CMD_MAX + 4];
     bool first = message_text()[0] == '\0';
@@ -314,7 +320,7 @@ static int kind_of(const uint8_t *cmd, size_t len)
 }
 
 /* Do it. Returns false if it was left undone. */
-static bool run(const char *from, const uint8_t *cmd, size_t len)
+static bool run(comm_transport_t via, const char *from, const uint8_t *cmd, size_t len)
 {
     switch (cmd[7])
     {
@@ -338,7 +344,7 @@ static bool run(const char *from, const uint8_t *cmd, size_t len)
         react(cmd[8]);
         break;
     case OTHERS_MESSAGE:
-        return show_message(from, cmd[8], cmd + HEADER_LEN + 1, len - HEADER_LEN - 1);
+        return show_message(via, from, cmd[8], cmd + HEADER_LEN + 1, len - HEADER_LEN - 1);
     }
     return true;
 }
@@ -378,7 +384,7 @@ void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
     {
         return;
     }
-    if (!run(from, cmd, len))
+    if (!run(via, from, cmd, len))
     {
         return;
     }

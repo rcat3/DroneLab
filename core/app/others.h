@@ -35,9 +35,12 @@
  *     04 react:    04, the reaction (reactive_mode_t, 0 for none): to this
  *                  board's wearer, if it can sense it
  *   For the Terminal:
- *     10 message:  10, flags (bit 0 named), then the text, in UTF-8: added
- *                  to the Terminal, on a line of its own, after the sender's
- *                  name if it's named, and the Terminal's brought on screen.
+ *     10 message:  10, flags (bit 0 named, bit 1 for the app only), then
+ *                  the text, in UTF-8: added to the Terminal, on a line of
+ *                  its own, after the sender's name if it's named, and the
+ *                  Terminal's brought on screen; for the app only, not shown
+ *                  on the display at all. Either way it's passed on to the
+ *                  wearer's app, for its Terminal (comm_message_to_phone).
  *                  Unnamed ones are still only taken from those allowed, but
  *                  the wearer can choose not to have them shown at all
  * A command that comes more than once, by both ways, or sent again in case
@@ -62,6 +65,7 @@
 #define OTHERS_MESSAGE          0x10
 #define OTHERS_ALL_MOTORS       0xFF
 #define OTHERS_NAMED            0x01    // a message's flags: shown with who it's from
+#define OTHERS_APP_ONLY         0x02    // and not shown on the display, only in the app
 
 typedef enum
 {

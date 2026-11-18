@@ -26,6 +26,8 @@
 ///   direct peer [0x08][id LE32][rssi][flags: 1 talking, 2 versions follow]
 ///           ([firmware length][firmware][app length][app])[name]
 ///           a board heard over direct comms, every couple of seconds
+///   message [0x0C][flags: 1 over direct, 2 for the app only][name length][name][text]
+///           a message for the Terminal, from someone the wearer allows
 ///   direct group [0x09][group id, 4 bytes][rssi][boards][channel][flags: 1 Long Range][name]
 ///           a group heard about over direct comms, from its beacons
 /// Both ways, the phone remote's requests and their answers, in pieces:
@@ -55,6 +57,7 @@ const commVersion = 3;
 const commVersionCommands = 4;
 const commVersionRemote = 2;
 const commVersionPeerFirmware = 5;
+const commVersionMessages = 6;
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -73,6 +76,7 @@ const _msgDirectPeer = 0x08;
 const _msgDirectGroup = 0x09;
 const _msgRecord = 0x0A;
 const _msgCommand = 0x0B;
+const _msgMessage = 0x0C;
 
 /// No avatar, in a slot.
 const avatarNone = 0xFF;
@@ -135,6 +139,15 @@ class DirectPeer {
   DirectPeer(this.id, this.rssi, this.talking, this.name, [this.firmware = '', this.app = '']);
 }
 
+/// A message for the Terminal, passed on by the board once it's taken it.
+class TerminalMessage {
+  final String from;        // '' if they didn't say who it's from
+  final bool direct;        // heard over direct comms, not the server
+  final bool appOnly;       // not shown on the display
+  final String text;
+  TerminalMessage(this.from, this.direct, this.appOnly, this.text);
+}
+
 class DirectGroupHeard {
   final String id;          // 8 hex digits
   final int rssi;
@@ -182,6 +195,10 @@ Object? parseBoardMessage(Uint8List data) {
     }
     return DirectPeer(le32(1), data[5].toSigned(8), data[6] & 1 != 0,
         utf8.decode(data.sublist(at), allowMalformed: true), versions[0], versions[1]);
+  }
+  if (data[0] == _msgMessage && data.length >= 3 && data.length >= 3 + data[2]) {
+    return TerminalMessage(utf8.decode(data.sublist(3, 3 + data[2]), allowMalformed: true), data[1] & 1 != 0,
+        data[1] & 2 != 0, utf8.decode(data.sublist(3 + data[2]), allowMalformed: true));
   }
   if (data[0] == _msgDirectGroup && data.length >= 9) {
     final id = data.sublist(1, 5).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
@@ -384,9 +401,10 @@ class OthersCommand {
 
   /// A message for the Terminal, shown after our name if it's [named];
   /// otherwise nobody can see who it's from (but it still only goes to
-  /// those who've allowed us).
-  static OthersCommand sendMessage(int source, int seq, String text, {bool named = true}) =>
-      _make(source, seq, [message, named ? 1 : 0, ..._cut(utf8.encode(text), messageMax)]);
+  /// those who've allowed us). [appOnly] keeps it off their display: it's
+  /// only in their app's Terminal.
+  static OthersCommand sendMessage(int source, int seq, String text, {bool named = true, bool appOnly = false}) =>
+      _make(source, seq, [message, (named ? 1 : 0) | (appOnly ? 2 : 0), ..._cut(utf8.encode(text), messageMax)]);
 }
 
 /// The longest command the board takes (OTHERS_CMD_MAX), and the most

@@ -150,6 +150,10 @@ void main() {
     final noPhone = parseBoardMessage(Uint8List.fromList(
         [0x08, 1, 0, 0, 0, 0xC4, 2, 6, ...'v0.9.4'.codeUnits, 0, ...'Pup'.codeUnits])) as DirectPeer;
     expect([noPhone.firmware, noPhone.app, noPhone.name], ['v0.9.4', '', 'Pup']);
+    final m = parseBoardMessage(Uint8List.fromList([0x0C, 3, 3, ...'Pup'.codeUnits, ...'HI'.codeUnits])) as TerminalMessage;
+    expect([m.from, m.direct, m.appOnly, m.text], ['Pup', true, true, 'HI']);
+    final unnamed = parseBoardMessage(Uint8List.fromList([0x0C, 0, 0, ...'HI'.codeUnits])) as TerminalMessage;
+    expect([unnamed.from, unnamed.direct, unnamed.appOnly, unnamed.text], ['', false, false, 'HI']);
   });
 
   test('a direct group key is the same for the same name and passphrase', () {
@@ -198,6 +202,7 @@ void main() {
     expect(OthersCommand.setReact(source, 7, 2).bytes.sublist(7), [0x04, 2]);
     expect(OthersCommand.sendMessage(source, 7, 'hi').bytes.sublist(7), [0x10, 1, ...utf8.encode('hi')]);
     expect(OthersCommand.sendMessage(source, 7, 'hi', named: false).bytes.sublist(7), [0x10, 0, ...utf8.encode('hi')]);
+    expect(OthersCommand.sendMessage(source, 7, 'hi', appOnly: true).bytes.sublist(7), [0x10, 3, ...utf8.encode('hi')]);
     final long = OthersCommand.sendMessage(source, 7, 'x' * 500).bytes.length;
     expect(long, 9 + OthersCommand.messageMax);
     expect(long, lessThanOrEqualTo(othersCommandMax));
