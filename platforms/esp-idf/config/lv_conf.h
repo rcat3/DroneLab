@@ -7,6 +7,7 @@
  *   LV_DEF_REFR_PERIOD = 10: refresh often, for smooth swiping
  *   LV_USE_GIF = 1: animated GIFs
  *   LV_FONT_MONTSERRAT_24 = 1: for larger screens
+ *   LV_FONT_MONTSERRAT_32 = 1: for the firmware update screen
  *   LV_USE_FS_STDIO = 1: SD card files, drive letter S
  *   LV_USE_LODEPNG = 1: PNG
  *   LV_USE_BMP = 1: BMP
@@ -1054,7 +1055,7 @@
 #define LV_FONT_MONTSERRAT_30 0
 
 /** Montserrat 32 */
-#define LV_FONT_MONTSERRAT_32 0
+#define LV_FONT_MONTSERRAT_32 1
 
 /** Montserrat 34 */
 #define LV_FONT_MONTSERRAT_34 0
@@ -1078,7 +1079,7 @@
 #define LV_FONT_MONTSERRAT_46 0
 
 /** Montserrat 48 */
-#define LV_FONT_MONTSERRAT_48 1
+#define LV_FONT_MONTSERRAT_48 0
 
 /** Montserrat 28 (compressed) */
 #define LV_FONT_MONTSERRAT_28_COMPRESSED 0

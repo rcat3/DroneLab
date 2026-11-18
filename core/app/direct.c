@@ -9,11 +9,12 @@
  */
 #include "app/direct.h"
 
+#include <string.h>
+
 #if RCAT_HAVE_DIRECT
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "mbedtls/gcm.h"
 #include "mbedtls/pkcs5.h"
@@ -127,6 +128,7 @@ typedef struct
 
 static bool started;
 static volatile bool running;
+static bool paused;         // by direct_pause(), to start again after
 static uint32_t own_id;
 static uint32_t counter;
 
@@ -318,10 +320,42 @@ static void send_beacon(void)
     rcat_hal_direct_send(msg, 12 + n);
 }
 
+/* Broadcasts from boards with another version of direct comms, which can't
+ * be heard: a few of them, not one stray, and it's said for a while after. */
+#define OTHER_FIRMWARE_WINDOW_MS 10000
+#define OTHER_FIRMWARE_COUNT     3
+#define OTHER_FIRMWARE_MS        30000
+static uint32_t other_firmware_window_ms, other_firmware_count;
+static volatile uint32_t other_firmware_ms;
+
+static void heard_other_firmware(const uint8_t *msg, size_t len, uint32_t now)
+{
+    if (len < 12 || (msg[0] != MAGIC && msg[0] != BEACON) || msg[1] == DIRECT_VERSION)
+    {
+        return;
+    }
+    if (now - other_firmware_window_ms > OTHER_FIRMWARE_WINDOW_MS)
+    {
+        other_firmware_window_ms = now;
+        other_firmware_count = 0;
+    }
+    if (++other_firmware_count >= OTHER_FIRMWARE_COUNT)
+    {
+        other_firmware_ms = now | 1;    // never 0
+    }
+}
+
+bool direct_other_firmware(void)
+{
+    uint32_t at = other_firmware_ms;
+    return running && at != 0 && rcat_hal_millis() - at < OTHER_FIRMWARE_MS;
+}
+
 static void heard_beacon(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
 {
     if (len < 12 || msg[1] != DIRECT_VERSION)
     {
+        heard_other_firmware(msg, len, now);
         return;
     }
     uint32_t sender;
@@ -795,6 +829,7 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
         {
             heard_other(now);
         }
+        heard_other_firmware(msg, len, now);
         return;     // not ours: another version, or another group
     }
     uint32_t id, c;
@@ -1096,6 +1131,7 @@ bool direct_available(void)
 
 bool direct_start(void)
 {
+    paused = false;
     if (!started || (!running && !rcat_hal_direct_start()))
     {
         return false;
@@ -1107,6 +1143,7 @@ bool direct_start(void)
 
 void direct_stop(void)
 {
+    paused = false;     // and it stays off
     if (running)
     {
         running = false;
@@ -1115,6 +1152,21 @@ void direct_stop(void)
     if (started)
     {
         settings_set_direct(0);
+    }
+}
+
+void direct_pause(bool pause)
+{
+    if (pause && running)
+    {
+        running = false;
+        rcat_hal_direct_stop();
+        paused = true;
+    }
+    else if (!pause && paused)
+    {
+        paused = false;
+        running = started && rcat_hal_direct_start();
     }
 }
 
@@ -1445,6 +1497,16 @@ int direct_groups(direct_group_t *out, int max)
 bool direct_other_voice(void)
 {
     return false;
+}
+
+bool direct_other_firmware(void)
+{
+    return false;
+}
+
+void direct_pause(bool pause)
+{
+    (void)pause;
 }
 
 int direct_peers(direct_peer_t *out, int max)

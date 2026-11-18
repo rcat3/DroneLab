@@ -28,6 +28,7 @@ PLATFORMS = {
         # Bluetooth (see the board's lvgl_mem.c)
         "LV_USE_STDLIB_MALLOC": ("LV_STDLIB_CUSTOM", "PSRAM first (the board's lvgl_mem.c)"),
         "LV_FONT_MONTSERRAT_24": ("1", "for larger screens"),
+        "LV_FONT_MONTSERRAT_32": ("1", "for the firmware update screen"),
         # Images on the SD card
         "LV_USE_FS_STDIO": ("1", "SD card files, drive letter S"),
         "LV_FS_STDIO_LETTER": ("'S'", None),

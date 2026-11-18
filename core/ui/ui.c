@@ -35,6 +35,7 @@
 #include "ui/nav_dots.h"
 #include "ui/ui.h"
 #include "ui/ui_internal.h"
+#include "ui/update_screen.h"
 
 // The features, top to bottom. Each one is defined in its own feature_*.c.
 // All but settings are optional, and each platform picks which to build in
@@ -160,6 +161,7 @@ void ui_init(void)
     }
 
     nav_dots_create();      // after the features, so it's drawn over the voice ring
+    update_screen_create(); // and over everything, while there's an update
     show_startup_page();
     navigate_event_cb(NULL);
 }

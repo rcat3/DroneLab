@@ -21,7 +21,9 @@
  *                  (bit 0 sending, bit 1 voice heard, bit 2 the talk button
  *                  is connected, see talk_button.h; bit 3 recording; bit 4
  *                  someone talking in another direct comms group nearby,
- *                  from COMM_VERSION 6), the
+ *                  from COMM_VERSION 6; bit 5 boards with another version
+ *                  of direct comms nearby, which can't be heard, from
+ *                  COMM_VERSION 7), the
  *                  battery (its percent, bit 7 set while charging; 0xFF
  *                  not known; from COMM_VERSION 6), when the phone turns
  *                  notifications on, when any of it changes, and every few
@@ -67,8 +69,21 @@
  *                  the wearer's, to send over direct comms: how many boards
  *                  it's for (1, 0 for all of them), their ids (4 bytes each,
  *                  little endian, as 0x08's), then the command.
- *   Messages from the phone are at most RCAT_HAL_BLE_PEER_MSG_MAX bytes (244),
- *   and no more than the MTU allows; before COMM_VERSION 3, 64.
+ *     0x0E update: 0E, flags (bit 0 the start, bit 1 the end, bit 2 asks
+ *                  for an ack), then for the start: the firmware's length
+ *                  (4, little endian), the board it's for
+ *                  (RCAT_BOARD_NAME, UTF-8), and optionally a newline and
+ *                  its version, for the screen; for the end, nothing; or else
+ *                  where it goes (4, little endian, from 0) and the next
+ *                  piece of the firmware (dronelab.bin, the app's part of a
+ *                  build). The phone sends a few pieces without waiting,
+ *                  asking for an ack with the last of them, as for avatars. Pieces that aren't where the board's got to are
+ *                  left out, for the phone to send again from there. See
+ *                  updater.h. From COMM_VERSION 7, if /version says
+ *                  "update": 1.
+ *   Messages from the phone are at most RCAT_HAL_BLE_PEER_MSG_MAX bytes (244,
+ *   and from COMM_VERSION 7 /version's "msgmax" says), and no more than the
+ *   MTU allows; before COMM_VERSION 3, 64.
  *
  *   COMM_TO_PHONE_UUID, as well:
  *     0x06 avatar ack: 06, slot, flags (bit 0 the picture's all there, bit
@@ -101,6 +116,15 @@
  *                  flags (bit 0 Long Range), then its name:
  *                  each group heard about over direct comms, from their
  *                  beacons, every couple of seconds.
+ *     0x0E update ack: 0E, flags (bit 0 done: the end's been dealt with,
+ *                  bit 1 all's well, bit 2 it's all here and being
+ *                  installed), what went wrong (update_result_t, 0 for
+ *                  nothing), then how much of the firmware's come (4,
+ *                  little endian). For the start, each piece that asks, and
+ *                  the end. Done and well, the board restarts into the new
+ *                  firmware a moment later, or once it's installed; if the
+ *                  install fails, another done ack says why. The link may
+ *                  well drop while it installs (see updater.c).
  *
  *   Both ways: the phone remote's requests (see remote.h), so the app can
  *   show the remote's page without joining the board's hotspot
@@ -115,7 +139,10 @@
  *   comm_app_os), and answers {"firmware": rcat_hal_firmware_version,
  *   "built": rcat_hal_firmware_built, "comm": COMM_VERSION, "avatar": the
  *   avatars' size in pixels, 0 if it doesn't show them, "avatars":
- *   COMM_AVATAR_SLOTS}.
+ *   COMM_AVATAR_SLOTS, and from COMM_VERSION 7, "board": RCAT_BOARD_NAME,
+ *   "update": 1 if the app can update the firmware (0x0E), "msgmax": the
+ *   longest message it takes from the phone (RCAT_HAL_BLE_PEER_MSG_MAX), and
+ *   "msgs": how many it keeps before dropping the oldest}.
  *   GET /remote.html?h=<hash> answers with the page itself (remote_page.html),
  *   so the app shows the board's own version, or "304\n" if <hash>, eight
  *   hex digits of the page's 32-bit FNV-1a hash, says the app has it already.
@@ -136,6 +163,12 @@
 #define COMM_FROM_PHONE_UUID    "efe06e1d-a7ff-4823-bfbb-b3a82ea05849"
 /* The version of the messages here, in the status message, for the app to
  * tell what the board can do. Goes up by one with each change.
+ *
+ * Changes only ever add: a new message, a new flag, or new bytes on the end
+ * of a message, which an older app or firmware leaves alone, and the other
+ * side checks the version before counting on them. Never change what an
+ * existing message or byte means: an older app or firmware would read it
+ * the old way, with nothing to tell it otherwise.
  *   1  sound, status, talk and mode
  *   2  the phone remote's requests (0x03), GET /version, and pairing with a
  *      code; the status's bit 2, the talk button
@@ -146,8 +179,11 @@
  *   5  direct peers' firmware and app versions (0x08's bit 1)
  *   6  messages for the Terminal passed on to the app (0x0C), and messages
  *      for the app only (others.h); the battery in the status (0x02);
- *      direct comms' avatars (0x0D) */
-#define COMM_VERSION            6
+ *      direct comms' avatars (0x0D)
+ *   7  updating the firmware from the app (0x0E, and /version's "board"
+ *      and "update"); the status's bit 5, another version of direct comms
+ *      nearby */
+#define COMM_VERSION            7
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

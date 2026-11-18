@@ -31,6 +31,7 @@
 #include "app/remote.h"
 #include "app/settings.h"
 #include "app/talk_button.h"
+#include "app/updater.h"
 #include "audio/speaker.h"
 #include "audio/voice_fx.h"
 #include "hal.h"
@@ -99,6 +100,14 @@
 #define STATUS_BUTTON       0x04
 #define STATUS_RECORDING    0x08
 #define STATUS_OTHER_VOICE  0x10    // someone's talking in another direct comms group nearby
+#define STATUS_OTHER_FIRMWARE 0x20  // boards with another version of direct comms nearby
+#define MSG_UPDATE          0x0E    // both ways: the firmware from the app, and the ack
+#define UPDATE_START        0x01
+#define UPDATE_END          0x02
+#define UPDATE_ACK          0x04
+#define UPDATE_DONE         0x01    // in the ack
+#define UPDATE_WELL         0x02
+#define UPDATE_INSTALLING   0x04    // in the ack: it's all here, and being installed
 #define MSG_RECORD          0x0A    // both ways: start or stop recording, and what's recorded
 #define RECORD_SPEAKER      0x01    // the speaker's voice effect, not the comm voice
 #define RECORD_BEEP         0x02    // with a sync beep to start
@@ -322,7 +331,8 @@ static uint8_t status_flags(void)
 {
     return (sending ? STATUS_SENDING : 0) | (voice_heard ? STATUS_HEARD : 0) | (recording ? STATUS_RECORDING : 0) |
            (talk_button_state() == TALK_BUTTON_CONNECTED ? STATUS_BUTTON : 0) |
-           (direct_other_voice() ? STATUS_OTHER_VOICE : 0);
+           (direct_other_voice() ? STATUS_OTHER_VOICE : 0) |
+           (direct_other_firmware() ? STATUS_OTHER_FIRMWARE : 0);
 }
 
 static bool send_retrying(const uint8_t *data, size_t len)
@@ -913,9 +923,11 @@ static void answer_request(void)
                 app_started = true;
             }
             len = snprintf(answer + 4, ANSWER_MAX - 4,
-                           "{\"firmware\":\"%s\",\"built\":\"%s\",\"comm\":%d,\"avatar\":%d,\"avatars\":%d}",
+                           "{\"firmware\":\"%s\",\"built\":\"%s\",\"comm\":%d,\"avatar\":%d,\"avatars\":%d,"
+                           "\"board\":\"%s\",\"update\":%d,\"msgmax\":%d,\"msgs\":%d}",
                            rcat_hal_firmware_version(), rcat_hal_firmware_built(), COMM_VERSION, avatar_size,
-                           COMM_AVATAR_SLOTS);
+                           COMM_AVATAR_SLOTS, RCAT_BOARD_NAME, updater_app_available() ? 1 : 0,
+                           RCAT_HAL_BLE_PEER_MSG_MAX, RCAT_HAL_BLE_PEER_MSGS);
         }
         else if (strncmp(target, "/remote.html", 12) == 0)
         {
@@ -1151,6 +1163,7 @@ static void set_recording(bool on, bool speaker, bool beep)
 
 static void forget_phone(void)
 {
+    updater_app_cancel();   // an update from it that hasn't finished
     phone_talk = false;     // so a phone that's gone doesn't leave it talking
     if (recording)
     {
@@ -1463,6 +1476,54 @@ static void receive_command(const uint8_t *msg, size_t len)
     }
 }
 
+/* A piece of the firmware from the app (0x0E): see updater.h. */
+static void receive_update(const uint8_t *msg, size_t len)
+{
+    uint8_t flags = msg[1];
+    update_result_t result = UPDATE_OK;
+    bool ack = (flags & (UPDATE_START | UPDATE_END | UPDATE_ACK)) != 0;
+    if (flags & UPDATE_START)
+    {
+        // The length, then "<board>\n<version>", the version optional
+        char text[96];
+        uint32_t length = 0;
+        size_t n = len > 6 ? len - 6 : 0;
+        n = n < sizeof(text) - 1 ? n : sizeof(text) - 1;
+        if (len >= 6)
+        {
+            memcpy(&length, msg + 2, 4);
+            memcpy(text, msg + 6, n);
+        }
+        text[n] = '\0';
+        char *version = strchr(text, '\n');
+        if (version != NULL)
+        {
+            *version++ = '\0';
+        }
+        result = len >= 6 ? updater_app_begin(length, text, version != NULL ? version : "") : UPDATE_TOO_BIG;
+    }
+    else if (flags & UPDATE_END)
+    {
+        result = updater_app_finish();
+    }
+    else if (len >= 6)
+    {
+        uint32_t offset;
+        memcpy(&offset, msg + 2, 4);
+        result = updater_app_write(offset, msg + 6, len - 6);
+    }
+    if (ack)
+    {
+        uint32_t got = (uint32_t)updater_app_received();
+        uint8_t out[7] = { MSG_UPDATE,
+                           (uint8_t)((flags & UPDATE_END ? UPDATE_DONE : 0) | (result == UPDATE_OK ? UPDATE_WELL : 0) |
+                                     (updater_app_installing() ? UPDATE_INSTALLING : 0)),
+                           (uint8_t)result, (uint8_t)got, (uint8_t)(got >> 8), (uint8_t)(got >> 16),
+                           (uint8_t)(got >> 24) };
+        send_retrying(out, sizeof(out));
+    }
+}
+
 void comm_poll(uint32_t now_ms)
 {
     others_poll(now_ms);
@@ -1528,12 +1589,25 @@ void comm_poll(uint32_t now_ms)
         {
             receive_command(msg, len);
         }
+        else if (msg[0] == MSG_UPDATE && len >= 2)
+        {
+            receive_update(msg, len);
+        }
         else if (msg[0] == MSG_RECORD && len >= 3)
         {
             set_recording(msg[1] != 0, (msg[2] & RECORD_SPEAKER) != 0, (msg[2] & RECORD_BEEP) != 0);
         }
     }
     merge_hearing();
+    update_result_t installed;
+    if (updater_app_outcome(&installed))
+    {
+        // The install after the end's ack went wrong: say so, if the phone's still there
+        uint32_t got = (uint32_t)updater_app_received();
+        uint8_t out[7] = { MSG_UPDATE, UPDATE_DONE, (uint8_t)installed, (uint8_t)got, (uint8_t)(got >> 8),
+                           (uint8_t)(got >> 16), (uint8_t)(got >> 24) };
+        send_retrying(out, sizeof(out));
+    }
     send_direct_peers(now_ms);
     send_direct_avatars(now_ms);
     send_answer();

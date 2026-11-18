@@ -1295,7 +1295,7 @@ function:	The peripheral: one service that a phone connects to
 
 // Room for what the phone writes: a few avatars' pieces at once (see
 // core/app/comm.h), each as long as the biggest MTU lets it be.
-#define PEER_MSGS           32
+#define PEER_MSGS           RCAT_HAL_BLE_PEER_MSGS
 #define PEER_MSG_MAX        RCAT_HAL_BLE_PEER_MSG_MAX
 // How often it advertises, in 0.625 ms steps: 100 to 150 ms, which a phone
 // finds in a second or so, without costing much battery.
@@ -1308,6 +1308,8 @@ function:	The peripheral: one service that a phone connects to
 #define PEER_CONN_MAX       24
 #define PEER_CONN_LATENCY   4
 #define PEER_CONN_TIMEOUT   500     // 10 ms steps
+#define PEER_FAST_CONN_MIN  6       // 7.5 ms: for updates, as fast as the phone allows
+#define PEER_FAST_CONN_MAX  12
 
 static const rcat_hal_ble_peer_service_t *peer_service;
 static ble_uuid128_t peer_svc_uuid, peer_tx_uuid, peer_rx_uuid;
@@ -1579,6 +1581,10 @@ static int peer_event_cb(struct ble_gap_event *event, void *arg)
         ESP_LOGI(TAG, "Phone's MTU is %u", event->mtu.value);
         break;
 
+    case BLE_GAP_EVENT_PHY_UPDATE_COMPLETE:
+        ESP_LOGI(TAG, "Phone's link: %s", event->phy_updated.tx_phy == BLE_GAP_LE_PHY_2M ? "2M PHY" : "1M PHY");
+        break;
+
     case BLE_GAP_EVENT_CONN_UPDATE:
     {
         struct ble_gap_conn_desc desc;
@@ -1752,6 +1758,29 @@ bool rcat_hal_ble_peer_send(const void *data, size_t len)
     return ble_gatts_notify_custom(conn, peer_tx_handle, om) == 0;     // it frees om either way
 }
 
+void rcat_hal_ble_peer_fast(bool fast)
+{
+    uint16_t conn = peer_conn;
+    if (conn == BLE_HS_CONN_HANDLE_NONE)
+    {
+        return;
+    }
+    struct ble_gap_upd_params params = {
+        .itvl_min = fast ? PEER_FAST_CONN_MIN : PEER_CONN_MIN,
+        .itvl_max = fast ? PEER_FAST_CONN_MAX : PEER_CONN_MAX,
+        .latency = fast ? 0 : PEER_CONN_LATENCY,
+        .supervision_timeout = PEER_CONN_TIMEOUT,
+    };
+    ble_gap_update_params(conn, &params);
+    // Twice the bit rate, and the longest packets, at a little less range
+    uint8_t phy = fast ? BLE_GAP_LE_PHY_2M_MASK : BLE_GAP_LE_PHY_1M_MASK;
+    ble_gap_set_prefered_le_phy(conn, phy, phy, BLE_GAP_LE_PHY_CODED_ANY);
+    if (fast)
+    {
+        ble_gap_set_data_len(conn, 251, 2120);
+    }
+}
+
 size_t rcat_hal_ble_peer_receive(void *data, size_t max)
 {
     size_t len = 0;
@@ -1830,6 +1859,11 @@ bool rcat_hal_ble_peer_send(const void *data, size_t len)
 size_t rcat_hal_ble_peer_receive(void *data, size_t max)
 {
     return 0;
+}
+
+void rcat_hal_ble_peer_fast(bool fast)
+{
+    (void)fast;
 }
 
 #endif

@@ -8,8 +8,7 @@
  * Comm feature (feature_comm.c). Then, on boards with WiFi, the WiFi hotspot
  * remote (see app/remote.h): a switch for its hotspot, the QR code that
  * joins it, a new password, and whether it switches itself on at power-up.
- * Then Rotation, the Level, Startup and the battery log, and last, firmware
- * updates.
+ * Then Rotation, the Level, Startup and the battery log.
  */
 #include <stdio.h>
 #include <string.h>
@@ -20,7 +19,6 @@
 #include "app/remote.h"
 #include "app/settings.h"
 #include "app/talk_button.h"
-#include "app/updater.h"
 #include "hal.h"
 #include "ui/ui_internal.h"
 
@@ -29,7 +27,6 @@
 #define COMM_POLL_MS      20      // quick, so the Comm screen keeps up with the phone
 #define LOG_UPDATE_MS     1000
 #define UPTIME_UPDATE_MS  1000
-#define UPDATE_POLL_MS    200
 #define COLOR_MUTED       lv_palette_main(LV_PALETTE_GREY)
 
 static bool build(ui_feature_t *feature);
@@ -1003,78 +1000,6 @@ static void add_paired_page(ui_feature_t *feature)
     show_paired();
 }
 
-/* ----- Firmware update ----- */
-
-static lv_obj_t *update_page;
-static lv_obj_t *update_switch;
-static lv_obj_t *update_code;
-static lv_obj_t *update_join;
-static lv_obj_t *update_status;
-
-static void show_update(void)
-{
-    bool on = updater_allowed();
-    lv_obj_set_state(update_switch, LV_STATE_CHECKED, on);
-    lv_obj_set_hidden(update_code, !on);
-    lv_obj_set_hidden(update_join, !on);
-    if (on)
-    {
-        lv_label_set_text(update_code, updater_code());
-        lv_label_set_text_fmt(update_join, "%s\n%s", remote_ssid(), remote_password());
-    }
-    const char *status = updater_status();
-    lv_label_set_text(update_status, status[0] != '\0' ? status : "Update from a computer\nwith tools/update.py");
-}
-
-static void update_switch_event_cb(lv_event_t *e)
-{
-    updater_allow(lv_obj_has_state(update_switch, LV_STATE_CHECKED));
-    show_update();
-}
-
-static void update_timer_cb(lv_timer_t *t)
-{
-    if (ui_current_page() == update_page)
-    {
-        show_update();
-    }
-}
-
-static void add_update_page(ui_feature_t *feature)
-{
-    update_page = ui_feature_add_page(feature, "Firmware Update", false);
-    lv_obj_set_scrollable(update_page, false);
-
-    lv_obj_t *title = lv_label_create(update_page);
-    lv_label_set_text(title, "Firmware Update");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(28));
-
-    update_switch = lv_switch_create(update_page);
-    lv_obj_set_size(update_switch, ui_px(64), ui_px(32));
-    lv_obj_align(update_switch, LV_ALIGN_CENTER, 0, ui_px(-58));
-    lv_obj_add_event_cb(update_switch, update_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
-
-    // The code for tools/update.py, big enough to read off easily
-    update_code = lv_label_create(update_page);
-    lv_obj_set_style_text_font(update_code, &lv_font_montserrat_24, 0);
-    lv_label_set_text(update_code, "");
-    lv_obj_align(update_code, LV_ALIGN_CENTER, 0, ui_px(-12));
-
-    // The hotspot to join, and its password
-    update_join = lv_label_create(update_page);
-    lv_obj_set_style_text_align(update_join, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(update_join, COLOR_MUTED, 0);
-    lv_label_set_text(update_join, "");
-    lv_obj_align(update_join, LV_ALIGN_CENTER, 0, ui_px(30));
-
-    update_status = lv_label_create(update_page);
-    lv_obj_set_style_text_align(update_status, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(update_status, LV_ALIGN_CENTER, 0, ui_px(72));
-
-    show_update();
-    lv_timer_create(update_timer_cb, UPDATE_POLL_MS, NULL);
-}
-
 #endif  // RCAT_HAVE_NETWORK
 
 /* ----- Changes from the phone remote ----- */
@@ -1117,12 +1042,6 @@ static bool build(ui_feature_t *feature)
     {
         add_log_page(feature);
     }
-#if RCAT_HAVE_NETWORK
-    if (updater_available())
-    {
-        add_update_page(feature);
-    }
-#endif
     return true;
 }
 

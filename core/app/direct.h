@@ -73,6 +73,14 @@
  * and passphrase (direct_key), and checks it gives the group's id before
  * using it. It's slow to make on purpose, so that guessing passphrases
  * against an id heard over the air is slow too.
+ *
+ * Versions: boards only hear broadcasts with their own DIRECT_VERSION, so a
+ * change to anything above means a new DIRECT_VERSION, and boards on either
+ * side of it can't hear each other until they're all updated. What every
+ * version keeps, so a board can tell another version's there
+ * (direct_other_firmware): 'D' or 'G' first, then the version, in broadcasts
+ * of at least 12 bytes. Change those and boards can't even say why they
+ * don't hear each other.
  */
 
 #include <stdbool.h>
@@ -108,6 +116,17 @@ bool direct_running(void);
 /* Whether someone's talking in another group on this channel just now: their
  * voice is heard on the air, though it can't be listened to. From any task. */
 bool direct_other_voice(void);
+
+/* Whether boards with another version of direct comms (DIRECT_VERSION) were
+ * heard lately on this channel: they can't be heard, nor this board by them,
+ * so someone needs to update. From any task. */
+bool direct_other_firmware(void);
+
+/* Stop direct comms for a while, and start it again, without changing the
+ * setting: for an update from the app, which needs the radio to itself
+ * (Bluetooth shares it with ESP-NOW). Starting or stopping it meanwhile
+ * takes over. From the UI loop. */
+void direct_pause(bool pause);
 
 /* The group: its key (NULL for the open group), its name to show, this
  * board's name in it ("" for the board's own, comm_name()), and its radio:

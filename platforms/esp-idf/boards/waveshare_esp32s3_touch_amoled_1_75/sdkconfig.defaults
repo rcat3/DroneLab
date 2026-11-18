@@ -57,6 +57,10 @@ CONFIG_BT_NIMBLE_SECURITY_ENABLE=y
 CONFIG_BT_NIMBLE_NVS_PERSIST=y
 CONFIG_BT_NIMBLE_MAX_BONDS=8
 CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL=y
+# Room for a few dozen messages from the app at once, as a firmware update
+# sends them (in PSRAM, with the rest of NimBLE's memory). Bigger messages
+# (a bigger MTU) didn't help: the phone cut them back to 253 bytes.
+CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=64
 
 # WiFi and Bluetooth together (the Lovense phone remote) need more internal
 # RAM than is left, so some code that would sit in internal RAM runs from
