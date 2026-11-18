@@ -178,7 +178,7 @@ def doc_shots(board, out):
     info = board.api("GET", "/api/info")
     images = dict(info["features"])["Images"]
 
-    take("images_katcorp", "Images", images.index("RCatLogo"))
+    take("images_katcorp", "Images", images.index("katcorp"))
     take("images_hal9000", "Images", images.index("hal9000"))
 
     # Something for the visualizers to show: a track on the speaker

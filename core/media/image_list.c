@@ -17,17 +17,18 @@
 
 #define IMAGE(name, is_gif) { #name, &name, is_gif }
 
+LV_IMAGE_DECLARE(katcorp);
 LV_IMAGE_DECLARE(hexcorp);
-LV_IMAGE_DECLARE(RCatLogo);
 LV_IMAGE_DECLARE(hal9000);
 LV_IMAGE_DECLARE(evileye);
 #if RCAT_LARGE_IMAGES
 LV_IMAGE_DECLARE(radar3c);     // full screen, about 140kB to play on a 240x240 screen
 #endif
 
+// The first is what a new build shows at startup, without an SD card
 const builtin_image_t builtin_images[] = {
+    IMAGE(katcorp,   false),     // drawn by tools/doc_renders/gen_doc_logos.py
     IMAGE(hexcorp,   false),
-    IMAGE(RCatLogo,  false),
     IMAGE(hal9000,   false),
     IMAGE(evileye,   true),
 #if RCAT_LARGE_IMAGES

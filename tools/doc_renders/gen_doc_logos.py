@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Draw the logos the documentation uses, in docs/images/:
+Draw KatCorp's logo for the display, imgs/katcorp.png, the first image it
+shows on a new build, and the logos the documentation uses, in docs/images/:
 
   dronelab_banner.png   DroneLab's banner for the top of the README: the
                         startup logo's glitched green title in its brackets
                         (see tools/gen_logo.py), on a wide strip, with
                         KatCorp's mark and name
   katcorp_logo.png      KatCorp, the fictional company DroneLab is "from":
-                        the cat from imgs/RCatLogo.bmp in a ring, with its
+                        the cat (katcorp_cat.bmp, here) in a ring, with its
                         name and "Drone Systems Division"
   katcorp_mark.png      Just the cat in its ring, small, for page headings
 
@@ -148,8 +149,8 @@ def glitch(img, top, bottom, rng, slices=4):
 
 
 def cat_mask(size):
-    """The cat from imgs/RCatLogo.bmp, smoothed, size pixels across"""
-    src = Image.open(os.path.join(REPO, "imgs", "RCatLogo.bmp")).convert("RGB")
+    """The cat from katcorp_cat.bmp, smoothed, size pixels across"""
+    src = Image.open(os.path.join(HERE, "katcorp_cat.bmp")).convert("RGB")
     # The cat is the pink pixels: much more red and blue than green
     m = Image.new("L", src.size, 0)
     px, mp = src.load(), m.load()
@@ -265,6 +266,25 @@ def katcorp_logo(fonts):
     return c.finish(scan=False)
 
 
+def display_logo():
+    """For the round display: the cat in a glowing ring, clear of the edge,
+    where the voice ring glows"""
+    size = 466
+    c = Canvas(size, size)
+    cx = cy = c.w // 2
+    r = c.w // 2
+    ring = c.mask()
+    ImageDraw.Draw(ring).ellipse(circle(cx, cy, r * 0.86), outline=255, width=int(r * 0.035))
+    c.glow(ring, PINK, (14, 5), (0.45, 0.9))
+    c.gradient(ring, [(0, PINK_BRIGHT), (0.5, PINK), (1, PINK_DARK)])
+    cat = cat_mask(int(r * 1.05))
+    cm = c.mask()
+    cm.paste(cat, (int(cx - cat.width / 2), int(cy - cat.height / 2 + r * 0.04)))
+    c.glow(cm, PINK, (10, 4), (0.35, 0.6))
+    c.gradient(cm, [(0, PINK_BRIGHT), (0.5, PINK), (1, (210, 40, 160))])
+    return c.finish(scan=False)
+
+
 def katcorp_mark():
     c = Canvas(160, 160, "RGBA")
     draw_mark(c, c.w // 2, c.h // 2, 74 * SS)
@@ -277,7 +297,7 @@ def main():
     args = parser.parse_args()
     fonts = (os.path.join(args.fonts, "Orbitron[wght].ttf"), os.path.join(args.fonts, "ShareTechMono-Regular.ttf"))
     for name, img in (("dronelab_banner.png", banner(fonts)), ("katcorp_logo.png", katcorp_logo(fonts)),
-                      ("katcorp_mark.png", katcorp_mark())):
+                      ("katcorp_mark.png", katcorp_mark()), ("../../imgs/katcorp.png", display_logo())):
         path = os.path.join(OUT, name)
         img.save(path, optimize=True)
         print(f"Wrote {os.path.normpath(path)}")

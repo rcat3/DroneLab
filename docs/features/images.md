@@ -10,7 +10,7 @@ While the Images feature is on screen, the [Voice Ring](voice-ring.md) can glow 
 |:-:|:-:|
 | With the voice ring | A built-in image |
 
-The images built into the firmware are in the `imgs/` folder.  The ESP32-S3 boards can also show images from their micro SD card, which come first.
+The images built into the firmware are in the `imgs/` folder.  The first is KatCorp's logo, the cat in its ring, which is what a new unit shows when it starts, until another image is picked in *Startup*.  The ESP32-S3 boards can also show images from their micro SD card, which come first, so with a card in, a new unit starts on the card's first image.
 
 ## Adding or changing built-in images
 
