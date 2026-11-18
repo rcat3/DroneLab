@@ -9,7 +9,7 @@ It's an all-in-one housing that screws into the voice port of an MSA Millennium 
 ## Why it was dropped
 
 - **It's a hard build.**  It needs a custom adapter PCB, parts from specialty electronics shops, and soldering, including a tiny 0201 resistor on the board.  The 1.75" board has its own amplifier and speaker socket, so its housing needs no soldering but the speaker's plug.
-- **No USB.**  The board's USB-C port faces into a speaker pod, so it can't be reached: firmware updates have to go over WiFi, or the board has to come out.  The housing's own USB-C port only charges.
+- **No USB.**  The board's USB-C port faces into a speaker pod, so it can't be reached: the board has to come out for firmware updates.  The housing's own USB-C port only charges.
 - **Voice effects.**  The 1.46" board has one microphone and can't hear what its amplifiers are playing.  The 1.75" board's audio chip hears its speaker, so it can cancel the speaker out of its two microphones, and averaging the two microphones turned out to help too.  Two speakers also give the sound more ways to get back to the microphone.
 - **Upkeep.**  Voice effects are hard to tune, and keeping them working on two very different boards and housings means testing everything twice.  The housing would also have needed a lot of changes to catch up with the 1.75" housing.
 

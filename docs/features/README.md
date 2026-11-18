@@ -119,7 +119,7 @@ Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp
 <td width="190" align="center"><a href="settings.md"><img src="../images/screens/settings_setup.png" width="170" alt="The Setup page"></a><br><a href="level.md"><img src="../images/screens/settings_level.png" width="80" alt="The Level" title="Level"></a></td>
 <td>
 <h3>Settings</h3>
-<p>Everything that applies to the whole unit: brightness, pairing with the phone app, the WiFi hotspot, the display's rotation and the unit's model, and what's shown at startup.  A built-in spirit level lines the display up in the mask, and turns green when it's level.  The battery's level and a log of its charge are here too, and firmware updates over WiFi.</p>
+<p>Everything that applies to the whole unit: brightness, pairing with the phone app, the WiFi hotspot, the display's rotation and the unit's model, and what's shown at startup.  A built-in spirit level lines the display up in the mask, and turns green when it's level.  The battery's level and a log of its charge are here too.</p>
 <p><a href="settings.md">Settings →</a> · <a href="level.md">Level →</a></p>
 </td>
 </tr>

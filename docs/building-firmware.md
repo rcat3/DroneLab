@@ -118,9 +118,10 @@ If something doesn't seem to change after an update, delete the `build-s3-175` f
 
 ## Updating
 
-To update a board to a new release, run the [web installer](#the-web-installer) again, leaving *Erase device* unticked: the settings are kept.  The board stays in its housing.
+**From the app** (firmware 0.9.7 and later): the app carries the firmware of its own release, and keeps the board in step with it.  When it connects to a board with older firmware, it offers to update it over Bluetooth, and *Setup* shows the board's firmware with an *Update* button.  It takes about 3 minutes, with direct mode paused meanwhile, and the unit's screen shows how it's going: keep the phone next to the unit, with the unit charged to 20% or more.  The unit restarts into the new firmware, the app reconnects, and the settings are kept.  If the new firmware doesn't start properly, the unit goes back to the old one.  So once a board has 0.9.7 or later, updating the app is all it takes.
 
-The board can also take new firmware over its WiFi hotspot (see [Updating over WiFi](updating-over-wifi.md)), but USB is simpler and is the recommended way.
+**With the web installer:** run the [web installer](#the-web-installer) again, leaving *Erase device* unticked: the settings are kept.  The board stays in its housing.  Boards with firmware before 0.9.7 need this once, to get firmware the app can update; the app says so when it connects to one.
+
 
 ## Troubleshooting
 

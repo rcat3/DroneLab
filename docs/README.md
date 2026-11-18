@@ -15,7 +15,6 @@ New here?  Start with the [project page](../README.md).
 
 - [Using the Display](using-the-display.md): finding your way around, and turning it on and off.
 - [Features](features/README.md): [Voice Effects](features/voice-effects.md), [HiveMind (Comms)](features/comms.md), [Visualizer](features/visualizer.md), [Lovense](features/lovense.md), [Images](features/images.md), [Voice Ring](features/voice-ring.md), [Terminal](features/terminal.md), [WiFi Hotspot Remote](features/phone-remote.md), [Sound](features/sound.md), [Voice Lab](features/voice-lab.md) and [Settings](features/settings.md), with the [Level](features/level.md).
-- [Updating over WiFi](updating-over-wifi.md): for boards whose USB port can't be reached.
 
 ## Under the hood
 

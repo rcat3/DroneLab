@@ -134,7 +134,7 @@ Use the build folder of the firmware that's on the board, so the addresses match
 Things to know:
 
 - **Only the latest one is kept.**  Each core dump erases the partition and replaces the last one.  It can't spill past the end: one too big for the partition isn't saved.  A core dump stays until the next crash replaces it.
-- **The partition is only made when flashing over USB.**  An update over WiFi doesn't change the partition table, so a board that has only ever had updates over WiFi since this was added has no `coredump` partition.  It still restarts, without the core dump.
+- **The partition is only made when flashing over USB.**  An update from the app doesn't change the partition table, so a board that has only ever been updated from the app since this was added has no `coredump` partition.  It still restarts, without the core dump.
 - **A new task that runs all the time should be watched too.**  Call `esp_task_wdt_add(NULL)` when it starts and `esp_task_wdt_reset()` each time round its loop, as `audio_task()` in the 1.75" board's `hal_board.c` does.  And don't keep a core busy for seconds at a time without blocking, or its idle task misses its check-in and the board restarts.
 - **The settings are in [`platforms/esp-idf/sdkconfig.defaults`](../../platforms/esp-idf/sdkconfig.defaults)** (`CONFIG_ESP_TASK_WDT_PANIC` and `CONFIG_ESP_COREDUMP_*`).  An existing build folder keeps its old configuration, so build in a new one after changing them.
 - **The RP2040 and RP2350 boards don't have any of this.**

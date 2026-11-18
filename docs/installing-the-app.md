@@ -20,6 +20,8 @@ You can switch *Allow from this source* off again once it's installed.
 
 Download the new release's APK and install it the same way.  It installs over the old one, and keeps its settings, the server and the paired board.
 
+Then let it update the unit: each release of the app carries the firmware released with it, and offers to update a unit with older firmware when it connects (see [Updating the firmware](building-firmware.md#updating)).  Keeping the two in step keeps every feature working, and units only hear each other over direct mode with the same version.  If the HiveMind tab shows a warning sign by the channel, units nearby are on a different version, and can't be heard until everyone's updated.
+
 If Android says the app conflicts with one that's installed, the copy on the phone was signed with a different key: usually one you built yourself (see [`app/README.md`](../app/README.md#installing-on-a-phone)).  Uninstall it first, which loses its settings, then install the release.
 
 ## First time with the board
