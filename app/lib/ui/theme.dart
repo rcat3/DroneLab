@@ -69,8 +69,11 @@ abstract final class Kc {
         surfaceTintColor: Colors.transparent,
         indicatorColor: pink.withValues(alpha: 0.14),
         height: 68,
-        labelTextStyle: WidgetStateProperty.resolveWith(
-            (s) => term(12, color: s.contains(WidgetState.selected) ? pink : dim)),
+        labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            color: s.contains(WidgetState.selected) ? pink : dim)),
         iconTheme: WidgetStateProperty.resolveWith(
             (s) => IconThemeData(color: s.contains(WidgetState.selected) ? pink : dim)),
       ),

@@ -25,7 +25,7 @@ class StatusStrip extends StatelessWidget {
         Widget item(bool ok, String text) => Row(mainAxisSize: MainAxisSize.min, children: [
               _Dot(ok),
               const SizedBox(width: 6),
-              Text(text, style: Kc.term(14, color: ok ? Kc.text : Kc.dim)),
+              Text(text, style: Kc.term(11, color: ok ? Kc.text : Kc.dim)),
             ]);
         return Semantics(
           button: true,
@@ -161,7 +161,7 @@ class _Battery extends StatelessWidget {
       Container(width: 2, height: 5, color: color),
       if (charging) const Icon(Icons.bolt, size: 14, color: Kc.green),
       const SizedBox(width: 4),
-      Text('$percent%', style: Kc.term(14, color: color)),
+      Text('$percent%', style: Kc.term(11, color: color)),
     ]);
   }
 }
