@@ -51,10 +51,20 @@ lv_obj_t *ui_current_page(void);
 /* Show a page, as if it had been swiped to. Returns false if it isn't one. */
 bool ui_show_page(lv_obj_t *page);
 
-/* The Level (feature_level.c), as a page of Settings. Returns false without
- * an accelerometer. Settings calls feature_level_on_navigate. */
-bool feature_level_add_page(ui_feature_t *feature);
-void feature_level_on_navigate(void);
+/* A row (or rows, with "\n" in the map) of choices, the chosen one filled
+ * in and the others dark. It changes when the finger lifts, not when it
+ * lands, so swiping to the next page from it doesn't change it. map must stay
+ * valid for as long as it exists. */
+lv_obj_t *ui_add_choices(lv_obj_t *parent, const char *const *map, int32_t w, int32_t h, int32_t y);
+void ui_check_choice(lv_obj_t *m, uint32_t index);
+
+/* The Level (feature_level.c): a spirit level over the whole screen, opened
+ * from Settings' Setup page, and closed with a swipe. Returns false without
+ * an accelerometer. */
+bool level_available(void);
+void level_open(void);
+void level_close(void);
+bool level_is_open(void);
 
 /*
  * Startup choices: pages that can be picked in the Startup setting. value is
@@ -65,6 +75,8 @@ void ui_add_startup_choice(ui_feature_t *feature, lv_obj_t *page, const char *la
 size_t ui_startup_choice_count(void);
 const char *ui_startup_choice_label(size_t index);
 const char *ui_startup_choice_value(size_t index);
+/* The name of the feature the choice is in, to group them by */
+const char *ui_startup_choice_group(size_t index);
 
 /* Index of the startup choice with this value, or -1. */
 int ui_find_startup_choice(const char *value);

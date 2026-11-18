@@ -323,12 +323,15 @@ static void add_options_page(ui_feature_t *feature)
     lv_label_set_text(autoplay_label, "Play at startup");
     lv_obj_align(autoplay_label, LV_ALIGN_CENTER, 0, ui_px(42));
 
+    // Big, so it's easy to hit with a gloved finger
     autoplay_switch = lv_switch_create(page);
+    lv_obj_set_size(autoplay_switch, ui_px(76), ui_px(38));
+    lv_obj_set_ext_click_area(autoplay_switch, ui_px(8));
     if (settings_get()->sound_autoplay)
     {
         lv_obj_add_state(autoplay_switch, LV_STATE_CHECKED);
     }
-    lv_obj_align(autoplay_switch, LV_ALIGN_CENTER, 0, ui_px(68));
+    lv_obj_align(autoplay_switch, LV_ALIGN_CENTER, 0, ui_px(74));
     lv_obj_add_event_cb(autoplay_switch, autoplay_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 }
 

@@ -79,7 +79,7 @@ The status screen can be picked to show when the display turns on, in [Settings]
 
 ### HiveMind Voice
 
-The voice effect for what the hive hears: *Same as speaker*, or any of the [voice effects](voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.  With two different effects the voice runs through both, which takes more of the unit's processor: the heaviest two together take about 70% of one of its cores.
+Titled *HiveMind Voice Effect* on the screen: the voice effect for what the hive hears: *Same as speaker*, or any of the [voice effects](voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.  With two different effects the voice runs through both, which takes more of the unit's processor: the heaviest two together take about 70% of one of its cores.
 
 ### Talk on
 

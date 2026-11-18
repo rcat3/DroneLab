@@ -13,6 +13,7 @@
 #include "esp_app_desc.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_timer.h"
 #include "esp_vfs_fat.h"
 
@@ -199,6 +200,12 @@ const char *rcat_hal_firmware_version(void)
 {
     // ESP-IDF builds `git describe` into the firmware
     return esp_app_get_description()->version;
+}
+
+bool rcat_hal_mac_address(uint8_t mac[6])
+{
+    // Read from the chip's eFuses, so it needs no WiFi running
+    return esp_read_mac(mac, ESP_MAC_WIFI_STA) == ESP_OK;
 }
 
 const char *rcat_hal_firmware_built(void)

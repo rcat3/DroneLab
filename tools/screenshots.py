@@ -214,11 +214,21 @@ def doc_shots(board, out):
     board.api("POST", "/api/react?m=1")
     take("lovense_react", "Lovense", 3)
     board.api("POST", "/api/stop")
-    take("settings_level", "Settings", info["features"][-1][1].index("Level"))
+    settings = info["features"][-1][1]
+    # Not the Brightness page: it shows the board's MAC address, which is
+    # the owner's, like a serial number, and shouldn't go in the docs
     # Rotation at 180 degrees, as the housings need
     board.api("POST", "/api/display?rot=2")
-    take("settings_rotation", "Settings", info["features"][-1][1].index("Rotation"))
+    take("settings_setup", "Settings", settings.index("Setup"))
+    board.api("POST", "/api/display?level=1")      # the Level, over the Setup page
+    take("settings_level")
+    board.api("POST", "/api/display?level=0")
     board.api("POST", f"/api/display?rot={before['display']['rotation']}")
+    # Startup, with an image chosen, to show the list of them (the images
+    # are the first startup choices, in the same order)
+    board.api("POST", f"/api/display?start={images.index('katcorp')}")
+    take("settings_startup", "Settings", settings.index("Startup"))
+    board.api("POST", f"/api/display?start={before['display']['startup']}")
 
     # Put things back as they were
     board.api("POST", "/api/clear")

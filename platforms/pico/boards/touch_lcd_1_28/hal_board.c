@@ -415,6 +415,12 @@ const char *rcat_hal_firmware_version(void)
     return RCAT_FIRMWARE_VERSION;   // from `git describe`, in CMakeLists.txt
 }
 
+bool rcat_hal_mac_address(uint8_t mac[6])
+{
+    (void)mac;
+    return false;   // no WiFi
+}
+
 uint32_t rcat_hal_random(void)
 {
     // Only used for hotspot passwords, which this board doesn't have

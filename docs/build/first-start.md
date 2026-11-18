@@ -20,7 +20,7 @@ The board learns its own battery as it goes.  The first time it runs from a full
 
 Press `PWR`, the lower button on the left side, marked with a power symbol.  The DroneLab logo shows while it starts.  Hold `PWR` for 2 seconds to turn it off.
 
-The first time a new unit starts, it asks **Which model is this?**  Tap **Speaker** for the speaker model, or **Low-profile** for the low-profile model, which has no speaker: the features that need one are left out.  It only asks once.  To change it later, it's the **Model** page in Settings (see [Model](../features/settings.md#model)).
+The first time a new unit starts, it asks **Which model is this?**  Tap **Speaker** for the speaker model, or **Low-profile** for the low-profile model, which has no speaker: the features that need one are left out.  It only asks once.  To change it later, it's **Model** on Settings' **Setup** page (see [Model](../features/settings.md#model)).
 
 > **Photo to come:** the left side of the speaker model, with the `PWR` and `BOOT` plungers and their engraved marks, and the micro SD slot.
 
@@ -30,19 +30,19 @@ Swipe **up and down** to move between features, and **left and right** between a
 
 ## 4. Check the picture's the right way up
 
-<a href="../features/settings.md#rotation"><img src="../images/screens/settings_rotation.png" width="180" align="right" alt="The Rotation page, set to 180 degrees"></a>
+<a href="../features/settings.md#setup"><img src="../images/screens/settings_setup.png" width="180" align="right" alt="The Setup page: Rotation set to 180 degrees, the model, and the Level button"></a>
 
 The picture should be upright with the speaker below the display, or on the low-profile model, with the USB-C port on the right.  In the housing, the board sits turned from its usual way up, and the firmware already turns the picture to match: Rotation starts at 180°.
 
-If the picture isn't upright (on a board that's been used before, say, which keeps its old setting), swipe to **Settings**, then to **Rotation**, and scroll the roller until it is: 180° in both housings.  The picture turns about a second after you stop scrolling.
+If the picture isn't upright (on a board that's been used before, say, which keeps its old setting), swipe to **Settings**, then to the **Setup** page, and tap the **Rotation** that puts it upright: 180° in both housings.
 
 <br clear="right">
 
 ## 5. Level it in the mask
 
-<a href="../features/level.md"><img src="../images/screens/settings_level.png" width="180" align="right" alt="The Level page, level"></a>
+<a href="../features/level.md"><img src="../images/screens/settings_level.png" width="180" align="right" alt="The Level"></a>
 
-Screw the unit into the mask, put the mask on (or set it upright on a head form), and go to the **Level** page in Settings.  The line across the screen stays level with the ground, and turns green when the display is within a degree of level.
+Screw the unit into the mask, put the mask on (or set it upright on a head form), and tap **Level** on Settings' **Setup** page.  The line across the screen stays level with the ground, and turns green when the display is within a degree of level.  Swipe to close it.
 
 - **Speaker model:** turn the housing on its collar until it's level.
 - **Low-profile model:** it should be level once screwed in.  If it's a little crooked, see `lp_phase_test` in the [design's README](../../hardware/boards/waveshare_esp32s3_touch_amoled_1_75/README.md#test-prints-1).
@@ -83,7 +83,7 @@ Put the card in the slot on the left side and restart the unit: it reads the car
 
 ## 9. Pick what it shows at startup
 
-In Settings, **Startup** picks what's on screen when the unit turns on: any image, a visualizer, the terminal, or the comm status screen.
+In Settings, **Startup** picks what's on screen when the unit turns on: **Images**, **Visualizer**, **HiveMind** or **Terminal**.  With **Images**, pick which image in the list under them.
 
 ## 10. Connect your phone (optional)
 

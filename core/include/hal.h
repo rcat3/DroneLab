@@ -202,6 +202,11 @@ uint32_t rcat_hal_random(void);
  * tag, at commit 9881203), with "-dirty" if it had changes not committed. */
 const char *rcat_hal_firmware_version(void);
 
+/* The board's own WiFi MAC address, set at the factory and different on every
+ * board, to tell boards apart by, like a serial number. Returns false if it
+ * has none. */
+bool rcat_hal_mac_address(uint8_t mac[6]);
+
 /* When the firmware was built, as the compiler puts it: "Nov 15 2026 01:30:12". */
 const char *rcat_hal_firmware_built(void);
 

@@ -654,46 +654,11 @@ static lv_obj_t *mode_buttons;
 static lv_obj_t *mute_switch;
 static lv_obj_t *show_buttons;
 
-/* A row of choices, the chosen one filled in and the others dark: told apart
- * by how bright they are, not only by their color. It changes when the
- * finger lifts (CLICK_TRIG), not when it lands, so that swiping to the next
- * page from here doesn't change it. */
-static lv_obj_t *add_choices(lv_obj_t *parent, const char *const *map, int32_t w, int32_t h, int32_t y)
-{
-    lv_obj_t *m = lv_buttonmatrix_create(parent);
-    lv_buttonmatrix_set_map(m, map);
-    lv_buttonmatrix_set_button_ctrl_all(m, LV_BUTTONMATRIX_CTRL_CHECKABLE | LV_BUTTONMATRIX_CTRL_CLICK_TRIG);
-    lv_buttonmatrix_set_one_checked(m, true);
-    lv_obj_set_style_bg_opa(m, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(m, 0, 0);
-    lv_obj_set_style_pad_all(m, 0, 0);
-    lv_obj_set_style_pad_column(m, ui_px(4), 0);
-    lv_obj_set_style_radius(m, ui_px(10), LV_PART_ITEMS);
-    lv_obj_set_style_border_width(m, 0, LV_PART_ITEMS);
-    lv_obj_set_style_shadow_width(m, 0, LV_PART_ITEMS);
-    lv_obj_set_style_bg_opa(m, LV_OPA_COVER, LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(m, lv_color_hex(0x2a2a2a), LV_PART_ITEMS);
-    lv_obj_set_style_text_color(m, lv_color_hex(0x909090), LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(m, lv_palette_main(LV_PALETTE_PINK), LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_text_color(m, lv_color_white(), LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_size(m, w, h);
-    lv_obj_align(m, LV_ALIGN_CENTER, 0, y);
-    return m;
-}
-
-static void check_choice(lv_obj_t *m, uint32_t index)
-{
-    if (!lv_buttonmatrix_has_button_ctrl(m, index, LV_BUTTONMATRIX_CTRL_CHECKED))
-    {
-        lv_buttonmatrix_set_button_ctrl(m, index, LV_BUTTONMATRIX_CTRL_CHECKED);
-    }
-}
-
 static void show_setup(void)
 {
     const settings_t *s = settings_get();
-    check_choice(mode_buttons, comm_mode());    // the phone can change it too
-    check_choice(show_buttons, s->comm_auto_show);
+    ui_check_choice(mode_buttons, comm_mode());    // the phone can change it too
+    ui_check_choice(show_buttons, s->comm_auto_show);
     lv_obj_set_state(mute_switch, LV_STATE_CHECKED, s->comm_mute_speaker);
 }
 
@@ -728,7 +693,7 @@ static void add_setup_page(ui_feature_t *feature)
 
     // Push to talk, or talk whenever it hears you
     static const char *const modes[] = { "Push to talk", "Voice", "" };
-    mode_buttons = add_choices(setup_page, modes, ui_px(190), ui_px(36), ui_px(-46));
+    mode_buttons = ui_add_choices(setup_page, modes, ui_px(190), ui_px(36), ui_px(-46));
     lv_obj_add_event_cb(mode_buttons, mode_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     lv_obj_t *mute_label = lv_label_create(setup_page);
@@ -745,7 +710,7 @@ static void add_setup_page(ui_feature_t *feature)
     lv_obj_align(show_label, LV_ALIGN_CENTER, 0, ui_px(36));
 
     static const char *const shows[] = { "Off", "Talk", "Hear", "Both", "" };
-    show_buttons = add_choices(setup_page, shows, ui_px(176), ui_px(32), ui_px(64));
+    show_buttons = ui_add_choices(setup_page, shows, ui_px(176), ui_px(32), ui_px(64));
     lv_obj_add_event_cb(show_buttons, options_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     show_setup();
@@ -777,7 +742,7 @@ static void add_voice_page(ui_feature_t *feature)
     lv_obj_set_scrollable(voice_page, false);
 
     lv_obj_t *t = lv_label_create(voice_page);
-    lv_label_set_text(t, "HiveMind Voice");
+    lv_label_set_text(t, "HiveMind Voice Effect");
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, ui_px(28));
 
     size_t len = 32;
@@ -801,7 +766,7 @@ static void add_voice_page(ui_feature_t *feature)
     lv_obj_add_event_cb(voice_roller, voice_roller_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     lv_obj_t *hint = lv_label_create(voice_page);
-    lv_label_set_text(hint, "What the others hear,\nwhatever the speaker plays");
+    lv_label_set_text(hint, "What the hive hears.");
     lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(hint, COLOR_MUTED, 0);
     lv_obj_align(hint, LV_ALIGN_CENTER, 0, ui_px(74));
@@ -821,7 +786,7 @@ static void show_direct(void)
 {
     bool on = direct_running();
     lv_obj_set_state(direct_switch, LV_STATE_CHECKED, on);
-    check_choice(talk_on_buttons, comm_talk_on());     // the app can change it too
+    ui_check_choice(talk_on_buttons, comm_talk_on());     // the app can change it too
     char text[160];
     snprintf(text, sizeof(text), "%s, ch %u%s\nAs: %s", direct_group_name(), direct_channel(),
              direct_long_range() ? ", LR" : "", direct_own_name());
@@ -903,7 +868,7 @@ static void add_direct_page(ui_feature_t *feature)
     lv_obj_set_style_text_color(talk_label, COLOR_MUTED, 0);
     lv_obj_align(talk_label, LV_ALIGN_CENTER, 0, ui_px(-32));
     static const char *const transports[] = { "Server", "Direct", "" };
-    talk_on_buttons = add_choices(direct_page, transports, ui_px(170), ui_px(30), ui_px(-9));
+    talk_on_buttons = ui_add_choices(direct_page, transports, ui_px(170), ui_px(30), ui_px(-9));
     lv_obj_add_event_cb(talk_on_buttons, talk_on_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(direct_switch, direct_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
 

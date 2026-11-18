@@ -290,6 +290,41 @@ bool ui_show_page(lv_obj_t *page)
     return false;
 }
 
+/* A row of choices, the chosen one filled in and the others dark: told apart
+ * by how bright they are, not only by their color. It changes when the
+ * finger lifts (CLICK_TRIG), not when it lands, so that swiping to the next
+ * page from here doesn't change it. */
+lv_obj_t *ui_add_choices(lv_obj_t *parent, const char *const *map, int32_t w, int32_t h, int32_t y)
+{
+    lv_obj_t *m = lv_buttonmatrix_create(parent);
+    lv_buttonmatrix_set_map(m, map);
+    lv_buttonmatrix_set_button_ctrl_all(m, LV_BUTTONMATRIX_CTRL_CHECKABLE | LV_BUTTONMATRIX_CTRL_CLICK_TRIG);
+    lv_buttonmatrix_set_one_checked(m, true);
+    lv_obj_set_style_bg_opa(m, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(m, 0, 0);
+    lv_obj_set_style_pad_all(m, 0, 0);
+    lv_obj_set_style_pad_column(m, ui_px(4), 0);
+    lv_obj_set_style_radius(m, ui_px(10), LV_PART_ITEMS);
+    lv_obj_set_style_border_width(m, 0, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(m, 0, LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(m, LV_OPA_COVER, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(m, lv_color_hex(0x2a2a2a), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(m, lv_color_hex(0x909090), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(m, lv_palette_main(LV_PALETTE_PINK), LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(m, lv_color_white(), LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_size(m, w, h);
+    lv_obj_align(m, LV_ALIGN_CENTER, 0, y);
+    return m;
+}
+
+void ui_check_choice(lv_obj_t *m, uint32_t index)
+{
+    if (!lv_buttonmatrix_has_button_ctrl(m, index, LV_BUTTONMATRIX_CTRL_CHECKED))
+    {
+        lv_buttonmatrix_set_button_ctrl(m, index, LV_BUTTONMATRIX_CTRL_CHECKED);
+    }
+}
+
 void ui_add_startup_choice(ui_feature_t *feature, lv_obj_t *page, const char *label, const char *value)
 {
     if (startup_choice_count < MAX_STARTUP_CHOICES)
@@ -311,6 +346,11 @@ const char *ui_startup_choice_label(size_t index)
 const char *ui_startup_choice_value(size_t index)
 {
     return startup_choices[index].value;
+}
+
+const char *ui_startup_choice_group(size_t index)
+{
+    return startup_choices[index].feature->def->name;
 }
 
 int ui_find_startup_choice(const char *value)

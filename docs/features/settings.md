@@ -2,7 +2,7 @@
 
 *All boards*
 
-Settings that apply to the whole display, one per page.  Settings that belong to a single feature, like the [Voice Ring](voice-ring.md)'s color or the [Sound](sound.md) volume, are on that feature's own pages.
+Settings that apply to the whole display.  Settings that belong to a single feature, like the [Voice Ring](voice-ring.md)'s color or the [Sound](sound.md) volume, are on that feature's own pages.
 
 The [WiFi Hotspot Remote](phone-remote.md)'s Setup tab can set the brightness, rotation and startup page too, and shows the battery and uptime.
 
@@ -10,7 +10,7 @@ Settings are saved about two seconds after you change them, and are restored whe
 
 ## Brightness
 
-How bright the screen is, with the battery's charge above it, in percent and volts, and how long the display's been on since it was last switched on or restarted.  On the ESP32-S3-Touch-AMOLED-1.75, which has no backlight, the screen dims itself.
+How bright the screen is, with the battery's charge above it, in percent and volts, and how long the display's been on since it was last switched on or restarted.  At the bottom are the firmware's version, the board's WiFi MAC address, and when the firmware was built.  The MAC address is set at the factory and different on every board, so it serves as the unit's serial number: quote it when reporting a problem with a particular unit.  On the ESP32-S3-Touch-AMOLED-1.75, which has no backlight, the screen dims itself.
 
 The percentage is worked out from the voltage, along a discharge curve the board learns for itself (see [Battery Log](#battery-log) below), so it reads high while USB is plugged in and charging, and settles back once it's unplugged.  On the ESP32-S3-Touch-AMOLED-1.75, the power chip also says when it's charging, and a lightning bolt shows then; the percentage stays at 99% or below until the charger finishes, and then shows 100%.  That power chip has a fuel gauge too, but it isn't used: without a profile for the battery it read up to 15% high halfway through a run, and reached 0% half an hour before the board switched off.  The voltage is smoothed over about 10 seconds, so the percentage doesn't jump around as the screen's brightness or the speaker changes how much the board draws.
 
@@ -32,27 +32,35 @@ How many phones are paired with the Phone App's link.  *Pair a phone* lets a new
 
 Runs the display from a phone's web browser, over the board's own WiFi hotspot, for phones without the app.  While it's off, *At power-up* sets it to switch itself on whenever the display starts.  See [WiFi Hotspot Remote](phone-remote.md).
 
-## Rotation
+## Setup
 
-Turns the whole display, touch included, in 90 degree steps.  It helps when the display ends up sitting at an angle in the mask, and some housings turn the board a quarter turn, which this puts right (each board's build guide says which).  On the ESP32-S3-Touch-AMOLED-1.75 it starts at 180 degrees, to suit its housings.  The new rotation is applied about a second after you stop scrolling the roller.
+<img src="../images/screens/settings_setup.png" width="220" alt="The Setup page: rotation, model and the Level button">
 
-## Model
+Everything for fitting the display in the mask, on one page.
+
+### Rotation
+
+Turns the whole display, touch included, in 90 degree steps: tap **0°**, **90°**, **180°** or **270°**.  It helps when the display ends up sitting at an angle in the mask, and some housings turn the board a quarter turn, which this puts right (each board's build guide says which).  On the ESP32-S3-Touch-AMOLED-1.75 it starts at 180 degrees, to suit its housings.
+
+### Model
 
 *The ESP32-S3-Touch-AMOLED-1.75*
 
 Which housing the board's in: **Speaker** (the [speaker model](../build/speaker-housing.md)) or **Low-profile** (the [low-profile model](../build/low-profile-housing.md)), which has no speaker.  A new board asks the first time it starts.  On the low-profile model, the [Sound](sound.md) feature, *Play on speaker*, *Effect Volume* and the [Seal Test](../build/seal-test.md) are left out, and so are the phone remote's speaker controls.  The *Voice Effect* page stays: it picks the effect [HiveMind](comms.md) sends your voice through.
 
-What uses the speaker is set up as the board starts, so after changing it, tap **Restart**.  Boards set up before there was a choice count as the speaker model.  The phone remote's API sets it with `POST /api/display?speaker=1` (speaker) or `speaker=2` (low-profile), and `restart=1` to restart.
+What uses the speaker is set up as the board starts, so changing it asks to restart: tap **Restart**, or **Later** to restart some other time.  Boards set up before there was a choice count as the speaker model.  The phone remote's API sets it with `POST /api/display?speaker=1` (speaker) or `speaker=2` (low-profile), and `restart=1` to restart.
 
-## Level
+### Level
 
 *Boards with a supported accelerometer: the ESP32-S3 boards*
 
-A spirit level, for lining the display up on the mask.  See [Level](level.md).
+The **Level** button opens a spirit level, for lining the display up on the mask, over the whole screen.  Swipe in any direction to close it.  See [Level](level.md).
 
 ## Startup
 
-What's shown when the display turns on: any image (see [Images](images.md)), the blank page, the [Visualizer](visualizer.md), the [Terminal](terminal.md) or the [HiveMind](comms.md) status screen, depending on what the board has.
+<img src="../images/screens/settings_startup.png" width="220" alt="The Startup page, with Images chosen and the image under it">
+
+What's shown when the display turns on.  Tap **Images**, **Visualizer**, **HiveMind** or **Terminal** (whichever the board has).  With **Images**, scroll the list under them to the image, or *Blank* for the blank page (see [Images](images.md)).  The [Visualizer](visualizer.md) starts on the style it was last on, and [HiveMind](comms.md) on its status screen.
 
 ## Battery Log
 

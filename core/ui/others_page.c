@@ -27,6 +27,7 @@ typedef struct
     lv_obj_t *names[OTHERS_SENDERS_MAX];
     lv_obj_t *vias[OTHERS_SENDERS_MAX];
     lv_obj_t *status;
+    int32_t list_y;         // the middle of the list, where the status goes while it's empty
     others_sender_t senders[OTHERS_SENDERS_MAX];
     uint32_t shown_changes;
     uint32_t shown_age_s;
@@ -86,12 +87,14 @@ static void show(others_kind_t kind, bool always)
     }
     else if (n == 0)
     {
-        lv_label_set_text(p->status, "Nobody's sent any yet");
+        lv_label_set_text(p->status, "None received.");
     }
     else
     {
         lv_label_set_text(p->status, "Tap to allow, hold to forget");
     }
+    // With nobody listed, in the middle of the empty list; else under it
+    lv_obj_align(p->status, LV_ALIGN_CENTER, 0, n == 0 ? p->list_y : ui_px(88));
 }
 
 static void timer_cb(lv_timer_t *t)
@@ -167,7 +170,7 @@ lv_obj_t *ui_others_page_add(ui_feature_t *feature, others_kind_t kind)
     lv_obj_set_style_text_color(p->page, lv_color_white(), 0);
 
     lv_obj_t *title = lv_label_create(p->page);
-    lv_label_set_text(title, "From Others");
+    lv_label_set_text(title, kind == OTHERS_LOVENSE ? "Hive Commands" : "Hive Messages");
     lv_obj_set_style_text_color(title, COLOR_MUTED, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(28));
 
@@ -179,10 +182,17 @@ lv_obj_t *ui_others_page_add(ui_feature_t *feature, others_kind_t kind)
         p->unnamed = add_switch(p->page, "Unnamed", 88, unnamed_event_cb, NULL);
     }
 
+    // Who may send them, under its heading
+    lv_obj_t *heading = lv_label_create(p->page);
+    lv_label_set_text(heading, "Permissions");
+    lv_obj_set_style_text_color(heading, COLOR_MUTED, 0);
+    lv_obj_align(heading, LV_ALIGN_TOP_MID, 0, ui_px(more ? 122 : 89));
+
     lv_obj_t *list = lv_obj_create(p->page);
     lv_obj_remove_style_all(list);
-    lv_obj_set_size(list, ui_px(180), ui_px(more ? 76 : 100));
-    lv_obj_align(list, LV_ALIGN_CENTER, 0, ui_px(more ? 38 : 22));
+    lv_obj_set_size(list, ui_px(180), ui_px(more ? 56 : 84));
+    p->list_y = ui_px(more ? 50 : 34);
+    lv_obj_align(list, LV_ALIGN_CENTER, 0, p->list_y);
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(list, ui_px(8), 0);

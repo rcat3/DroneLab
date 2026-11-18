@@ -32,10 +32,6 @@
 #define UPDATE_POLL_MS    200
 #define COLOR_MUTED       lv_palette_main(LV_PALETTE_GREY)
 
-// Apply a new rotation only once the roller has been left alone this long, so
-// flicking past options doesn't rotate the screen under your finger.
-#define ROTATION_APPLY_DELAY_MS 1000
-
 static bool build(ui_feature_t *feature);
 static void on_navigate(void);
 
@@ -48,11 +44,6 @@ const ui_feature_def_t feature_settings = {
 static lv_obj_t *battery_label;
 static lv_obj_t *brightness_value_label;
 static lv_obj_t *brightness_slider;
-static lv_obj_t *rotation_roller;
-static lv_obj_t *startup_roller;
-static lv_timer_t *rotation_timer;
-static uint8_t pending_rotation;
-static bool rotation_pending;       // chosen, and waiting to be applied
 
 #define SYNC_MS 250     // how often the pages catch up with the phone remote
 
@@ -178,8 +169,18 @@ static void add_brightness_page(ui_feature_t *feature)
     // 2026-11-15 01:52: short enough to fit low on a round screen
     char built[24];
     firmware_built_short(built, sizeof(built));
+    // and the board's MAC address between them, to tell boards apart by
     lv_obj_t *version_label = lv_label_create(page);
-    lv_label_set_text_fmt(version_label, "%s\n%s", rcat_hal_firmware_version(), built);
+    uint8_t mac[6];
+    if (rcat_hal_mac_address(mac))
+    {
+        lv_label_set_text_fmt(version_label, "%s\n%02X:%02X:%02X:%02X:%02X:%02X\n%s", rcat_hal_firmware_version(),
+                              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], built);
+    }
+    else
+    {
+        lv_label_set_text_fmt(version_label, "%s\n%s", rcat_hal_firmware_version(), built);
+    }
     lv_obj_set_style_text_align(version_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(version_label, COLOR_MUTED, 0);
     lv_obj_align(version_label, LV_ALIGN_CENTER, 0, ui_px(78));
@@ -190,59 +191,28 @@ static void add_brightness_page(ui_feature_t *feature)
     lv_timer_ready(timer);
 }
 
-/* ----- Rotation ----- */
+/* ----- Setup: rotation, model and the Level ----- */
 
-static void rotation_apply_timer_cb(lv_timer_t *t)
+static lv_obj_t *rotation_buttons;
+static const char *const rotation_map[] = { "0°", "90°", "180°", "270°", "" };
+
+static void rotation_event_cb(lv_event_t *e)
 {
-    lv_timer_pause(t);
-    rotation_pending = false;
-
-    if (pending_rotation != settings_get()->rotation)
+    uint8_t rotation = (uint8_t)lv_buttonmatrix_get_selected_button(rotation_buttons);
+    if (rotation <= 3 && rotation != settings_get()->rotation)
     {
-        rcat_hal_display_set_rotation(pending_rotation);
-        settings_set_rotation(pending_rotation);
+        rcat_hal_display_set_rotation(rotation);
+        settings_set_rotation(rotation);
     }
 }
-
-static void rotation_roller_event_cb(lv_event_t *e)
-{
-    // Roller options are 0, 90, 180 and 270 degrees.
-    pending_rotation = lv_roller_get_selected(rotation_roller);
-    rotation_pending = true;
-
-    if (rotation_timer == NULL)
-    {
-        rotation_timer = lv_timer_create(rotation_apply_timer_cb, ROTATION_APPLY_DELAY_MS, NULL);
-    }
-    lv_timer_reset(rotation_timer);
-    lv_timer_resume(rotation_timer);
-}
-
-static void add_rotation_page(ui_feature_t *feature)
-{
-    lv_obj_t *page = ui_feature_add_page(feature, "Rotation", false);
-
-    rotation_roller = lv_roller_create(page);
-    lv_roller_set_options(rotation_roller, "0°\n90°\n180°\n270°", LV_ROLLER_MODE_NORMAL);
-    lv_roller_set_visible_row_count(rotation_roller, 3);
-    lv_roller_set_selected(rotation_roller, settings_get()->rotation, LV_ANIM_OFF);
-    lv_obj_center(rotation_roller);
-    lv_obj_add_event_cb(rotation_roller, rotation_roller_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
-
-    lv_obj_t *rotation_label = lv_label_create(page);
-    lv_label_set_text(rotation_label, "Rotation");
-    lv_obj_align_to(rotation_label, rotation_roller, LV_ALIGN_OUT_TOP_MID, 0, ui_px(-10));
-}
-
-/* ----- Speaker ----- */
 
 #if RCAT_SPEAKER_OPTIONAL
 // Which housing the board's in: the speaker model, or the low-profile model
 // with no speaker. What uses the speaker is set up at startup, so a change
 // takes a restart.
-static lv_obj_t *model_roller;
-static lv_obj_t *model_restart;
+static lv_obj_t *model_buttons;
 static uint8_t model_at_startup;
+static const char *const model_map[] = { "Speaker", "Low-profile", "" };
 
 static void model_restart_cb(lv_event_t *e)
 {
@@ -250,84 +220,250 @@ static void model_restart_cb(lv_event_t *e)
     rcat_hal_restart();
 }
 
-static void model_roller_event_cb(lv_event_t *e)
+static void model_later_cb(lv_event_t *e)
 {
-    uint8_t speaker = lv_roller_get_selected(model_roller) == 0 ? SETTINGS_SPEAKER_FITTED : SETTINGS_SPEAKER_NONE;
-    settings_set_speaker(speaker);
-    lv_obj_set_hidden(model_restart, speaker == model_at_startup);
+    lv_msgbox_close(lv_event_get_user_data(e));
 }
 
-static void add_model_page(ui_feature_t *feature)
+static void model_event_cb(lv_event_t *e)
 {
-    lv_obj_t *page = ui_feature_add_page(feature, "Model", false);
-    model_at_startup = settings_get()->speaker;
-
-    lv_obj_t *label = lv_label_create(page);
-    lv_label_set_text(label, "Model");
-    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, ui_px(40));
-
-    model_roller = lv_roller_create(page);
-    lv_roller_set_options(model_roller, "Speaker\nLow-profile", LV_ROLLER_MODE_NORMAL);
-    lv_roller_set_visible_row_count(model_roller, 2);
-    lv_roller_set_selected(model_roller, model_at_startup == SETTINGS_SPEAKER_NONE ? 1 : 0, LV_ANIM_OFF);
-    lv_obj_align(model_roller, LV_ALIGN_CENTER, 0, ui_px(-12));
-    lv_obj_add_event_cb(model_roller, model_roller_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
-
-    // Shown once it's changed
-    model_restart = lv_button_create(page);
-    lv_obj_set_size(model_restart, ui_px(130), ui_px(32));
-    lv_obj_set_style_radius(model_restart, LV_RADIUS_CIRCLE, 0);
-    lv_obj_align(model_restart, LV_ALIGN_CENTER, 0, ui_px(56));
-    lv_obj_add_event_cb(model_restart, model_restart_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *text = lv_label_create(model_restart);
-    lv_label_set_text(text, "Restart");
-    lv_obj_center(text);
-    lv_obj_set_hidden(model_restart, true);
+    uint8_t speaker = lv_buttonmatrix_get_selected_button(model_buttons) == 0 ? SETTINGS_SPEAKER_FITTED
+                                                                                : SETTINGS_SPEAKER_NONE;
+    if (speaker == settings_get()->speaker)
+    {
+        return;
+    }
+    settings_set_speaker(speaker);
+    if (speaker == model_at_startup)
+    {
+        return;     // back as it started
+    }
+    lv_obj_t *box = lv_msgbox_create(NULL);
+    lv_msgbox_add_text(box, "Restart to change\nthe model?");
+    lv_obj_t *restart = lv_msgbox_add_footer_button(box, "Restart");
+    lv_obj_add_event_cb(restart, model_restart_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *later = lv_msgbox_add_footer_button(box, "Later");
+    lv_obj_add_event_cb(later, model_later_cb, LV_EVENT_CLICKED, box);
 }
 #endif
 
+#if RCAT_FEATURE_LEVEL
+static void level_button_cb(lv_event_t *e)
+{
+    level_open();
+}
+#endif
+
+static lv_obj_t *add_label(lv_obj_t *page, const char *text, int32_t y)
+{
+    lv_obj_t *label = lv_label_create(page);
+    lv_label_set_text(label, text);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, ui_px(y));
+    return label;
+}
+
+static void add_setup_page(ui_feature_t *feature)
+{
+    lv_obj_t *page = ui_feature_add_page(feature, "Setup", false);
+#if RCAT_SPEAKER_OPTIONAL
+    bool model = true;
+#else
+    bool model = false;
+#endif
+#if RCAT_FEATURE_LEVEL
+    bool level = level_available();
+#else
+    bool level = false;
+#endif
+    // Top to bottom, centered on the round screen
+    int32_t y = model ? (level ? -84 : -62) : (level ? -60 : -26);
+
+    add_label(page, "Rotation", y);
+    rotation_buttons = ui_add_choices(page, rotation_map, ui_px(196), ui_px(34), ui_px(y + 26));
+    ui_check_choice(rotation_buttons, settings_get()->rotation);
+    lv_obj_add_event_cb(rotation_buttons, rotation_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    y += 62;
+
+#if RCAT_SPEAKER_OPTIONAL
+    model_at_startup = settings_get()->speaker;
+    add_label(page, "Model", y);
+    model_buttons = ui_add_choices(page, model_map, ui_px(196), ui_px(34), ui_px(y + 26));
+    ui_check_choice(model_buttons, model_at_startup == SETTINGS_SPEAKER_NONE ? 1 : 0);
+    lv_obj_add_event_cb(model_buttons, model_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    y += 62;
+#endif
+
+#if RCAT_FEATURE_LEVEL
+    if (level)
+    {
+        lv_obj_t *button = lv_button_create(page);
+        lv_obj_set_size(button, ui_px(120), ui_px(36));
+        lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
+        lv_obj_align(button, LV_ALIGN_CENTER, 0, ui_px(y + 12));
+        lv_obj_add_event_cb(button, level_button_cb, LV_EVENT_CLICKED, NULL);
+        lv_obj_t *text = lv_label_create(button);
+        lv_label_set_text(text, "Level");
+        lv_obj_center(text);
+    }
+#endif
+}
+
 /* ----- Startup page ----- */
+
+// The features that can be shown at startup, as a grid of choices, and for
+// the one with more than one choice (Images), a roller of them
+#define MAX_GROUPS 6
+static const char *group_map[MAX_GROUPS + 3];       // the names, a row break and the end
+static const char *group_names[MAX_GROUPS];
+static size_t group_count;
+static lv_obj_t *group_buttons;
+static lv_obj_t *startup_roller;
+static size_t roller_choices[64];                   // the startup choice of each roller line
+static size_t roller_count;
+static int roller_group = -1;                       // the group the roller's for
+
+static int group_of(size_t choice)
+{
+    const char *name = ui_startup_choice_group(choice);
+    for (size_t g = 0; g < group_count; g++)
+    {
+        if (strcmp(group_names[g], name) == 0)
+        {
+            return (int)g;
+        }
+    }
+    return -1;
+}
+
+static size_t group_first(int g)
+{
+    for (size_t i = 0; i < ui_startup_choice_count(); i++)
+    {
+        if (group_of(i) == g)
+        {
+            return i;
+        }
+    }
+    return 0;
+}
+
+/* Show the saved choice: its group checked, and the roller if it's Images */
+static void show_startup(void)
+{
+    int choice = ui_find_startup_choice(settings_get()->startup_image);
+    if (choice < 0)
+    {
+        choice = 0;     // unknown values show the first choice, as at startup
+    }
+    int g = group_of((size_t)choice);
+    if (g < 0)
+    {
+        return;
+    }
+    // The grid's index skips its row break
+    ui_check_choice(group_buttons, (uint32_t)g);
+    lv_obj_set_hidden(startup_roller, g != roller_group);
+    for (size_t i = 0; i < roller_count; i++)
+    {
+        if (roller_choices[i] == (size_t)choice && lv_roller_get_selected(startup_roller) != i
+            && !lv_obj_has_state(startup_roller, LV_STATE_PRESSED))
+        {
+            lv_roller_set_selected(startup_roller, i, LV_ANIM_OFF);
+        }
+    }
+}
+
+static void group_event_cb(lv_event_t *e)
+{
+    int g = (int)lv_buttonmatrix_get_selected_button(group_buttons);
+    if (g < 0 || (size_t)g >= group_count)
+    {
+        return;
+    }
+    size_t choice = g == roller_group ? roller_choices[lv_roller_get_selected(startup_roller)] : group_first(g);
+    settings_set_startup_image(ui_startup_choice_value(choice));
+    show_startup();
+}
 
 static void startup_roller_event_cb(lv_event_t *e)
 {
-    settings_set_startup_image(ui_startup_choice_value(lv_roller_get_selected(startup_roller)));
+    settings_set_startup_image(ui_startup_choice_value(roller_choices[lv_roller_get_selected(startup_roller)]));
 }
 
 static void add_startup_page(ui_feature_t *feature)
 {
     lv_obj_t *page = ui_feature_add_page(feature, "Startup", false);
 
-    // Roller options: every feature's startup choices, separated by newlines.
-    size_t len = 1;
+    // The groups, in the order the features come
     for (size_t i = 0; i < ui_startup_choice_count(); i++)
     {
-        len += strlen(ui_startup_choice_label(i)) + 1;
+        if (group_of(i) < 0 && group_count < MAX_GROUPS)
+        {
+            group_names[group_count++] = ui_startup_choice_group(i);
+        }
     }
-    char *options = lv_malloc(len);
-    options[0] = '\0';
+    size_t n = 0;
+    for (size_t g = 0; g < group_count; g++)
+    {
+        if (g > 0 && g % 2 == 0)
+        {
+            group_map[n++] = "\n";
+        }
+        group_map[n++] = group_names[g];
+    }
+    group_map[n] = "";
+
+    // The group with more than one choice (Images, with its blank page)
+    // gets the roller
+    char *options = NULL;
+    size_t len = 1;
+    for (size_t g = 0; g < group_count && roller_group < 0; g++)
+    {
+        size_t count = 0;
+        for (size_t i = 0; i < ui_startup_choice_count(); i++)
+        {
+            count += group_of(i) == (int)g;
+        }
+        if (count > 1)
+        {
+            roller_group = (int)g;
+        }
+    }
     for (size_t i = 0; i < ui_startup_choice_count(); i++)
+    {
+        if (group_of(i) == roller_group && roller_count < sizeof(roller_choices) / sizeof(roller_choices[0]))
+        {
+            roller_choices[roller_count++] = i;
+            len += strlen(ui_startup_choice_label(i)) + 1;
+        }
+    }
+    options = lv_malloc(len);
+    options[0] = '\0';
+    for (size_t i = 0; i < roller_count; i++)
     {
         if (i > 0)
         {
             strcat(options, "\n");
         }
-        strcat(options, ui_startup_choice_label(i));
+        strcat(options, ui_startup_choice_label(roller_choices[i]));
     }
 
-    // Unknown values (e.g. an image that's since been removed) show the first choice.
-    int selected = ui_find_startup_choice(settings_get()->startup_image);
+    add_label(page, "Startup", -86);
+    size_t rows = (group_count + 1) / 2;
+    group_buttons = ui_add_choices(page, group_map, ui_px(204), ui_px(rows > 1 ? 72 : 34),
+                                   ui_px(rows > 1 ? -38 : -56));
+    lv_obj_set_style_pad_row(group_buttons, ui_px(4), 0);
+    lv_obj_add_event_cb(group_buttons, group_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     startup_roller = lv_roller_create(page);
     lv_roller_set_options(startup_roller, options, LV_ROLLER_MODE_NORMAL);
     lv_free(options);   // the roller keeps its own copy
-    lv_roller_set_visible_row_count(startup_roller, 3);
-    lv_roller_set_selected(startup_roller, (selected < 0) ? 0 : selected, LV_ANIM_OFF);
-    lv_obj_center(startup_roller);
+    lv_roller_set_visible_row_count(startup_roller, 2);
+    lv_obj_set_width(startup_roller, ui_px(160));
+    lv_obj_align(startup_roller, LV_ALIGN_CENTER, 0, ui_px(rows > 1 ? 44 : 20));
     lv_obj_add_event_cb(startup_roller, startup_roller_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    lv_obj_t *startup_label = lv_label_create(page);
-    lv_label_set_text(startup_label, "Startup");
-    lv_obj_align_to(startup_label, startup_roller, LV_ALIGN_OUT_TOP_MID, 0, ui_px(-10));
+    show_startup();
 }
 
 /* ----- Battery log ----- */
@@ -954,18 +1090,8 @@ static void sync_timer_cb(lv_timer_t *t)
         lv_label_set_text_fmt(brightness_value_label, "%d%%", s->brightness);
         lv_obj_align_to(brightness_value_label, brightness_slider, LV_ALIGN_OUT_BOTTOM_MID, 0, ui_px(10));
     }
-    if (!rotation_pending && !lv_obj_has_state(rotation_roller, LV_STATE_PRESSED)
-        && lv_roller_get_selected(rotation_roller) != s->rotation)
-    {
-        lv_roller_set_selected(rotation_roller, s->rotation, LV_ANIM_OFF);
-        pending_rotation = s->rotation;
-    }
-    int startup = ui_find_startup_choice(s->startup_image);
-    if (startup >= 0 && !lv_obj_has_state(startup_roller, LV_STATE_PRESSED)
-        && lv_roller_get_selected(startup_roller) != (uint32_t)startup)
-    {
-        lv_roller_set_selected(startup_roller, startup, LV_ANIM_OFF);
-    }
+    ui_check_choice(rotation_buttons, s->rotation);
+    show_startup();
 }
 
 static bool build(ui_feature_t *feature)
@@ -984,13 +1110,7 @@ static bool build(ui_feature_t *feature)
         add_remote_page(feature);
     }
 #endif
-    add_rotation_page(feature);
-#if RCAT_SPEAKER_OPTIONAL
-    add_model_page(feature);
-#endif
-#if RCAT_FEATURE_LEVEL
-    feature_level_add_page(feature);    // with Rotation, for lining the display up
-#endif
+    add_setup_page(feature);            // rotation, model and the Level, for lining the display up
     add_startup_page(feature);
     lv_timer_create(sync_timer_cb, SYNC_MS, NULL);
     if (battery_log_available())
@@ -1008,7 +1128,4 @@ static bool build(ui_feature_t *feature)
 
 static void on_navigate(void)
 {
-#if RCAT_FEATURE_LEVEL
-    feature_level_on_navigate();
-#endif
 }

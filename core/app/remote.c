@@ -982,6 +982,18 @@ static bool run_command(const char *name, const char *query, const char *body, s
         {
             settings_set_speaker((uint8_t)speaker);
         }
+#if RCAT_FEATURE_LEVEL
+        // The Level, over the whole screen, as Setup's Level button
+        int level = query_int(query, "level", -1);
+        if (level == 1)
+        {
+            level_open();
+        }
+        else if (level == 0)
+        {
+            level_close();
+        }
+#endif
         if (query_int(query, "restart", 0) == 1)
         {
             settings_save_now();
