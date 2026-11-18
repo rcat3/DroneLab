@@ -34,7 +34,7 @@ static void set_defaults(settings_t *s)
 {
     memset(s, 0, sizeof(*s));
     s->brightness = SETTINGS_DEFAULT_BRIGHTNESS;
-    s->rotation = 0;
+    s->rotation = SETTINGS_DEFAULT_ROTATION;
     s->startup_image[0] = '\0';
     s->voice_ring = 0;
     s->voice_ring_color = 0;

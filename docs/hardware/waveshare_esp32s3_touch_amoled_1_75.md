@@ -16,7 +16,7 @@ Use the bare board, not the -B version that comes in its own case.
 - **Voice through the mask:** the microphones hear you through the mask's speaking diaphragm, which booms around 250 Hz and muffles everything above about 2 kHz, where the consonants are.  The firmware turns the boom down and the treble up (`VOICE_BOOM_` and `VOICE_TREBLE_`), which makes the voice effects much easier to understand.  More treble than that mostly brings up hiss.
 - **Speaker:** the microphones and the speaker share one audio clock, so sound is resampled to 32 kHz for the speaker, which is plenty for a small speaker.  `SPK_VOLUME` in `hal_board.c` sets how loud the board's amplifier goes, on top of the volume setting.
 - **Sealing the speaker from the microphones:** the microphones listen into the housing's chamber, so the less of the speaker reaches it, the louder the voice effect can go.  In the speaker model, plasticine around the speaker's wire and behind the speaker, a sealed cell for the microphones, and open-cell foam in it each help.  Sealing the speaker's opening and the plasticine behind it cut the speaker in the microphones by about 5 dB, and what's left after echo cancelling by about 11 dB.
-- **Rotation:** in both housings the board is turned a quarter turn, with its USB-C port facing right, and the Rotation setting that puts the picture upright is 180 degrees.
+- **Rotation:** in both housings the board is turned a quarter turn, with its USB-C port facing right, and the Rotation setting that puts the picture upright is 180 degrees.  The firmware starts with it set to that.
 - **Images:** 466 pixels across fills the screen.
 - **Not used yet:** the clock chip, and the GPS on the -G version.
 

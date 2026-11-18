@@ -6,6 +6,14 @@
 #define SETTINGS_DEFAULT_BRIGHTNESS 50
 #define SETTINGS_DEFAULT_VOLUME     50
 #define SETTINGS_DEFAULT_VOICE_VOLUME 50
+
+/* The display's rotation on a new board, in clockwise quarter turns. The
+ * board's .cmake file sets it to suit the way its housing holds the board. */
+#ifdef RCAT_DEFAULT_ROTATION
+#define SETTINGS_DEFAULT_ROTATION   RCAT_DEFAULT_ROTATION
+#else
+#define SETTINGS_DEFAULT_ROTATION   0
+#endif
 #define SETTINGS_NAME_LEN           24
 #define SETTINGS_REMOTE_LEN         16
 #define SETTINGS_CURVE_POINTS       21      // 100%, 95% ... 0%

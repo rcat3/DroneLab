@@ -26,11 +26,13 @@ Press `PWR`, the lower button on the left side, marked with a power symbol.  The
 
 Swipe **up and down** to move between features, and **left and right** between a feature's pages.  Settings is the last feature.  See [Using the Display](../using-the-display.md).
 
-## 4. Turn the picture the right way round
+## 4. Check the picture's the right way up
 
 <a href="../features/settings.md#rotation"><img src="../images/screens/settings_rotation.png" width="180" align="right" alt="The Rotation page, set to 180 degrees"></a>
 
-In the housing, the board sits turned from its usual way up, with its USB-C port facing the side, so the picture needs turning to match.  Swipe to **Settings**, then to **Rotation**, and scroll the roller to **180°**.  The picture turns about a second after you stop scrolling.
+The picture should be upright with the speaker below the display, or on the low-profile model, with the USB-C port on the right.  In the housing, the board sits turned from its usual way up, and the firmware already turns the picture to match: Rotation starts at 180°.
+
+If the picture isn't upright (on a board that's been used before, say, which keeps its old setting), swipe to **Settings**, then to **Rotation**, and scroll the roller until it is: 180° in both housings.  The picture turns about a second after you stop scrolling.
 
 <br clear="right">
 

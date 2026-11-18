@@ -138,6 +138,7 @@ Two more settings are fixed when the firmware is built:
 
 - `RCAT_VOICE_FX`, in each ESP32 board's `board.cmake`, picks whether [voice effects](features/voice-effects.md) are built in.  They're on for the ESP32-S3-Touch-AMOLED-1.75, whose echo canceller lets them play on the speaker without feeding back, and off for the ESP32-S3-Touch-LCD-1.46.
 - `RCAT_LARGE_IMAGES`, in each board's `.cmake` file, picks whether full screen animated GIFs are built in (see [Animated GIF memory use](features/images.md#animated-gif-memory-use)).
+- `RCAT_DEFAULT_ROTATION`, in a board's `.cmake` file, sets the display's [Rotation](features/settings.md#rotation) on a new board, in clockwise quarter turns, to suit the way its housing holds it.  It's 2 (180 degrees) for the ESP32-S3-Touch-AMOLED-1.75, and 0 when it isn't set.  A board that already has saved settings keeps its own.
 
 ## Other boards
 

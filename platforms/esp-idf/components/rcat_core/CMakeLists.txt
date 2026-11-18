@@ -56,6 +56,12 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
         target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_VOICE_FX=1)
     endif()
 
+    # The display's rotation on a new board, to suit its housing (see board.cmake)
+    idf_build_get_property(default_rotation RCAT_DEFAULT_ROTATION)
+    if(default_rotation)
+        target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_DEFAULT_ROTATION=${default_rotation})
+    endif()
+
     # The comm channel, on boards where a phone can connect over Bluetooth
     # (CONFIG_BT_NIMBLE_ROLE_PERIPHERAL in the board's sdkconfig.defaults)
     if(CONFIG_BT_NIMBLE_ROLE_PERIPHERAL)

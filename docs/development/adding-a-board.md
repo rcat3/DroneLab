@@ -6,7 +6,7 @@ A new display means a board folder with its HAL and its screen size, without cop
 
 ### An RP2040 or RP2350 board
 
-1. Add `platforms/pico/boards/<board>.cmake`, like [`waveshare_rp2350_touch_lcd_1_28.cmake`](../../platforms/pico/boards/waveshare_rp2350_touch_lcd_1_28.cmake).  It sets `PICO_BOARD`, `BOARD_DIR` (the folder with its HAL), `RCAT_IMAGE_SIZE` (the screen's size in pixels) and `RCAT_LARGE_IMAGES` (whether full screen animated GIFs fit in its RAM).
+1. Add `platforms/pico/boards/<board>.cmake`, like [`waveshare_rp2350_touch_lcd_1_28.cmake`](../../platforms/pico/boards/waveshare_rp2350_touch_lcd_1_28.cmake).  It sets `PICO_BOARD`, `BOARD_DIR` (the folder with its HAL), `RCAT_IMAGE_SIZE` (the screen's size in pixels) and `RCAT_LARGE_IMAGES` (whether full screen animated GIFs fit in its RAM), and optionally `RCAT_DEFAULT_ROTATION` (the display's rotation on a new board, in clockwise quarter turns, if its housing turns it).
 2. If its hardware differs from the 1.28" boards, add a folder for its HAL and drivers under `platforms/pico/boards/`, and point `BOARD_DIR` at it.
 3. Build it with `-DBOARD=<board>`.
 
@@ -14,7 +14,7 @@ A new display means a board folder with its HAL and its screen size, without cop
 
 Add `platforms/esp-idf/boards/<board>/`, named after the board, with:
 
-- `board.cmake` - Sets `IDF_TARGET`, `RCAT_IMAGE_SIZE`, `RCAT_LARGE_IMAGES` and `RCAT_VOICE_FX` (whether voice effects are built in: only for a board whose speaker can play them without feeding back).
+- `board.cmake` - Sets `IDF_TARGET`, `RCAT_IMAGE_SIZE`, `RCAT_LARGE_IMAGES` and `RCAT_VOICE_FX` (whether voice effects are built in: only for a board whose speaker can play them without feeding back), and optionally `RCAT_DEFAULT_ROTATION` (the display's rotation on a new board, in clockwise quarter turns, if its housing turns it).
 - `CMakeLists.txt` - Registers the board's component, which requires `rcat_core` and `rcat_esp32`.
 - `hal_board.c` - The board's own HAL: display, touch, audio, battery, accelerometer axes and the SD card's pins.  Everything else is in `components/rcat_esp32/` already.
 - `idf_component.yml` - The drivers it needs from Espressif's component registry.  The first build makes `dependencies.lock`, which pins their versions; commit it.
