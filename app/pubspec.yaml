@@ -74,6 +74,8 @@ flutter:
   # The phone remote's page, copied from core/app by tools/gen_remote_page.py
   assets:
     - assets/remote_page.html
+    # The firmware it carries, put there by tools/release/bundle_firmware.sh
+    - assets/firmware/
 
   # The board's Terminal letters: unscii 8, public domain
   # (http://viznut.fi/unscii/), from third_party/lvgl

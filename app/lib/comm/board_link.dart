@@ -37,12 +37,23 @@ class BoardLink extends ChangeNotifier {
   /// The board's firmware version (rcat_hal_firmware_version), once it's said.
   String? firmware;
 
+  /// The kind of board (RCAT_BOARD_NAME), and whether the app can update its
+  /// firmware, once it's said (commVersion 7; null and false before).
+  String? model;
+  bool canUpdate = false;
+
+  /// The longest message the board takes, and how many it keeps before it
+  /// drops the oldest: as it says (commVersion 7), or as before.
+  int msgMax = boardMaxWriteV3;
+  int msgQueue = 32;
+
   /// How big the board shows avatars, in pixels, and how many it keeps,
   /// once it's said; 0 if it doesn't.
   int avatarSize = 0;
   int avatarSlots = 0;
 
   final _avatarAcks = StreamController<AvatarAck>.broadcast();
+  final _updateAcks = StreamController<UpdateAck>.broadcast();
   final _directSounds = StreamController<DirectSound>.broadcast();
   final _directPeers = StreamController<DirectPeer>.broadcast();
   final _directGroups = StreamController<DirectGroupHeard>.broadcast();
@@ -56,9 +67,10 @@ class BoardLink extends ChangeNotifier {
   final _directAvatars = StreamController<DirectAvatarPiece>.broadcast();
   Stream<DirectAvatarPiece> get directAvatars => _directAvatars.stream;
   Stream<AvatarAck> get avatarAcks => _avatarAcks.stream;
+  Stream<UpdateAck> get updateAcks => _updateAcks.stream;
 
   /// The longest message the board takes.
-  int get maxWrite => (status?.version ?? 0) >= 3 ? math.min(boardMaxWriteV3, mtu - 3) : boardMaxWrite;
+  int get maxWrite => (status?.version ?? 0) >= 3 ? math.min(msgMax, mtu - 3) : boardMaxWrite;
 
   BoardState state = BoardState.off;
   String? error;
@@ -185,7 +197,10 @@ class BoardLink extends ChangeNotifier {
     state = _wanted ? BoardState.connecting : BoardState.off;
     error = why;
     status = null;
-    firmware = null;
+    firmware = model = null;
+    canUpdate = false;
+    msgMax = boardMaxWriteV3;
+    msgQueue = 32;
     avatarSize = avatarSlots = 0;
     notifyListeners();
     _retry?.cancel();
@@ -211,6 +226,8 @@ class BoardLink extends ChangeNotifier {
       _onAnswerPiece(msg);
     } else if (msg is AvatarAck) {
       _avatarAcks.add(msg);
+    } else if (msg is UpdateAck) {
+      _updateAcks.add(msg);
     } else if (msg is DirectSound) {
       _directSounds.add(msg);
     } else if (msg is DirectPeer) {
@@ -236,6 +253,10 @@ class BoardLink extends ChangeNotifier {
             firmware = v['firmware'] as String?;
             avatarSize = (v['avatar'] as num?)?.toInt() ?? 0;
             avatarSlots = (v['avatars'] as num?)?.toInt() ?? 0;
+            model = v['board'] as String?;
+            canUpdate = v['update'] == 1;
+            msgMax = (v['msgmax'] as num?)?.toInt() ?? boardMaxWriteV3;
+            msgQueue = (v['msgs'] as num?)?.toInt() ?? 32;
             notifyListeners();
           }
         }).catchError((_) {}).whenComplete(() => _askingVersion = false);
@@ -314,15 +335,15 @@ class BoardLink extends ChangeNotifier {
 
   /// Send without waiting for the board to say it's got it, for avatars'
   /// pieces. Returns false if the link's gone.
-  Future<bool> sendFast(Uint8List msg) async {
-    for (var tries = 0; tries < 20; tries++) {
+  Future<bool> sendFast(Uint8List msg, {int tries = 20, Duration wait = const Duration(milliseconds: 20)}) async {
+    for (var i = 0; i < tries; i++) {
       final id = deviceId;
       if (id == null || state != BoardState.connected) return false;
       try {
         await UniversalBle.write(id, serviceUuid, fromPhoneUuid, msg, withoutResponse: true);
         return true;
       } catch (_) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));   // its buffer's full
+        await Future<void>.delayed(wait);   // its buffer's full
       }
     }
     return false;
@@ -346,7 +367,10 @@ class BoardLink extends ChangeNotifier {
     }
     state = BoardState.off;
     status = null;
-    firmware = null;
+    firmware = model = null;
+    canUpdate = false;
+    msgMax = boardMaxWriteV3;
+    msgQueue = 32;
     avatarSize = avatarSlots = 0;
     notifyListeners();
   }

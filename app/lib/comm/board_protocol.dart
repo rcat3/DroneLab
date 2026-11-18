@@ -62,6 +62,7 @@ const commVersionCommands = 4;
 const commVersionRemote = 2;
 const commVersionPeerFirmware = 5;
 const commVersionMessages = 6;
+const commVersionUpdate = 7;     // updating the firmware from the app, and status bit 5
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -82,6 +83,7 @@ const _msgRecord = 0x0A;
 const _msgCommand = 0x0B;
 const _msgMessage = 0x0C;
 const _msgDirectAvatar = 0x0D;
+const _msgUpdate = 0x0E;
 
 /// No avatar, in a slot.
 const avatarNone = 0xFF;
@@ -111,8 +113,10 @@ class BoardStatus {
   final int? battery;       // percent, null if not known
   final bool charging;
   final bool otherVoice;    // someone's talking in another direct comms group nearby
+  final bool otherFirmware; // boards with another version of direct comms nearby, which can't be heard
   BoardStatus(this.version, this.mode, this.sending, this.hearsVoice, this.buttonConnected,
-      [this.recording = false, this.battery, this.charging = false, this.otherVoice = false]);
+      [this.recording = false, this.battery, this.charging = false, this.otherVoice = false,
+      this.otherFirmware = false]);
 }
 
 /// The board's voice while recording: as [BoardSound], kept apart from it.
@@ -198,7 +202,8 @@ Object? parseBoardMessage(Uint8List data) {
       final mode = data[2] < BoardMode.values.length ? BoardMode.values[data[2]] : BoardMode.pushToTalk;
       final charge = data.length >= 5 && data[4] != 0xFF ? data[4] : null;
       return BoardStatus(data[1], mode, data[3] & 1 != 0, data[3] & 2 != 0, data[3] & 4 != 0, data[3] & 8 != 0,
-          charge == null ? null : charge & 0x7F, charge != null && charge & 0x80 != 0, data[3] & 16 != 0);
+          charge == null ? null : charge & 0x7F, charge != null && charge & 0x80 != 0, data[3] & 16 != 0,
+          data[3] & 32 != 0);
     case _msgRecord:
       return RecordedSound(BoardSound(data[1] | (data[2] << 8), data[3] & 1 != 0, data[3] & 2 != 0,
           Uint8List.sublistView(data, 4)));
@@ -229,6 +234,10 @@ Object? parseBoardMessage(Uint8List data) {
     final id = data.sublist(1, 5).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
     return DirectGroupHeard(id, data[5].toSigned(8), data[6], data[7], data[8] & 1 != 0,
         utf8.decode(data.sublist(9), allowMalformed: true));
+  }
+  if (data[0] == _msgUpdate && data.length >= 7) {
+    return UpdateAck(data[1] & 1 != 0, data[1] & 2 != 0, data[2],
+        data[3] | (data[4] << 8) | (data[5] << 16) | (data[6] << 24), data[1] & 4 != 0);
   }
   if (data[0] == _msgAvatar && data.length >= 7) {
     final got = data[3] | (data[4] << 8) | (data[5] << 16) | (data[6] << 24);
@@ -449,3 +458,43 @@ Uint8List commandToDirect(List<int> boards, List<int> cmd) {
   final ids = <int>[for (final id in boards) ...[id & 0xFF, (id >> 8) & 0xFF, (id >> 16) & 0xFF, (id >> 24) & 0xFF]];
   return Uint8List.fromList([_msgCommand, 0, boards.length, ...ids, ...cmd]);
 }
+
+/// The board's answer to the firmware coming from the app (commVersion 7).
+class UpdateAck {
+  final bool done;      // the end's been dealt with
+  final bool ok;        // all's well
+  final bool installing;    // it's all here, and the board's installing it
+  final int result;     // what went wrong (updater.h's update_result_t), 0 for nothing
+  final int received;   // how much of the firmware's come
+  UpdateAck(this.done, this.ok, this.result, this.received, [this.installing = false]);
+}
+
+/// Why an update went wrong, from [UpdateAck.result].
+String updateProblem(int result) => switch (result) {
+      1 => "That firmware isn't for this unit",
+      2 => "That firmware doesn't fit the unit",
+      3 => 'The battery is too low. Charge it to 20% or more first',
+      4 => "The unit couldn't start the update",
+      5 => 'The update was interrupted',
+      6 => "The unit couldn't write the firmware",
+      7 => 'Not all of the firmware arrived',
+      8 => 'The firmware was damaged on the way',
+      _ => 'The update failed',
+    };
+
+/// The start of an update: the firmware's length, the board it's for, and
+/// its version, for the board's screen.
+Uint8List updateStartMessage(int length, String board, String version) {
+  final text = utf8.encode('$board\n$version');
+  return Uint8List.fromList([_msgUpdate, 0x01, ..._le32(length), ...text]);
+}
+
+/// A piece of the firmware, at [offset]; [ack] asks the board to say how
+/// far it's got.
+Uint8List updateDataMessage(int offset, Uint8List data, {bool ack = false}) =>
+    Uint8List.fromList([_msgUpdate, ack ? 0x04 : 0x00, ..._le32(offset), ...data]);
+
+/// The end: the board checks it and restarts into it.
+Uint8List updateEndMessage() => Uint8List.fromList([_msgUpdate, 0x02]);
+
+List<int> _le32(int v) => [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF];

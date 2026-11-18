@@ -31,6 +31,15 @@ flutter build apk --release
 
 The Mumble test logs two clients in to a real server and sends voice from one to the other.
 
+For a release, put the release's firmware in the app first, so it can keep boards up to date with it:
+
+```
+tools/release/build_firmware.sh          # from the repo's root, with ESP-IDF's export.sh run
+tools/release/bundle_firmware.sh         # copies it to assets/firmware/
+```
+
+An app built without it works the same, but doesn't offer to update boards.
+
 The APK is in `build/app/outputs/flutter-apk/app-release.apk`.  For handing the app out, `flutter build apk --release --split-per-abi` makes one smaller APK per CPU type instead; most phones want the arm64-v8a one.
 
 Release builds are signed with the key that `android/key.properties` names (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`); it and the keystore stay out of the repo.  Without it they're signed with the debug key.

@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# The firmware the app carries (tools/release/bundle_firmware.sh)
+/assets/firmware/firmware.bin
+/assets/firmware/firmware.json

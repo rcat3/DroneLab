@@ -1,0 +1,1 @@
+The firmware the app carries, to keep boards in step with it: `firmware.bin` and `firmware.json`, put here by `tools/release/bundle_firmware.sh` before a release build. They're not kept in git. Without them, the app just doesn't offer to update boards.

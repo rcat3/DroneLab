@@ -4,6 +4,7 @@ import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
+import 'firmware_ui.dart';
 import 'groups_page.dart';
 import 'people.dart';
 import 'person_sheet.dart';
@@ -139,14 +140,16 @@ class _ChannelHeader extends StatelessWidget {
     final canChange = onDirect || (m?.channels.length ?? 0) > 1;
     return SectionHeader(
       name.toLowerCase().contains('channel') ? name : 'Channel $name',
-      trailing: canChange
-          ? OutlinedButton(
-              onPressed: () => onDirect
-                  ? Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupsPage(comm: comm)))
-                  : _pickChannel(context, m!),
-              child: const Text('Change'),
-            )
-          : null,
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        OtherFirmwareIcon(comm: comm),
+        if (canChange)
+          OutlinedButton(
+            onPressed: () => onDirect
+                ? Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupsPage(comm: comm)))
+                : _pickChannel(context, m!),
+            child: const Text('Change'),
+          ),
+      ]),
     );
   }
 

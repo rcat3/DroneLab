@@ -18,6 +18,7 @@ abstract final class Kc {
   static const pink = Color(0xFFFF40C0);
   static const red = Color(0xFFD7263D);
   static const softRed = Color(0xFFFF6B7D);
+  static const warn = Color(0xFFFFC940);        // something to see to, not an error
   static const otherAir = Color(0xFFC4BCCC);    // voice on another channel, not heard
 
   /// The board's Terminal letters (unscii 8). Each letter's as wide as it's

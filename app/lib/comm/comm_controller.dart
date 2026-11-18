@@ -17,6 +17,7 @@ import 'avatars.dart';
 import 'background.dart';
 import 'board_link.dart';
 import 'board_protocol.dart';
+import 'firmware_update.dart';
 import 'jitter.dart';
 import 'media_buttons.dart';
 import 'recorder.dart';
@@ -177,6 +178,34 @@ class CommController extends ChangeNotifier {
   Uint8List? avatar;
   late final BoardAvatars _boardAvatars = BoardAvatars(board, _updateBoardScreen);
 
+  // ----- The board's firmware -----
+
+  /// The firmware the app carries, if it does (see firmware_update.dart).
+  BundledFirmware? bundledFirmware;
+  late final FirmwareUpdate firmwareUpdate = FirmwareUpdate(board);
+
+  /// How the board's firmware stands against the app's, once it's said.
+  FirmwareStanding get firmwareStanding {
+    final status = board.status;
+    if (board.state != BoardState.connected || status == null) return FirmwareStanding.unknown;
+    // Older than the app can update: only the web installer will do
+    if (status.version < commVersionUpdate) return FirmwareStanding.needsInstaller;
+    final b = bundledFirmware;
+    final mine = releaseOf(board.firmware);
+    final theirs = b == null ? null : releaseOf(b.version);
+    if (board.firmware == null || mine == null || b == null || theirs == null || board.model != b.board) {
+      return FirmwareStanding.unknown;
+    }
+    final c = compareReleases(mine, theirs);
+    if (c < 0) return board.canUpdate ? FirmwareStanding.canUpdate : FirmwareStanding.needsInstaller;
+    return c > 0 ? FirmwareStanding.newer : FirmwareStanding.current;
+  }
+
+  Future<void> updateFirmware() async {
+    final b = bundledFirmware;
+    if (b != null) await firmwareUpdate.run(b);
+  }
+
   // The board's voice, numbered for Mumble in 10 ms frames, keeping the
   // board's gaps so listeners' decoders fill them in.
   int _seq = 0;
@@ -189,6 +218,7 @@ class CommController extends ChangeNotifier {
 
   Future<void> init() async {
     board.appVersion = (await PackageInfo.fromPlatform()).version;
+    bundledFirmware = await BundledFirmware.load();
     final p = _prefs = await SharedPreferences.getInstance();
     server = ServerSettings(
       host: p.getString('host') ?? '',
@@ -1097,4 +1127,13 @@ class CommController extends ChangeNotifier {
     board.disconnect();
     super.dispose();
   }
+}
+
+/// The board's firmware, against the one the app carries.
+enum FirmwareStanding {
+  unknown,          // not said yet, a development build, another kind of board, or the app carries none
+  current,          // the same release
+  canUpdate,        // older, and the app can update it
+  needsInstaller,   // older, and too old for the app to update: the web installer
+  newer,            // newer than the app's: the app wants updating
 }

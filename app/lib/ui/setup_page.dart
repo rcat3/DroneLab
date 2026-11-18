@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
+import 'firmware_ui.dart';
 import 'groups_page.dart';
 import 'server_page.dart';
 import 'status_strip.dart';
@@ -143,6 +144,10 @@ class SetupPage extends StatelessWidget {
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupsPage(comm: comm))),
                   ),
                 ]),
+              ],
+              if (boardUp) ...[
+                const SectionHeader('Firmware'),
+                FirmwarePanel(comm: comm),
               ],
               if (comm.muted.isNotEmpty) ...[
                 const SectionHeader('Muted by you'),
