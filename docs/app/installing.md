@@ -2,7 +2,7 @@
 
 The DroneLab app is for **Android** phones and tablets.  It isn't on the Play Store: you install it from a file on the project's [releases page](https://github.com/rcat3/DroneLab/releases/latest).  To build it yourself instead, see [`app/README.md`](../../app/README.md).
 
-**No Android phone?**  iPhones, and any phone without the app, can still run the display unit from a web browser, through the display unit's own [WiFi Hotspot Remote](../features/phone-remote.md).  That covers what's on the display, the settings, the Lovense toys, the voice effect, sounds and the Terminal; it doesn't cover [HiveMind](hivemind.md), messages to others, or recording, which need the app.
+**No Android phone?**  iPhones, and any phone without the app, can still run the unit from a web browser, through the unit's own [WiFi Hotspot Remote](../features/phone-remote.md).  That covers what's on the display, the settings, the Lovense toys, the voice effect, sounds and the Terminal; it doesn't cover [HiveMind](hivemind.md), messages to others, or recording, which need the app.
 
 Back to [the app](README.md).
 
@@ -20,7 +20,7 @@ Back to [the app](README.md).
 
 You can switch *Allow from this source* off again once it's installed.
 
-Then [connect it to your display unit](connecting.md).
+Then [connect it to your unit](connecting.md).
 
 ## If the phone won't let you install it
 
@@ -37,10 +37,10 @@ The app says when there's a new release, with a banner under the status strip:
 
 <img src="../images/app/release_banner.png" width="400" alt="DroneLab 0.9.6 is available, with Download and a close button">
 
-**Download** opens the release's page in the browser, to get the APK.  The **×** hides the banner until a newer release still comes out.  To know, the app asks GitHub for the latest release when it starts, and once a day while it's open; nothing about you or your display unit is sent.
+**Download** opens the release's page in the browser, to get the APK.  The **×** hides the banner until the app next starts.  To know, the app asks GitHub for the latest release when it starts, and once a day while it's open; nothing about you or your unit is sent.
 
-Download the new release's APK and install it the same way.  It installs over the old one, and keeps its settings, the server and the paired display unit.
+Download the new release's APK and install it the same way.  It installs over the old one, and keeps its settings, the server and the paired unit.
 
-Then let it update the display unit, when it offers: each release of the app carries the firmware released with it.  See [Updating the display unit's firmware](firmware-updates.md).
+Then let it update the unit, when it offers: each release of the app carries the firmware released with it.  See [Updating the unit's firmware](firmware-updates.md).
 
 If Android says the app conflicts with one that's installed, the copy on the phone was signed with a different key: usually one you built yourself (see [`app/README.md`](../../app/README.md#installing-on-a-phone)).  Uninstall it first, which loses its settings, then install the release.

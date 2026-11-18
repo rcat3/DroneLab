@@ -1,6 +1,6 @@
 # Record
 
-The Record tab records your voice effect straight to the phone, as it sounds coming out of the display unit, over the same Bluetooth link as HiveMind.  It's for **videos**: a camera filming you in the mask hears your real voice, muffled through the mask, and the display unit's speaker from outside.  Recorded here, the voice effect is clean, without the room, and can be laid over the video in place of the camera's sound.
+The Record tab records your voice effect straight to the phone, as it sounds coming out of the unit, over the same Bluetooth link as HiveMind.  It's for **videos**: a camera filming you in the mask hears your real voice, muffled through the mask, and the unit's speaker from outside.  Recorded here, the voice effect is clean, without the room, and can be laid over the video in place of the camera's sound.
 
 <p align="center">
 <img src="../images/app/record.png" width="260" alt="The Record tab: Speaker voice or HiveMind voice, the sync beep, the record button, and a recording">
@@ -13,19 +13,19 @@ Back to [the app](README.md).
 ## Recording
 
 1. Pick the voice:
-   - **SPEAKER VOICE**: the effect the display unit plays from its speaker.
+   - **SPEAKER VOICE**: the effect the unit plays from its speaker.
    - **HIVEMIND VOICE**: the effect the hive hears, if you've set a [different one](hivemind.md#setup-talking) for HiveMind.
 2. Switch on **Sync beep to start**, if you're filming (see below).
-3. Tap **RECORD**, and talk.  The button turns red and counts the time; the display unit's screen shows *REC*.
+3. Tap **RECORD**, and talk.  The button turns red and counts the time; the unit's display shows *REC*.
 4. Tap it again to stop.
 
 **HiveMind pauses while it records**, on both links, and starts again after: nobody hears you, and you don't hear them.  The status strip shows the server and direct greyed out meanwhile.  The voice is evened out by HiveMind's automatic gain, as it is on the channel.
 
 ## The sync beep
 
-With the beep on, the display unit beeps from its speaker as the recording starts, and the same beep is in the file, at the same moment.  The camera hears the beep too.  In the video editor, line up the beep in the recording with the beep in the camera's sound, and your voice lines up with your mouth for the rest of the take.
+With the beep on, the unit beeps from its speaker as the recording starts, and the same beep is in the file, at the same moment.  The camera hears the beep too.  In the video editor, line up the beep in the recording with the beep in the camera's sound, and your voice lines up with your mouth for the rest of the take.
 
-The display unit's microphone hears the beep from its own speaker, so the recording leaves the microphone out for a moment while it beeps, and the beep isn't in the file twice.
+The unit's microphone hears the beep from its own speaker, so the recording leaves the microphone out for a moment while it beeps, and the beep isn't in the file twice.
 
 ## Your recordings
 
