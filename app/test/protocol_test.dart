@@ -181,6 +181,9 @@ void main() {
     expect([r.sound.seq, r.sound.first, r.sound.opus], [0x1234, true, [7, 8]]);
     final st = parseBoardMessage(Uint8List.fromList([0x02, 3, 0, 8])) as BoardStatus;
     expect(st.recording, isTrue);
+    expect(st.battery, isNull);
+    final charged = parseBoardMessage(Uint8List.fromList([0x02, 6, 0, 0, 0x80 | 82])) as BoardStatus;
+    expect([charged.battery, charged.charging], [82, true]);
   });
 
   test('a WAV header for 48 kHz mono', () {

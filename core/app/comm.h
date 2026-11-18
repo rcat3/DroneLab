@@ -19,7 +19,9 @@
  *                  data, and only says it's over.
  *     0x02 status: 02, version (COMM_VERSION), mode (comm_mode_t), flags
  *                  (bit 0 sending, bit 1 voice heard, bit 2 the talk button
- *                  is connected, see talk_button.h; bit 3 recording), when the phone turns
+ *                  is connected, see talk_button.h; bit 3 recording), the
+ *                  battery (its percent, bit 7 set while charging; 0xFF
+ *                  not known; from COMM_VERSION 6), when the phone turns
  *                  notifications on, when any of it changes, and every few
  *                  seconds.
  *
@@ -136,7 +138,7 @@
  *   4  commands for the others (0x0B)
  *   5  direct peers' firmware and app versions (0x08's bit 1)
  *   6  messages for the Terminal passed on to the app (0x0C), and messages
- *      for the app only (others.h) */
+ *      for the app only (others.h); the battery in the status (0x02) */
 #define COMM_VERSION            6
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */

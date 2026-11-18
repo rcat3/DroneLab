@@ -25,6 +25,7 @@
 
 #include "opus.h"
 
+#include "app/battery.h"
 #include "app/direct.h"
 #include "app/others.h"
 #include "app/remote.h"
@@ -334,7 +335,13 @@ static bool send_retrying(const uint8_t *data, size_t len)
 
 static void send_status(void)
 {
-    uint8_t msg[4] = { MSG_STATUS, COMM_VERSION, (uint8_t)mode, status_flags() };
+    battery_status_t b;
+    uint8_t charge = 0xFF;
+    if (battery_latest(&b))
+    {
+        charge = (uint8_t)((b.percent > 100 ? 100 : b.percent) | (b.charging_known && b.charging ? 0x80 : 0));
+    }
+    uint8_t msg[5] = { MSG_STATUS, COMM_VERSION, (uint8_t)mode, status_flags(), charge };
     send_retrying(msg, sizeof(msg));
 }
 
