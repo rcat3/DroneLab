@@ -1,7 +1,8 @@
 /*
  * A feature's "Others" page (see others_page.h), dark like the Lovense
- * feature's pages: a title, the Accept switch, a row for each person who's
- * sent commands of its kind, and a line saying who sent the last one.
+ * feature's pages: a title, who's taken (the Lovense feature's Off, Ask or
+ * Accept; the Terminal's Accept switch), a row for each person who's sent
+ * commands of its kind, and a line saying who sent the last one.
  */
 #include "ui/others_page.h"
 
@@ -21,7 +22,7 @@
 typedef struct
 {
     lv_obj_t *page;
-    lv_obj_t *accept;
+    lv_obj_t *accept;       // a switch, or for the Lovense feature, Off, Ask and Accept
     lv_obj_t *unnamed;      // the Terminal's: unnamed messages shown, or NULL
     lv_obj_t *rows[OTHERS_SENDERS_MAX];
     lv_obj_t *names[OTHERS_SENDERS_MAX];
@@ -49,8 +50,15 @@ static void show(others_kind_t kind, bool always)
     p->shown_changes = others_changes();
     p->shown_age_s = age_s;
 
-    bool accepting = others_accepting(kind);
-    lv_obj_set_state(p->accept, LV_STATE_CHECKED, accepting);
+    others_permission_t permission = others_permission(kind);
+    if (kind == OTHERS_LOVENSE)
+    {
+        ui_check_choice(p->accept, (uint32_t)permission);
+    }
+    else
+    {
+        lv_obj_set_state(p->accept, LV_STATE_CHECKED, permission != OTHERS_OFF);
+    }
     if (p->unnamed != NULL)
     {
         lv_obj_set_state(p->unnamed, LV_STATE_CHECKED, others_unnamed_shown());
@@ -77,13 +85,17 @@ static void show(others_kind_t kind, bool always)
         lv_obj_set_style_text_color(p->names[i], o->allowed ? COLOR_ALLOWED : lv_color_white(), 0);
     }
 
-    if (!accepting)
+    if (permission == OTHERS_OFF)
     {
         lv_label_set_text(p->status, "Ignoring everyone");
     }
     else if (last != NULL && age_s < 60)
     {
         lv_label_set_text_fmt(p->status, "%s, %lus ago", last, (unsigned long)age_s);
+    }
+    else if (permission == OTHERS_ACCEPT)
+    {
+        lv_label_set_text(p->status, "Accepting everyone");
     }
     else if (n == 0)
     {
@@ -113,6 +125,19 @@ static void accept_event_cb(lv_event_t *e)
 {
     others_kind_t kind = (others_kind_t)(intptr_t)lv_event_get_user_data(e);
     others_set_accepting(kind, lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+    show(kind, true);
+}
+
+static const char *const permission_map[] = { "Off", "Ask", "Accept", "" };
+
+static void permission_event_cb(lv_event_t *e)
+{
+    others_kind_t kind = (others_kind_t)(intptr_t)lv_event_get_user_data(e);
+    uint32_t selected = lv_buttonmatrix_get_selected_button(lv_event_get_target_obj(e));
+    if (selected <= OTHERS_ACCEPT)
+    {
+        others_set_permission(kind, (others_permission_t)selected);
+    }
     show(kind, true);
 }
 
@@ -174,7 +199,16 @@ lv_obj_t *ui_others_page_add(ui_feature_t *feature, others_kind_t kind)
     lv_obj_set_style_text_color(title, COLOR_MUTED, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(28));
 
-    p->accept = add_switch(p->page, "Accept", 55, accept_event_cb, (void *)(intptr_t)kind);
+    if (kind == OTHERS_LOVENSE)
+    {
+        // Who's taken: nobody, those allowed in the list, or anyone
+        p->accept = ui_add_choices(p->page, permission_map, ui_px(176), ui_px(28), ui_px(-51));
+        lv_obj_add_event_cb(p->accept, permission_event_cb, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)kind);
+    }
+    else
+    {
+        p->accept = add_switch(p->page, "Accept", 55, accept_event_cb, (void *)(intptr_t)kind);
+    }
     // The Terminal's: whether messages that don't say who they're from show
     bool more = kind == OTHERS_TERMINAL;
     if (more)

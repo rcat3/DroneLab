@@ -136,7 +136,7 @@ button.dim { color: var(--green); border-color: var(--green-dim); background: #0
   background: var(--stop); color: #fff; font: 28px var(--mono); letter-spacing: .14em;
   box-shadow: 0 0 0 6px var(--bg), 0 0 22px rgba(215,38,61,.45); z-index: 3; }
 #stop:active { background: #9a0007; }
-body.toys { padding-bottom: 104px; }
+body.toys { padding-bottom: calc(max(16px, env(safe-area-inset-bottom)) + 88px); }    /* clear of STOP, wherever it sits */
 body:not(.toys) #stop { display: none; }
 #toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: #1c1a21;
   color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 15px; opacity: 0;
@@ -192,8 +192,8 @@ body:not(.toys) #stop { display: none; }
 
   <div id="others0-box" hidden>
     <h2>From others</h2>
+    <div class="chips" id="permission0"></div>
     <div class="list" id="others0"></div>
-    <button id="accept0" style="width:100%"></button>
     <div class="status" id="others0-status"></div>
   </div>
 </section>
@@ -643,14 +643,20 @@ function showOthers(kind) {
   if (o.senders.length === 0 && o.accept) {
     box.append(el("div", "empty", "Anyone who sends you " + othersAbout[kind] + " from the DroneLab app shows up here"));
   }
-  $("accept" + kind).textContent = (o.accept ? "Accepting " : "Ignoring ") + othersAbout[kind];
-  $("accept" + kind).classList.toggle("on", !!o.accept);
+  if (kind === 0) {
+    // Who's taken: nobody, those allowed below, or anyone
+    for (const x of $("permission0").children) x.classList.toggle("on", +x.dataset.p === o.permission);
+  } else {
+    $("accept" + kind).textContent = (o.accept ? "Accepting " : "Ignoring ") + othersAbout[kind];
+    $("accept" + kind).classList.toggle("on", !!o.accept);
+  }
   if (kind === 1) {
     $("unnamed").hidden = !o.accept || o.unnamed === undefined;
     $("unnamed").textContent = o.unnamed ? "Showing unnamed messages" : "Hiding unnamed messages";
     $("unnamed").classList.toggle("on", !!o.unnamed);
   }
   $("others" + kind + "-status").textContent = !o.accept ? "" : o.last && o.age < 60 ? o.last + ", " + o.age + "s ago"
+    : o.permission === 2 ? "Accepting everyone"
     : o.senders.length ? "Tap someone to allow them; hold to forget them" : "";
 }
 
@@ -906,9 +912,13 @@ $("slower").onclick = () => command("speed", { v: Math.max(25, state.speed - 25)
 $("faster").onclick = () => command("speed", { v: Math.min(300, state.speed + 25) });
 $("search").onclick = () => command("scan", { on: 1 });
 $("unnamed").onclick = () => command("others", { kind: 1, unnamed: state.others && state.others[1].unnamed ? 0 : 1 });
-for (const kind of [0, 1]) {
-  $("accept" + kind).onclick = () => command("others", { kind, accept: state.others && state.others[kind].accept ? 0 : 1 });
-}
+$("accept1").onclick = () => command("others", { kind: 1, accept: state.others && state.others[1].accept ? 0 : 1 });
+["Off", "Ask", "Accept"].forEach((name, p) => {
+  const b = el("button", "", name);
+  b.dataset.p = p;
+  b.onclick = () => command("others", { kind: 0, permission: p });
+  $("permission0").append(b);
+});
 // Stop as soon as it's touched, not when the finger lifts
 $("stop").addEventListener("pointerdown", e => { e.preventDefault(); pending.clear(); command("stop"); });
 

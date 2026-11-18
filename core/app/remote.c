@@ -22,11 +22,12 @@
  *     POST /api/scan?on=<1 or 0>
  *     POST /api/connect?d=<slot>      connect, or disconnect if connected
  *     POST /api/stop                  everything, as the Stop button
-*     POST /api/others?kind=<0 Lovense, 1 Terminal>[&accept=<1 or 0>][&name=<who>&via=<0 server, 1 direct>
-*                       &allow=<1 or 0>][&forget=1][&unnamed=<1 or 0: the Terminal's unnamed messages shown>]
+*     POST /api/others?kind=<0 Lovense, 1 Terminal>[&accept=<1 or 0>][&permission=<0 off, 1 ask, 2 accept>]
+*                       [&name=<who>&via=<0 server, 1 direct>&allow=<1 or 0>][&forget=1]
+*                       [&unnamed=<1 or 0: the Terminal's unnamed messages shown>]
 *                                     commands from others in the comm channel
-*                                     (app/others.h): take them or not, and
-*                                     who may send them
+*                                     (app/others.h): who they're taken from
+*                                     (accept=1 is ask), and who may send them
  *     POST /api/show?f=<feature>&p=<page>     bring a page on screen
  *     POST /api/message?append=<1 or 0>&show=<1 or 0>   the body (UTF-8) to
  *                                     the Terminal feature, and show it there
@@ -514,7 +515,8 @@ static void write_state(json_t *j)
     {
         uint32_t age = 0;
         const char *last = others_last((others_kind_t)k, now, &age);
-        jprintf(j, "%s{\"accept\":%d,", k ? "," : "", others_accepting((others_kind_t)k) ? 1 : 0);
+        jprintf(j, "%s{\"accept\":%d,\"permission\":%d,", k ? "," : "", others_accepting((others_kind_t)k) ? 1 : 0,
+                (int)others_permission((others_kind_t)k));
         if (k == OTHERS_TERMINAL)
         {
             jprintf(j, "\"unnamed\":%d,", others_unnamed_shown() ? 1 : 0);
@@ -916,6 +918,11 @@ static bool run_command(const char *name, const char *query, const char *body, s
         if (accept >= 0)
         {
             others_set_accepting((others_kind_t)kind, accept != 0);
+        }
+        int permission = query_int(query, "permission", -1);
+        if (permission >= OTHERS_OFF && permission <= OTHERS_ACCEPT)
+        {
+            others_set_permission((others_kind_t)kind, (others_permission_t)permission);
         }
         int unnamed = query_int(query, "unnamed", -1);
         if (unnamed >= 0 && kind == OTHERS_TERMINAL)

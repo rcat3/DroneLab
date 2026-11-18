@@ -22,11 +22,11 @@ What you set stays set on their toys until it's changed or stopped, even if you 
 
 ## Who can control your toys
 
-The same works the other way: your toys only take commands from people you've allowed.
+The same works the other way, and you choose whose commands your toys take, with **Off**, **Ask** or **Accept**.  It's on your unit, on the Lovense feature's last page, *Hive Commands*, and in the app's [Remote](remote.md) tab, under *Toys*, *From others*, with the list of who's sent you commands:
 
-- The first time someone sends you a command, they're added to your unit's list, **not allowed**, and the command is ignored.  Allow them, and their commands work from then on.
-- The list is on your unit, on the Lovense feature's last page, *Hive Commands*, and in the app's [Remote](remote.md) tab, under *Toys*, *From others*.
-- **Accept** off ignores everyone's commands, and adds nobody.
+- **Ask**, to start with: only people you've allowed.  The first time someone sends you a command, they're added to your unit's list, **not allowed**, and the command is ignored.  Allow them, and their commands work from then on.
+- **Accept**: anyone's commands work, allowed or not.  New people are still added to the list, so you can see who's been sending, and allow them for when you go back to Ask.
+- **Off**: everyone's commands are ignored, and nobody's added.
 - **STOP** on your own unit, or in your Remote tab, stops whatever anyone's set.
 
 It's a separate list from the [Terminal's](terminal.md#who-can-send-you-messages), so someone can message you without being allowed near your toys.  Names can be borrowed on the open channel or an open server, so only allow people on those if you trust everyone there: see [Commands from others](../features/lovense.md#commands-from-others) for the details.

@@ -38,7 +38,7 @@ typedef struct
 typedef struct
 {
     uint8_t version;
-    uint8_t accepting;
+    uint8_t accepting;      // others_permission_t (0 and 1, as it was before Accept, mean the same)
     uint8_t options;        // HIDE_UNNAMED
     uint8_t count;
     stored_sender_t senders[OTHERS_SENDERS_MAX];
@@ -116,8 +116,12 @@ static void load(void)
         {
             memset(list, 0, sizeof(*list));
             list->version = STORE_VERSION;
-            list->accepting = 1;
+            list->accepting = OTHERS_ASK;
             continue;
+        }
+        if (list->accepting > OTHERS_ACCEPT)
+        {
+            list->accepting = OTHERS_ASK;
         }
         for (int i = 0; i < list->count; i++)
         {
@@ -363,18 +367,19 @@ void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
         return;
     }
     kind_t *k = &kinds[which];
-    if (!k->list.accepting)
+    if (k->list.accepting == OTHERS_OFF)
     {
         return;
     }
+    bool anyone = k->list.accepting == OTHERS_ACCEPT;
     int i = find(&k->list, via, from);
     if (i < 0)
     {
-        i = add(k, via, from);
-        printf("others: %s commands from %s (%s), not allowed yet\n", which == OTHERS_LOVENSE ? "Lovense" : "Terminal",
-               from, via == COMM_TALK_DIRECT ? "direct" : "server");
+        i = add(k, via, from);  // listed either way, to say who's been sending
+        printf("others: %s commands from %s (%s), %s\n", which == OTHERS_LOVENSE ? "Lovense" : "Terminal", from,
+               via == COMM_TALK_DIRECT ? "direct" : "server", anyone ? "accepted" : "not allowed yet");
     }
-    if (i < 0 || !k->list.senders[i].allowed)
+    if (!anyone && (i < 0 || !k->list.senders[i].allowed))
     {
         return;
     }
@@ -409,17 +414,31 @@ void others_queue(const char *from, const uint8_t *cmd, size_t len)
 
 /* ----- The lists ----- */
 
+others_permission_t others_permission(others_kind_t kind)
+{
+    return kinds != NULL && kind < OTHERS_KIND_COUNT ? (others_permission_t)kinds[kind].list.accepting : OTHERS_OFF;
+}
+
+void others_set_permission(others_kind_t kind, others_permission_t permission)
+{
+    if (kinds != NULL && kind < OTHERS_KIND_COUNT && permission <= OTHERS_ACCEPT &&
+        kinds[kind].list.accepting != permission)
+    {
+        kinds[kind].list.accepting = (uint8_t)permission;
+        changed(&kinds[kind]);
+    }
+}
+
 bool others_accepting(others_kind_t kind)
 {
-    return kinds != NULL && kind < OTHERS_KIND_COUNT && kinds[kind].list.accepting != 0;
+    return others_permission(kind) != OTHERS_OFF;
 }
 
 void others_set_accepting(others_kind_t kind, bool on)
 {
-    if (kinds != NULL && kind < OTHERS_KIND_COUNT && kinds[kind].list.accepting != on)
+    if (on != others_accepting(kind))
     {
-        kinds[kind].list.accepting = on;
-        changed(&kinds[kind]);
+        others_set_permission(kind, on ? OTHERS_ASK : OTHERS_OFF);
     }
 }
 

@@ -9,10 +9,11 @@
  * which they set as the Lovense feature's own controls do, and stay set
  * until they're changed or Stop's touched; and messages, for the Terminal.
  *
- * Each kind has its own list of who may send it, and only those the wearer
- * has allowed are obeyed. Anyone new who sends one is added to that kind's
- * list, not allowed, for the wearer to tick if they want to. Accepting a
- * kind can be switched off altogether, and then nobody's added either.
+ * Each kind has its own list of who may send it, and its permission: Off,
+ * nobody (and nobody's added to the list either); Ask, only those the wearer
+ * has allowed in the list; or Accept, anyone. Anyone new who sends one is
+ * added to that kind's list, not allowed, for the wearer to tick if they
+ * want to, in Ask and Accept both, so the list says who's been sending.
  * Someone's known by their name and how they're heard (server or direct), so
  * the same person can be in a list twice. Names can be borrowed: in a
  * direct comms group with a passphrase, only its members can send at all,
@@ -94,7 +95,18 @@ void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
  * on its next others_poll(). Nothing else may call it. */
 void others_queue(const char *from, const uint8_t *cmd, size_t len);
 
-/* Whether a kind of command is taken at all. Remembered. */
+/* Who a kind of command is taken from. Remembered. */
+typedef enum
+{
+    OTHERS_OFF,         // nobody
+    OTHERS_ASK,         // those allowed in its list
+    OTHERS_ACCEPT,      // anyone
+} others_permission_t;
+others_permission_t others_permission(others_kind_t kind);
+void others_set_permission(others_kind_t kind, others_permission_t permission);
+
+/* Whether a kind of command is taken at all: its permission isn't Off.
+ * Switching it on goes back to Ask. Remembered. */
 bool others_accepting(others_kind_t kind);
 void others_set_accepting(others_kind_t kind, bool on);
 
