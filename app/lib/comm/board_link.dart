@@ -77,6 +77,7 @@ class BoardLink extends ChangeNotifier {
   Completer<RemoteAnswer>? _answer;
   int _answerId = -1;
   BytesBuilder? _answerBytes;
+  bool _askingVersion = false;   // the version swap's request is out
 
   StreamSubscription<BleDevice>? _scanSub;
   StreamSubscription<Uint8List>? _valueSub;
@@ -188,6 +189,11 @@ class BoardLink extends ChangeNotifier {
     avatarSize = avatarSlots = 0;
     notifyListeners();
     _retry?.cancel();
+    // Stop hearing about this link first: letting go of one that's already
+    // down says it's disconnected again, which would land back here and put
+    // off the retry, over and over, for good
+    _connSub?.cancel();
+    _connSub = null;
     // Let go of what's left of the link, or Android can keep it half open,
     // and the board, thinking it's still connected, stops advertising
     final id = deviceId;
@@ -220,8 +226,10 @@ class BoardLink extends ChangeNotifier {
     } else if (msg is BoardStatus) {
       final old = status;
       status = msg;
-      if (old == null && msg.version >= commVersionRemote) {
-        // Paired and talking: swap versions
+      if (firmware == null && !_askingVersion && state == BoardState.connected && msg.version >= commVersionRemote) {
+        // Paired and talking: swap versions. Asked again at the next status
+        // until it's answered, as the first can come before the link's up.
+        _askingVersion = true;
         request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}&os=${Platform.isIOS ? 'iPhone' : 'Android'}').then((a) {
           if (a.status == 200) {
             final v = jsonDecode(a.body) as Map<String, dynamic>;
@@ -230,7 +238,7 @@ class BoardLink extends ChangeNotifier {
             avatarSlots = (v['avatars'] as num?)?.toInt() ?? 0;
             notifyListeners();
           }
-        }).catchError((_) {});
+        }).catchError((_) {}).whenComplete(() => _askingVersion = false);
       }
       if (old == null ||
           old.mode != msg.mode ||
