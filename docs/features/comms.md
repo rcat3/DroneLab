@@ -140,7 +140,7 @@ The app's status strip shows a grey arrow when someone's talking on another chan
 
 ### Frequencies and Long Range
 
-Each channel has a radio frequency, 1, 6 or 11 (the three WiFi channels that don't overlap), and can use **Long Range**, Espressif's own slower mode (500 kb/s) that reaches further, at the cost of each packet taking about twice as long on the air.  Both are chosen when the channel's made, and come with it to everyone who joins.  The open channel is on frequency 6, in Long Range.  Every unit hears both ordinary and Long Range broadcasts, so it doesn't matter which a unit on the channel sends.  Putting a busy channel on its own frequency keeps it from crowding the open channel.
+Each channel has a radio frequency, 1, 6 or 11 (the three WiFi channels that don't overlap), and can use **Long Range**, Espressif's own slower mode (500 kb/s): it reaches further, but fewer units can share the channel, as each packet takes about twice as long to send.  Both are chosen when the channel's made, and come with it to everyone who joins.  The open channel is on frequency 6, in Long Range.  Every unit hears both ordinary and Long Range broadcasts, so it doesn't matter which a unit on the channel sends.  The open channel is on 6, so a new channel is best on 1 or 11, where it doesn't share the air with it.
 
 A unit only hears its own frequency, so opening the app's *Direct Channels* screen has it listen on each of the three for a couple of seconds, to find the channels on the others; what's said on its own meanwhile is missed.  It can't while the hotspot's on.  The hotspot moves to the channel's frequency, if it's on.
 

@@ -151,9 +151,9 @@ class BoardLink extends ChangeNotifier {
     notifyListeners();
     await _connSub?.cancel();
     _connSub = UniversalBle.connectionChangeStream(id).listen((c) {
-      if (!c.isConnected && state == BoardState.connected) {
+      if (!c.isConnected && _wanted && state != BoardState.off) {
         // Dropped before it ever said how it is: it wouldn't pair
-        _lost(status == null
+        _lost(state == BoardState.connected && status == null
             ? "The board didn't let this phone pair. On the board, open Settings, Paired Phones, "
                 'and tap Pair a phone'
             : c.error ?? 'The board went out of range');
@@ -188,6 +188,10 @@ class BoardLink extends ChangeNotifier {
     avatarSize = avatarSlots = 0;
     notifyListeners();
     _retry?.cancel();
+    // Let go of what's left of the link, or Android can keep it half open,
+    // and the board, thinking it's still connected, stops advertising
+    final id = deviceId;
+    if (id != null) UniversalBle.disconnect(id).catchError((_) {});
     if (_wanted) {
       _retry = Timer(const Duration(seconds: 3), _connect);
     }

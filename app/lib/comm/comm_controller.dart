@@ -229,6 +229,12 @@ class CommController extends ChangeNotifier {
     _soundSub = board.sounds.listen(_onBoardSound);
     await loadOpus();
     notifyListeners();
+    // Back to the board from last time, unless it was disconnected on purpose
+    final id = lastBoardId;
+    if (id != null && (p.getBool('boardWanted') ?? true)) {
+      await board.connect(id, lastBoardName ?? 'Board');
+      await _updateBackground();
+    }
   }
 
   /// Pick a new avatar from [picture] (any image), or take it away with null.
@@ -272,11 +278,13 @@ class CommController extends ChangeNotifier {
   Future<void> connectBoard(String id, String name) async {
     await _prefs?.setString('boardId', id);
     await _prefs?.setString('boardName', name);
+    await _prefs?.setBool('boardWanted', true);
     await board.connect(id, name);
     await _updateBackground();
   }
 
   Future<void> disconnectBoard() async {
+    await _prefs?.setBool('boardWanted', false);
     await board.disconnect();
     await _updateBackground();
   }
