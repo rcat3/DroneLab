@@ -45,6 +45,7 @@ static void set_defaults(settings_t *s)
     s->voice_effect = 0;
     s->lovense_release_to_zero = 0;
     s->voice_volume = SETTINGS_DEFAULT_VOICE_VOLUME;
+    s->speaker = SETTINGS_SPEAKER_ASK;
 }
 
 static uint32_t checksum(const void *data, size_t len)
@@ -91,6 +92,14 @@ static bool load(settings_t *out)
         out->brightness = SETTINGS_DEFAULT_BRIGHTNESS;
     }
     out->rotation &= 3;
+    if (rec->size <= offsetof(settings_t, speaker) || out->speaker == SETTINGS_SPEAKER_OLD)
+    {
+        out->speaker = SETTINGS_SPEAKER_FITTED;     // saved before there was a choice
+    }
+    else if (out->speaker > SETTINGS_SPEAKER_ASK)
+    {
+        out->speaker = SETTINGS_SPEAKER_ASK;
+    }
     out->startup_image[SETTINGS_NAME_LEN - 1] = '\0';
     if (strcmp(out->startup_image, SETTINGS_STARTUP_OLD_KITT) == 0)
     {
@@ -151,7 +160,10 @@ const settings_t *settings_get(void)
 
 static void save_timer_cb(lv_timer_t *t)
 {
-    lv_timer_pause(t);
+    if (t != NULL)
+    {
+        lv_timer_pause(t);
+    }
 
     if (memcmp(&current, &saved, sizeof(current)) == 0)
     {
@@ -192,6 +204,40 @@ void settings_set_rotation(uint8_t quarter_turns)
 {
     current.rotation = quarter_turns & 3;
     schedule_save();
+}
+
+void settings_set_speaker(uint8_t speaker)
+{
+    current.speaker = speaker >= SETTINGS_SPEAKER_FITTED && speaker <= SETTINGS_SPEAKER_NONE ? speaker
+                                                                                          : SETTINGS_SPEAKER_ASK;
+    schedule_save();
+}
+
+bool settings_speaker_fitted(void)
+{
+#if RCAT_SPEAKER_OPTIONAL
+    return current.speaker != SETTINGS_SPEAKER_NONE;
+#else
+    return true;
+#endif
+}
+
+bool settings_speaker_unasked(void)
+{
+#if RCAT_SPEAKER_OPTIONAL
+    return current.speaker == SETTINGS_SPEAKER_ASK;
+#else
+    return false;
+#endif
+}
+
+void settings_save_now(void)
+{
+    if (save_timer != NULL)
+    {
+        lv_timer_pause(save_timer);
+    }
+    save_timer_cb(NULL);
 }
 
 void settings_set_startup_image(const char *name)

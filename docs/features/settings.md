@@ -36,6 +36,14 @@ Runs the display from a phone's web browser, over the board's own WiFi hotspot, 
 
 Turns the whole display, touch included, in 90 degree steps.  It helps when the display ends up sitting at an angle in the mask, and some housings turn the board a quarter turn, which this puts right (each board's build guide says which).  On the ESP32-S3-Touch-AMOLED-1.75 it starts at 180 degrees, to suit its housings.  The new rotation is applied about a second after you stop scrolling the roller.
 
+## Model
+
+*The ESP32-S3-Touch-AMOLED-1.75*
+
+Which housing the board's in: **Speaker** (the [speaker model](../build/speaker-housing.md)) or **Low-profile** (the [low-profile model](../build/low-profile-housing.md)), which has no speaker.  A new board asks the first time it starts.  On the low-profile model, the [Sound](sound.md) feature, *Play on speaker*, *Effect Volume* and the [Seal Test](../build/seal-test.md) are left out, and so are the phone remote's speaker controls.  The *Voice Effect* page stays: it picks the effect [HiveMind](comms.md) sends your voice through.
+
+What uses the speaker is set up as the board starts, so after changing it, tap **Restart**.  Boards set up before there was a choice count as the speaker model.  The phone remote's API sets it with `POST /api/display?speaker=1` (speaker) or `speaker=2` (low-profile), and `restart=1` to restart.
+
 ## Level
 
 *Boards with a supported accelerometer: the ESP32-S3 boards*

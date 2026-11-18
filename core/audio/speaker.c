@@ -5,6 +5,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "app/settings.h"
 #include "audio/audio_player.h"
 #include "audio/audio_tap.h"
 #include "audio/speaker.h"
@@ -154,7 +155,9 @@ bool speaker_start(void)
     if (!tried)
     {
         tried = true;
-        started = rcat_hal_audio_out_start(fill_cb, NULL);
+        // Not in a housing without one (the low-profile model), though the
+        // board itself could play to one
+        started = settings_speaker_fitted() && rcat_hal_audio_out_start(fill_cb, NULL);
     }
     return started;
 }

@@ -1,6 +1,6 @@
 # Sound
 
-*Boards with a speaker: the ESP32-S3 boards*
+*Boards with a speaker: the ESP32-S3 boards.  Not on the low-profile model, which has no speaker (see [Model](settings.md#model)).*
 
 <img src="../images/screens/sound_player.png" width="220" alt="The Sound player">
 

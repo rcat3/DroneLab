@@ -197,7 +197,7 @@ body:not(.toys) #stop { display: none; }
 <section class="tab" id="tab-sound">
   <div id="voice-box">
     <h2>Voice effect</h2>
-    <div class="card">
+    <div class="card" id="fx-speaker">
       <button class="wide" id="speaker">Play on speaker</button>
       <div class="motor" style="--c:var(--accent)">
         <div class="row"><span>Effect Volume</span><b id="fx-vol-text"></b></div>
@@ -763,6 +763,7 @@ function showSound() {
   $("sound-box").hidden = !s;
   $("sound-none").hidden = !!(v || s || ring);
   if (v) {
+    $("fx-speaker").hidden = v.fitted === 0;     // the low-profile model has no speaker
     $("speaker").classList.toggle("on", !!v.speaker);
     $("speaker").textContent = v.speaker ? "✓ Playing on speaker" : "Play on speaker";
     for (const b of $("presets").children) b.classList.toggle("on", +b.dataset.p === v.preset);

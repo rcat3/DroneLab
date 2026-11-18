@@ -70,6 +70,7 @@
 #include "app/settings.h"
 #include "audio/audio_player.h"
 #include "audio/seal_test.h"
+#include "audio/speaker.h"
 #include "audio/voice_fx.h"
 #include "audio/voice_lab.h"
 #include "hal.h"
@@ -435,9 +436,10 @@ static void write_state(json_t *j)
             (unsigned)page, settings_get()->terminal_size, message_scale());
     jstring(j, message_text());
     const settings_t *s = settings_get();
-    jprintf(j, ",\"display\":{\"brightness\":%u,\"rotation\":%u,\"startup\":%d,\"remote_auto\":%u,\"uptime\":%lu",
+    jprintf(j, ",\"display\":{\"brightness\":%u,\"rotation\":%u,\"startup\":%d,\"remote_auto\":%u,\"uptime\":%lu,"
+            "\"speaker\":%u",
             s->brightness, s->rotation, ui_find_startup_choice(s->startup_image), s->remote_autostart,
-            (unsigned long)(now / 1000));
+            (unsigned long)(now / 1000), s->speaker);
     battery_status_t battery;
     if (battery_latest(&battery))
     {
@@ -455,8 +457,8 @@ static void write_state(json_t *j)
     }
     if (voice_fx_available())
     {
-        jprintf(j, ",\"voice\":{\"preset\":%u,\"speaker\":%d,\"volume\":%u}", s->voice_effect,
-                voice_fx_speaker_on() ? 1 : 0, s->voice_volume);
+        jprintf(j, ",\"voice\":{\"preset\":%u,\"speaker\":%d,\"volume\":%u,\"fitted\":%d}", s->voice_effect,
+                voice_fx_speaker_on() ? 1 : 0, s->voice_volume, speaker_start() ? 1 : 0);
     }
     if (seal_test_available())
     {
@@ -972,6 +974,18 @@ static bool run_command(const char *name, const char *query, const char *body, s
         if (autostart >= 0)
         {
             settings_set_remote_autostart(autostart != 0);
+        }
+        // The model (SETTINGS_SPEAKER_*), as Settings' Model page: it takes
+        // a restart, which restart=1 does. 3 asks again at the next start.
+        int speaker = query_int(query, "speaker", -1);
+        if (speaker >= SETTINGS_SPEAKER_FITTED && speaker <= SETTINGS_SPEAKER_ASK)
+        {
+            settings_set_speaker((uint8_t)speaker);
+        }
+        if (query_int(query, "restart", 0) == 1)
+        {
+            settings_save_now();
+            rcat_hal_restart();
         }
     }
     else if (strcmp(name, "ring") == 0 && voice_ring_available())

@@ -62,6 +62,12 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
         target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_DEFAULT_ROTATION=${default_rotation})
     endif()
 
+    # Whether a housing may have no speaker, so a new board asks (see board.cmake)
+    idf_build_get_property(speaker_optional RCAT_SPEAKER_OPTIONAL)
+    if(speaker_optional)
+        target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_SPEAKER_OPTIONAL=1)
+    endif()
+
     # The comm channel, on boards where a phone can connect over Bluetooth
     # (CONFIG_BT_NIMBLE_ROLE_PERIPHERAL in the board's sdkconfig.defaults)
     if(CONFIG_BT_NIMBLE_ROLE_PERIPHERAL)

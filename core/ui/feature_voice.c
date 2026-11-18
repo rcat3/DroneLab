@@ -17,6 +17,7 @@
 #include "app/settings.h"
 #include "audio/audio_level.h"
 #include "audio/seal_test.h"
+#include "audio/speaker.h"
 #include "audio/voice_fx.h"
 #include "audio/voice_lab.h"
 #include "hal.h"
@@ -152,7 +153,13 @@ static void add_effect_page(ui_feature_t *feature)
     lv_obj_add_event_cb(roller, effect_roller_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     // Not saved: with the speaker where it is, it feeds back, so it's always
-    // off at startup.
+    // off at startup. Not there at all without a speaker (the low-profile
+    // model), where the effect is still what HiveMind sends.
+    if (!speaker_start())
+    {
+        lv_obj_align(roller, LV_ALIGN_CENTER, 0, ui_px(10));
+        return;
+    }
     lv_obj_t *speaker_label = lv_label_create(page);
     lv_label_set_text(speaker_label, "Play on speaker");
     lv_obj_align(speaker_label, LV_ALIGN_CENTER, 0, ui_px(44));
@@ -338,12 +345,12 @@ static void seal_show(seal_phase_t phase, int seconds_left)
     }
     if (running)
     {
-        lv_obj_remove_flag(seal_big_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(seal_big_label, false);
         lv_obj_align(seal_status_label, LV_ALIGN_CENTER, 0, ui_px(40));
     }
     else
     {
-        lv_obj_add_flag(seal_big_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(seal_big_label, true);
         lv_obj_align(seal_status_label, LV_ALIGN_CENTER, 0, ui_px(-10));
     }
 }
@@ -410,7 +417,7 @@ static void add_seal_page(ui_feature_t *feature)
     }
 #endif
     lv_obj_align(seal_big_label, LV_ALIGN_CENTER, 0, ui_px(-12));
-    lv_obj_add_flag(seal_big_label, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(seal_big_label, true);
 
     lv_obj_t *button = lv_button_create(page);
     lv_obj_set_size(button, ui_px(120), ui_px(38));
@@ -535,7 +542,10 @@ static bool build(ui_feature_t *feature)
     {
         any = true;
         add_effect_page(feature);
-        add_volume_page(feature);
+        if (speaker_start())
+        {
+            add_volume_page(feature);
+        }
         if (seal_test_available())
         {
             add_seal_page(feature);

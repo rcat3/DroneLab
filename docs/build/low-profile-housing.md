@@ -79,4 +79,4 @@ The thread screws into a metal adapter in the mask, which itself screws into the
 
 ## Next
 
-[Install the firmware](../building-firmware.md), if you haven't already, then [set it up](first-start.md).
+[Install the firmware](../building-firmware.md), if you haven't already, then [set it up](first-start.md).  The first time it starts, it asks which model it is: tap **Low-profile**, which leaves out the features that need a speaker.

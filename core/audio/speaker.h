@@ -6,8 +6,8 @@
 
 /* The speaker, shared by the sound player and the voice effect. While the
  * voice effect is switched to the speaker, it has the speaker and the player
- * waits. Returns false if the board has no speaker. Safe to call more than
- * once. */
+ * waits. Returns false if the board has no speaker, or its housing has none
+ * (settings_speaker_fitted). Safe to call more than once. */
 bool speaker_start(void);
 
 /* Silence the speaker, whatever it's playing, or let it play again. It

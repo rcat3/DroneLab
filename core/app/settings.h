@@ -1,6 +1,7 @@
 #ifndef RCAT_SETTINGS_H
 #define RCAT_SETTINGS_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #define SETTINGS_DEFAULT_BRIGHTNESS 50
@@ -68,7 +69,18 @@ typedef struct
     uint8_t comm_talk_on;                   // comm_transport_t: where talking goes, by choice
     uint8_t direct_channel;                 // direct comms' group's channel: 1, 6 or 11; 0 for 6
     uint8_t direct_long_range;              // 1 if the group sends in Long Range mode
+    uint8_t speaker;                        // SETTINGS_SPEAKER_*: whether the housing has a speaker
 } settings_t;
+
+/* speaker: on boards whose speaker plugs in, whether the housing has one
+ * (RCAT_SPEAKER_OPTIONAL, in the board's .cmake file). A new board asks at
+ * its first start. Settings saved before there was a choice have a 0 here
+ * (it was padding at the end of the struct), and are the speaker model's, the
+ * only model there was. */
+#define SETTINGS_SPEAKER_OLD        0
+#define SETTINGS_SPEAKER_FITTED     1
+#define SETTINGS_SPEAKER_NONE       2
+#define SETTINGS_SPEAKER_ASK        3
 
 /* comm_auto_show: switch to the comm channel's status screen while it's
  * sending, while it hears someone, or both, and back afterwards. */
@@ -85,6 +97,18 @@ const settings_t *settings_get(void);
  * to be initialised. */
 void settings_set_brightness(uint8_t percent);
 void settings_set_rotation(uint8_t quarter_turns);
+void settings_set_speaker(uint8_t speaker);
+
+/* Whether there's a speaker to play to: always, on boards where it isn't a
+ * choice. */
+bool settings_speaker_fitted(void);
+
+/* Whether a new board has yet to be asked if it has a speaker */
+bool settings_speaker_unasked(void);
+
+/* Save now, rather than a couple of seconds after the last change, as before
+ * restarting. */
+void settings_save_now(void);
 void settings_set_startup_image(const char *name);
 void settings_set_voice_ring(uint8_t enabled, uint8_t color);
 void settings_set_sound_volume(uint8_t percent);

@@ -234,6 +234,58 @@ static void add_rotation_page(ui_feature_t *feature)
     lv_obj_align_to(rotation_label, rotation_roller, LV_ALIGN_OUT_TOP_MID, 0, ui_px(-10));
 }
 
+/* ----- Speaker ----- */
+
+#if RCAT_SPEAKER_OPTIONAL
+// Which housing the board's in: the speaker model, or the low-profile model
+// with no speaker. What uses the speaker is set up at startup, so a change
+// takes a restart.
+static lv_obj_t *model_roller;
+static lv_obj_t *model_restart;
+static uint8_t model_at_startup;
+
+static void model_restart_cb(lv_event_t *e)
+{
+    settings_save_now();
+    rcat_hal_restart();
+}
+
+static void model_roller_event_cb(lv_event_t *e)
+{
+    uint8_t speaker = lv_roller_get_selected(model_roller) == 0 ? SETTINGS_SPEAKER_FITTED : SETTINGS_SPEAKER_NONE;
+    settings_set_speaker(speaker);
+    lv_obj_set_hidden(model_restart, speaker == model_at_startup);
+}
+
+static void add_model_page(ui_feature_t *feature)
+{
+    lv_obj_t *page = ui_feature_add_page(feature, "Model", false);
+    model_at_startup = settings_get()->speaker;
+
+    lv_obj_t *label = lv_label_create(page);
+    lv_label_set_text(label, "Model");
+    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, ui_px(40));
+
+    model_roller = lv_roller_create(page);
+    lv_roller_set_options(model_roller, "Speaker\nLow-profile", LV_ROLLER_MODE_NORMAL);
+    lv_roller_set_visible_row_count(model_roller, 2);
+    lv_roller_set_selected(model_roller, model_at_startup == SETTINGS_SPEAKER_NONE ? 1 : 0, LV_ANIM_OFF);
+    lv_obj_align(model_roller, LV_ALIGN_CENTER, 0, ui_px(-12));
+    lv_obj_add_event_cb(model_roller, model_roller_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    // Shown once it's changed
+    model_restart = lv_button_create(page);
+    lv_obj_set_size(model_restart, ui_px(130), ui_px(32));
+    lv_obj_set_style_radius(model_restart, LV_RADIUS_CIRCLE, 0);
+    lv_obj_align(model_restart, LV_ALIGN_CENTER, 0, ui_px(56));
+    lv_obj_add_event_cb(model_restart, model_restart_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *text = lv_label_create(model_restart);
+    lv_label_set_text(text, "Restart");
+    lv_obj_center(text);
+    lv_obj_set_hidden(model_restart, true);
+}
+#endif
+
 /* ----- Startup page ----- */
 
 static void startup_roller_event_cb(lv_event_t *e)
@@ -933,6 +985,9 @@ static bool build(ui_feature_t *feature)
     }
 #endif
     add_rotation_page(feature);
+#if RCAT_SPEAKER_OPTIONAL
+    add_model_page(feature);
+#endif
 #if RCAT_FEATURE_LEVEL
     feature_level_add_page(feature);    // with Rotation, for lining the display up
 #endif

@@ -30,6 +30,7 @@
 
 #include "audio/fft.h"
 #include "audio/mic.h"
+#include "audio/speaker.h"
 #include "audio/voice_fx.h"
 #include "audio/voice_lab.h"
 #include "hal.h"
@@ -1384,6 +1385,10 @@ void voice_fx_set_comm_preset(int index)
 
 void voice_fx_set_speaker(bool on)
 {
+    if (on && !speaker_start())
+    {
+        return;     // no speaker to play on
+    }
     if (on)
     {
         // Start from now, not from whatever was left in the buffer.
