@@ -31,7 +31,7 @@ class DroneLabApp extends StatelessWidget {
   }
 }
 
-/// The comm channel, sending to others, recording and the remote, each kept
+/// HiveMind, sending to others, recording and the remote, each kept
 /// running while another shows.
 class HomePage extends StatefulWidget {
   final CommController comm;
@@ -60,7 +60,7 @@ class _HomePageState extends State<HomePage> {
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.headset_mic), label: 'Comm'),
+          NavigationDestination(icon: Icon(Icons.headset_mic), label: 'HiveMind'),
           NavigationDestination(icon: Icon(Icons.send), label: 'Send'),
           NavigationDestination(icon: Icon(Icons.fiber_manual_record), label: 'Record'),
           NavigationDestination(icon: Icon(Icons.tune), label: 'Remote'),

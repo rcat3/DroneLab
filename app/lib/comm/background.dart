@@ -14,7 +14,7 @@ void _init() {
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
       channelId: 'comm',
-      channelName: 'Comm channel',
+      channelName: 'HiveMind',
       channelDescription: 'Shown while the comm channel is on',
       onlyAlertOnce: true,
     ),
@@ -60,7 +60,7 @@ Future<void> startBackground() async {
       ForegroundServiceTypes.mediaPlayback,
     ],
     serviceId: 1,
-    notificationTitle: 'Comm is on',
+    notificationTitle: 'HiveMind is on',
     notificationText: 'Tap to open DroneLab',
     callback: _startCallback,
   );

@@ -77,7 +77,7 @@ The DroneLab display unit screws into the mask's voice port: a glowing 1.75" rou
 - **Recording:** records voice effect output to the phone or a computer for videos, or feeds it to a video call or streaming software as a microphone.  [Voice Lab](docs/features/voice-lab.md)
 - **All-day battery:** the speaker model runs about 13.5 hours on a charge, or about 9.5 with HiveMind comms on, and charges over USB-C without leaving the mask.
 
-> **Screenshot to come:** the DroneLab app's Comm tab and Remote tab, side by side.
+> **Screenshot to come:** the DroneLab app's HiveMind tab and Remote tab, side by side.
 
 See [Features](docs/features/README.md) for everything it does.
 

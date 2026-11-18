@@ -37,7 +37,7 @@ class CommPage extends StatelessWidget {
             );
         return Scaffold(
           appBar: AppBar(
-            title: const Text('DroneLab Comm'),
+            title: const Text('HiveMind'),
             actions: [
               IconButton(
                 tooltip: 'Settings',

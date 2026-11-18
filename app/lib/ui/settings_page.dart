@@ -29,7 +29,7 @@ class CommSettingsPage extends StatelessWidget {
             );
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Comm Settings')),
+          appBar: AppBar(title: const Text('HiveMind Settings')),
           body: ListView(
             children: [
               header('You'),
@@ -84,7 +84,7 @@ class CommSettingsPage extends StatelessWidget {
                 if (settings.voices.isNotEmpty) ...[
                   line,
                   ListTile(
-                    title: const Text('Comm voice'),
+                    title: const Text('HiveMind voice'),
                     subtitle: const Text("The voice effect the others hear, whatever the board's speaker plays"),
                     trailing: DropdownButton<int>(
                       value: settings.voice,
@@ -106,7 +106,7 @@ class CommSettingsPage extends StatelessWidget {
                 ),
                 line,
                 ListTile(
-                  title: const Text("Show the board's Comm screen while"),
+                  title: const Text("Show the board's HiveMind screen while"),
                   subtitle: Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: SegmentedButton<int>(

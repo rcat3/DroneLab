@@ -2,7 +2,7 @@
 
 *The ESP32-S3-Touch-AMOLED-1.75, with the DroneLab app on an Android phone.  New: cloud mode works end to end and is still being tried out; direct mode is in development.*
 
-HiveMind links every drone in the hive into one mind: they talk to each other, like a radio.  On the unit it's the *HiveMind* feature; in the app it's still the *Comm* tab.  Each unit sends its wearer's voice, through the [voice effect](voice-effects.md), and the others' voices come back to the wearer's headphones, through their phone.  The display shows who's talking, with their avatar.  The unit only sends while the wearer talks: with *Push to talk*, while the talk button is held, and in *Voice* mode, whenever it hears them speak.
+HiveMind links every drone in the hive into one mind: they talk to each other, like a radio.  On the unit it's the *HiveMind* feature; in the app it's the *HiveMind* tab too.  Each unit sends its wearer's voice, through the [voice effect](voice-effects.md), and the others' voices come back to the wearer's headphones, through their phone.  The display shows who's talking, with their avatar.  The unit only sends while the wearer talks: with *Push to talk*, while the talk button is held, and in *Voice* mode, whenever it hears them speak.
 
 It has two modes, which can be on together:
 
@@ -33,7 +33,7 @@ You hear both modes at once: the app plays the server's voices and the direct on
 ## Getting started
 
 1. [Install the app](../installing-the-app.md) and pair it with your unit: on the unit, switch on the *Phone App* page in [Settings](settings.md), after Brightness.
-2. **For cloud mode**, the hive needs a Mumble server (see [Setting up a Mumble server](#setting-up-a-mumble-server)).  Enter it in the app's *Comm Settings*, behind the gear on the Comm tab: its address, your name and the server password, then connect.
+2. **For cloud mode**, the hive needs a Mumble server (see [Setting up a Mumble server](#setting-up-a-mumble-server)).  Enter it in the app's *HiveMind Settings*, behind the gear on the HiveMind tab: its address, your name and the server password, then connect.
 3. **For direct mode**, switch on *Direct*: on the unit's *Direct* page, in the HiveMind feature, or on the *Direct* line of the app's Comm tab.  Then [pick a group](#groups).
 4. Talk: hold the talk button, or set *Voice* mode and just speak.
 
@@ -98,7 +98,7 @@ The headphones' play/pause button talks too, while the app's connected.  Headpho
 
 ### Avatars
 
-Each person's avatar is their [Mumble](https://www.mumble.info) avatar, so desktop Mumble shows the same pictures, and anyone who's set one in Mumble shows up with it on the units.  Set yours in the app's *Comm Settings*: *Choose a picture* cuts it square from the middle.  Anyone without one shows as a head in a visor.
+Each person's avatar is their [Mumble](https://www.mumble.info) avatar, so desktop Mumble shows the same pictures, and anyone who's set one in Mumble shows up with it on the units.  Set yours in the app's *HiveMind Settings*: *Choose a picture* cuts it square from the middle.  Anyone without one shows as a head in a visor.
 
 In cloud mode, the app gives yours to the server each time it connects, fetches everyone's, shrinks them to the unit's size, and sends them to the unit in the background, yours and whoever's talking first, about a second each.  The unit keeps 16, until the app's link drops.
 
@@ -128,7 +128,7 @@ The unit's *Direct* page, in the HiveMind feature, switches it on, and lists the
 
 ### Groups
 
-Units start in the **open group**, which any unit in range can hear.  To keep it to your hive, use a group with a passphrase: in the app, *Direct* on the Comm tab, or *Comm Settings*, then the group.
+Units start in the **open group**, which any unit in range can hear.  To keep it to your hive, use a group with a passphrase: in the app, *Direct* on the HiveMind tab, or *HiveMind Settings*, then the group.
 
 - **Create a group**: give it a name, which others nearby can see, and a passphrase, which they'll need to join.  A few unrelated words make a good passphrase.
 - **Heard nearby**: every unit in a group says so every couple of seconds, with its group's name (not its passphrase), so the groups about show up in the list, with how many units are in each.  Tap one and type its passphrase to join; a wrong one's caught straight away, without trying it on the air.
@@ -154,7 +154,7 @@ The radio has to listen the whole time direct mode is on, which costs about 80 m
 
 The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now: see [Installing the App](../installing-the-app.md) to get it.
 
-The **Comm tab** shows the unit, the server and direct mode, one line each, with the talk button, the channel's people and the units nearby.  What's set once is in *Comm Settings*, behind the gear: your avatar, the server, the unit's comms settings (the mode, the [HiveMind Voice](#hivemind-voice), *Speaker off while talking*, when to show the HiveMind screen), and direct mode and its group.  It has its own *Hold to talk*, and keeps going with the screen off, with a notification while it's on.
+The **HiveMind tab** shows the unit, the server and direct mode, one line each, with the talk button, the channel's people and the units nearby.  What's set once is in *HiveMind Settings*, behind the gear: your avatar, the server, the unit's comms settings (the mode, the [HiveMind Voice](#hivemind-voice), *Speaker off while talking*, when to show the HiveMind screen), and direct mode and its group.  It has its own *Hold to talk*, and keeps going with the screen off, with a notification while it's on.
 
 The first time the app connects, the phone asks to pair, and the unit shows a 6-digit code over whatever's on its screen: type it into the phone.  The unit only talks to a phone that's paired like that, so nobody else nearby can listen in or take over, and the phone and unit remember each other after that.  A new phone can only pair while pairing's open: for two minutes after the *Phone App* is switched on, or after *Pair a phone* on the *Paired Phones* page in Settings, and until a phone's paired.  The rest of the time, a phone that isn't paired is turned away before any code's shown, as the screen faces outward while the mask's worn, where anyone could read it.  With several units about, pick yours by its name, shown on the *Phone App* page (`DroneLab-` and four letters): if you pick someone else's, the code shows on theirs, not yours.
 

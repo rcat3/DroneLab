@@ -169,7 +169,7 @@ class _RemotePageState extends State<RemotePage> {
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: Text(
-                  'Connect to the board on the Comm tab first.\n\n'
+                  'Connect to the board on the HiveMind tab first.\n\n'
                   'The remote runs the board over Bluetooth, as the board\'s own WiFi remote does, '
                   'so the phone keeps its internet.',
                   textAlign: TextAlign.center,

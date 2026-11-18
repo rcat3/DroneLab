@@ -55,13 +55,13 @@ class _RecordPageState extends State<RecordPage> {
             children: [
               Text(
                   'Records the board\'s voice to a file on this phone, for videos and the like. '
-                  'Comms stop while it records, and start again after.',
+                  'HiveMind stops while it records, and start again after.',
                   style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 16),
               SegmentedButton<bool>(
                 segments: const [
                   ButtonSegment(value: true, label: Text('Speaker voice'), icon: Icon(Icons.campaign)),
-                  ButtonSegment(value: false, label: Text('Comm voice'), icon: Icon(Icons.headset_mic)),
+                  ButtonSegment(value: false, label: Text('HiveMind voice'), icon: Icon(Icons.headset_mic)),
                 ],
                 selected: {comm.recordSpeakerVoice},
                 onSelectionChanged: rec ? null : (sel) => comm.setRecordOptions(speakerVoice: sel.first),
@@ -106,7 +106,7 @@ class _RecordPageState extends State<RecordPage> {
               if (!connected && !rec)
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
-                  child: Text('Connect to the board on the Comm tab first', textAlign: TextAlign.center),
+                  child: Text('Connect to the board on the HiveMind tab first', textAlign: TextAlign.center),
                 ),
               const SizedBox(height: 24),
               Text('Recordings', style: Theme.of(context).textTheme.titleMedium),
