@@ -138,7 +138,7 @@ class _ChannelHeader extends StatelessWidget {
     final name = onDirect ? directChannelName(d) : m!.channelPath(m.myChannel);
     final canChange = onDirect || (m?.channels.length ?? 0) > 1;
     return SectionHeader(
-      'Channel $name',
+      name.toLowerCase().contains('channel') ? name : 'Channel $name',
       trailing: canChange
           ? OutlinedButton(
               onPressed: () => onDirect
@@ -211,7 +211,7 @@ class _PersonRow extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
               child: Row(children: [
-                DroneAvatar(picture: p.user?.texture, talking: talking),
+                DroneAvatar(picture: p.picture, talking: talking),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

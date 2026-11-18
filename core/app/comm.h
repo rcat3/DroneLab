@@ -91,6 +91,11 @@
  *                  name, then the text, in UTF-8: a message for the
  *                  Terminal from someone the wearer's allowed (others.h),
  *                  for the app's Terminal.
+ *     0x0D direct avatar: 0D, a board's id (32, as 0x08's), its avatar's
+ *                  size (1, pixels square), the piece (1), how many pieces
+ *                  (1), then up to 100 of its pixels, RGB565, little endian,
+ *                  in rows: a board's avatar heard over direct comms, once
+ *                  it's stopped changing (from COMM_VERSION 6).
  *     0x09 direct group: 09, a group's id (4 bytes), how strong it's heard
  *                  (dBm, signed), how many boards are in it, its channel,
  *                  flags (bit 0 Long Range), then its name:
@@ -140,7 +145,8 @@
  *   4  commands for the others (0x0B)
  *   5  direct peers' firmware and app versions (0x08's bit 1)
  *   6  messages for the Terminal passed on to the app (0x0C), and messages
- *      for the app only (others.h); the battery in the status (0x02) */
+ *      for the app only (others.h); the battery in the status (0x02);
+ *      direct comms' avatars (0x0D) */
 #define COMM_VERSION            6
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */

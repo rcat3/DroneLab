@@ -213,28 +213,31 @@ class _AvatarRowState extends State<_AvatarRow> {
   @override
   Widget build(BuildContext context) {
     final avatar = widget.comm.avatar;
-    return Explained(
-      help: "Shown on the others' displays while you talk, on the server and over direct comms. "
-          'Cut square from the middle.',
-      builder: (context, info) => PanelRow(
-        leading: Row(mainAxisSize: MainAxisSize.min, children: [
-          _Step(3, avatar != null),
-          const SizedBox(width: 12),
-          DroneAvatar(picture: avatar, size: 36),
-        ]),
-        title: 'Your avatar',
-        subtitle: avatar == null ? 'Optional' : 'Shown while you talk',
-        trailing: [
-          info,
-          if (avatar != null)
-            IconButton(
-              tooltip: 'Remove it',
-              icon: const Icon(Icons.delete_outline, color: Kc.muted),
-              onPressed: () => widget.comm.setAvatar(null),
-            ),
-          avatar == null
-              ? FilledButton(onPressed: _picking ? null : _pick, child: const Text('Choose'))
-              : OutlinedButton(onPressed: _picking ? null : _pick, child: const Text('Change')),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            _Step(3, avatar != null),
+            const SizedBox(width: 12),
+            const Text('Your avatar', style: TextStyle(fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [
+            DroneAvatar(picture: avatar, size: 96),
+            const Spacer(),
+            if (avatar != null)
+              IconButton(
+                tooltip: 'Remove your avatar',
+                icon: const Icon(Icons.delete_outline, color: Kc.muted),
+                onPressed: () => widget.comm.setAvatar(null),
+              ),
+            const SizedBox(width: 4),
+            avatar == null
+                ? FilledButton(onPressed: _picking ? null : _pick, child: const Text('Choose'))
+                : OutlinedButton(onPressed: _picking ? null : _pick, child: const Text('Change')),
+          ]),
         ],
       ),
     );

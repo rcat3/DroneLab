@@ -47,7 +47,7 @@ Future<void> showPerson(BuildContext context, CommController comm, String key) =
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(children: [
-                    DroneAvatar(picture: p.user?.texture, talking: talking, size: 76),
+                    DroneAvatar(picture: p.picture, talking: talking, size: 76),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(

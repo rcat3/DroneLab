@@ -154,6 +154,8 @@ void main() {
     expect([m.from, m.direct, m.appOnly, m.text], ['Pup', true, true, 'HI']);
     final unnamed = parseBoardMessage(Uint8List.fromList([0x0C, 0, 0, ...'HI'.codeUnits])) as TerminalMessage;
     expect([unnamed.from, unnamed.direct, unnamed.appOnly, unnamed.text], ['', false, false, 'HI']);
+    final av = parseBoardMessage(Uint8List.fromList([0x0D, 2, 0, 0, 0, 112, 3, 126, 0x1F, 0xF8])) as DirectAvatarPiece;
+    expect([av.id, av.size, av.piece, av.pieces, av.pixels], [2, 112, 3, 126, [0x1F, 0xF8]]);
   });
 
   test('a direct group key is the same for the same name and passphrase', () {

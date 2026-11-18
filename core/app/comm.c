@@ -105,6 +105,10 @@
 #define MSG_COMMAND         0x0B    // from the phone: a command for others, in from the server or out over direct
 #define COMMAND_FROM_SERVER 0x01
 #define MSG_MESSAGE         0x0C    // to the phone: a message for the Terminal
+#define MSG_DIRECT_AVATAR   0x0D    // to the phone: a piece of a board's avatar, heard over direct comms
+#define PEER_AVATAR_PIECE   100     // pixels a piece
+#define PEER_AVATAR_SETTLE_MS 2000  // sent once it's stopped changing this long
+#define PEER_AVATAR_BURST   6       // pieces each comm_poll
 #define MESSAGE_DIRECT      0x01
 #define MESSAGE_APP_ONLY    0x02
 // The beep comes out of the speaker about this long after the speaker's
@@ -1227,6 +1231,114 @@ static void merge_hearing(void)
     }
 }
 
+/* The boards' avatars heard over direct comms, passed on to the phone once
+ * each has stopped changing, a few pieces at a time. */
+typedef struct
+{
+    uint32_t id;            // 0 for a free slot
+    uint8_t version;        // as direct_avatar() last said
+    uint32_t changed_ms;
+    uint8_t sent;           // the version the phone has
+    bool sent_any;
+} peer_avatar_t;
+static peer_avatar_t peer_avatar[DIRECT_PEERS_MAX];
+static uint32_t avatar_out_id;
+static const uint16_t *avatar_out;
+static int avatar_out_piece = -1;
+
+static void send_direct_avatars(uint32_t now_ms)
+{
+    if (!comm_phone_connected() || !direct_running())
+    {
+        memset(peer_avatar, 0, sizeof(peer_avatar));    // all again for the next phone
+        avatar_out_piece = -1;
+        return;
+    }
+    const int total = DIRECT_AVATAR_PX * DIRECT_AVATAR_PX;
+    const int count = (total + PEER_AVATAR_PIECE - 1) / PEER_AVATAR_PIECE;
+    if (avatar_out_piece >= 0)
+    {
+        for (int k = 0; k < PEER_AVATAR_BURST && avatar_out_piece < count; k++)
+        {
+            uint8_t msg[8 + 2 * PEER_AVATAR_PIECE];
+            int at = avatar_out_piece * PEER_AVATAR_PIECE;
+            int n = total - at < PEER_AVATAR_PIECE ? total - at : PEER_AVATAR_PIECE;
+            msg[0] = MSG_DIRECT_AVATAR;
+            memcpy(msg + 1, &avatar_out_id, 4);
+            msg[5] = DIRECT_AVATAR_PX;
+            msg[6] = (uint8_t)avatar_out_piece;
+            msg[7] = (uint8_t)count;
+            for (int i = 0; i < n; i++)
+            {
+                uint16_t p = avatar_out[at + i];
+                msg[8 + 2 * i] = (uint8_t)p;
+                msg[9 + 2 * i] = (uint8_t)(p >> 8);
+            }
+            if (!rcat_hal_ble_peer_send(msg, 8 + 2 * (size_t)n))
+            {
+                return;     // full: carry on next time
+            }
+            avatar_out_piece++;
+        }
+        if (avatar_out_piece >= count)
+        {
+            avatar_out_piece = -1;
+        }
+        return;
+    }
+    direct_peer_t peers[DIRECT_PEERS_MAX];
+    int n = direct_peers(peers, DIRECT_PEERS_MAX);
+    for (int i = 0; i < n; i++)
+    {
+        uint8_t version;
+        const uint16_t *pixels = direct_avatar(peers[i].name, &version);
+        if (pixels == NULL)
+        {
+            continue;
+        }
+        peer_avatar_t *slot = NULL;
+        for (int k = 0; k < DIRECT_PEERS_MAX && slot == NULL; k++)
+        {
+            slot = peer_avatar[k].id == peers[i].id ? &peer_avatar[k] : NULL;
+        }
+        for (int k = 0; k < DIRECT_PEERS_MAX && slot == NULL; k++)
+        {
+            // A free one, or one for a board that's gone
+            bool about = false;
+            for (int j = 0; j < n && !about; j++)
+            {
+                about = peers[j].id == peer_avatar[k].id;
+            }
+            if (!about)
+            {
+                slot = &peer_avatar[k];
+                memset(slot, 0, sizeof(*slot));
+                slot->id = peers[i].id;
+                slot->version = version;
+                slot->changed_ms = now_ms;
+            }
+        }
+        if (slot == NULL)
+        {
+            continue;
+        }
+        if (version != slot->version)
+        {
+            slot->version = version;
+            slot->changed_ms = now_ms;
+        }
+        else if ((!slot->sent_any || slot->sent != version) && now_ms - slot->changed_ms >= PEER_AVATAR_SETTLE_MS)
+        {
+            slot->sent = version;
+            slot->sent_any = true;
+            avatar_out_id = peers[i].id;
+            avatar_out = pixels;
+            avatar_out_piece = 0;
+            return;
+        }
+    }
+}
+
 /* Tell the phone who's about over direct comms, every couple of seconds. */
 static void send_direct_peers(uint32_t now_ms)
 {
@@ -1418,6 +1530,7 @@ void comm_poll(uint32_t now_ms)
     }
     merge_hearing();
     send_direct_peers(now_ms);
+    send_direct_avatars(now_ms);
     send_answer();
 
     // The wearer's avatar, for direct comms to send the others, once it's here

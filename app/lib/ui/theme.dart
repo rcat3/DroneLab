@@ -20,9 +20,10 @@ abstract final class Kc {
   static const softRed = Color(0xFFFF6B7D);
   static const otherAir = Color(0xFFC4BCCC);    // voice on another channel, not heard
 
-  /// The board's Terminal letters (unscii 8), sharpest at multiples of 8.
+  /// The board's Terminal letters (unscii 8). Each letter's as wide as it's
+  /// tall, so it reads bigger than other fonts: sizes are scaled down to suit.
   static TextStyle term(double size, {Color color = text, List<Shadow>? shadows}) =>
-      TextStyle(fontFamily: 'Unscii', fontSize: size, color: color, height: 1.15, shadows: shadows);
+      TextStyle(fontFamily: 'Unscii', fontSize: size * 0.7, color: color, height: 1.15, shadows: shadows);
 
   static List<Shadow> glow(Color c) => [Shadow(color: c.withValues(alpha: 0.5), blurRadius: 10)];
 
@@ -114,8 +115,9 @@ abstract final class Kc {
                   ? off
                   : muted),
           side: const WidgetStatePropertyAll(BorderSide(color: line)),
-          textStyle: WidgetStatePropertyAll(term(16)),
+          textStyle: WidgetStatePropertyAll(term(15)),
           minimumSize: const WidgetStatePropertyAll(Size(48, 44)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 6)),
         ),
       ),
       chipTheme: ChipThemeData(

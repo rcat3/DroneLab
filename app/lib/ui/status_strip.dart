@@ -25,7 +25,7 @@ class StatusStrip extends StatelessWidget {
         Widget item(bool ok, String text) => Row(mainAxisSize: MainAxisSize.min, children: [
               _Dot(ok),
               const SizedBox(width: 6),
-              Text(text, style: Kc.term(11, color: ok ? Kc.text : Kc.dim)),
+              Text(text, style: Kc.term(14, color: ok ? Kc.text : Kc.dim)),
             ]);
         return Semantics(
           button: true,
@@ -40,12 +40,20 @@ class StatusStrip extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Kc.line))),
                 child: Row(children: [
-                  item(l.board, 'BOARD'),
-                  const SizedBox(width: 12),
-                  item(l.server, 'SERVER'),
-                  const SizedBox(width: 12),
-                  item(l.direct, l.direct && l.nearby > 0 ? 'DIRECT ${l.nearby}' : 'DIRECT'),
-                  const Spacer(),
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(children: [
+                        item(l.board, 'BOARD'),
+                        const SizedBox(width: 12),
+                        item(l.server, 'SERVER'),
+                        const SizedBox(width: 12),
+                        item(l.direct, l.direct && l.nearby > 0 ? 'DIRECT ${l.nearby}' : 'DIRECT'),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   _Arrow(up: true, color: l.sending ? Kc.pink : Kc.off),
                   _Arrow(up: false, color: l.hearing ? Kc.green : l.otherVoice ? Kc.otherAir : Kc.off),
                   if (l.board && st?.battery != null) ...[
@@ -161,7 +169,7 @@ class _Battery extends StatelessWidget {
       Container(width: 2, height: 5, color: color),
       if (charging) const Icon(Icons.bolt, size: 14, color: Kc.green),
       const SizedBox(width: 4),
-      Text('$percent%', style: Kc.term(11, color: color)),
+      Text('$percent%', style: Kc.term(14, color: color)),
     ]);
   }
 }

@@ -185,3 +185,15 @@ class BoardAvatars {
     return false;
   }
 }
+
+/// A board's avatar heard over direct comms, [size] pixels square, RGB565
+/// little endian, as a PNG to show.
+Uint8List directAvatarPng((Uint8List, int) job) {
+  final (rgb565, size) = job;
+  final im = img.Image(width: size, height: size);
+  for (var i = 0; i < size * size && 2 * i + 1 < rgb565.length; i++) {
+    final v = rgb565[2 * i] | (rgb565[2 * i + 1] << 8);
+    im.setPixelRgb(i % size, i ~/ size, ((v >> 11) & 31) * 255 ~/ 31, ((v >> 5) & 63) * 255 ~/ 63, (v & 31) * 255 ~/ 31);
+  }
+  return img.encodePng(im);
+}

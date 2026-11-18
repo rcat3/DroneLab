@@ -53,6 +53,8 @@ class BoardLink extends ChangeNotifier {
   Stream<DirectPeer> get directPeers => _directPeers.stream;
   final _messages = StreamController<TerminalMessage>.broadcast();
   Stream<TerminalMessage> get messages => _messages.stream;
+  final _directAvatars = StreamController<DirectAvatarPiece>.broadcast();
+  Stream<DirectAvatarPiece> get directAvatars => _directAvatars.stream;
   Stream<AvatarAck> get avatarAcks => _avatarAcks.stream;
 
   /// The longest message the board takes.
@@ -203,6 +205,8 @@ class BoardLink extends ChangeNotifier {
       _directSounds.add(msg);
     } else if (msg is DirectPeer) {
       _directPeers.add(msg);
+    } else if (msg is DirectAvatarPiece) {
+      _directAvatars.add(msg);
     } else if (msg is TerminalMessage) {
       _messages.add(msg);
     } else if (msg is DirectGroupHeard) {

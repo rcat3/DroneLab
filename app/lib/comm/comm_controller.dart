@@ -211,6 +211,7 @@ class CommController extends ChangeNotifier {
     recordSpeakerVoice = p.getBool('recordSpeakerVoice') ?? true;
     recordBeep = p.getBool('recordBeep') ?? false;
     _directPeerSub = board.directPeers.listen(_onDirectPeer);
+    _directAvatarSub = board.directAvatars.listen(_onDirectAvatar);
     _messageSub = board.messages
         .listen((m) => _addTerminal(TerminalEntry(from: m.from, onDisplay: !m.appOnly, text: m.text)));
     // Who's talking, kept up to date whether the voices come from the server
@@ -356,6 +357,29 @@ class CommController extends ChangeNotifier {
   StreamSubscription<DirectSound>? _directSoundSub;
   StreamSubscription<DirectPeer>? _directPeerSub;
   StreamSubscription<TerminalMessage>? _messageSub;
+  StreamSubscription<DirectAvatarPiece>? _directAvatarSub;
+
+  /// The avatars of boards heard over direct comms, as PNGs, by board id.
+  final Map<int, Uint8List> directAvatars = {};
+  final Map<int, ({Uint8List pixels, Set<int> got, int size, int pieces})> _avatarsComing = {};
+
+  void _onDirectAvatar(DirectAvatarPiece p) {
+    var a = _avatarsComing[p.id];
+    if (a == null || a.size != p.size || a.pieces != p.pieces || p.piece == 0) {
+      a = (pixels: Uint8List(p.size * p.size * 2), got: <int>{}, size: p.size, pieces: p.pieces);
+      _avatarsComing[p.id] = a;
+    }
+    final at = p.piece * 200;
+    if (at >= a.pixels.length) return;
+    a.pixels.setRange(at, min(at + p.pixels.length, a.pixels.length), p.pixels);
+    a.got.add(p.piece);
+    if (a.got.length < a.pieces) return;
+    _avatarsComing.remove(p.id);
+    compute(directAvatarPng, (a.pixels, a.size)).then((png) {
+      directAvatars[p.id] = png;
+      notifyListeners();
+    });
+  }
   StreamSubscription<DirectGroupHeard>? _directGroupSub;
   final Map<int, (int, int)> _directSeq = {};     // sender: its last seq, and that counted on
 
@@ -1035,6 +1059,7 @@ class CommController extends ChangeNotifier {
     _directSoundSub?.cancel();
     _directPeerSub?.cancel();
     _messageSub?.cancel();
+    _directAvatarSub?.cancel();
     _directGroupSub?.cancel();
     _recordSub?.cancel();
     _talkingTimer?.cancel();

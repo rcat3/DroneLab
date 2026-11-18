@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../comm/board_link.dart';
@@ -22,7 +24,9 @@ class Person {
   final NearbyBoard? board;
   final bool talking;
   final bool mutedByMe;
-  const Person(this.key, this.name, {this.user, this.board, this.talking = false, this.mutedByMe = false});
+  final Uint8List? picture;     // their avatar, if it's come
+  const Person(this.key, this.name,
+      {this.user, this.board, this.talking = false, this.mutedByMe = false, this.picture});
 
   bool get onServer => user != null;
 }
@@ -37,9 +41,10 @@ List<Person> hivePeople(CommController comm) {
   return [
     for (final u in users)
       Person('s${u.session}', u.name,
-          user: u, talking: comm.talking.contains(u.session), mutedByMe: comm.isMuted(u.name)),
+          user: u, talking: comm.talking.contains(u.session), mutedByMe: comm.isMuted(u.name), picture: u.texture),
     for (final b in boards)
-      Person('d${b.id}', b.name, board: b, talking: b.talking, mutedByMe: comm.isMuted(b.name)),
+      Person('d${b.id}', b.name,
+          board: b, talking: b.talking, mutedByMe: comm.isMuted(b.name), picture: comm.directAvatars[b.id]),
   ];
 }
 

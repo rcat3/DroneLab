@@ -30,6 +30,8 @@
 ///           a board heard over direct comms, every couple of seconds
 ///   message [0x0C][flags: 1 over direct, 2 for the app only][name length][name][text]
 ///           a message for the Terminal, from someone the wearer allows
+///   direct avatar [0x0D][id LE32][size][piece][pieces][pixels, RGB565 LE]
+///           a piece of a board's avatar heard over direct comms, 100 pixels a piece
 ///   direct group [0x09][group id, 4 bytes][rssi][boards][channel][flags: 1 Long Range][name]
 ///           a group heard about over direct comms, from its beacons
 /// Both ways, the phone remote's requests and their answers, in pieces:
@@ -79,6 +81,7 @@ const _msgDirectGroup = 0x09;
 const _msgRecord = 0x0A;
 const _msgCommand = 0x0B;
 const _msgMessage = 0x0C;
+const _msgDirectAvatar = 0x0D;
 
 /// No avatar, in a slot.
 const avatarNone = 0xFF;
@@ -145,6 +148,17 @@ class DirectPeer {
   DirectPeer(this.id, this.rssi, this.talking, this.name, [this.firmware = '', this.app = '']);
 }
 
+/// A piece of a board's avatar, heard over direct comms: [size] pixels
+/// square, RGB565, 100 pixels a piece.
+class DirectAvatarPiece {
+  final int id;
+  final int size;
+  final int piece;
+  final int pieces;
+  final Uint8List pixels;
+  DirectAvatarPiece(this.id, this.size, this.piece, this.pieces, this.pixels);
+}
+
 /// A message for the Terminal, passed on by the board once it's taken it.
 class TerminalMessage {
   final String from;        // '' if they didn't say who it's from
@@ -203,6 +217,9 @@ Object? parseBoardMessage(Uint8List data) {
     }
     return DirectPeer(le32(1), data[5].toSigned(8), data[6] & 1 != 0,
         utf8.decode(data.sublist(at), allowMalformed: true), versions[0], versions[1]);
+  }
+  if (data[0] == _msgDirectAvatar && data.length >= 8) {
+    return DirectAvatarPiece(le32(1), data[5], data[6], data[7], Uint8List.sublistView(data, 8));
   }
   if (data[0] == _msgMessage && data.length >= 3 && data.length >= 3 + data[2]) {
     return TerminalMessage(utf8.decode(data.sublist(3, 3 + data[2]), allowMalformed: true), data[1] & 1 != 0,
