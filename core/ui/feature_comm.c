@@ -788,7 +788,7 @@ static void show_direct(void)
     lv_obj_set_state(direct_switch, LV_STATE_CHECKED, on);
     ui_check_choice(talk_on_buttons, comm_talk_on());     // the app can change it too
     char text[160];
-    snprintf(text, sizeof(text), "%s, ch %u%s\nAs: %s", direct_group_name(), direct_channel(),
+    snprintf(text, sizeof(text), "%s, freq %u%s\nAs: %s", direct_group_name(), direct_channel(),
              direct_long_range() ? ", LR" : "", direct_own_name());
     set_label(direct_group_label, text);
     if (!on)

@@ -16,7 +16,7 @@ It can be picked to show when the display turns on, in [Settings](settings.md#st
 
 *The ESP32-S3-Touch-AMOLED-1.75, with comms*
 
-Others in your hive can send you messages from the *Send* tab of the DroneLab app, in cloud or [direct mode](comms.md#direct-mode).  Each one is added on a line of its own, after the sender's name (`Ann: hello`), and the Terminal comes on screen.  The sender can leave their name off (*Show my name*, in the app), and then it's just the message, so nobody looking at your display can tell who it's from.  The *Others* page still says who sent the last one.
+Others in your hive can send you messages from the *Terminal* tab of the DroneLab app, in cloud or [direct mode](comms.md#direct-mode).  Each one is added on a line of its own, after the sender's name (`Ann: hello`), and the Terminal comes on screen.  The sender can leave their name off (*Show my name*, in the app), and then it's just the message, so nobody looking at your display can tell who it's from.  The *Others* page still says who sent the last one.  They can also untick *Show on their display*, and then it only goes to your app's Terminal tab, not your display.  Every message you allow is passed on to your app's Terminal tab, either way.
 
 Unnamed messages are shown to start with.  *Unnamed* off, on the *Others* page (titled *Hive Messages*) (or *Showing unnamed messages* in the remote's Terminal tab), leaves them off the display.
 

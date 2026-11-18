@@ -11,8 +11,8 @@ It has two modes, which can be on together:
 | How the voice travels | Over Bluetooth to the wearer's phone, and on over the internet to a [Mumble](https://www.mumble.info) server the hive shares | Unit to unit over the radio (ESP-NOW, on the WiFi radio) |
 | Range | Anywhere with a phone signal or WiFi | A few tens of metres through people and walls, more in the open |
 | Needs | A Mumble server, and a phone with internet | Nothing else: no server, internet or phone signal.  A phone is still needed to listen |
-| Who can join | Anyone on the server, including people without a unit, from a Mumble app: [Mumla](https://mumla-app.gitlab.io/) on Android, or Mumble on a computer | Other DroneLab units nearby, in the same group |
-| Privacy | Whoever runs the server, and anyone it lets in | Groups with a passphrase are encrypted end to end |
+| Who can join | Anyone on the server, including people without a unit, from a Mumble app: [Mumla](https://mumla-app.gitlab.io/) on Android, or Mumble on a computer | Other DroneLab units nearby, on the same channel |
+| Privacy | Whoever runs the server, and anyone it lets in | Channels with a passphrase are encrypted end to end |
 | Shown on the unit and in the app as | *Server* | *Direct* |
 | Status | Works, still being tried out | In development: not yet tried with two units that can both talk |
 
@@ -33,8 +33,8 @@ You hear both modes at once: the app plays the server's voices and the direct on
 ## Getting started
 
 1. [Install the app](../installing-the-app.md) and pair it with your unit: on the unit, switch on the *Phone App* page in [Settings](settings.md), after Brightness.
-2. **For cloud mode**, the hive needs a Mumble server (see [Setting up a Mumble server](#setting-up-a-mumble-server)).  Enter it in the app's *HiveMind Settings*, behind the gear on the HiveMind tab: its address, your name and the server password, then connect.
-3. **For direct mode**, switch on *Direct*: on the unit's *Direct* page, in the HiveMind feature, or on the *Direct* line of the app's Comm tab.  Then [pick a group](#groups).
+2. **For cloud mode**, the hive needs a Mumble server (see [Setting up a Mumble server](#setting-up-a-mumble-server)).  Enter it in the app's *Setup*, behind the gear on the HiveMind tab (*Join the server*): its address, your name and the server password, then connect.
+3. **For direct mode**, switch on *Direct*: on the unit's *Direct* page, in the HiveMind feature, or in the app's *Setup*, behind the gear on the HiveMind tab.  Then [pick a channel](#channels).
 4. Talk: hold the talk button, or set *Voice* mode and just speak.
 
 The *Phone App* stays on, or off, from one startup to the next.  The voice effect has to run the whole time it's on, so it uses more battery: the [speaker model](../build/speaker-housing.md)'s 2000 mAh battery runs about 9.5 hours with comms on, against about 13.5 without.  Direct mode costs a little more again, as the radio has to listen the whole time.
@@ -49,7 +49,7 @@ Cloud mode needs one [Mumble](https://www.mumble.info) server for the whole hive
 - **Rent one.**  Many hosting companies rent Mumble servers, priced by how many people can be on at once; a small one costs little.  Search for *Mumble server hosting*.
 - **Run your own**, on any computer that stays on: a home server, a Raspberry Pi, or a small cloud server.  [`tools/mumble/`](../../tools/mumble/) has a ready-made Docker setup and instructions: copy one file, set two passwords, and start it.  To reach it from outside your home, forward port 64738 (TCP and UDP) on the router.  Mumble's own [server documentation](https://www.mumble.info/documentation/mumble-server/) covers installing it without Docker, and every setting.
 
-Whichever you use, everyone needs its **address**, its **port** (64738, unless it says otherwise) and its **password**, if it has one.  The server should be Mumble 1.4 or newer for the app's *Send* tab.  Channels are made from Mumble on a computer, logged in as the server's *SuperUser*.
+Whichever you use, everyone needs its **address**, its **port** (64738, unless it says otherwise) and its **password**, if it has one.  The server should be Mumble 1.4 or newer for the app's *Terminal* and *Control* tabs.  Channels are made from Mumble on a computer, logged in as the server's *SuperUser*.
 
 ## On the display
 
@@ -64,7 +64,7 @@ The first page shows how comms are doing at a glance, as a green screen like the
 - At the top, *HiveMind* and an antenna: red and struck through with no uplink (the phone running the app), yellow without its waves while the app's connected but the server isn't, and green with its waves once everything's connected.
 - In the middle, an avatar in a frame, with a tag on its bottom edge:
   - **RX**: whoever's talking, their avatar in full color and the frame lit up, with their name underneath, and "+1" and so on for others talking at once.
-  - **TX**: your own avatar, in full color, the frame white-hot, and a ring round the edge of the screen.  A cloud (cloud mode) or a handheld radio (direct mode) shows where it's going, with the channel's or group's name.
+  - **TX**: your own avatar, in full color, the frame white-hot, and a ring round the edge of the screen.  A cloud (cloud mode) or a handheld radio (direct mode) shows where it's going, with the channel's name.
   - *PTT* or *VOX*, the mode, while it's quiet: your avatar, dim and green, with how things are underneath: how many others are online, or what's missing.  With no phone, it says how many units are nearby in direct mode.
 
 Holding the avatar talks, for trying it out with the display in hand.  It waits a moment before it starts, so a swipe across it doesn't, and once it's talking the page holds still until you let go.  In the mask, the app, the headphones' button or the talk button does the talking.
@@ -83,7 +83,7 @@ Titled *HiveMind Voice Effect* on the screen: the voice effect for what the hive
 
 ### Talk on
 
-Talking goes one way at a time: cloud (*Server*) or *Direct*.  *Talk on*, above the app's Hold to talk, or on the unit's *Direct* page, says which.  If nobody's there to hear you that way (the server isn't connected, or nobody else is in your channel; or no units of your group are nearby) and somebody is the other way, it goes the other way instead, and the app says so under the choice.  That's decided as you start talking, and doesn't change partway through.
+Talking goes one way at a time: cloud (*Server*) or *Direct*.  *Server* or *Direct*, above the app's Hold to talk, or *Talk on* on the unit's *Direct* page, says which.  If nobody's there to hear you that way (the server isn't connected, or nobody else is in your channel; or no units on your direct channel are nearby) and somebody is the other way, it goes the other way instead, and the app says so under the choice.  That's decided as you start talking, and doesn't change partway through.
 
 ### The talk button
 
@@ -98,11 +98,11 @@ The headphones' play/pause button talks too, while the app's connected.  Headpho
 
 ### Avatars
 
-Each person's avatar is their [Mumble](https://www.mumble.info) avatar, so desktop Mumble shows the same pictures, and anyone who's set one in Mumble shows up with it on the units.  Set yours in the app's *HiveMind Settings*: *Choose a picture* cuts it square from the middle.  Anyone without one shows as a head in a visor.
+Each person's avatar is their [Mumble](https://www.mumble.info) avatar, so desktop Mumble shows the same pictures, and anyone who's set one in Mumble shows up with it on the units.  Set yours in the app's *Setup*: *Choose* cuts it square from the middle.  Anyone without one shows as a head in a visor.
 
 In cloud mode, the app gives yours to the server each time it connects, fetches everyone's, shrinks them to the unit's size, and sends them to the unit in the background, yours and whoever's talking first, about a second each.  The unit keeps 16, until the app's link drops.
 
-In direct mode, each unit sends its wearer's avatar to the others in its group over the radio, at the size the unit shows it (112x112), a little at a time.  The pixels go every eighth one each way first, then every fourth, every second and the rest, so a talker shows straight away as big blocks of their picture, which sharpen as more comes in.  All of it goes soon after a new unit's heard and every five minutes, about twenty seconds' worth of small packets; the coarsest two layers go every half minute; and none of it while the wearer's talking.  Pieces that don't arrive are asked for again and resent, so a picture fills in within seconds.  The unit needs its phone to have given it the avatar once since it started.
+In direct mode, each unit sends its wearer's avatar to the others on its channel over the radio, at the size the unit shows it (112x112), a little at a time.  The pixels go every eighth one each way first, then every fourth, every second and the rest, so a talker shows straight away as big blocks of their picture, which sharpen as more comes in.  All of it goes soon after a new unit's heard and every five minutes, about twenty seconds' worth of small packets; the coarsest two layers go every half minute; and none of it while the wearer's talking.  Pieces that don't arrive are asked for again and resent, so a picture fills in within seconds.  The unit needs its phone to have given it the avatar once since it started.
 
 ## Cloud mode
 
@@ -126,35 +126,41 @@ Direct mode carries the hive's voices unit to unit over the radio, with no inter
 
 The unit's *Direct* page, in the HiveMind feature, switches it on, and lists the units it hears, strongest first, with bars for how well.  It talks the same way as in cloud mode: the talk button, holding the avatar on the status screen, voice mode, or the app's Hold to talk.
 
-### Groups
+### Channels
 
-Units start in the **open group**, which any unit in range can hear.  To keep it to your hive, use a group with a passphrase: in the app, *Direct* on the HiveMind tab, or *HiveMind Settings*, then the group.
+Units start on the **open channel**, which any unit in range can hear.  To keep it to your hive, use a channel with a passphrase: in the app's *Setup*, under *Direct*, tap the channel, or *Change* on the HiveMind tab while talking direct.
 
-- **Create a group**: give it a name, which others nearby can see, and a passphrase, which they'll need to join.  A few unrelated words make a good passphrase.
-- **Heard nearby**: every unit in a group says so every couple of seconds, with its group's name (not its passphrase), so the groups about show up in the list, with how many units are in each.  Tap one and type its passphrase to join; a wrong one's caught straight away, without trying it on the air.
-- **Your groups**: those made or joined on this phone, to switch between.  *Delete* takes one off this phone; it carries on for anyone else who has its passphrase.
+- **Create a channel**: give it a name, which others nearby can see, and a passphrase, which they'll need to join.  A few unrelated words make a good passphrase.
+- **Heard nearby**: every unit on a channel says so every couple of seconds, with its channel's name (not its passphrase), so the channels about show up in the list, with how many units are on each.  Tap one and type its passphrase to join; a wrong one's caught straight away, without trying it on the air.
+- **Your channels**: those made or joined on this phone, to switch between.  *Delete* takes one off this phone; it carries on for anyone else who has its passphrase.
 
-The app turns the group's name and passphrase into a key (PBKDF2, deliberately slow), and the unit encrypts everything with it (AES-128-GCM), so units outside the group can neither hear it nor send to it, however they're changed.  The passphrase never leaves the phone.  What's not hidden: that a group's there, its name, and how many are in it; and anyone who's been given the passphrase is in it, so start a new group if someone shouldn't be any more.  The unit keeps its group's key in its settings, so someone with the unit itself could read it out.
+The app turns the channel's name and passphrase into a key (PBKDF2, deliberately slow), and the unit encrypts everything with it (AES-128-GCM), so units outside the channel can neither hear it nor send to it, however they're changed.  The passphrase never leaves the phone.  What's not hidden: that a channel's there, its name, and how many are on it; and anyone who's been given the passphrase is on it, so start a new channel if someone shouldn't be any more.  The unit keeps its channel's key in its settings, so someone with the unit itself could read it out.
 
-### Channels and Long Range
+The app's status strip shows a grey arrow when someone's talking on another channel nearby: the unit hears it on the air, but can't listen to it.
 
-Each group has a radio channel, 1, 6 or 11 (the three that don't overlap), and can use **Long Range**, Espressif's own slower mode (500 kb/s) that reaches further, at the cost of each packet taking about twice as long on the air.  Both are chosen when the group's made, and come with it to everyone who joins.  The open group is on channel 6, in Long Range.  Every unit hears both ordinary and Long Range broadcasts, so it doesn't matter which a unit in the group sends.  Putting a busy group on its own channel keeps it from crowding the open group.
+### Frequencies and Long Range
 
-A unit only hears its own channel, so opening the app's Groups screen has it listen on each of the three for a couple of seconds, to find the groups on the others; what's said on its own meanwhile is missed.  It can't while the hotspot's on.  The hotspot moves to the group's channel, if it's on.
+Each channel has a radio frequency, 1, 6 or 11 (the three WiFi channels that don't overlap), and can use **Long Range**, Espressif's own slower mode (500 kb/s) that reaches further, at the cost of each packet taking about twice as long on the air.  Both are chosen when the channel's made, and come with it to everyone who joins.  The open channel is on frequency 6, in Long Range.  Every unit hears both ordinary and Long Range broadcasts, so it doesn't matter which a unit on the channel sends.  Putting a busy channel on its own frequency keeps it from crowding the open channel.
+
+A unit only hears its own frequency, so opening the app's *Direct Channels* screen has it listen on each of the three for a couple of seconds, to find the channels on the others; what's said on its own meanwhile is missed.  It can't while the hotspot's on.  The hotspot moves to the channel's frequency, if it's on.
 
 ### Relaying
 
-A unit that hears one of its group's broadcasts only weakly, as from the edge of its range, passes it on once, after a short random wait, unless it hears another unit do so first.  So two units just out of range of each other still hear each other through one in between, without every unit repeating everything.
+A unit that hears one of its channel's broadcasts only weakly, as from the edge of its range, passes it on once, after a short random wait, unless it hears another unit do so first.  So two units just out of range of each other still hear each other through one in between, without every unit repeating everything.
 
 ### Range and battery
 
-The radio has to listen the whole time direct mode is on, which costs about 80 mA more than with it off.  Range is a few tens of metres through people and walls, more in the open, and more again with Long Range or an antenna outside the mask.  Joining a network on another channel, for the Voice Lab, takes the unit off the group's channel while it lasts.
+The radio has to listen the whole time direct mode is on, which costs about 80 mA more than with it off.  Range is a few tens of metres through people and walls, more in the open, and more again with Long Range or an antenna outside the mask.  Joining a network on another channel, for the Voice Lab, takes the unit off its direct channel's frequency while it lasts.
 
 ## The app
 
 The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now: see [Installing the App](../installing-the-app.md) to get it.
 
-The **HiveMind tab** shows the unit, the server and direct mode, one line each, with the talk button, the channel's people and the units nearby.  What's set once is in *HiveMind Settings*, behind the gear: your avatar, the server, the unit's comms settings (the mode, the [HiveMind Voice](#hivemind-voice), *Speaker off while talking*, when to show the HiveMind screen), and direct mode and its group.  It has its own *Hold to talk*, and keeps going with the screen off, with a notification while it's on.
+A **status strip** along the top of every tab shows the unit, the server and direct mode, each with a light; arrows for your voice going out (pink) and others' coming in (green, or grey for someone on another direct channel nearby, not heard); and the unit's battery.  Tap it to connect or disconnect each.
+
+The **HiveMind tab** lists everyone in your channel: those on the server, and the units heard over direct mode, with bars for how well each is heard.  Whoever's talking glows green.  Tap someone for more: how they're linked, their unit's firmware and app versions (over direct mode), muting them, and shortcuts to message or control them.  At the foot are *Server* or *Direct*, for where talking goes, and *Hold to talk*.  It keeps going with the screen off, with a notification while it's on.
+
+What's set once is in *Setup*, behind the gear: getting connected (pairing the unit, joining the server, your avatar), the unit's talking settings (the mode, the [HiveMind Voice](#hivemind-voice), *Mute speaker on Tx*, when to show the HiveMind screen), direct mode and its channel, and who you've muted.  The (i) buttons explain each.
 
 The first time the app connects, the phone asks to pair, and the unit shows a 6-digit code over whatever's on its screen: type it into the phone.  The unit only talks to a phone that's paired like that, so nobody else nearby can listen in or take over, and the phone and unit remember each other after that.  A new phone can only pair while pairing's open: for two minutes after the *Phone App* is switched on, or after *Pair a phone* on the *Paired Phones* page in Settings, and until a phone's paired.  The rest of the time, a phone that isn't paired is turned away before any code's shown, as the screen faces outward while the mask's worn, where anyone could read it.  With several units about, pick yours by its name, shown on the *Phone App* page (`DroneLab-` and four letters): if you pick someone else's, the code shows on theirs, not yours.
 
@@ -162,7 +168,11 @@ The **Remote tab** is the [WiFi Hotspot Remote](phone-remote.md)'s page, run ove
 
 The **Record tab** records the unit's voice to the phone, for videos: see [Recording in the app](voice-lab.md#recording-in-the-app).
 
-The **Send tab** sends to the others' units: a message for their [Terminal](terminal.md#messages-from-others), and commands for their [Lovense](lovense.md) devices (*STOP*, a level for each kind of motor, a pattern and its speed, and a reaction).  They go to everyone in your server channel and your direct group, or to those you pick, and each unit only takes them if its wearer has allowed you, in a list for each: see [Commands from others](lovense.md#commands-from-others).  Over the server they go as Mumble plugin data, which the Mumble apps don't show, so it needs a server from Mumble 1.4 on.
+The **Terminal tab** holds messages: those from others, as their units pass them on, the server's own text messages, and yours.  Messages go to the others' [Terminal](terminal.md#messages-from-others): *Show on their display* puts them on their unit's screen as well as in their app; untick it for their app only.
+
+The **Control tab** sends commands for the others' [Lovense](lovense.md) devices: a level for each kind of motor, a pattern and its speed, and a reaction, with *STOP* always at the foot of the screen.
+
+Messages and commands go to everyone in your server channel and your direct channel, or to those you pick, and each unit only takes them if its wearer has allowed you, in a list for each: see [Commands from others](lovense.md#commands-from-others).  Over the server they go as Mumble plugin data, which the Mumble apps don't show, so it needs a server from Mumble 1.4 on.
 
 ## Trying it out
 
@@ -180,7 +190,7 @@ The computer has to pair with the unit first, as the app does: `tools/ble_pair.p
 
 ### Direct mode with one unit
 
-A unit built with `-DRCAT_DIRECT_ECHO=1` only echoes back what it hears, as a unit called `ECHO-` and four letters, so one unit that can talk, with its phone, hears itself come back.  Once it's had a whole avatar, it takes that on as its own, so the avatar comes back too.  It's in a group called *Echo Test*, with the passphrase `dronelab`, which shows up as heard nearby, for trying joining one:
+A unit built with `-DRCAT_DIRECT_ECHO=1` only echoes back what it hears, as a unit called `ECHO-` and four letters, so one unit that can talk, with its phone, hears itself come back.  Once it's had a whole avatar, it takes that on as its own, so the avatar comes back too.  It's on a channel called *Echo Test*, with the passphrase `dronelab`, which shows up as heard nearby, for trying joining one:
 
 ```
 idf.py -C platforms/esp-idf -B build-s3-146-echo -DBOARD=waveshare_esp32s3_touch_lcd_1_46 -DRCAT_DIRECT_ECHO=1 build flash

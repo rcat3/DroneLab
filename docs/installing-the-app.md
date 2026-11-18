@@ -25,7 +25,7 @@ If Android says the app conflicts with one that's installed, the copy on the pho
 ## First time with the board
 
 1. On the board, switch on the *Phone App* page in [Settings](features/settings.md).  Pairing is open for two minutes after it's switched on.
-2. In the app's *HiveMind Settings*, behind the gear on the HiveMind tab, *Find* the board and pick yours, by the name on the *Phone App* page.
+2. In the app's *Setup*, behind the gear on the HiveMind tab, *Find* the board and pick yours, by the name on the *Phone App* page.
 3. The phone asks to pair, and the board shows a 6-digit code: type it into the phone.
 
 After that, they remember each other.  Setting up the server, and the rest of the app, are in [Comms](features/comms.md#the-app).

@@ -27,6 +27,6 @@ The WiFi Hotspot Remote and the [Voice Lab](voice-lab.md) both use WiFi, so they
 
 ## In the app
 
-The [comms](comms.md) Android app has the same page on its *Remote* tab, sent over the comms Bluetooth link instead of the hotspot, so the phone stays on its own WiFi or mobile data.  It needs the board's *Comm* switched on, and the phone paired with it; the hotspot isn't used.
+The [comms](comms.md) Android app has the same page on its *Remote* tab, sent over the comms Bluetooth link instead of the hotspot, so the phone stays on its own WiFi or mobile data.  It needs the board's *Phone App* switched on, and the phone paired with it; the hotspot isn't used.
 
 The page is `core/app/remote_page.html`.  After changing it, run `python3 tools/gen_remote_page.py` to turn it into the C file that's built into the firmware, and to copy it into the app.
