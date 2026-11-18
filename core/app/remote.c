@@ -747,7 +747,8 @@ static void set_comm(const char *query)
     }
 
     // Direct comms: direct=0 or 1, and its group: key=32 hex digits (or
-    // empty for the open group), group=its name, name=this board's
+    // empty for the open group), group=its name, name=this board's; or
+    // name= on its own
     int direct = query_int(query, "direct", -1);
     if (direct == 1)
     {
@@ -784,6 +785,18 @@ static void set_comm(const char *query)
         int channel = query_int(query, "ch", DIRECT_CHANNEL_DEFAULT);
         int lr = query_int(query, "lr", 0);
         direct_set_group(keyed ? key : NULL, group, name, (uint8_t)channel, lr != 0);
+    }
+    else if (query_str(query, "name", name, sizeof(name)))
+    {
+        // Just this board's name, in the group it's in
+        const settings_t *s = settings_get();
+        if (strcmp(name, s->direct_name) != 0)
+        {
+            uint8_t key[SETTINGS_DIRECT_KEY_LEN];
+            memcpy(key, s->direct_key, sizeof(key));
+            snprintf(group, sizeof(group), "%s", s->direct_group);
+            direct_set_group(s->direct_keyed ? key : NULL, group, name, s->direct_channel, s->direct_long_range != 0);
+        }
     }
 }
 

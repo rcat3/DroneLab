@@ -75,7 +75,8 @@ const char *remote_page_html(size_t *len);
  * "scanning" (1 while it listens to the other channels)},
  * and POST takes direct=0 or 1, scan=1 to hear about the groups on the
  * other channels, and key= (32 hex digits, or empty for the open group) with
- * group=, name=, ch= (1, 6 or 11) and lr= (1 for Long Range). */
+ * group=, name=, ch= (1, 6 or 11) and lr= (1 for Long Range), or name= on
+ * its own to change only this board's name. */
 int remote_api(const char *method, const char *target, const char *body, size_t body_len, char *out, size_t cap);
 
 #endif

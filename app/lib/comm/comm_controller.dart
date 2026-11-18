@@ -310,6 +310,7 @@ class CommController extends ChangeNotifier {
       _settingsTimer?.cancel();
       _settingsTimer = null;
       boardSettings = null;
+      _boardNameSent = null;
       return;
     }
     if (_settingsTimer == null) {
@@ -336,7 +337,22 @@ class CommController extends ChangeNotifier {
           [for (final n in (v['voices'] as List<dynamic>? ?? const [])) n as String],
           (v['talk'] as num?)?.toInt() ?? talkServer);
       notifyListeners();
+      _nameBoard();
     } catch (_) {}
+  }
+
+  /// The name sent to the board for direct comms, this connection.
+  String? _boardNameSent;
+
+  /// Have the board go by our server name over direct comms too, in
+  /// whichever channel it's in: it's only told along with a channel
+  /// otherwise, so one left in the open channel goes by its Bluetooth name.
+  void _nameBoard() {
+    final want = server.username;
+    final have = boardSettings?.direct?.name;
+    if (have == null || want.isEmpty || want == have || want == _boardNameSent) return;
+    _boardNameSent = want;     // once: older firmware ignores it
+    _boardSettingsRequest('POST', '?name=${Uri.encodeQueryComponent(want)}');
   }
 
   /// Change the board's: the speaker off while it sends, when it shows the
