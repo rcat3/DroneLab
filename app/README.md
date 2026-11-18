@@ -8,7 +8,7 @@ The phone side of the [comms](../docs/features/comms.md), in Flutter, for Androi
 - `lib/comm/audio_out.dart`: Opus decoding and playback.  It plays silence between voices, so Bluetooth headphones stay awake and don't cut off the start of what's said.
 - `lib/comm/background.dart`: an Android foreground service, so it keeps going with the screen off.
 
-To install a released copy instead of building it, see [Installing the App](../docs/installing-the-app.md).
+To install a released copy instead of building it, see [Installing the App](../docs/app/installing.md).  How to use it is in [The DroneLab App](../docs/app/README.md).
 
 ## Getting the code
 
@@ -49,6 +49,6 @@ Switch on USB debugging on the phone (in *Developer options*), connect it over U
 adb install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
-`-r` installs over the copy that's there and keeps its settings.  Don't use `flutter install`: it uninstalls the app first, which wipes its settings.  Or copy the APK to the phone and open it there, as in [Installing the App](../docs/installing-the-app.md).
+`-r` installs over the copy that's there and keeps its settings.  Don't use `flutter install`: it uninstalls the app first, which wipes its settings.  Or copy the APK to the phone and open it there, as in [Installing the App](../docs/app/installing.md).
 
 A release build only installs over a copy signed with the same key.  Built without the project's key, it won't install over a copy from the releases page (`adb` says `INSTALL_FAILED_UPDATE_INCOMPATIBLE`): uninstall that first, which loses its settings, or build a debug copy, which installs beside it.

@@ -15,7 +15,7 @@ DroneLab units aren't sold.  They're built by their owners, from a Waveshare dis
 3. **Put it together**, on the same page.
 4. **[Install the firmware](../building-firmware.md)** from a computer, over USB.  This can be done before the board goes into the housing, or after: the USB-C port stays reachable.
 5. **[Set it up](first-start.md)**: check the picture's the right way up, level it in the mask, [test the seal](seal-test.md) (speaker model), and load your own images and sounds.
-6. **[Install the app](../installing-the-app.md)** on an Android phone, if you want [comms](../features/comms.md), recording, or to run it from your phone.
+6. **[Install the app](../app/installing.md)** on an Android phone, if you want [comms](../features/comms.md), recording, or to run it from your phone.
 
 ## Choose a model
 

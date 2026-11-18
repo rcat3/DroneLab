@@ -9,9 +9,18 @@ New here?  Start with the [project page](../README.md).
   - [Low-profile model](build/low-profile-housing.md): parts, printing and putting it together.
 - [Installing the Firmware](building-firmware.md): the web installer, flashing a release by hand, or building it yourself, and updating.
 - [First Start](build/first-start.md): rotation, levelling, the voice effect, and your own images and sounds.
-- [Installing the App](installing-the-app.md): the DroneLab app for Android, and pairing it with the unit.
+- [Installing the App](app/installing.md): the DroneLab app for Android, and [connecting](app/connecting.md) it to the unit.
 
 ## Using it
+
+- [The DroneLab App](app/README.md): what it does, the screen and its signs.
+  - [Connecting](app/connecting.md): pairing the unit, joining the server, your avatar.
+  - [HiveMind](app/hivemind.md): talking to other drones, over the server and direct, and hearing them.
+  - [Terminal](app/terminal.md): messages to one, several or all of the hive, and who can send you theirs.
+  - [Control](app/control.md): others' Lovense toys, and who can control yours.
+  - [Record](app/record.md): your voice effect to WAV files, for videos.
+  - [Remote](app/remote.md): the unit's controls on the phone, and the WiFi hotspot for iPhones.
+  - [Updating the unit's firmware](app/firmware-updates.md): from the app, or over USB.
 
 - [Using the Display](using-the-display.md): finding your way around, and turning it on and off.
 - [Features](features/README.md): [Voice Effects](features/voice-effects.md), [HiveMind (Comms)](features/comms.md), [Visualizer](features/visualizer.md), [Lovense](features/lovense.md), [Images](features/images.md), [Voice Ring](features/voice-ring.md), [Terminal](features/terminal.md), [WiFi Hotspot Remote](features/phone-remote.md), [Sound](features/sound.md), [Voice Lab](features/voice-lab.md) and [Settings](features/settings.md), with the [Level](features/level.md).

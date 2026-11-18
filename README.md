@@ -72,12 +72,12 @@ The DroneLab display unit screws into the mask's voice port: a glowing 1.75" rou
 
 ### Also on board
 
-- **Remote operation:** the DroneLab app for Android runs the whole display unit from a phone over Bluetooth.  Change what's displayed on the screen and operate features without having to see the display.  Phones without the app (including iPhones) can run it through the display unit's own WiFi hotspot, in a web browser.  [The app](docs/installing-the-app.md) · [Hotspot remote](docs/features/phone-remote.md)
+- **Remote operation:** the DroneLab app for Android runs the whole display unit from a phone over Bluetooth.  Change what's displayed on the screen and operate features without having to see the display.  Phones without the app (including iPhones) can run it through the display unit's own WiFi hotspot, in a web browser.  [The app](docs/app/README.md) · [Hotspot remote](docs/features/phone-remote.md)
 
 <p align="center">
-<a href="docs/installing-the-app.md"><img src="docs/images/app_hivemind.png" width="270" alt="The DroneLab app's HiveMind tab: the hive on the server and a unit heard directly, each with their avatar, and the talk button"></a>
+<a href="docs/app/hivemind.md"><img src="docs/images/app_hivemind.png" width="270" alt="The DroneLab app's HiveMind tab: the hive on the server and a unit heard directly, each with their avatar, and the talk button"></a>
 &nbsp;
-<a href="docs/installing-the-app.md"><img src="docs/images/app_remote.png" width="270" alt="The DroneLab app's Remote tab, running the display unit's screen over Bluetooth"></a>
+<a href="docs/app/remote.md"><img src="docs/images/app_remote.png" width="270" alt="The DroneLab app's Remote tab, running the display unit's screen over Bluetooth"></a>
 </p>
 
 - **Sound:** plays WAV, MP3 and FLAC files from the SD card through the speaker.  [Sound](docs/features/sound.md)
@@ -126,13 +126,14 @@ The [**Build Guide**](docs/build/README.md) walks you through it, step by step:
 3. **Put it together**: the [speaker model](docs/build/speaker-housing.md#3-put-it-together) or the [low-profile model](docs/build/low-profile-housing.md#3-put-it-together).
 4. **[Install the firmware](docs/building-firmware.md)** over USB, straight from the browser with the [web installer](https://rcat3.github.io/DroneLab/).
 5. **[Set it up](docs/build/first-start.md)**: rotation, levelling it in the mask, and your images and sounds on an SD card.
-6. **[Install the app](docs/installing-the-app.md)** on an Android phone, for comms and the remote (optional).
+6. **[Install the app](docs/app/installing.md)** on an Android phone, for comms and the remote (optional).
 
 ## Documentation
 
 - **[Build Guide](docs/build/README.md):** choosing a model, the parts, printing, assembly and setup.
 - **[Installing the Firmware](docs/building-firmware.md):** the web installer, flashing a release by hand, or building it yourself.
-- **[Installing the App](docs/installing-the-app.md):** the DroneLab app for Android, from the [releases page](https://github.com/rcat3/DroneLab/releases/latest).
+- **[Installing the App](docs/app/installing.md):** the DroneLab app for Android, from the [releases page](https://github.com/rcat3/DroneLab/releases/latest).
+- **[Using the App](docs/app/README.md):** talking to the hive, messages, controlling others' toys, recording, the remote, and updating the unit.
 - **[Using the Display](docs/using-the-display.md):** finding your way around, and turning it on and off.
 - **[Features](docs/features/README.md):** each feature in detail.
 - **[The board](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md):** technical notes on the ESP32-S3-Touch-AMOLED-1.75: power, audio and the echo canceller.

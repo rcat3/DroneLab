@@ -26,7 +26,8 @@ Some things to try:
 No recording is ever written over: if the file's there already, the new one gets `-2`, `-3` and so on before the `.wav`.
 
 
-For recording the voice effect for videos, the DroneLab app's *Record* tab is the easier way: see [Recording in the app](#recording-in-the-app).
+For recording the voice effect for videos, the DroneLab app's *Record* tab is the easier way: see [Record](../app/record.md).
+
 ## Recording for video
 
 To use the voice effect as the sound of a video, instead of a microphone on the outside of the mask picking up your real voice:
@@ -65,9 +66,7 @@ The Voice Lab is off whenever the board starts, and WiFi is off while it's off. 
 
 ## Recording in the app
 
-The DroneLab app's *Record* tab records the board's voice, after the effect, straight to the phone, over the same Bluetooth link as the [comms](comms.md), with no computer or WiFi.  Pick the *Speaker voice* (the effect the board plays) or the *Comm voice* (the [HiveMind Voice](comms.md#hivemind-voice), if it's different), and, if you like, a *Sync beep*: the board beeps as it starts, and the same beep's in the recording, for lining it up with video.  The microphone's left out of the recording while it beeps, and a moment after, so the beep it picks up from the speaker doesn't follow as a second one.
-
-Each recording is a 48 kHz mono WAV, the voice sent at 48 kb/s (the effect itself runs at 16 kHz, so that's as much as there is to hear).  The list under the button plays, shares (to Google Drive, email and the rest, from Android's share sheet) and deletes them.  Comms stop while it records, in both modes, and start again after; the board shows REC.  The voice is evened out by comms's automatic gain, as on the channel.
+The DroneLab app's *Record* tab records the voice effect straight to the phone, over Bluetooth, with no computer or WiFi, and a sync beep for lining it up with video: see [Record](../app/record.md).
 
 ## Recording over Bluetooth
 

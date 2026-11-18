@@ -1,6 +1,6 @@
 # Features
 
-Everything a DroneLab unit can do, in one place.  On the display, the features are stacked one above the other: swipe up and down to move between them, and left and right between each feature's pages (see [Using the Display](../using-the-display.md)).  Most of them can also be run from a phone, with the [DroneLab app](../installing-the-app.md) or the [WiFi Hotspot Remote](phone-remote.md), so nobody has to reach the display in the mask.
+Everything a DroneLab unit can do, in one place.  On the display, the features are stacked one above the other: swipe up and down to move between them, and left and right between each feature's pages (see [Using the Display](../using-the-display.md)).  Most of them can also be run from a phone, with the [DroneLab app](../app/installing.md) or the [WiFi Hotspot Remote](phone-remote.md), so nobody has to reach the display in the mask.
 
 Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp32s3_touch_amoled_1_75.md).  The [low-profile model](../build/low-profile-housing.md) has no speaker, so the ones marked *speaker model* need the [speaker model](../build/speaker-housing.md).
 
@@ -106,8 +106,8 @@ Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp
 <td width="190" align="center"><a href="phone-remote.md"><img src="../images/screens/feature_remote.png" width="170" alt="Remote control"></a></td>
 <td>
 <h3>Remote control</h3>
-<p>Run the whole unit from a phone, without seeing the display: what it shows, its brightness and settings, the Lovense toys, the voice ring, the voice effect, the sound player and the Terminal.  The <a href="../installing-the-app.md">DroneLab app</a> for Android does it over Bluetooth, and keeps the phone on the internet.  Phones without the app, iPhones included, join the unit's own WiFi hotspot and use a web browser.</p>
-<p><a href="phone-remote.md">WiFi Hotspot Remote →</a> · <a href="../installing-the-app.md">The app →</a></p>
+<p>Run the whole unit from a phone, without seeing the display: what it shows, its brightness and settings, the Lovense toys, the voice ring, the voice effect, the sound player and the Terminal.  The <a href="../app/installing.md">DroneLab app</a> for Android does it over Bluetooth, and keeps the phone on the internet.  Phones without the app, iPhones included, join the unit's own WiFi hotspot and use a web browser.</p>
+<p><a href="phone-remote.md">WiFi Hotspot Remote →</a> · <a href="../app/remote.md">The app's Remote →</a></p>
 </td>
 </tr>
 </table>

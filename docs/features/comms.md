@@ -32,7 +32,7 @@ You hear both modes at once: the app plays the server's voices and the direct on
 
 ## Getting started
 
-1. [Install the app](../installing-the-app.md) and pair it with your unit: on the unit, switch on the *Phone App* page in [Settings](settings.md), after Brightness.
+1. [Install the app](../app/installing.md) and [pair it](../app/connecting.md) with your unit: on the unit, switch on the *Phone App* page in [Settings](settings.md), after Brightness.
 2. **For cloud mode**, the hive needs a Mumble server (see [Setting up a Mumble server](#setting-up-a-mumble-server)).  Enter it in the app's *Setup*, behind the gear on the HiveMind tab (*Join the server*): its address, your name and the server password, then connect.
 3. **For direct mode**, switch on *Direct*: on the unit's *Direct* page, in the HiveMind feature, or in the app's *Setup*, behind the gear on the HiveMind tab.  Then [pick a channel](#channels).
 4. Talk: hold the talk button, or set *Voice* mode and just speak.
@@ -154,25 +154,12 @@ The radio has to listen the whole time direct mode is on, which costs about 80 m
 
 ## The app
 
-The DroneLab app, in [`app/`](../../app/), is the phone's side, for Android for now: see [Installing the App](../installing-the-app.md) to get it.
+The DroneLab app is the phone's side of HiveMind: it joins the server, plays the hive to your headphones, and has the talk button.  It has its own guide, [The DroneLab App](../app/README.md):
 
-A **status strip** along the top of every tab shows the unit, the server and direct mode, each with a light; arrows for your voice going out (pink) and others' coming in (green, or grey for someone on another direct channel nearby, not heard); and the unit's battery.  Tap it to connect or disconnect each.
-
-The **HiveMind tab** lists everyone in your channel: those on the server, and the units heard over direct mode, with bars for how well each is heard.  Whoever's talking glows green.  Tap someone for more: how they're linked, their unit's firmware and app versions (over direct mode), muting them, and shortcuts to message or control them.  At the foot are *Server* or *Direct*, for where talking goes, and *Hold to talk*.  It keeps going with the screen off, with a notification while it's on.
-
-What's set once is in *Setup*, behind the gear: getting connected (pairing the unit, joining the server, your avatar), the unit's talking settings (the mode, the [HiveMind Voice](#hivemind-voice), *Mute speaker on Tx*, when to show the HiveMind screen), direct mode and its channel, and who you've muted.  The (i) buttons explain each.
-
-The first time the app connects, the phone asks to pair, and the unit shows a 6-digit code over whatever's on its screen: type it into the phone.  The unit only talks to a phone that's paired like that, so nobody else nearby can listen in or take over, and the phone and unit remember each other after that.  A new phone can only pair while pairing's open: for two minutes after the *Phone App* is switched on, or after *Pair a phone* on the *Paired Phones* page in Settings, and until a phone's paired.  The rest of the time, a phone that isn't paired is turned away before any code's shown, as the screen faces outward while the mask's worn, where anyone could read it.  With several units about, pick yours by its name, shown on the *Phone App* page (`DroneLab-` and four letters): if you pick someone else's, the code shows on theirs, not yours.
-
-The **Remote tab** is the [WiFi Hotspot Remote](phone-remote.md)'s page, run over the same Bluetooth link instead of the unit's WiFi hotspot, so the phone keeps its internet.
-
-The **Record tab** records the unit's voice to the phone, for videos: see [Recording in the app](voice-lab.md#recording-in-the-app).
-
-The **Terminal tab** holds messages: those from others, as their units pass them on, the server's own text messages, and yours.  Messages go to the others' [Terminal](terminal.md#messages-from-others): *Show on their display* puts them on their unit's screen as well as in their app; untick it for their app only.
-
-The **Control tab** sends commands for the others' [Lovense](lovense.md) devices: a level for each kind of motor, a pattern and its speed, and a reaction, with *STOP* always at the foot of the screen.
-
-Messages and commands go to everyone in your server channel and your direct channel, or to those you pick, and each unit only takes them if its wearer has allowed you, in a list for each: see [Commands from others](lovense.md#commands-from-others).  Over the server they go as Mumble plugin data, which the Mumble apps don't show, so it needs a server from Mumble 1.4 on.
+- [Connecting](../app/connecting.md): pairing it with the unit, joining the server, your avatar.
+- [HiveMind](../app/hivemind.md): the two links, who's there, the ways to talk, hearing the hive, channels, and the talking settings.
+- [Terminal](../app/terminal.md) and [Control](../app/control.md): messages and Lovense commands to others, and who may send you theirs.
+- The [status strip](../app/README.md#the-status-strip) and the app's other signs.
 
 ## Trying it out
 

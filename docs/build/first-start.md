@@ -87,7 +87,7 @@ In Settings, **Startup** picks what's on screen when the unit turns on: **Images
 
 ## 10. Connect your phone (optional)
 
-[Install the DroneLab app](../installing-the-app.md) on an Android phone, and pair it with the unit, for [comms](../features/comms.md), recording, sending messages and running the unit from the phone.  Without the app, any phone can run it through the unit's [WiFi hotspot](../features/phone-remote.md).
+[Install the DroneLab app](../app/installing.md) on an Android phone, and pair it with the unit, for [comms](../features/comms.md), recording, sending messages and running the unit from the phone.  Without the app, any phone can run it through the unit's [WiFi hotspot](../features/phone-remote.md).
 
 ## Something wrong?
 
