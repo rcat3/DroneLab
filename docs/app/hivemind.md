@@ -116,6 +116,6 @@ These are the display unit's own settings, so they also show on its display, in 
 
 - **Nobody hears you**: check the status strip's up arrow lights pink while you talk, and that the line under SERVER/DIRECT names the link the others are on.
 - **You can't hear anyone**: check the phone's volume and which headphones it's playing through, and that they aren't [muted by you](#whos-there).
-- **A yellow warning sign by the channel's name**: display units nearby run a different firmware, and can't be heard until everyone's on the same release.  See [Firmware updates](firmware-updates.md#units-on-different-versions).
+- **A yellow warning sign by the channel's name**: display units nearby run a different firmware, and can't be heard until everyone's on the same release.  See [Firmware updates](firmware-updates.md#display-units-on-different-versions).
 - **Nobody over direct**: everyone needs direct mode on, the same direct channel, and to be within range.
 - **The server won't connect**: the [links sheet](connecting.md#the-links-sheet) says why, under the server.

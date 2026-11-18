@@ -60,7 +60,7 @@ A grey dot is a link that's off, or not connected.  Tap the strip to open the [l
   - *Not linked yet*: the display unit isn't paired, or the server isn't set up.  *Set up* goes to Setup.
   - *Board offline*: the app can't reach your display unit.  It keeps trying by itself.
   - *No link to the hive*: the display unit's connected, but neither the server nor direct mode is.
-- **A yellow warning sign** by the channel's name: display units nearby run [a different firmware](firmware-updates.md#units-on-different-versions), and can't be heard.
+- **A yellow warning sign** by the channel's name: display units nearby run [a different firmware](firmware-updates.md#display-units-on-different-versions), and can't be heard.
 - **An offer to update the display unit**, when the app has newer firmware for it: see [Firmware updates](firmware-updates.md).
 - **A banner under the status strip** when a newer version of the app itself is out: see [Updating the app](installing.md#updating).
 

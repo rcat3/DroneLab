@@ -7,7 +7,7 @@ Back to [the app](README.md).
 ## Why keep them in step
 
 - **Features need both halves.**  New things in the app often need the matching firmware on the display unit, and the other way round.  Most go quiet, rather than break, when the two don't match, so it's easy to miss what's missing.
-- **Direct mode needs everyone on the same release.**  Display units only hear each other over [direct mode](hivemind.md#two-links-server-and-direct) when their firmware speaks the same version of it.  If display units nearby are on a different one, a yellow warning sign appears by the channel's name: see [below](#units-on-different-versions).
+- **Direct mode needs everyone on the same release.**  Display units only hear each other over [direct mode](hivemind.md#two-links-server-and-direct) when their firmware speaks the same version of it.  If display units nearby are on a different one, a yellow warning sign appears by the channel's name: see [below](#display-units-on-different-versions).
 
 ## When it happens
 
