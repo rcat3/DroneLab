@@ -54,7 +54,7 @@ class _ServerPageState extends State<ServerPage> {
         actions: [TextButton(onPressed: _save, child: const Text('Save'))],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
         children: [
           const Text('The Mumble server everyone joins. Anyone can join it from the Mumble app too.'),
           const SizedBox(height: 16),

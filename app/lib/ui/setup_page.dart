@@ -31,7 +31,8 @@ class SetupPage extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(title: const Text('Setup')),
           body: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            // Clear of the system's navigation bar, which can sit over the page
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom),
             children: [
               const SectionHeader('Get connected'),
               Panel(children: [

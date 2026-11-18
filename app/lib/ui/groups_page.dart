@@ -49,7 +49,7 @@ class _GroupsPageState extends State<GroupsPage> {
         return Scaffold(
           appBar: AppBar(title: const Text('Direct Channels')),
           body: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom),
             children: [
               if (!usable)
                 const Panel(children: [PanelRow(title: 'Connect to the board to choose its channel')])
