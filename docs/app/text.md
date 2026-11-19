@@ -18,10 +18,21 @@ The tab lists every conversation you can use now, with its last message, and a p
   - **Broadcast**: everyone who can hear you, by any link: your server channel and your direct channel together.
   - **Your server channel**, with a cloud: everyone in it, on the server.
   - **Your direct channel**, with an antenna: every unit on it nearby.
-- **People**: everyone about, on the server or heard nearby over direct mode, each once even if they're on both.  The *Message* button on someone in the [Voice](voice.md#whos-there) list opens theirs.
+- **People**: everyone about, on the server or heard nearby over direct mode, each once even if they're on both.  Tap someone's avatar for their details, as on the [Voice](voice.md#whos-there) tab: how they're linked, their unit, and muting them.  The *Message* button there opens their conversation.
 - **Offline**: conversations with people who aren't about, and channels you're not on, to read back.  They're back under *Channels* or *People* once they can be reached.
 
-Conversations are kept on the phone, the last 300 messages of each, so they're still there when the app starts again.  **Hold** one to delete it, or use the menu (⋮) inside it.  It starts afresh the next time someone texts it.
+Conversations are kept on the phone, the last 300 messages of each, so they're still there when the app starts again.  **Hold** one to delete it, or use the menu (⋮) inside it.  It starts afresh the next time someone texts it.  In a conversation with one person, the menu's **Details** shows who they are, as their avatar does.
+
+## Notifications
+
+A text that comes in while you're not looking at its conversation shows as a notification, with the conversation's latest texts and the sender's avatar.  Tap it to open the conversation.  Reading the conversation clears it.  Commands for your display or toys don't notify you: they're only noted in the conversation.
+
+In *Setup*, under *Notifications*:
+
+- **Text messages** turns them on or off, for every conversation.
+- **Unit battery low** tells you when your unit's battery is down to 15%, unless it's charging.
+
+The button by each (sliders) opens Android's own settings for it: its sound, whether it pops up on screen, shows on the lock screen and in the status bar, and so on.
 
 ## Texting
 
@@ -59,7 +70,9 @@ The **Control button** at the top of a conversation opens [Control](control.md),
 
 Texts, yours on the right in pink and theirs on the left in green, with who sent each in a channel.
 
-Between them, in grey, are the commands for the display and the toys, sent each way: *You put "WE ARE THE HIVE" on their display*, or *RubberCat2 set your vibrate to 8*.  One your unit didn't do, because you don't allow the sender, is in red, *not done*, so you can see who's trying.  Dragging a slider makes one line, not one for every step.
+Between them, in grey, are the commands for the display and the toys, sent each way: *You put "WE ARE THE HIVE" on their display*, or *RubberCat2 set your vibrate to 8*.  One your unit didn't do is in red, *not done*, so you can see who's trying.  It may not be allowed, or your unit may be set to ignore ones sent to everyone or to the whole channel.  Tap *change them* under it to go to those settings, in the [Remote](remote.md) tab.  Dragging a slider makes one line, not one for every step.
+
+Someone you've muted (*Mute for me*, in their details) is muted here too: their texts and commands are ignored, and your unit doesn't do their commands, whoever they're for.
 
 ## Who can put words on your display
 
@@ -68,6 +81,13 @@ You choose who can put words on your display, with **Off**, **Ask** or **Accept*
 - **Ask**, to start with: only people you've allowed.  The first time someone sends you words, they're added to your unit's list, **not allowed**, and nothing shows.  Tap them to allow them, and their words show from then on (tap again to stop; on the display, hold them to take them off the list).
 - **Accept**: anyone's words show, allowed or not.  New people are still added to the list, so you can see who's been sending, and allow them for when you go back to Ask.
 - **Off**: nobody's words show, and nobody's added.
+
+Two more choices, under it (on the unit, on the page after *Hive Messages*), ignore some commands whoever they're from, allowed or not:
+
+- **Ignore broadcasts**: those sent to everyone who can hear the sender, from their *Broadcast*.  Those sent to the channel over the open direct channel count too, as anyone nearby can hear that.
+- **Ignore channel-wide**: those sent to a whole channel, server or direct.
+
+So with both on, only commands sent to you alone get through.
 
 Someone's known by their name and how they're heard, server or direct, so the same person can be on the list twice.  Names can be borrowed: on a direct channel with a passphrase only its members can send at all, but on the open channel, or a server anyone can join, someone could use a name you've allowed.
 

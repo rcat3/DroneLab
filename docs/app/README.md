@@ -36,7 +36,7 @@ Four tabs along the bottom, and the status strip along the top of every one:
 | **Record** | Recording your voice, and your recordings. |
 | **Remote** | The unit's own controls, as on its display. |
 
-**Setup**, behind the gear on the Voice tab, has what's set once: [connecting](connecting.md) the unit and the server, your avatar, how you [talk](voice.md#setup-talking), [direct mode](voice.md#direct-channels), and the [unit's firmware](firmware-updates.md).  The (i) buttons throughout the app explain each setting.
+**Setup**, behind the gear on the Voice tab, has what's set once: [connecting](connecting.md) the unit and the server, your avatar, how you [talk](voice.md#setup-talking), [direct mode](voice.md#direct-channels), [notifications](text.md#notifications), and the [unit's firmware](firmware-updates.md).  The (i) buttons throughout the app explain each setting.
 
 ### The status strip
 

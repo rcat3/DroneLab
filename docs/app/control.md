@@ -22,11 +22,18 @@ What you set stays set on their toys until it's changed or stopped, even once yo
 
 ## Who can control your toys
 
-The same works the other way, and you choose whose commands your toys take, with **Off**, **Ask** or **Accept**.  It's on your unit, on the Lovense feature's last page, *Hive Commands*, and in the app's [Remote](remote.md) tab, under *Toys*, *From others*, with the list of who's sent you commands:
+The same works the other way, and you choose whose commands your toys take, with **Off**, **Ask** or **Accept**.  It's on your unit, on the Lovense feature's *Hive Commands* page, and in the app's [Remote](remote.md) tab, under *Toys*, *From others*, with the list of who's sent you commands:
 
 - **Ask**, to start with: only people you've allowed.  The first time someone sends you a command, they're added to your unit's list, **not allowed**, and the command is ignored.  Allow them, and their commands work from then on.
 - **Accept**: anyone's commands work, allowed or not.  New people are still added to the list, so you can see who's been sending, and allow them for when you go back to Ask.
 - **Off**: everyone's commands are ignored, and nobody's added.
 - **STOP** on your own unit, or in your Remote tab, stops whatever anyone's set.
+
+Two more choices, under it (on the unit, on the page after *Hive Commands*), ignore some commands whoever they're from, allowed or not:
+
+- **Ignore broadcasts**: those sent to everyone who can hear the sender, from their *Broadcast*.  Those sent to the channel over the open direct channel count too, as anyone nearby can hear that.
+- **Ignore channel-wide**: those sent to a whole channel, server or direct.
+
+So with both on, only commands sent to you alone get through.  Someone you've [muted](text.md#what-a-conversation-shows) is ignored too.
 
 It's a separate list from the one for [your display](text.md#who-can-put-words-on-your-display), so someone can put words on your display without being allowed near your toys.  Texting you needs neither.  Names can be borrowed on the open channel or an open server, so only allow people on those if you trust everyone there: see [Commands from others](../features/lovense.md#commands-from-others) for the details.

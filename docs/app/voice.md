@@ -40,7 +40,7 @@ Under each name it says how they're linked, or what they're doing:
 - **Muted**: they've muted themselves, on the server.
 - **Muted by you**: you've muted them.
 
-The **speaker button** on each row mutes that person, for you alone: the app doesn't play them, and your unit doesn't show them talking.  The app remembers by name, so they stay muted next time.
+The **speaker button** on each row mutes that person, for you alone: the app doesn't play them, and your unit doesn't show them talking.  Their texts are ignored too, and your unit doesn't do their commands.  The app remembers by name, so they stay muted next time.
 
 Tap someone for more: how they're linked, their signal and when they were last heard, their unit's firmware and app versions (over direct mode), muting, and shortcuts to open your [conversation](text.md) with them or [control](control.md) their toys.
 
