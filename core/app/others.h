@@ -76,6 +76,10 @@
  *   For the wearer's app:
  *     20 text:     20, then the text, in UTF-8: a text, only passed on to
  *                  the app, whoever it's from
+ *     21 text part: 21, the text's id (2, little endian, the same in each
+ *                  of its parts), which part it is (from 0), how many
+ *                  parts, then that part of the text, in UTF-8: a text too
+ *                  long for one command, which the app puts back together
  * A command that comes more than once, by both ways, or sent again in case
  * one was lost, is only done once: by its sender's key and counter. One
  * whose counter is no more than the last from someone listed is a replay,
@@ -106,6 +110,7 @@
 #define OTHERS_ALL_MOTORS       0xFF
 #define OTHERS_CLEAR            0x11
 #define OTHERS_TEXT             0x20
+#define OTHERS_TEXT_PART        0x21
 #define OTHERS_MESSAGE_APPEND   0x01    // a message's flags: on a line of its own after what's there
 #define OTHERS_MESSAGE_SHOW     0x02    // and bring the Terminal on screen
 
@@ -152,6 +157,16 @@ void others_set_owner(const uint8_t key[OTHERS_KEY_LEN]);
  * theirs, for the others to check (direct.h's hello). Not kept, as the id's
  * new each time the board starts. */
 void others_set_binding(const uint8_t sig[OTHERS_SIG_LEN]);
+
+/* From direct comms' task: check another board's wearer's signature that
+ * it's theirs (from its hello), on the task that checks commands, as it
+ * takes tens of ms. Returns false if it can't be queued just now: ask
+ * again with its next hello. */
+bool others_check_board(uint32_t id, const uint8_t key[OTHERS_KEY_LEN], const uint8_t sig[OTHERS_SIG_LEN]);
+
+/* From direct comms' task: a board that's been checked, and whether its
+ * signature was good; false if none has since last asked. */
+bool others_board_checked(uint32_t *id, uint8_t key[OTHERS_KEY_LEN], bool *good);
 
 /* The wearer's public key, and their signature that this board's theirs:
  * false until their app's given both. From any task: direct comms says them

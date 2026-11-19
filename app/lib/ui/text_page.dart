@@ -292,7 +292,7 @@ class _ConversationPageState extends State<ConversationPage> {
                           minLines: 1,
                           maxLines: 4,
                           textCapitalization: TextCapitalization.sentences,
-                          maxLength: c.kind == ConversationKind.server ? null : OthersCommand.textMax,
+                          maxLength: c.kind == ConversationKind.server ? null : OthersCommand.longTextMax,
                           decoration: InputDecoration(
                               hintText: 'Text ${c.kind == ConversationKind.everyone ? 'everyone' : c.title}',
                               counterText: '',

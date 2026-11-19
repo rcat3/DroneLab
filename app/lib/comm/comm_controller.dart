@@ -1209,7 +1209,13 @@ class CommController extends ChangeNotifier {
     if (text.isEmpty) return false;
     final m = mumble;
     var sent = false;
-    OthersCommand direct() => newCommand(OthersCommand.sendText(text)).withScope(_scopeOf(c));
+    // Over direct comms: in one command, or in parts if it's long
+    final textId = Random().nextInt(0x10000);
+    void toDirect({NearbyBoard? to}) {
+      for (final part in OthersCommand.sendText(text, id: textId)) {
+        _toDirect(newCommand(part).withScope(_scopeOf(c)), to: to);
+      }
+    }
     switch (c.kind) {
       case ConversationKind.everyone:
         if (_serverUp) {
@@ -1217,7 +1223,7 @@ class CommController extends ChangeNotifier {
           sent = true;
         }
         if (_directUp) {
-          _toDirect(direct());
+          toDirect();
           sent = true;
         }
       case ConversationKind.server:
@@ -1227,7 +1233,7 @@ class CommController extends ChangeNotifier {
         }
       case ConversationKind.direct:
         if (directConversation?.key == c.key) {
-          _toDirect(direct());
+          toDirect();
           sent = true;
         }
       case ConversationKind.person:
@@ -1239,7 +1245,7 @@ class CommController extends ChangeNotifier {
           sent = true;
         }
         if (b != null && b.key != null) {
-          _toDirect(direct(), to: b);
+          toDirect(to: b);
           sent = true;
         }
     }
@@ -1372,7 +1378,31 @@ class CommController extends ChangeNotifier {
 
   /// What someone sent our board, as it passes it on: into the conversation
   /// it was for.
+  /// Long texts' parts, as they come, by who and the text's id: put back
+  /// together once they're all here.
+  final Map<String, (int, Map<int, Uint8List>, int)> _textParts = {};
+  static const _partsFor = 30000;   // ms to wait for the rest
+
+  Heard? _textFromParts(Heard h) {
+    final d = h.data;
+    if (d.length < 4 || d[2] >= d[3]) return null;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _textParts.removeWhere((_, p) => now - p.$3 > _partsFor);
+    final key = '${Identity.idOf(h.key)}:${d[0] | (d[1] << 8)}';
+    final got = _textParts.putIfAbsent(key, () => (d[3], <int, Uint8List>{}, now));
+    got.$2[d[2]] = Uint8List.sublistView(d, 4);
+    if (got.$2.length < got.$1) return null;
+    _textParts.remove(key);
+    final whole = <int>[for (var i = 0; i < got.$1; i++) ...?got.$2[i]];
+    return Heard(h.direct, true, Heard.text, h.scope, h.from, h.key, Uint8List.fromList(whole));
+  }
+
   void _onHeard(Heard h) {
+    if (h.what == Heard.textPart) {
+      final whole = _textFromParts(h);
+      if (whole == null) return;
+      h = whole;
+    }
     // Who, by the key they signed it with
     final who = people.byKey(h.key, h.from);
     if (who.muted) return;

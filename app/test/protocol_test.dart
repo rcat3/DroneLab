@@ -215,7 +215,21 @@ void main() {
     // The longest fit, signed
     final long = OthersCommand.terminal('x' * 500).body(key).length + OthersCommand.signatureLength;
     expect(long, othersCommandMax);
-    expect(OthersCommand.sendText('y' * 500).body(key).length + OthersCommand.signatureLength, othersCommandMax);
+    expect(OthersCommand.sendText('y' * OthersCommand.textMax), hasLength(1));
+    expect(OthersCommand.sendText('y' * OthersCommand.textMax).first.what[0], OthersCommand.text);
+    // Longer, in parts, each fitting, cut only between characters
+    final long2 = 'abc😀' * 100;   // 700 bytes
+    final parts = OthersCommand.sendText(long2, id: 0x1234);
+    expect(parts.length, OthersCommand.partsMax);
+    for (var i = 0; i < parts.length; i++) {
+      final w = parts[i].what;
+      expect(w.sublist(0, 5), [OthersCommand.textPart, 0x34, 0x12, i, parts.length]);
+      expect(parts[i].body(key).length + OthersCommand.signatureLength, lessThanOrEqualTo(othersCommandMax));
+      utf8.decode(w.sublist(5));   // whole characters: throws if not
+    }
+    final joined = utf8.decode([for (final p in parts) ...p.what.sublist(5)]);
+    expect(long2.startsWith(joined), isTrue);
+    expect(utf8.encode(joined).length, greaterThan(OthersCommand.partsMax * (OthersCommand.partMax - 4)));
 
     // Signed for one person, it's only good for them
     final theirs = List.filled(32, 9);

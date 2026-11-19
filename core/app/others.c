@@ -103,6 +103,23 @@ static volatile uint32_t checked_write; // only the checker moves it
 static volatile uint32_t checked_read;  // only the UI loop moves it
 static queued_t *known_good;            // KNOWN_GOOD of them, signatures and all: the checker's
 static volatile bool checker_running;   // none are queued until it is
+
+// Boards' signatures that they're their wearers', from direct comms' task to
+// the checker, and back
+#define BOARDS_LEN          4
+typedef struct
+{
+    uint32_t id;
+    uint8_t key[OTHERS_KEY_LEN];
+    uint8_t sig[OTHERS_SIG_LEN];
+    bool good;
+} board_check_t;
+static board_check_t boards[BOARDS_LEN];
+static volatile uint32_t boards_write;  // only direct comms' task moves it
+static volatile uint32_t boards_read;   // only the checker moves it
+static board_check_t board_results[BOARDS_LEN];
+static volatile uint32_t results_write; // only the checker moves it
+static volatile uint32_t results_read;  // only direct comms' task moves it
 static int known_next;
 
 static seen_t seen[SEEN_MAX];
@@ -414,6 +431,8 @@ static int kind_of(const uint8_t *what, size_t len)
         return OTHERS_TERMINAL;
     case OTHERS_TEXT:
         return len > 1 ? OTHERS_KIND_COUNT : -1;
+    case OTHERS_TEXT_PART:
+        return len > 5 && what[3] < what[4] ? OTHERS_KIND_COUNT : -1;
     default:
         return -1;
     }
@@ -607,8 +626,9 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
     uint8_t scope = cmd[SCOPE_AT];
     if (which == OTHERS_KIND_COUNT)
     {
-        // A text: for the app, whoever it's from
-        comm_heard_to_phone(via, from, key, COMM_HEARD_TEXT, scope, true, what + 1, what_len - 1);
+        // A text, or part of one: for the app, whoever it's from
+        comm_heard_to_phone(via, from, key, what[0] == OTHERS_TEXT_PART ? COMM_HEARD_TEXT_PART : COMM_HEARD_TEXT, scope,
+                            true, what + 1, what_len - 1);
         return;
     }
     comm_heard_t heard = which == OTHERS_LOVENSE ? COMM_HEARD_LOVENSE : COMM_HEARD_TERMINAL;
@@ -671,18 +691,74 @@ static bool known(const queued_t *q)
     return false;
 }
 
+bool others_check_board(uint32_t id, const uint8_t key[OTHERS_KEY_LEN], const uint8_t sig[OTHERS_SIG_LEN])
+{
+    uint32_t w = boards_write;
+    if (!checker_running || w - __atomic_load_n(&boards_read, __ATOMIC_ACQUIRE) >= BOARDS_LEN)
+    {
+        return false;
+    }
+    board_check_t *b = &boards[w % BOARDS_LEN];
+    b->id = id;
+    memcpy(b->key, key, OTHERS_KEY_LEN);
+    memcpy(b->sig, sig, OTHERS_SIG_LEN);
+    __atomic_store_n(&boards_write, w + 1, __ATOMIC_RELEASE);
+    return true;
+}
+
+bool others_board_checked(uint32_t *id, uint8_t key[OTHERS_KEY_LEN], bool *good)
+{
+    uint32_t r = results_read;
+    if (r == __atomic_load_n(&results_write, __ATOMIC_ACQUIRE))
+    {
+        return false;
+    }
+    const board_check_t *b = &board_results[r % BOARDS_LEN];
+    *id = b->id;
+    memcpy(key, b->key, OTHERS_KEY_LEN);
+    *good = b->good;
+    __atomic_store_n(&results_read, r + 1, __ATOMIC_RELEASE);
+    return true;
+}
+
+/* A board's signature that it's its wearer's: see direct.h's hello. */
+static void check_board(void)
+{
+    uint32_t r = boards_read;
+    uint32_t w = results_write;
+    if (r == __atomic_load_n(&boards_write, __ATOMIC_ACQUIRE)
+        || w - __atomic_load_n(&results_read, __ATOMIC_ACQUIRE) >= BOARDS_LEN)
+    {
+        return;     // none, or no room for the answer till direct comms takes the last
+    }
+    board_check_t *b = &boards[r % BOARDS_LEN];
+    static const char prefix[] = "dronelab-board\n";
+    uint8_t msg[sizeof(prefix) - 1 + 4];
+    memcpy(msg, prefix, sizeof(prefix) - 1);
+    memcpy(msg + sizeof(prefix) - 1, &b->id, 4);
+    board_check_t *out = &board_results[w % BOARDS_LEN];
+    *out = *b;
+    out->good = crypto_ed25519_check(b->sig, b->key, msg, sizeof(msg)) == 0;
+    __atomic_store_n(&results_write, w + 1, __ATOMIC_RELEASE);
+    __atomic_store_n(&boards_read, r + 1, __ATOMIC_RELEASE);
+}
+
 /* Checks the signatures of commands heard over direct comms, and passes the
- * good ones on to the UI loop. */
+ * good ones on to the UI loop; and boards' that they're their wearers'. */
 static void checker_task(void *arg)
 {
     (void)arg;
     bool timed = false;
     for (;;)
     {
+        check_board();
         uint32_t r = queue_read;
         if (r == __atomic_load_n(&queue_write, __ATOMIC_ACQUIRE))
         {
-            rcat_hal_delay_ms(CHECKER_IDLE_MS);
+            if (boards_read == __atomic_load_n(&boards_write, __ATOMIC_ACQUIRE))
+            {
+                rcat_hal_delay_ms(CHECKER_IDLE_MS);
+            }
             continue;
         }
         queued_t *q = &queue[r % QUEUE_LEN];

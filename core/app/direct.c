@@ -22,7 +22,6 @@
 
 #include "app/comm.h"
 #include "app/others.h"
-#include "crypto/monocypher-ed25519.h"
 #include "app/settings.h"
 #include "hal.h"
 #include "lvgl.h"
@@ -69,7 +68,7 @@
 #define TASK_BUSY_MS        2
 #define VOICE_QUEUE         8           // the wearer's voice, waiting to go
 #define REPEATS             2           // packets sent again in each after them
-#define COMMAND_QUEUE       4           // commands for others, waiting to go
+#define COMMAND_QUEUE       8           // commands for others, waiting to go: a long text's parts all fit
 #define COMMAND_SENDS       3           // each is sent this many times, as nothing says it came
 #define COMMAND_GAP_MS      100         // this far apart
 
@@ -106,8 +105,10 @@ typedef struct
     char name[DIRECT_NAME_MAX];
     char firmware[DIRECT_VERSION_MAX];
     char app[DIRECT_VERSION_MAX];
-    uint8_t key[OTHERS_KEY_LEN];    // its wearer's, as its hello says
+    uint8_t key[OTHERS_KEY_LEN];    // its wearer's, as its hello says, once it's been checked
     bool has_key;
+    uint8_t asked_key[OTHERS_KEY_LEN];  // being checked, or found wanting
+    bool key_asked;
     int8_t rssi;
     bool used;
     uint8_t avatar_version;     // of the avatar coming in, 0 for none
@@ -524,26 +525,53 @@ static void heard_command(const peer_t *p, const uint8_t *plain, size_t len)
     }
 }
 
-/* A board's wearer's key, from its hello: believed if they've signed that
- * the board's theirs, which is only checked when it's new. */
+/* A board's wearer's key, from its hello: believed once they've signed that
+ * the board's theirs, which is checked when it's new, on another task, as
+ * it takes too long to hold up the voice (heard_keys). */
 static void heard_key(peer_t *p, const uint8_t *key, const uint8_t *sig)
 {
     if (p->has_key && memcmp(p->key, key, OTHERS_KEY_LEN) == 0)
     {
         return;
     }
-    static const char prefix[] = "dronelab-board\n";
-    uint8_t msg[sizeof(prefix) - 1 + 4];
-    memcpy(msg, prefix, sizeof(prefix) - 1);
-    memcpy(msg + sizeof(prefix) - 1, &p->id, 4);
-    p->has_key = crypto_ed25519_check(sig, key, msg, sizeof(msg)) == 0;
-    if (p->has_key)
+    p->has_key = false;
+    if (p->key_asked && memcmp(p->asked_key, key, OTHERS_KEY_LEN) == 0)
     {
-        memcpy(p->key, key, OTHERS_KEY_LEN);
+        return;     // being checked, or found wanting already
     }
-    else
+    if (others_check_board(p->id, key, sig))
     {
-        printf("direct: %s says it's someone it can't prove it is\n", p->name);
+        memcpy(p->asked_key, key, OTHERS_KEY_LEN);
+        p->key_asked = true;
+    }
+}
+
+/* Boards' keys that have been checked. */
+static void heard_keys(void)
+{
+    uint32_t id;
+    uint8_t key[OTHERS_KEY_LEN];
+    bool good;
+    while (others_board_checked(&id, key, &good))
+    {
+        __atomic_add_fetch(&peers_seq, 1, __ATOMIC_SEQ_CST);
+        for (int i = 0; i < DIRECT_PEERS_MAX; i++)
+        {
+            peer_t *p = &peers[i];
+            if (p->used && p->id == id && p->key_asked && memcmp(p->asked_key, key, OTHERS_KEY_LEN) == 0)
+            {
+                p->has_key = good;
+                if (good)
+                {
+                    memcpy(p->key, key, OTHERS_KEY_LEN);
+                }
+                else
+                {
+                    printf("direct: %s says it's someone it can't prove it is\n", p->name);
+                }
+            }
+        }
+        __atomic_add_fetch(&peers_seq, 1, __ATOMIC_SEQ_CST);
     }
 }
 
@@ -1013,6 +1041,7 @@ static void direct_task(void *arg)
         {
             heard(msg, len, rssi, now);
         }
+        heard_keys();
         relay_due(now);
 
         // Commands for others, each a few times over

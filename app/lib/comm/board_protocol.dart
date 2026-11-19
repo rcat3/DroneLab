@@ -174,7 +174,7 @@ class DirectAvatarPiece {
 /// What someone sent the board, passed on as it came (commVersion 8): a
 /// text, or a command for its Terminal or Lovense devices, done or not.
 class Heard {
-  static const text = 0, terminal = 1, lovense = 2;    // comm_heard_t
+  static const text = 0, terminal = 1, lovense = 2, textPart = 3;    // comm_heard_t
   final bool direct;        // heard over direct comms, not the server
   final bool done;          // a command: taken, by the permission for its kind
   final int what;
@@ -419,6 +419,7 @@ class OthersCommand {
   static const message = 0x10;
   static const clear = 0x11;
   static const text = 0x20;
+  static const textPart = 0x21;
   static const allMotors = 0xFF;
 
   /// Who it's for, as the receivers see it: everyone who can hear us, the
@@ -438,6 +439,15 @@ class OthersCommand {
   /// (OTHERS_WHAT_MAX, less what goes before them).
   static const messageMax = whatMax - 3;
   static const textMax = whatMax - 1;
+
+  /// A longer text goes in parts, each this long at most, and no more than
+  /// [partsMax] of them (so they all fit in the board's queue).
+  static const partMax = whatMax - 5;
+  static const partsMax = 6;
+
+  /// The longest a text can be typed, in characters: past [partsMax] parts'
+  /// worth of bytes, it's cut.
+  static const longTextMax = 600;
 
   static const keyLength = 32, signatureLength = 64;
   static const headerLength = 40;     // OTHERS_HEADER_LEN
@@ -503,8 +513,27 @@ class OthersCommand {
   /// Empty their Terminal.
   static OthersCommand clearTerminal() => _make([clear]);
 
-  /// A text, for their app (over direct comms: the server has its own).
-  static OthersCommand sendText(String message) => _make([text, ..._cut(utf8.encode(message), textMax)]);
+  /// A text, for their app (over direct comms: the server has its own): in
+  /// one command, or if it's too long for one, in parts, with [id] the same
+  /// in each, for their app to put back together.
+  static List<OthersCommand> sendText(String message, {int id = 0}) {
+    final bytes = utf8.encode(message);
+    if (bytes.length <= textMax) return [_make([text, ...bytes])];
+    final parts = <List<int>>[];
+    var at = 0;
+    while (at < bytes.length && parts.length < partsMax) {
+      var end = at + partMax < bytes.length ? at + partMax : bytes.length;
+      // Not in the middle of a character
+      while (end < bytes.length && end > at && bytes[end] & 0xC0 == 0x80) {
+        end--;
+      }
+      parts.add(bytes.sublist(at, end));
+      at = end;
+    }
+    return [
+      for (var i = 0; i < parts.length; i++) _make([textPart, id & 0xFF, (id >> 8) & 0xFF, i, parts.length, ...parts[i]])
+    ];
+  }
 }
 
 /// A command as it came, read: who it's from, and the rest.
