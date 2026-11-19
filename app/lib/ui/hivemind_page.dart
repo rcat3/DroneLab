@@ -13,8 +13,11 @@ import 'status_strip.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// HiveMind, built around talking: who's about, and the talk button where the
-/// thumb is. What's set once is in [SetupPage], behind the gear.
+/// HiveMind, built around talking: the channels we're on and the people
+/// about, as on the Text tab, each once. Tap one to talk to it: a channel by
+/// its own way (the server's, or direct), one person by whichever reaches
+/// them. The talk button's where the thumb is. What's set once is in
+/// [SetupPage], behind the gear.
 class HiveMindPage extends StatelessWidget {
   final CommController comm;
   const HiveMindPage({super.key, required this.comm});
@@ -25,11 +28,18 @@ class HiveMindPage extends StatelessWidget {
       listenable: comm,
       builder: (context, _) {
         final boardUp = comm.board.state == BoardState.connected && comm.board.status != null;
-        final serverUp = comm.mumble?.state == MumbleState.connected;
+        final m = comm.mumble;
+        final serverUp = m?.state == MumbleState.connected;
         final direct = boardUp ? comm.boardSettings?.direct : null;
         final directOn = direct?.on ?? false;
         final sending = boardUp && (comm.board.status?.sending ?? false);
-        final people = hivePeople(comm);
+        final to = comm.talkTo;
+        final people = peopleOnce(comm)
+          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        // The one talked to stays in the list while they're out of reach
+        final away = to.kind == TalkTo.person && !people.any((p) => p.id == to.personId)
+            ? comm.people[to.personId!]
+            : null;
         return Scaffold(
           appBar: AppBar(
             title: Row(children: [
@@ -52,33 +62,46 @@ class HiveMindPage extends StatelessWidget {
             children: [
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   children: [
                     if (!boardUp || (!serverUp && !directOn)) ...[
+                      const SizedBox(height: 4),
                       _Offline(comm: comm, boardUp: boardUp),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 4),
                     ],
                     if (serverUp || directOn) ...[
-                      _ChannelHeader(comm: comm, serverUp: serverUp, direct: direct),
-                      if (comm.mumble?.denied case final why?)
+                      SectionHeader('Channels', trailing: OtherFirmwareIcon(comm: comm)),
+                      Panel(children: [
+                        if (serverUp) _ServerChannelRow(comm: comm, m: m!, selected: to.kind == TalkTo.server),
+                        if (directOn) _DirectChannelRow(comm: comm, d: direct!, selected: to.kind == TalkTo.direct),
+                      ]),
+                      if (m?.denied case final why?)
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.only(top: 8),
                           child: Text(why, style: const TextStyle(color: Kc.softRed, fontSize: 13)),
                         ),
-                      if (people.isEmpty)
+                      const SectionHeader('People'),
+                      if (people.isEmpty && away == null)
                         const Panel(children: [PanelRow(title: 'Nobody else yet')])
-                      else ...[
-                        Panel(children: [for (final p in people) _PersonRow(comm: comm, person: p)]),
-                        const Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: Text('Tap someone for more', style: TextStyle(color: Kc.muted, fontSize: 13)),
-                        ),
-                      ],
+                      else
+                        Panel(children: [
+                          for (final p in people)
+                            _PersonRow(comm: comm, person: p, selected: to.kind == TalkTo.person && to.personId == p.id),
+                          if (away != null) _AwayRow(comm: comm, id: away.id, name: away.name),
+                        ]),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                            comm.boardTalksTo
+                                ? 'Tap a channel or someone to talk to them; their picture for more'
+                                : "Tap someone for more. To talk to one person alone, update the unit's firmware",
+                            style: const TextStyle(color: Kc.muted, fontSize: 13)),
+                      ),
                     ],
                   ],
                 ),
               ),
-              _Dock(comm: comm, boardUp: boardUp, serverUp: serverUp, direct: direct),
+              _Dock(comm: comm, boardUp: boardUp),
             ],
           ),
         );
@@ -124,36 +147,125 @@ class _Offline extends StatelessWidget {
   }
 }
 
-/// The channel talking goes to now, and a way to change it.
-class _ChannelHeader extends StatelessWidget {
-  final CommController comm;
-  final bool serverUp;
-  final DirectSettings? direct;
-  const _ChannelHeader({required this.comm, required this.serverUp, required this.direct});
+/// A row to talk to: pink, with a mic, while it's the one talked to.
+class _TalkRow extends StatelessWidget {
+  final Widget leading;
+  final String title;
+  final Widget? titleExtra;
+  final String subtitle;
+  final bool subtitleLit;
+  final bool selected;
+  final bool enabled;
+  final String semantics;
+  final VoidCallback? onTap;
+  final List<Widget> trailing;
+  const _TalkRow(
+      {required this.leading,
+      required this.title,
+      this.titleExtra,
+      required this.subtitle,
+      this.subtitleLit = false,
+      required this.selected,
+      this.enabled = true,
+      required this.semantics,
+      this.onTap,
+      this.trailing = const []});
 
   @override
   Widget build(BuildContext context) {
-    final m = comm.mumble;
-    final d = direct;
-    final onDirect = d != null && d.on && (!serverUp || comm.talkNow == CommController.talkDirect);
-    final name = onDirect ? directChannelName(d) : m!.channelPath(m.myChannel);
-    final canChange = onDirect || (m?.channels.length ?? 0) > 1;
-    return SectionHeader(
-      name.toLowerCase().contains('channel') ? name : 'Channel $name',
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        OtherFirmwareIcon(comm: comm),
-        if (canChange)
-          OutlinedButton(
-            onPressed: () => onDirect
-                ? Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupsPage(comm: comm)))
-                : _pickChannel(context, m!),
-            child: const Text('Change'),
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: selected ? Kc.pink : Colors.transparent, width: 3)),
+        color: selected ? Kc.pink.withValues(alpha: 0.08) : null,
+      ),
+      child: Row(children: [
+        Expanded(
+          child: InkWell(
+            onTap: onTap,
+            child: Semantics(
+              button: onTap != null,
+              selected: selected,
+              label: semantics,
+              excludeSemantics: true,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(13, 8, 8, 8),
+                child: Row(children: [
+                  leading,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Flexible(
+                            child: Text(title,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: selected ? Kc.pink : enabled ? null : Kc.muted)),
+                          ),
+                          ?titleExtra,
+                        ]),
+                        Text(subtitle,
+                            style: subtitleLit
+                                ? Kc.term(14, color: Kc.green)
+                                : const TextStyle(color: Kc.muted, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  if (selected) const Icon(Icons.mic, color: Kc.pink, size: 20, semanticLabel: 'Talking to'),
+                ]),
+              ),
+            ),
           ),
+        ),
+        ...trailing,
       ]),
     );
   }
+}
 
-  Future<void> _pickChannel(BuildContext context, MumbleClient m) async {
+/// Who's talking among these, for a channel's row: not those talking to
+/// us alone, who aren't talking on it.
+String? _talkersIn(CommController comm, Iterable<int> sessions) {
+  final names = [
+    for (final s in sessions)
+      if (comm.talking.contains(s) && !comm.talkingToUs.contains(s)) comm.talkerName(s)
+  ];
+  return names.isEmpty ? null : '${names.join(', ')} TALKING';
+}
+
+/// Our channel on the server, and a way to move to another.
+class _ServerChannelRow extends StatelessWidget {
+  final CommController comm;
+  final MumbleClient m;
+  final bool selected;
+  const _ServerChannelRow({required this.comm, required this.m, required this.selected});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = m.channelPath(m.myChannel);
+    final n = m.channelUsers.length;
+    final talking = _talkersIn(comm, [for (final u in m.channelUsers) u.session]);
+    final status = talking ?? (n == 0 ? 'Server · nobody else here' : 'Server · $n here');
+    return _TalkRow(
+      leading: const Icon(Icons.cloud_outlined, color: Kc.green),
+      title: name,
+      subtitle: status,
+      subtitleLit: talking != null,
+      selected: selected,
+      semantics: '$name, on the server, $status${selected ? ', talking to it' : ''}',
+      onTap: () => comm.setTalkTo(const TalkTarget.server()),
+      trailing: [
+        if (m.channels.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: OutlinedButton(onPressed: () => _pickChannel(context), child: const Text('Change')),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _pickChannel(BuildContext context) async {
     final ids = m.channels.keys.toList()..sort((a, b) => m.channelPath(a).compareTo(m.channelPath(b)));
     final counts = m.channelCounts;
     final picked = await showModalBottomSheet<int>(
@@ -185,95 +297,137 @@ class _ChannelHeader extends StatelessWidget {
   }
 }
 
+/// Our direct channel, and a way to move to another.
+class _DirectChannelRow extends StatelessWidget {
+  final CommController comm;
+  final DirectSettings d;
+  final bool selected;
+  const _DirectChannelRow({required this.comm, required this.d, required this.selected});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = directChannelName(d);
+    final n = comm.nearby.length;
+    final talking = _talkersIn(comm, [for (final b in comm.nearby.values) CommController.directSession(b.id)]);
+    final status = talking ?? (n == 0 ? 'Direct · nobody nearby' : 'Direct · $n nearby');
+    return _TalkRow(
+      leading: const Icon(Icons.settings_input_antenna, color: Kc.green),
+      title: name,
+      subtitle: status,
+      subtitleLit: talking != null,
+      selected: selected,
+      semantics: '$name, direct, $status${selected ? ', talking to it' : ''}',
+      onTap: () => comm.setTalkTo(const TalkTarget.direct()),
+      trailing: [
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: OutlinedButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupsPage(comm: comm))),
+            child: const Text('Change'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _PersonRow extends StatelessWidget {
   final CommController comm;
   final Person person;
-  const _PersonRow({required this.comm, required this.person});
+  final bool selected;
+  const _PersonRow({required this.comm, required this.person, required this.selected});
 
   @override
   Widget build(BuildContext context) {
     final p = person;
     final talking = p.talking && !p.mutedByMe;
+    final sessions = [?p.user?.session, if (p.board != null) CommController.directSession(p.board!.id)];
+    final toUs = talking && sessions.any(comm.talkingToUs.contains);
+    final ways = [if (p.onServer) 'Server', if (p.board != null) 'Direct'].join(' · ');
     final status = p.mutedByMe
         ? 'Muted by you'
-        : talking
-            ? 'TALKING'
-            : p.user?.muted ?? false
-                ? 'Muted'
-                : p.onServer
-                    ? 'Server'
-                    : 'Direct';
-    return Row(children: [
-      Expanded(
-        child: InkWell(
-          onTap: () => showPerson(context, comm, key: p.key),
-          child: Semantics(
-            button: true,
-            label: '${p.name}, $status. Tap for more',
-            excludeSemantics: true,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-              child: Row(children: [
-                DroneAvatar(picture: p.picture, talking: talking),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Flexible(child: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600))),
-                        if (comm.nameClash(p.who) != null) ...[
-                          const SizedBox(width: 6),
-                          const Icon(Icons.warning_amber, size: 16, color: Kc.softRed, semanticLabel: 'Not the one known by that name'),
-                        ],
-                      ]),
-                      Text(status,
-                          style: talking
-                              ? Kc.term(14, color: Kc.green)
-                              : const TextStyle(color: Kc.muted, fontSize: 13)),
-                    ],
-                  ),
-                ),
-                if (p.board != null) SignalBars(p.board!.rssi),
-              ]),
+        : toUs
+            ? 'TALKING TO YOU'
+            : talking
+                ? 'TALKING'
+                : p.user?.muted ?? false
+                    ? 'Muted · $ways'
+                    : ways;
+    final canTalkTo = comm.boardTalksTo;
+    return _TalkRow(
+      leading: GestureDetector(
+        onTap: () => showPerson(context, comm, id: p.id),
+        child: DroneAvatar(picture: p.picture, talking: talking),
+      ),
+      title: p.name,
+      titleExtra: comm.nameClash(p.who) == null
+          ? null
+          : const Padding(
+              padding: EdgeInsets.only(left: 6),
+              child: Icon(Icons.warning_amber, size: 16, color: Kc.softRed, semanticLabel: 'Not the one known by that name'),
             ),
-          ),
+      subtitle: status,
+      subtitleLit: talking,
+      selected: selected,
+      semantics: '${p.name}, $status${selected ? ', talking to them' : ''}',
+      onTap: canTalkTo ? () => comm.setTalkTo(TalkTarget.person(p.id)) : () => showPerson(context, comm, id: p.id),
+      trailing: [
+        if (p.board != null) SignalBars(p.board!.rssi),
+        IconButton(
+          tooltip: p.mutedByMe ? 'Hear ${p.name}' : 'Mute ${p.name}, here only',
+          icon: Icon(p.mutedByMe ? Icons.volume_off : Icons.volume_up, color: p.mutedByMe ? Kc.softRed : Kc.muted),
+          onPressed: () => comm.setMuted(p.id, !p.mutedByMe),
         ),
-      ),
-      IconButton(
-        tooltip: p.mutedByMe ? 'Hear ${p.name}' : 'Mute ${p.name}, here only',
-        icon: Icon(p.mutedByMe ? Icons.volume_off : Icons.volume_up, color: p.mutedByMe ? Kc.softRed : Kc.muted),
-        onPressed: () => comm.setMuted(p.id, !p.mutedByMe),
-      ),
-      const SizedBox(width: 4),
-    ]);
+        const SizedBox(width: 4),
+      ],
+    );
   }
 }
 
-/// Where talking goes, and the talk button, at the foot of the screen.
-class _Dock extends StatelessWidget {
+/// The one talked to, while they're out of reach: still picked, so talking
+/// goes to them again once they're back, and to nobody else meanwhile.
+class _AwayRow extends StatelessWidget {
   final CommController comm;
-  final bool boardUp;
-  final bool serverUp;
-  final DirectSettings? direct;
-  const _Dock({required this.comm, required this.boardUp, required this.serverUp, required this.direct});
+  final String id;
+  final String name;
+  const _AwayRow({required this.comm, required this.id, required this.name});
 
   @override
   Widget build(BuildContext context) {
-    final settings = comm.boardSettings;
-    final d = direct;
-    final ready = boardUp && (serverUp || (d?.on ?? false));
-    String? note;
-    if (ready && settings != null) {
-      final now = comm.talkNow;
-      final channel = comm.mumble?.channels[comm.mumble?.myChannel];
-      final toServer = 'to the server${channel == null ? '' : ', in $channel'}';
-      final toDirect = d == null ? 'to boards nearby' : 'to boards nearby, in ${directChannelName(d)}';
-      note = now == settings.talkOn
-          ? 'Talking ${now == CommController.talkDirect ? toDirect : toServer}'
-          : now == CommController.talkDirect
-              ? "Nobody's on the server, so talking $toDirect"
-              : "Nobody's nearby, so talking $toServer";
+    return _TalkRow(
+      leading: GestureDetector(
+        onTap: () => showPerson(context, comm, id: id),
+        child: const DroneAvatar(picture: null),
+      ),
+      title: name,
+      subtitle: 'Out of reach',
+      selected: true,
+      enabled: false,
+      semantics: '$name, out of reach, talking to them',
+    );
+  }
+}
+
+/// Who talking goes to, and the talk button, at the foot of the screen.
+class _Dock extends StatelessWidget {
+  final CommController comm;
+  final bool boardUp;
+  const _Dock({required this.comm, required this.boardUp});
+
+  @override
+  Widget build(BuildContext context) {
+    final route = comm.talkRoute;
+    final to = comm.talkTo;
+    final name = comm.talkToName;
+    final person = to.kind == TalkTo.person && comm.boardTalksTo;
+    final String note;
+    if (!boardUp) {
+      note = 'Connect the unit to talk';
+    } else if (route == null) {
+      note = person ? "$name can't hear you just now" : 'Nobody to hear you on $name just now';
+    } else {
+      final how = route == TalkRoute.direct ? 'direct' : 'over the server';
+      note = person ? 'Talking to $name alone, $how' : 'Talking to $name';
     }
     final mode = comm.board.status?.mode;
     return Container(
@@ -282,37 +436,13 @@ class _Dock extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (d != null && settings != null)
-            Explained(
-              help: "If nobody's on the one you pick, it talks on the other.",
-              align: TextAlign.center,
-              helpPadding: const EdgeInsets.only(top: 4),
-              builder: (context, info) => Row(children: [
-                Expanded(
-                  child: SegmentedButton<int>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: CommController.talkServer, label: Text('SERVER')),
-                      ButtonSegment(value: CommController.talkDirect, label: Text('DIRECT')),
-                    ],
-                    selected: {settings.talkOn},
-                    onSelectionChanged: (sel) => comm.setTalkOn(sel.first),
-                  ),
-                ),
-                info,
-              ]),
-            ),
-          if (note != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(note,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: settings != null && comm.talkNow != settings.talkOn ? Kc.otherAir : Kc.muted,
-                      fontSize: 13)),
-            ),
+          Text(note,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: boardUp && route == null ? Kc.softRed : Kc.muted, fontSize: 13)),
           const SizedBox(height: 10),
-          _TalkButton(comm: comm, enabled: boardUp),
+          // Grey while nobody would hear; it still talks, for the board to
+          // say no, and the tone with it
+          _TalkButton(comm: comm, enabled: boardUp, heard: route != null),
           Explained(
             help: comm.headsetTalking
                 ? "Talking from the headphones' button: press it again to stop."
@@ -340,8 +470,9 @@ class _Dock extends StatelessWidget {
 
 class _TalkButton extends StatefulWidget {
   final CommController comm;
-  final bool enabled;
-  const _TalkButton({required this.comm, required this.enabled});
+  final bool enabled;     // a board to talk through
+  final bool heard;       // and someone who'd hear
+  const _TalkButton({required this.comm, required this.enabled, required this.heard});
 
   @override
   State<_TalkButton> createState() => _TalkButtonState();
@@ -359,8 +490,9 @@ class _TalkButtonState extends State<_TalkButton> {
   @override
   Widget build(BuildContext context) {
     final enabled = widget.enabled;
+    final lit = enabled && widget.heard;
     final sending = enabled && (widget.comm.board.status?.sending ?? false);
-    final fg = !enabled
+    final fg = !lit
         ? Kc.off
         : sending
             ? Kc.bg
@@ -368,7 +500,11 @@ class _TalkButtonState extends State<_TalkButton> {
     return Semantics(
       button: true,
       enabled: enabled,
-      label: sending ? 'Talking' : 'Hold to talk',
+      label: sending
+          ? 'Talking'
+          : lit
+              ? 'Hold to talk'
+              : 'Hold to talk. Nobody would hear you just now',
       child: Listener(
         onPointerDown: enabled ? (_) => _set(true) : null,
         onPointerUp: (_) => _set(false),
@@ -380,16 +516,24 @@ class _TalkButtonState extends State<_TalkButton> {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: sending ? Kc.pink : Kc.panel,
-            border: Border.all(color: enabled ? Kc.pink : Kc.line, width: 2),
+            border: Border.all(color: lit ? Kc.pink : Kc.line, width: 2),
             boxShadow: sending ? [BoxShadow(color: Kc.pink.withValues(alpha: 0.6), blurRadius: 42)] : null,
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(sending ? Icons.mic : Icons.mic_none, size: 40, color: fg),
+              Icon(sending ? Icons.mic : lit ? Icons.mic_none : Icons.mic_off, size: 40, color: fg),
               const SizedBox(height: 4),
-              Text(!enabled ? 'OFFLINE' : sending ? 'TALKING' : 'HOLD TO\nTALK',
-                  textAlign: TextAlign.center, style: Kc.term(14, color: fg)),
+              Text(
+                  !enabled
+                      ? 'OFFLINE'
+                      : sending
+                          ? 'TALKING'
+                          : lit
+                              ? 'HOLD TO\nTALK'
+                              : 'NOBODY\nTO HEAR',
+                  textAlign: TextAlign.center,
+                  style: Kc.term(14, color: fg)),
             ],
           ),
         ),

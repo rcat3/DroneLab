@@ -2,7 +2,7 @@
 
 HiveMind links every drone in the hive into one mind.  The Voice tab is HiveMind by voice: you talk, and the others hear you, like a radio.  (Its other half, by text, is the [Text](text.md) tab.)  Your unit picks up your voice, puts it through your [voice effect](../features/voice-effects.md), and sends it; the others' voices come back to your headphones, through the app.
 
-<img src="../images/app_hivemind.png" width="300" alt="The Voice tab: the channel, who's in it, Server or Direct, and Hold to talk">
+<img src="../images/app_hivemind.png" width="300" alt="The Voice tab: the channels, the people about, who you're talking to, and Hold to talk">
 
 Back to [the app](README.md).  The unit's side, with its own HiveMind screens, is in [HiveMind (Comms)](../features/comms.md).
 
@@ -27,22 +27,25 @@ flowchart LR
     app --> ears["Your headphones"]
 ```
 
-**The two links are separate.**  You hear both at once, mixed together in your headphones, but nothing heard on one is passed on to the other: someone on the server doesn't hear a drone that's only nearby on direct, and that drone doesn't hear them.  Your own voice goes out on one link at a time (see [Where your voice goes](#where-your-voice-goes)).  To reach everyone, everyone needs to be on the same link.
+**The two links are separate.**  You hear both at once, mixed together in your headphones, but nothing heard on one is passed on to the other: someone on the server doesn't hear a drone that's only nearby on direct, and that drone doesn't hear them.  Your own voice goes to one channel or person at a time (see [Where your voice goes](#where-your-voice-goes)).  To reach everyone in a channel, everyone needs to be on the same link.
 
 ## Who's there
 
-The list shows everyone in your channel: those on the server, then the units heard over direct mode, strongest first.  The name over the list is the channel you're talking on; *Change* moves to another (see [Channels](#channels)).
+The Voice tab is laid out as the [Text](text.md) tab is:
+
+- **Channels**: your channel on the server, and your direct channel, while you're on them, with how many are there and who's talking.  *Change* on each moves to another (see [Channels](#channels)).
+- **People**: everyone in your server channel and every unit heard nearby, each once, by name.  Someone who's on the server and nearby both is one row, with both.
 
 Under each name it says how they're linked, or what they're doing:
 
-- **TALKING**, with their avatar lit up green: you're hearing them.
-- **Server** or **Direct**: how you hear them.  Units over direct mode have signal bars for how well they're heard.
+- **TALKING**, with their avatar lit up green: you're hearing them.  **TALKING TO YOU**: they're talking to you alone.
+- **Server**, **Direct**, or both: how they can be reached.  Units over direct mode have signal bars for how well they're heard.
 - **Muted**: they've muted themselves, on the server.
 - **Muted by you**: you've muted them.
 
 The **speaker button** on each row mutes that person, for you alone: the app doesn't play them, and your unit doesn't show them talking.  Their texts are ignored too, and your unit doesn't do their commands.  The app remembers by name, so they stay muted next time.
 
-Tap someone for more: how they're linked, their signal and when they were last heard, their unit's firmware and app versions (over direct mode), muting, and shortcuts to open your [conversation](text.md) with them or [control](control.md) their toys.
+Tap someone's picture for more: how they're linked, their signal and when they were last heard, their unit's firmware and app versions (over direct mode), muting, and shortcuts to open your [conversation](text.md) with them or [control](control.md) their toys.
 
 <img src="../images/app/person.png" width="300" alt="Someone tapped: their link, signal, when last heard, firmware and app, Mute for me, and Message and Control">
 
@@ -50,18 +53,21 @@ Tap someone for more: how they're linked, their signal and when they were last h
 
 ### Where your voice goes
 
-At the foot of the Voice tab, **SERVER** or **DIRECT** picks the link your voice goes out on.  Under it, the app says where it's going, and to which channel.
+**Tap a channel or a person** to talk to them: the row turns pink, with a mic, and the line over the talk button says who, *Talking to Unit 7 alone, direct*.  The app keeps it for next time.
 
-If nobody's there to hear you on the link you picked (the server isn't connected, or nobody else is in your channel; or no units are nearby on direct), and somebody is on the other, it goes the other way instead, and the line under the choice turns grey to say so: *Nobody's nearby, so talking to the server*.  That's decided as you start talking, and doesn't change partway through.
+- **A channel** goes its own way: your server channel over the server, your direct channel over direct.
+- **One person** hears you alone.  The app picks the way: direct if their unit's nearby, as it's quicker and needs no signal, else over the server.  Over direct, it's encrypted with a key only your two units have, which the apps work out from your two [identities](#setup-your-identity), so nobody needs to swap a passphrase, and others on the channel can't listen in.  It works with units on the same direct channel, running firmware from this release on; on the server, with anyone.
+
+**When nobody would hear you**, because the channel's empty or the one you picked is out of reach, they stay picked, and the talk button turns grey and says *NOBODY TO HEAR*.  Talking then doesn't go anywhere else: press to talk and you hear a **low buzz** in your headphones, as on a trunked radio, so you know without looking.  It's the same for the unit's own talk button.  Once they're back, the button lights up again.
 
 ### Ways to talk
 
-Pick whichever suits you.  They all work in either link.
+Pick whichever suits you.  They all talk to whoever you've picked.
 
 | | How | |
 |---|---|---|
 | **The app's button** | Hold *HOLD TO TALK* on the Voice tab, and let go to stop. | The simplest, with the phone in hand. |
-| **The headphones' button** | Press play/pause on your headphones to start talking, and again to stop.  A rising chirp in your ear says you're on, a falling one that you're off. | Hands free, phone in a pocket.  Headphones send a press, not a hold, so it's press-on, press-off; it stops by itself after two minutes, in case it's left on.  Holding the button usually starts the phone's voice assistant instead. |
+| **The headphones' button** | Press play/pause on your headphones to start talking, and again to stop.  Two rising notes in your ear say you're on, two falling ones that you're off. | Hands free, phone in a pocket.  Headphones send a press, not a hold, so it's press-on, press-off; it stops by itself after two minutes, in case it's left on.  Holding the button usually starts the phone's voice assistant instead. |
 | **A talk button** | A small Bluetooth camera shutter remote, paired with the unit: hold it to talk. | Hands free, and a real push-to-talk.  See [The talk button](../features/comms.md#the-talk-button) for which ones work and pairing. |
 | **The unit's display** | Hold the avatar on the unit's HiveMind status screen. | For trying it out with the unit in hand. |
 | **Voice mode** | Set *Talk with* to *VOICE* in Setup: the unit sends whenever it hears you speak, and stops a moment after you stop. | No buttons at all.  It sends anything loud enough, so it suits a quiet place. |
@@ -107,6 +113,7 @@ In Setup, behind the gear, while the unit's connected:
 - **Talk with**: *PUSH TO TALK*, while a button's held, or *VOICE*, whenever the unit hears you speak (see [Ways to talk](#ways-to-talk)).
 - **HiveMind voice**: the voice effect the hive hears: *Same as speaker*, or any of the [voice effects](../features/voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.
 - **Mute speaker on Tx**: the unit's speaker goes quiet while you're talking to the hive, so those around you don't hear what goes to it.
+- **Talk tones**: two short notes up in your headphones as push to talk starts, and two down as it ends, so you know it took.  Not in voice mode, which starts at every word.  The low buzz for [nobody hearing you](#where-your-voice-goes) sounds either way.
 - **Show HiveMind on the board while**: the unit's display switches to its HiveMind screen by itself when you *TALK*, when you *HEAR* someone, or *BOTH*, and goes back to what it was showing after.  *NEVER* leaves the display alone.
 - **Direct, board to board**: direct mode on or off.  It costs some battery, as the unit's radio listens the whole time.  Under it, the direct channel, and the name others see you as (your server name).
 
@@ -124,7 +131,7 @@ There's no way to call an identity back.  If your phone's lost, or someone's see
 
 ## When it doesn't work
 
-- **Nobody hears you**: check the status strip's up arrow lights pink while you talk, and that the line under SERVER/DIRECT names the link the others are on.
+- **Nobody hears you**: check the status strip's up arrow lights pink while you talk, and that the line over the talk button names the channel or person you mean.  A buzz as you press means nobody would hear you there.
 - **You can't hear anyone**: check the phone's volume and which headphones it's playing through, and that they aren't [muted by you](#whos-there).
 - **A yellow warning sign by the channel's name**: units nearby run a different firmware, and can't be heard until everyone's on the same release.  See [Firmware updates](firmware-updates.md#units-on-different-versions).
 - **Nobody over direct**: everyone needs direct mode on, the same direct channel, and to be within range.

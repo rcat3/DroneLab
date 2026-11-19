@@ -83,7 +83,12 @@ class IncomingVoice {
   final int seq;
   final Uint8List opus;   // empty on a bare terminator
   final bool last;
-  IncomingVoice(this.session, this.seq, this.opus, this.last);
+  final int target;       // 0 talking to the channel, [whisperedToUs] to us alone
+  IncomingVoice(this.session, this.seq, this.opus, this.last, [this.target = 0]);
+
+  /// The server's target for voice whispered to us by session.
+  static const whisperedToUs = 2;
+  bool get alone => target == whisperedToUs;
 }
 
 /// Someone else's voice, from the server. Null for anything but Opus.
@@ -98,7 +103,7 @@ IncomingVoice? decodeVoice(Uint8List data) {
   final len = header & 0x1FFF;
   if (r.i + len > data.length) throw const FormatException('voice packet: truncated opus');
   final opus = Uint8List.sublistView(data, r.i, r.i + len);
-  return IncomingVoice(session, seq, opus, header & opusTerminator != 0);
+  return IncomingVoice(session, seq, opus, header & opusTerminator != 0, data[0] & 0x1F);
 }
 
 /// Reads a Mumble varint from the start of data, for tests.

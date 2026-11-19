@@ -51,3 +51,21 @@ List<Person> hivePeople(CommController comm) {
             board: b, talking: b.talking, mutedByMe: who.muted, picture: comm.directAvatars[b.id]),
   ];
 }
+
+/// Everyone about, each once: someone on the server and heard directly is
+/// one person, with both. In the order [hivePeople] has them.
+List<Person> peopleOnce(CommController comm) {
+  final byId = <String, Person>{};
+  for (final p in hivePeople(comm)) {
+    final had = byId[p.id];
+    byId[p.id] = had == null
+        ? p
+        : Person('p${p.id}', p.who, had.name,
+            user: had.user ?? p.user,
+            board: had.board ?? p.board,
+            talking: had.talking || p.talking,
+            mutedByMe: had.mutedByMe,
+            picture: had.picture ?? p.picture);
+  }
+  return byId.values.toList();
+}

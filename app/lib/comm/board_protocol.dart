@@ -66,6 +66,7 @@ const commVersionUpdate = 7;     // updating the firmware from the app, and stat
 const commVersionHeard = 8;      // what others send the board, passed on as it comes (0x0F)
 const commVersionMuted = 9;      // who's muted here, whose commands the board ignores (0x10)
 const commVersionKeys = 10;     // commands signed by their sender's key; the wearer's key (0x11)
+const commVersionTalkTo = 11;   // who talking goes to (0x13), pairs' keys (0x14), and transmissions told (0x13)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -88,6 +89,9 @@ const _msgHeard = 0x0F;
 const _msgMuted = 0x10;
 const _msgIdentity = 0x11;
 const _msgBinding = 0x12;
+const _msgTalkTo = 0x13;      // to the board: who talking goes to
+const _msgTalked = 0x13;      // from it: a transmission started, ended or was refused
+const _msgPairs = 0x14;
 const _msgDirectAvatar = 0x0D;
 const _msgUpdate = 0x0E;
 
@@ -146,7 +150,19 @@ class DirectSound {
   final bool first;
   final bool last;
   final Uint8List opus;
-  DirectSound(this.sender, this.seq, this.first, this.last, this.opus);
+  final bool alone;         // for us alone, sealed with our pair's key (commVersion 11)
+  DirectSound(this.sender, this.seq, this.first, this.last, this.opus, [this.alone = false]);
+}
+
+/// A transmission of ours started, ended, or was refused as nobody would
+/// hear it (commVersion 11).
+class Talked {
+  static const started = 0, ended = 1, refused = 2;
+  final int what;
+  final bool byVoice;       // voice mode started it, not a button
+  final bool direct;        // it goes over direct comms
+  final bool alone;         // to one person alone
+  Talked(this.what, this.byVoice, this.direct, this.alone);
 }
 
 class DirectPeer {
@@ -208,6 +224,9 @@ class AnswerPiece {
 /// A notification from the board: a [BoardSound], a [BoardStatus], an
 /// [AnswerPiece], an [AvatarAck], or null.
 Object? parseBoardMessage(Uint8List data) {
+  if (data.length >= 3 && data[0] == _msgTalked) {
+    return Talked(data[1], data[2] & 1 != 0, data[2] & 2 != 0, data[2] & 4 != 0);
+  }
   if (data.length < 4) return null;
   switch (data[0]) {
     case _msgSound:
@@ -226,7 +245,7 @@ Object? parseBoardMessage(Uint8List data) {
   int le32(int at) => data[at] | (data[at + 1] << 8) | (data[at + 2] << 16) | (data[at + 3] << 24);
   if (data[0] == _msgDirectSound && data.length >= 8) {
     return DirectSound(le32(1), data[5] | (data[6] << 8), data[7] & 1 != 0, data[7] & 2 != 0,
-        Uint8List.sublistView(data, 8));
+        Uint8List.sublistView(data, 8), data[7] & 4 != 0);
   }
   if (data[0] == _msgDirectPeer && data.length >= 7) {
     var at = 7;
@@ -286,6 +305,41 @@ List<Uint8List> requestMessages(int id, Uint8List request, [int maxWrite = board
 }
 
 Uint8List talkMessage(bool talk) => Uint8List.fromList([_msgTalk, talk ? 1 : 0]);
+
+/// Who talking goes to (commVersion 11), as comm_to_t.
+enum TalkTo { server, direct, person }
+
+/// Who talking goes to: the server's channel, the direct group, or one
+/// person, by their key, and whether they're on the server; with the name
+/// for the board to show.
+Uint8List talkToMessage(TalkTo to, {Uint8List? key, bool onServer = false, String name = ''}) =>
+    Uint8List.fromList([
+      _msgTalkTo,
+      to.index,
+      onServer ? 1 : 0,
+      if (to == TalkTo.person) ...key!,
+      ..._cut(utf8.encode(name), hearingNameMax),
+    ]);
+
+/// The pairs' keys, for talking to one alone over direct comms: each their
+/// public key (32) and the key we share (16), in as many messages as it
+/// takes; none, one message that starts the list afresh.
+List<Uint8List> pairsMessages(List<(Uint8List, Uint8List)> pairs, int maxWrite) {
+  const entry = 48;
+  final per = ((maxWrite - 2) ~/ entry).clamp(1, 16);
+  final out = <Uint8List>[];
+  var at = 0;
+  do {
+    final n = (pairs.length - at).clamp(0, per);
+    out.add(Uint8List.fromList([
+      _msgPairs,
+      at == 0 ? 1 : 0,
+      for (final (their, key) in pairs.sublist(at, at + n)) ...[...their, ...key],
+    ]));
+    at += n;
+  } while (at < pairs.length);
+  return out;
+}
 Uint8List modeMessage(BoardMode mode) => Uint8List.fromList([_msgMode, mode.index]);
 Uint8List recordMessage(bool on, {bool speakerVoice = false, bool beep = false}) =>
     Uint8List.fromList([_msgRecord, on ? 1 : 0, (speakerVoice ? 1 : 0) | (beep ? 2 : 0)]);

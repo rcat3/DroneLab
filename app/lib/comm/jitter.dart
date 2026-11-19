@@ -216,6 +216,24 @@ class Mixer {
     return out;
   }
 
+  /// Talking refused, as nobody would hear it: a low buzz, as a radio's
+  /// "talk prohibit", hard to mistake for the chirps.
+  Int16List refusedTone({double level = 0.22}) {
+    const ms = 400, hz = 320.0;
+    final n = sampleRate * ms ~/ 1000;
+    final fade = sampleRate * 8 ~/ 1000;
+    final out = Int16List(n);
+    for (var i = 0; i < n; i++) {
+      final edge = math.min(i, n - 1 - i);
+      final env = edge >= fade ? 1.0 : edge / fade;
+      final t = 2 * math.pi * hz * i / sampleRate;
+      // Odd harmonics, for a buzz rather than a beep
+      final v = math.sin(t) + math.sin(3 * t) / 3 + math.sin(5 * t) / 5;
+      out[i] = (v * 0.8 * env * level * 32767).round();
+    }
+    return out;
+  }
+
   Mixer({required this.sampleRate, required this.newDecoder, this.targetMs = 60});
 
   /// [extraMs] waits that much longer for this speaker's voice, for one that

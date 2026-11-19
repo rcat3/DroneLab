@@ -115,6 +115,15 @@ class SetupPage extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (comm.boardTalksTo)
+                    Explained(
+                      help: 'Two short notes up in your headphones as push to talk starts, and down as it ends. '
+                          'Not in voice mode. A low buzz when nobody would hear you sounds either way.',
+                      builder: (context, info) => PanelRow(
+                        title: 'Talk tones',
+                        trailing: [info, Switch(value: comm.talkTones, onChanged: comm.setTalkTones)],
+                      ),
+                    ),
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

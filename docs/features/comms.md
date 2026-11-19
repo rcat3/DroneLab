@@ -28,7 +28,7 @@ flowchart LR
     phone --> headphones["Your headphones"]
 ```
 
-You hear both modes at once: the app plays the server's voices and the direct ones together.  Talking goes one way at a time (see [Talk on](#talk-on)).  Nothing heard one way is passed on the other.
+You hear both modes at once: the app plays the server's voices and the direct ones together.  Talking goes one way at a time (see [Talk to](#talk-to)).  Nothing heard one way is passed on the other.
 
 ## Getting started
 
@@ -81,9 +81,11 @@ The status screen can be picked to show when the display turns on, in [Settings]
 
 Titled *HiveMind Voice Effect* on the screen: the voice effect for what the hive hears: *Same as speaker*, or any of the [voice effects](voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.  With two different effects the voice runs through both, which takes more of the unit's processor: the heaviest two together take about 70% of one of its cores.
 
-### Talk on
+### Talk to
 
-Talking goes one way at a time: cloud (*Server*) or *Direct*.  *Server* or *Direct*, above the app's Hold to talk, or *Talk on* on the unit's *Direct* page, says which.  If nobody's there to hear you that way (the server isn't connected, or nobody else is in your channel; or no units on your direct channel are nearby) and somebody is the other way, it goes the other way instead, and the app says so under the choice.  That's decided as you start talking, and doesn't change partway through.
+Talking goes to one place at a time: your server channel, your direct channel, or one person alone, picked on the app's [Voice tab](../app/voice.md#where-your-voice-goes).  A channel goes its own way, the server's or direct; one person goes direct if their unit's nearby, else through the server.  The unit's *Direct* page shows who, and *Talk to* there switches between the server's channel (*Server*) and the direct channel (*Direct*), for when the phone's not about.
+
+If nobody would hear you (the server isn't connected or nobody else is in your channel, no units are nearby on direct, or the one you picked is out of reach), the unit doesn't talk at all: the app buzzes in your headphones, and the unit's HiveMind screen says *NOBODY HEARS*.  Let go and talk again once they're back.  That's decided as you start talking, and doesn't change partway through.
 
 ### The talk button
 

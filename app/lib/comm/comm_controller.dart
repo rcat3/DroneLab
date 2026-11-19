@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
@@ -28,6 +29,38 @@ import 'media_buttons.dart';
 import 'recorder.dart';
 import 'mumble_client.dart';
 
+/// Who talking goes to: our server channel, our direct channel, or one
+/// person, by who they are (KnownPerson.id).
+class TalkTarget {
+  final TalkTo kind;
+  final String? personId;
+  const TalkTarget.server()
+      : kind = TalkTo.server,
+        personId = null;
+  const TalkTarget.direct()
+      : kind = TalkTo.direct,
+        personId = null;
+  const TalkTarget.person(String id)
+      : kind = TalkTo.person,
+        personId = id;
+
+  String get pref => personId == null ? kind.name : 'person:$personId';
+
+  static TalkTarget fromPref(String? p) => p == 'direct'
+      ? const TalkTarget.direct()
+      : p != null && p.startsWith('person:')
+          ? TalkTarget.person(p.substring('person:'.length))
+          : const TalkTarget.server();
+
+  @override
+  bool operator ==(Object other) => other is TalkTarget && other.kind == kind && other.personId == personId;
+  @override
+  int get hashCode => Object.hash(kind, personId);
+}
+
+/// How talking would go now.
+enum TalkRoute { server, direct }
+
 class ServerSettings {
   String host;
   int port;
@@ -45,7 +78,7 @@ class BoardCommSettings {
   final DirectSettings? direct;   // null on boards without direct comms
   final int voice;                // the comm channel's own voice effect, -1 for the speaker's
   final List<String> voices;      // the voice effects
-  final int talkOn;               // where talking goes, as chosen: [talkServer] or [talkDirect]
+  final int talkOn;               // before commVersion 11: the channel talked on, 0 the server's, 1 direct
   const BoardCommSettings(this.muteSpeaker, this.show, this.direct, this.voice, this.voices, this.talkOn);
 }
 
@@ -155,6 +188,10 @@ class CommController extends ChangeNotifier {
   /// Who's talking on the channel, in the order they started. Counted from
   /// when their voice arrives, so the board's screen shows them at once.
   Set<int> talking = {};
+
+  /// Those talking to us alone just now: whispered on the server, or sealed
+  /// for us over direct comms.
+  Set<int> talkingToUs = {};
   final Map<int, int> _heardAt = {};
   static const _talkingFor = 300;     // ms after their last packet
 
@@ -222,6 +259,8 @@ class CommController extends ChangeNotifier {
       debugPrint('identity: $e');
     }
     channel = p.getString('channel');
+    _talkTo = TalkTarget.fromPref(p.getString('talkTo'));
+    talkTones = p.getBool('talkTones') ?? true;
     groups.addAll([
       for (final g in jsonDecode(p.getString('directGroups') ?? '[]') as List<dynamic>)
         DirectGroup.fromJson(g as Map<String, dynamic>)
@@ -234,6 +273,7 @@ class CommController extends ChangeNotifier {
     _directPeerSub = board.directPeers.listen(_onDirectPeer);
     _directAvatarSub = board.directAvatars.listen(_onDirectAvatar);
     _heardSub = board.heard.listen(_onHeard);
+    _talkedSub = board.talked.listen(_onTalked);
     await conversations.load();
     conversations.onSeen = notifier.clearTexts;
     await notifier.init();
@@ -361,7 +401,7 @@ class CommController extends ChangeNotifier {
                   d['id'] as String? ?? '', (d['channel'] as num?)?.toInt() ?? 6, d['lr'] == 1, d['scanning'] == 1),
           (v['voice'] as num?)?.toInt() ?? -1,
           [for (final n in (v['voices'] as List<dynamic>? ?? const [])) n as String],
-          (v['talk'] as num?)?.toInt() ?? talkServer);
+          (v['talk'] as num?)?.toInt() ?? 0);
       notifyListeners();
       _nameBoard();
     } catch (_) {}
@@ -407,6 +447,7 @@ class CommController extends ChangeNotifier {
   StreamSubscription<DirectSound>? _directSoundSub;
   StreamSubscription<DirectPeer>? _directPeerSub;
   StreamSubscription<Heard>? _heardSub;
+  StreamSubscription<Talked>? _talkedSub;
   StreamSubscription<DirectAvatarPiece>? _directAvatarSub;
 
   /// The avatars of boards heard over direct comms, as PNGs, by board id.
@@ -581,7 +622,7 @@ class CommController extends ChangeNotifier {
     _audio.start();
     mixer.receive(directSession(d.sender), counted * 2, d.opus, d.last, now, extraMs: _directExtraMs);
     _logDirect(now);
-    _heard(directSession(d.sender), d.last);
+    _heard(directSession(d.sender), d.last, alone: d.alone);
   }
 
   /// A talker's name, whether they're on the server or heard directly.
@@ -595,34 +636,159 @@ class CommController extends ChangeNotifier {
     return mumble?.users[session]?.name ?? '?';
   }
 
-  // ----- Talk on: the server or direct comms -----
+  // ----- Who talking goes to -----
 
-  static const talkServer = 0;
-  static const talkDirect = 1;
+  /// Who talking goes to: our channel on the server, our direct channel, or
+  /// one person, by who they are. Kept for next time. Firmware from before
+  /// commVersion 11 can't talk to one person: it talks to the server's
+  /// channel meanwhile.
+  TalkTarget get talkTo => _talkTo.kind == TalkTo.person && board.status != null && !boardTalksTo
+      ? const TalkTarget.server()
+      : _talkTo;
+  TalkTarget _talkTo = const TalkTarget.server();
 
-  Future<void> setTalkOn(int transport) => _boardSettingsRequest('POST', '?talk=$transport');
+  /// The firmware takes who to talk to (commVersion 11); before it, only
+  /// which channel, as "talk on" the server or direct comms.
+  bool get boardTalksTo => (board.status?.version ?? 0) >= commVersionTalkTo;
 
-  /// Where talking goes now, as the board decides it: the one chosen, unless
-  /// nobody's on it to hear and someone's on the other.
-  int get talkNow {
-    final pref = boardSettings?.talkOn ?? talkServer;
+  Future<void> setTalkTo(TalkTarget t) async {
+    _talkTo = t;
+    await _prefs?.setString('talkTo', t.pref);
+    _updateBoardScreen();
+    notifyListeners();
+  }
+
+  /// Whether talking would reach who it's for now, and how: null if nobody
+  /// would hear it. One person goes over direct comms if their board's
+  /// about, as the board decides, else over the server.
+  TalkRoute? get talkRoute {
     final m = mumble;
-    final serverUp = m != null && m.state == MumbleState.connected;
-    final serverHeard = serverUp && m.channelUsers.isNotEmpty;
-    final directUp = boardSettings?.direct?.on ?? false;
-    final directHeard = directUp && nearby.isNotEmpty;
-    if (pref == talkServer) {
-      return serverUp && (serverHeard || !directHeard)
-          ? talkServer
-          : directUp
-              ? talkDirect
-              : talkServer;
+    switch (talkTo.kind) {
+      case TalkTo.server:
+        return _serverUp && m!.channelUsers.isNotEmpty ? TalkRoute.server : null;
+      case TalkTo.direct:
+        return _directOn && nearby.isNotEmpty ? TalkRoute.direct : null;
+      case TalkTo.person:
+        final id = talkTo.personId!;
+        final b = directBoard(id);
+        if (b != null && b.key != null && boardTalksTo && _pairKeys.containsKey(Identity.idOf(b.key!))) {
+          return TalkRoute.direct;
+        }
+        return serverUser(id) != null ? TalkRoute.server : null;
     }
-    return directUp && (directHeard || !serverHeard)
-        ? talkDirect
-        : serverUp
-            ? talkServer
-            : talkDirect;
+  }
+
+  bool get _directOn => board.state == BoardState.connected && (boardSettings?.direct?.on ?? false);
+
+  /// What talking goes to, by name: the channel's, or the person's.
+  String get talkToName => switch (talkTo.kind) {
+        TalkTo.server => mumble?.channels[mumble?.myChannel] ?? 'Server',
+        TalkTo.direct => switch (boardSettings?.direct) {
+            final d? => d.keyed ? d.group : 'Open channel',
+            null => 'Direct',
+          },
+        TalkTo.person => people[talkTo.personId!]?.name ?? '?',
+      };
+
+  Uint8List? _sentTalkTo;
+  int? _sentTalkOn;       // to firmware before commVersion 11
+
+  /// Tell the board who talking goes to, when it changes; and the server who
+  /// to whisper to, ahead of talking, as it's set over TCP and the voice may
+  /// go over UDP.
+  void _sendTalkTo() {
+    final t = talkTo;
+    final u = t.kind == TalkTo.person ? serverUser(t.personId!) : null;
+    mumble?.whisperTo(u == null ? null : [u.session]);
+    if (!boardTalksTo) {
+      // Older firmware: the channel, as talking on the server or direct
+      final on = t.kind == TalkTo.direct ? 1 : 0;
+      if (boardSettings != null && boardSettings!.talkOn != on && _sentTalkOn != on) {
+        _sentTalkOn = on;
+        _boardSettingsRequest('POST', '?talk=$on');
+      }
+      return;
+    }
+    final msg = talkToMessage(t.kind,
+        key: t.kind == TalkTo.person ? (people[t.personId!]?.key ?? Uint8List(Identity.keyLength)) : null,
+        onServer: u != null,
+        name: talkToName);
+    if (_sentTalkTo == null || !listEquals(msg, _sentTalkTo)) {
+      _sentTalkTo = msg;
+      board.send(msg);
+    }
+  }
+
+  // ----- Keys shared with one other, for talking to them alone directly -----
+
+  /// Made as their boards are heard, by their key's id; and those the board
+  /// has, in the order they were first heard, the oldest going once there
+  /// are more than it keeps.
+  final Map<String, (Uint8List, Uint8List)> _pairKeys = {};   // their public key, and the one we share
+  final Set<String> _pairsMaking = {};
+  final List<String> _pairsWanted = [];
+  String? _sentPairs;
+
+  void _sendPairs() {
+    final me = identity;
+    if (me == null || !boardTalksTo) return;
+    for (final b in nearby.values) {
+      final key = b.key;
+      if (key == null) continue;
+      final id = Identity.idOf(key);
+      if (!_pairsWanted.contains(id)) _pairsWanted.add(id);
+      if (!_pairKeys.containsKey(id) && _pairsMaking.add(id)) {
+        me.pairKey(key).then((k) {
+          _pairsMaking.remove(id);
+          if (k != null) _pairKeys[id] = (key, k);
+          _updateBoardScreen();
+        });
+      }
+    }
+    while (_pairsWanted.length > _pairsMax) {
+      _pairsWanted.removeAt(0);
+    }
+    final pairs = [for (final id in _pairsWanted) ?_pairKeys[id]];
+    final now = pairs.map((p) => Identity.idOf(p.$1)).join(',');
+    if (now != _sentPairs) {
+      _sentPairs = now;
+      for (final m in pairsMessages(pairs, board.maxWrite)) {
+        board.send(m);
+      }
+    }
+  }
+
+  static const _pairsMax = 12;    // DIRECT_PAIRS_MAX
+
+  // ----- Tones for talking -----
+
+  /// Two short notes up as talking starts, and down as it ends, in the
+  /// headphones, for push to talk (not voice mode). Kept for next time.
+  bool talkTones = true;
+
+  Future<void> setTalkTones(bool on) async {
+    talkTones = on;
+    await _prefs?.setBool('talkTones', on);
+    notifyListeners();
+  }
+
+  /// A transmission started, ended or was refused: tones for it. Refused,
+  /// a low buzz, whatever's set, as nobody hears you; but none of them for
+  /// voice mode, which starts at each word.
+  void _onTalked(Talked t) {
+    if (t.byVoice) return;
+    final Int16List tone;
+    switch (t.what) {
+      case Talked.refused:
+        tone = mixer.refusedTone();
+      case Talked.started || Talked.ended:
+        if (!talkTones && !headsetTalking) return;   // the headphones' button always has them
+        tone = mixer.chirp(rising: t.what == Talked.started, level: 0.12);
+      default:
+        return;
+    }
+    _audio.start();
+    mixer.playTone(tone);
   }
 
   // ----- Recording -----
@@ -876,11 +1042,15 @@ class CommController extends ChangeNotifier {
   void _updateBoardScreen() {
     _boardAvatars.update();
     if (board.state != BoardState.connected || board.status == null) {
-      _sentServer = _sentHearing = _sentMuted = null;
+      _sentServer = _sentHearing = _sentMuted = _sentTalkTo = null;
+      _sentTalkOn = null;
+      _sentPairs = null;
       _sentIdentity = false;
       _boundId = null;
       return;
     }
+    _sendTalkTo();
+    _sendPairs();
     final keys = (board.status?.version ?? 0) >= commVersionKeys;
     // Who we are, and that the board's ours, for its hello over direct comms
     final me = identity;
@@ -955,8 +1125,13 @@ class CommController extends ChangeNotifier {
   }
 
   /// Someone's voice came: they're talking, from now if they weren't.
-  void _heard(int session, bool last) {
+  void _heard(int session, bool last, {bool alone = false}) {
     final now = DateTime.now().millisecondsSinceEpoch;
+    if (alone) {
+      talkingToUs.add(session);
+    } else {
+      talkingToUs.remove(session);
+    }
     if (last) {
       _heardAt.remove(session);
     } else {
@@ -973,6 +1148,7 @@ class CommController extends ChangeNotifier {
       for (final s in _heardAt.keys)
         if (!talking.contains(s)) s,
     };
+    talkingToUs.retainAll(next);
     if (!setEquals(next, talking)) {
       talking = next;
       _updateBoardScreen();
@@ -1022,7 +1198,9 @@ class CommController extends ChangeNotifier {
     if (talk == headsetTalking) return;
     headsetTalking = talk;
     board.setTalk(talk);
-    if (chirp) mixer.playTone(mixer.chirp(rising: talk));
+    // The board says when it starts and ends (and refuses), for the tones,
+    // from commVersion 11; before that, a chirp for each press
+    if (chirp && !boardTalksTo) mixer.playTone(mixer.chirp(rising: talk));
     _headsetLimit?.cancel();
     if (talk) {
       // In case it's left on: it would keep sending everything
@@ -1502,7 +1680,7 @@ class CommController extends ChangeNotifier {
     _mumbleSubs.add(m.voice.listen((v) {
       if (_sessionMuted(v.session)) return;
       mixer.receive(v.session, v.seq, v.opus, v.last, DateTime.now().millisecondsSinceEpoch);
-      _heard(v.session, v.last);
+      _heard(v.session, v.last, alone: v.alone);
     }));
     _mumbleSubs.add(m.texts.listen(_onServerText));
     _mumbleSubs.add(m.pluginData.listen((d) => _onPluginData(m, d)));
@@ -1611,6 +1789,7 @@ class CommController extends ChangeNotifier {
     _directSoundSub?.cancel();
     _directPeerSub?.cancel();
     _heardSub?.cancel();
+    _talkedSub?.cancel();
     _directAvatarSub?.cancel();
     _directGroupSub?.cancel();
     _recordSub?.cancel();

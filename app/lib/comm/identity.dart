@@ -88,6 +88,63 @@ class Identity {
         signature: c.Signature(signature, publicKey: c.SimplePublicKey(publicKey, type: c.KeyPairType.ed25519)));
   }
 
+  // ----- Keys shared with one other -----
+
+  static final _x25519 = c.X25519();
+  static final _p = (BigInt.one << 255) - BigInt.from(19);
+
+  /// An Ed25519 public key as the X25519 one of the same secret: u = (1 +
+  /// y) / (1 - y), RFC 7748's map between the two curves. Null if it isn't
+  /// one.
+  static Uint8List? montgomeryOf(List<int> edKey) {
+    if (edKey.length != keyLength) return null;
+    var y = BigInt.zero;
+    for (var i = keyLength - 1; i >= 0; i--) {
+      y = (y << 8) | BigInt.from(i == keyLength - 1 ? edKey[i] & 0x7F : edKey[i]);  // the top bit's x's sign
+    }
+    final den = (BigInt.one - y) % _p;
+    if (y >= _p || den == BigInt.zero) return null;
+    var u = ((BigInt.one + y) * den.modPow(_p - BigInt.two, _p)) % _p;
+    final out = Uint8List(keyLength);
+    for (var i = 0; i < keyLength; i++) {
+      out[i] = (u & BigInt.from(0xFF)).toInt();
+      u >>= 8;
+    }
+    return out;
+  }
+
+  /// Our secret as an X25519 one: the scalar Ed25519 makes from the seed.
+  Future<c.SimpleKeyPair> _xKeyPair() =>
+      _x25519.newKeyPairFromSeed(hash.sha512.convert(seed).bytes.sublist(0, 32));
+
+  /// A key only we and the one with this public key have, the same made on
+  /// either side, with nothing swapped first: X25519 between our identity
+  /// keys, then SHA-256 of "dronelab-pair\n", that, and the two public keys,
+  /// the lower first, cut to 16 bytes. For talking to them alone over
+  /// direct comms (direct.h). Null for our own key, or one that isn't a key.
+  Future<Uint8List?> pairKey(List<int> theirKey) async {
+    final their = montgomeryOf(theirKey);
+    if (their == null || _compare(theirKey, publicKey) == 0) return null;
+    final shared = await (await _x25519.sharedSecretKey(
+            keyPair: await _xKeyPair(), remotePublicKey: c.SimplePublicKey(their, type: c.KeyPairType.x25519)))
+        .extractBytes();
+    if (shared.every((b) => b == 0)) return null;     // a key of small order: nothing secret in it
+    final (lo, hi) = _compare(publicKey, theirKey) < 0 ? (publicKey, theirKey) : (theirKey, publicKey);
+    final digest = hash.sha256.convert([...utf8.encode('dronelab-pair\n'), ...shared, ...lo, ...hi]);
+    return Uint8List.fromList(digest.bytes.sublist(0, 16));
+  }
+
+  /// Our X25519 public key, for checking [montgomeryOf] gives the same.
+  Future<Uint8List> xPublicKey() async =>
+      Uint8List.fromList((await (await _xKeyPair()).extractPublicKey()).bytes);
+
+  static int _compare(List<int> a, List<int> b) {
+    for (var i = 0; i < a.length && i < b.length; i++) {
+      if (a[i] != b[i]) return a[i] - b[i];
+    }
+    return a.length - b.length;
+  }
+
   // ----- The code to back it up with -----
 
   static const _base32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';

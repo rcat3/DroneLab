@@ -59,4 +59,19 @@ void main() {
     data[40] ^= 1;
     expect(await IdentityAnnouncement.read(data), isNull);
   });
+
+  test('a pair key is the same made by either, and only for the two', () async {
+    final a = await Identity.fromSeed(seed);
+    final b = await Identity.fromSeed(List.generate(32, (i) => 200 - i));
+    final c = await Identity.fromSeed(List.generate(32, (i) => i * 3));
+    // The Ed25519 key, mapped, is the X25519 key of the same secret
+    expect(Identity.montgomeryOf(a.publicKey), await a.xPublicKey());
+    expect(Identity.montgomeryOf(b.publicKey), await b.xPublicKey());
+    final ab = await a.pairKey(b.publicKey);
+    expect(ab, isNotNull);
+    expect(ab!.length, 16);
+    expect(await b.pairKey(a.publicKey), ab);
+    expect(await a.pairKey(c.publicKey), isNot(ab));
+    expect(await a.pairKey(a.publicKey), isNull);
+  });
 }

@@ -32,6 +32,7 @@ const _userState = 9;
 const _textMessage = 11;
 const _permissionDenied = 12;
 const _cryptSetup = 15;
+const _voiceTarget = 19;
 const _requestBlob = 23;
 const _pluginData = 26;
 
@@ -372,10 +373,31 @@ class MumbleClient {
         .toBytes());
   }
 
+  /// Who our voice goes to: our channel, or, whispered, these sessions
+  /// alone (the voice target we set up as [_whisperTarget]).
+  List<int>? _whisperTo;
+  bool _whispering = false;
+  static const _whisperTarget = 1;
+
+  /// Talk to these sessions alone from now, or to our channel with null.
+  /// Set before talking, as it goes over TCP and the voice may go by UDP.
+  void whisperTo(List<int>? sessions) {
+    _whispering = sessions != null && sessions.isNotEmpty;
+    if (!_whispering || state != MumbleState.connected) return;
+    final have = _whisperTo;
+    if (have != null && have.length == sessions!.length && have.every(sessions.contains)) return;
+    _whisperTo = List.of(sessions!);
+    final w = ProtoWriter()..int_(1, _whisperTarget);
+    for (final s in sessions) {
+      w.bytes(2, (ProtoWriter()..int_(1, s)).toBytes());
+    }
+    _send(_voiceTarget, w.toBytes());
+  }
+
   /// Send a packet of our voice. seq counts in 10 ms frames.
   void sendVoice(int seq, Uint8List opus, {bool last = false}) {
     if (state != MumbleState.connected) return;
-    final packet = encodeVoice(seq: seq, opus: opus, last: last);
+    final packet = encodeVoice(seq: seq, opus: opus, last: last, target: _whispering ? _whisperTarget : 0);
     if (udpActive) {
       _sendUdp(packet);
     } else {

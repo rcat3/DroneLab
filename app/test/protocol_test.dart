@@ -266,4 +266,42 @@ void main() {
     final m = ProtoMessage.parse((ProtoWriter()..packed(2, [5, 300])).toBytes());
     expect(m.bytes(2), [5, 0xAC, 0x02]);
   });
+
+  test('who talking goes to, the pairs, and what the board says of talking', () {
+    final key = Uint8List.fromList(List.generate(32, (i) => i));
+    final m = talkToMessage(TalkTo.person, key: key, onServer: true, name: 'Unit 7');
+    expect(m.sublist(0, 3), [0x13, 2, 1]);
+    expect(m.sublist(3, 35), key);
+    expect(utf8.decode(m.sublist(35)), 'Unit 7');
+    expect(talkToMessage(TalkTo.direct, name: 'Open channel').sublist(0, 3), [0x13, 1, 0]);
+
+    final pairs = [for (var i = 0; i < 9; i++) (Uint8List(32)..[0] = i, Uint8List(16)..[0] = 100 + i)];
+    final msgs = pairsMessages(pairs, 244);
+    expect(msgs.length, 2);   // 5 to a message
+    expect(msgs.first.sublist(0, 2), [0x14, 1]);
+    expect(msgs[1][1], 0);
+    expect(msgs.first[2 + 48], 1);   // the second's key
+    expect(msgs.first[2 + 32], 100);  // the first's shared key
+    expect(pairsMessages(const [], 244).single, [0x14, 1]);
+
+    final t = parseBoardMessage(Uint8List.fromList([0x13, 2, 4])) as Talked;
+    expect(t.what, Talked.refused);
+    expect(t.alone, isTrue);
+    expect(t.byVoice, isFalse);
+    final d = parseBoardMessage(Uint8List.fromList([0x07, 1, 0, 0, 0, 5, 0, 4, 9])) as DirectSound;
+    expect(d.alone, isTrue);
+  });
+
+  test('voice whispered to us is told apart', () {
+    final out = BytesBuilder()
+      ..addByte((voiceTypeOpus << 5) | IncomingVoice.whisperedToUs);
+    writeMumbleVarint(out, 7);
+    writeMumbleVarint(out, 3);
+    writeMumbleVarint(out, 1);
+    out.addByte(0x42);
+    final v = decodeVoice(out.toBytes())!;
+    expect(v.session, 7);
+    expect(v.alone, isTrue);
+    expect(encodeVoice(seq: 1, opus: Uint8List(1), target: 1)[0] & 0x1F, 1);
+  });
 }
