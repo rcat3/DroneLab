@@ -12,7 +12,7 @@ Back to [the app](README.md).
 
 ## Picking a conversation
 
-The tab lists every conversation you can use now, with its last message, and a pink number for any you haven't read.  The number on the tab itself counts them all.
+The tab lists every conversation you can use now, with its last message, and a pink number for any you haven't read.  The number on the tab itself counts them all.  The gear at the top opens *Setup*, as on the Voice tab, and **Direct channel**, by *Channels*, picks or makes the [direct channel](voice.md#direct-channels) you're on.
 
 - **Channels**:
   - **Broadcast**: everyone who can hear you, by any link: your server channel and your direct channel together.
@@ -40,7 +40,7 @@ Type in the box at the foot of a conversation and tap send.  Anyone can text you
 
 - **Over the server**, texts are Mumble's own text messages: those in a channel's conversation go to the channel, and those to one person go to them alone.  So people in Mumble's own apps, on a computer, see them too, and can text you back.
 - **Over direct mode**, your unit carries them to the others nearby, up to 120 letters.
-- **To one person**, a text goes over the server if they're on it, and otherwise directly.
+- **To one person**, a text goes both ways they can be reached, over the server and directly, and they see it once.  Words for their display and commands for their toys go both ways too: their unit does each once, by whichever way it allows, so allowing them for either is enough.
 - **Broadcast** goes both ways at once.  Someone who hears you both ways sees it once, under their Broadcast.  (One from a Mumble app to the channel shows in the channel's conversation.)
 
 You need a link to send: someone who can't be reached just now says so in place of the box.
@@ -89,7 +89,7 @@ Two more choices, under it (on the unit, on the page after *Hive Messages*), ign
 
 So with both on, only commands sent to you alone get through.
 
-Someone's known by their name and how they're heard, server or direct, so the same person can be on the list twice.  Names can be borrowed: on a direct channel with a passphrase only its members can send at all, but on the open channel, or a server anyone can join, someone could use a name you've allowed.
+Someone's known by their name and how they're heard, server or direct, so the same person can be on the list twice.  Someone on both sends you their words both ways, so allowing either is enough.  Names can be borrowed: on a direct channel with a passphrase only its members can send at all, but on the open channel, or a server anyone can join, someone could use a name you've allowed.
 
 It's a separate list from the one for your toys, so someone can put words on your display without being allowed near your toys.  Texts don't need either: they only reach your app.
 

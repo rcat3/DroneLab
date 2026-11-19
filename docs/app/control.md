@@ -8,7 +8,7 @@ Back to [the app](README.md).  Running *your own* toys is on your unit's [Lovens
 
 ## Sending
 
-Open it with the **Control button** at the top of a [Text](text.md) conversation: it's for whoever that conversation is with, which it says at the top.  From a person's conversation it's their toys; from a channel's, the toys of everyone in it; from *Broadcast*, everyone who can hear you.  The *Control* button on someone in the [Voice](voice.md#whos-there) list opens it for them too.
+Open it with the **Control button** at the top of a [Text](text.md) conversation: it's for whoever that conversation is with, which it says at the top.  From a person's conversation it's their toys, sent both ways they can be reached (their unit does each once, by whichever way it allows); from a channel's, the toys of everyone in it; from *Broadcast*, everyone who can hear you.  The *Control* button on someone in the [Voice](voice.md#whos-there) list opens it for them too.
 
 Then one of three sections:
 
