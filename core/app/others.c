@@ -27,7 +27,7 @@
 
 #define STORE_NAME          "oth_people"
 #define OWNER_STORE_NAME    "oth_owner"
-#define STORE_VERSION       1
+#define STORE_VERSION       2
 #define SAVE_DELAY_MS       1000
 #define QUEUE_LEN           8           // from direct comms, waiting to be checked, and checked, waiting for the UI loop
 #define KNOWN_GOOD          6           // commands checked lately, whose copies needn't be again
@@ -52,8 +52,9 @@ typedef struct
     char name[COMM_NAME_MAX];
     uint8_t sent;           // a bit for each kind they've sent
     uint8_t allowed;        // a bit for each kind they're allowed
-    uint8_t clash;          // took the name of someone listed before them
-    uint8_t spare[5];
+    uint8_t spare1;
+    uint32_t name_order;    // when they took the name they go by, in order: who had a name first
+    uint8_t spare[1];
 } person_t;
 
 typedef struct
@@ -122,6 +123,8 @@ static volatile uint32_t results_write; // only the checker moves it
 static volatile uint32_t results_read;  // only direct comms' task moves it
 static int known_next;
 
+static uint32_t name_order_next;        // one more than any name_order in the list
+
 static seen_t seen[SEEN_MAX];
 static int seen_count;
 static int seen_next;
@@ -151,6 +154,10 @@ static void load(void)
     for (int i = 0; i < list->count; i++)
     {
         list->people[i].name[COMM_NAME_MAX - 1] = '\0';
+        if (list->people[i].name_order >= name_order_next)
+        {
+            name_order_next = list->people[i].name_order + 1;
+        }
     }
     have_owner = rcat_hal_store_read(OWNER_STORE_NAME, owner, sizeof(owner)) == sizeof(owner);
 }
@@ -228,12 +235,16 @@ static bool same_name(const char *a, const char *b)
     return *a == *b;
 }
 
-/* Whether someone else listed goes by this name. */
-static bool name_taken(const person_t *by, const char *name)
+/* Whether someone else listed took this person's name before they did:
+ * they may be using it to pass as them. By when each took the name, so
+ * someone listed a long while who takes a newer person's name is the one
+ * marked, and it's gone once they change it back. */
+static bool clashes(const person_t *p)
 {
     for (int i = 0; i < list->count; i++)
     {
-        if (&list->people[i] != by && same_name(list->people[i].name, name))
+        const person_t *q = &list->people[i];
+        if (q != p && same_name(q->name, p->name) && q->name_order < p->name_order)
         {
             return true;
         }
@@ -268,7 +279,7 @@ static person_t *add(const uint8_t *key, const char *name, uint64_t counter)
     memcpy(p->key, key, OTHERS_KEY_LEN);
     snprintf(p->name, sizeof(p->name), "%s", name);
     p->counter = counter;
-    p->clash = name_taken(p, name);
+    p->name_order = name_order_next++;
     list->count++;
     changed();
     return p;
@@ -279,9 +290,9 @@ static void rename_person(person_t *p, const char *name)
 {
     if (strcmp(p->name, name) != 0)
     {
-        if (name_taken(p, name))
+        if (!same_name(p->name, name))
         {
-            p->clash = 1;
+            p->name_order = name_order_next++;  // a new name, not a change of case
         }
         snprintf(p->name, sizeof(p->name), "%s", name);
         changed();
@@ -881,7 +892,7 @@ int others_senders(others_kind_t kind, others_sender_t *out, int max)
             memcpy(out[n].key, p->key, OTHERS_KEY_LEN);
             snprintf(out[n].name, sizeof(out[n].name), "%s", p->name);
             out[n].allowed = (p->allowed & bit) != 0;
-            out[n].clash = p->clash != 0;
+            out[n].clash = clashes(p);
         }
         n++;
     }

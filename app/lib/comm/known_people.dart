@@ -23,11 +23,13 @@ class KnownPerson {
   final Set<String> certs;        // their certificates' hashes
   String name;
   bool muted;
-  final int firstSeen;            // ms since the epoch: who had a name first
+  final int firstSeen;            // ms since the epoch
+  int nameSince;                  // when they took the name they go by: who had a name first
 
-  KnownPerson(this.id, this.name, {this.key, Set<String>? certs, this.muted = false, int? firstSeen})
+  KnownPerson(this.id, this.name, {this.key, Set<String>? certs, this.muted = false, int? firstSeen, int? nameSince})
       : certs = certs ?? {},
-        firstSeen = firstSeen ?? DateTime.now().millisecondsSinceEpoch;
+        firstSeen = firstSeen ?? DateTime.now().millisecondsSinceEpoch,
+        nameSince = nameSince ?? firstSeen ?? DateTime.now().millisecondsSinceEpoch;
 
   /// Known by something better than a name.
   bool get identified => !id.startsWith('n:');
@@ -39,6 +41,7 @@ class KnownPerson {
         if (certs.isNotEmpty) 'certs': certs.toList(),
         if (muted) 'muted': true,
         'first': firstSeen,
+        'since': nameSince,
       };
 
   static KnownPerson fromJson(Map<String, dynamic> j) => KnownPerson(
@@ -48,6 +51,7 @@ class KnownPerson {
         certs: {for (final c in j['certs'] as List<dynamic>? ?? const []) c as String},
         muted: j['muted'] == true,
         firstSeen: (j['first'] as num?)?.toInt(),
+        nameSince: (j['since'] as num?)?.toInt(),
       );
 
   static String keyId(List<int> key) => 'k:${Identity.idOf(key)}';
@@ -134,8 +138,9 @@ class KnownPeople {
     final oldId = _byCert[certHash];
     var p = _all[id];
     if (p == null) {
-      // As long known as they were by their certificate
-      p = KnownPerson(id, name, key: key, firstSeen: oldId == null ? null : _all[oldId]?.firstSeen);
+      // As long known as they were by their certificate, and by their name
+      final old = oldId == null ? null : _all[oldId];
+      p = KnownPerson(id, old?.name ?? name, key: key, firstSeen: old?.firstSeen, nameSince: old?.nameSince);
       _put(p);
     }
     if (oldId != null && oldId != id) {
@@ -158,6 +163,8 @@ class KnownPeople {
 
   KnownPerson _label(KnownPerson p, String name) {
     if (name.isNotEmpty && p.name != name) {
+      // Only a new name, not a change of case, starts afresh
+      if (p.name.toLowerCase() != name.toLowerCase()) p.nameSince = DateTime.now().millisecondsSinceEpoch;
       p.name = name;
       _changed();
     }
@@ -173,8 +180,13 @@ class KnownPeople {
     if (old == null || p == null || oldId == newId) return;
     _all.remove(oldId);
     old.certs.forEach(_byCert.remove);
+    // With the old one's standing: who had the name first
     _all[newId] = KnownPerson(p.id, p.name,
-        key: p.key, certs: p.certs, muted: p.muted || old.muted, firstSeen: min(p.firstSeen, old.firstSeen));
+        key: p.key,
+        certs: p.certs,
+        muted: p.muted || old.muted,
+        firstSeen: min(p.firstSeen, old.firstSeen),
+        nameSince: min(p.nameSince, old.nameSince));
     onRenamed?.call(oldId, newId);
     _changed();
   }
@@ -188,16 +200,18 @@ class KnownPeople {
 
   Iterable<KnownPerson> get muted => _all.values.where((p) => p.muted);
 
-  /// The one who had this name before [p]: someone else, so [p] may be
-  /// using it to pass as them. Only between those known by more than a
-  /// name, as a name's all there is to go on for the rest.
+  /// The one who had this name before [p] took it: someone else, so [p]
+  /// may be using it to pass as them. By when each took the name, not when
+  /// they were first seen, so someone known a long while who takes a newer
+  /// person's name is the one marked. Only between those known by more
+  /// than a name, as a name's all there is to go on for the rest.
   KnownPerson? clashes(KnownPerson p) {
     if (!p.identified) return null;
     final name = p.name.toLowerCase();
     KnownPerson? first;
     for (final q in _all.values) {
-      if (q.id != p.id && q.identified && q.name.toLowerCase() == name && q.firstSeen < p.firstSeen) {
-        if (first == null || q.firstSeen < first.firstSeen) first = q;
+      if (q.id != p.id && q.identified && q.name.toLowerCase() == name && q.nameSince < p.nameSince) {
+        if (first == null || q.nameSince < first.nameSince) first = q;
       }
     }
     return first;

@@ -135,7 +135,7 @@ typedef struct
     uint8_t key[OTHERS_KEY_LEN];
     char name[COMM_NAME_MAX];
     bool allowed;
-    bool clash;             // took the name of someone listed before them
+    bool clash;             // took the name of someone listed before them took it
 } others_sender_t;
 
 /* Set it up, and read the list. Call it once at startup, after LVGL and

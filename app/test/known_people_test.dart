@@ -62,4 +62,18 @@ void main() {
     final back = people.bind(key, 'aa' * 20, 'Alice');
     expect(people.clashes(back)?.id, now.id);
   });
+
+  test('someone known longer who takes a newer name is the one marked, until they change back', () async {
+    final people = KnownPeople((_) {});
+    final alice = people.bind(key, 'aa' * 20, 'Alice');
+    await Future.delayed(const Duration(milliseconds: 5));
+    final bob = people.bind(Uint8List.fromList(List.filled(32, 9)), 'bb' * 20, 'Bob');
+    await Future.delayed(const Duration(milliseconds: 5));
+    people.bind(key, 'aa' * 20, 'bob');       // Alice takes Bob's name
+    expect(people.clashes(people[alice.id]!)?.id, bob.id);
+    expect(people.clashes(people[bob.id]!), isNull);
+    people.bind(key, 'aa' * 20, 'Alice');     // and goes back
+    expect(people.clashes(people[alice.id]!), isNull);
+    expect(people.clashes(people[bob.id]!), isNull);
+  });
 }
