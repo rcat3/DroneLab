@@ -65,14 +65,17 @@ class BoardAvatars {
 
   static const _window = 8;               // pieces between acks
   static const _ackTimeout = Duration(seconds: 3);
+  static const _retryAfterMs = 15000;     // a picture that didn't go, tried again after this
 
   int _size = 0;
   int _slots = 0;
   final Map<String, int> _slotOf = {};    // on the board, all there
   final Map<int, int> _lastUsed = {};     // slot: when it was last wanted
   final List<(String, Uint8List)> _queue = [];
-  final Set<String> _failed = {};         // not a picture, or wouldn't go
+  final Set<String> _failed = {};         // not a picture
+  final Map<String, int> _didntGo = {};   // sent, but it didn't go: when, to try again later
   String? _sending;
+  bool _pumping = false;
   int _generation = 0;                    // goes up as the board's forgotten
 
   /// The board's link changed: start afresh if it's a different one.
@@ -87,6 +90,7 @@ class BoardAvatars {
       _lastUsed.clear();
       _queue.clear();
       _failed.clear();
+      _didntGo.clear();
       _generation++;
     }
   }
@@ -104,6 +108,11 @@ class BoardAvatars {
       return slot;
     }
     if (_failed.contains(key) || key == _sending) return avatarNone;
+    final didnt = _didntGo[key];
+    if (didnt != null) {
+      if (DateTime.now().millisecondsSinceEpoch - didnt < _retryAfterMs) return avatarNone;
+      _didntGo.remove(key);
+    }
     final at = _queue.indexWhere((q) => q.$1 == key);
     if (at >= 0) {
       if (soon && at > 0) _queue.insert(0, _queue.removeAt(at));
@@ -116,8 +125,20 @@ class BoardAvatars {
     return avatarNone;
   }
 
+  /// Send what's queued, one picture at a time. [onChanged] asks for more
+  /// as each arrives, which mustn't start a second round alongside: two
+  /// pictures sent at once into the same slot both fail.
   Future<void> _pump() async {
-    if (_sending != null) return;
+    if (_pumping) return;
+    _pumping = true;
+    try {
+      await _pumpQueue();
+    } finally {
+      _pumping = false;
+    }
+  }
+
+  Future<void> _pumpQueue() async {
     while (_queue.isNotEmpty && active) {
       final (key, picture) = _queue.removeAt(0);
       final generation = _generation;
@@ -136,8 +157,10 @@ class BoardAvatars {
         _slotOf[key] = slot;
         _lastUsed[slot] = DateTime.now().millisecondsSinceEpoch;
         onChanged();
-      } else {
+      } else if (rgb == null) {
         _failed.add(key);
+      } else {
+        _didntGo[key] = DateTime.now().millisecondsSinceEpoch;
       }
     }
   }
