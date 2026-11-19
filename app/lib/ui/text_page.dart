@@ -124,8 +124,8 @@ class _Row extends StatelessWidget {
     final preview = last == null
         ? null
         : last.kind == ConversationEntry.text
-            ? '${last.mine ? 'You: ' : c.kind == ConversationKind.person ? '' : '${last.from}: '}${last.body}'
-            : '${last.mine ? 'You' : last.from} ${last.body}';
+            ? '${last.mine ? 'You: ' : c.kind == ConversationKind.person ? '' : '${comm.fromLabel(last)}: '}${last.body}'
+            : '${last.mine ? 'You' : comm.fromLabel(last)} ${last.body}';
     return InkWell(
       onTap: () => openConversation(context, comm, c),
       onLongPress: () => deleteConversation(context, comm, c),
@@ -278,7 +278,8 @@ class _ConversationPageState extends State<ConversationPage> {
                       controller: _scroll,
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                       itemCount: c.entries.length,
-                      itemBuilder: (context, i) => _Entry(c.entries[i], _time(c.entries[i].time), named: group),
+                      itemBuilder: (context, i) => _Entry(c.entries[i], _time(c.entries[i].time),
+                          from: comm.fromLabel(c.entries[i]), named: group),
                     ),
             ),
             Container(
@@ -327,14 +328,15 @@ class _ConversationPageState extends State<ConversationPage> {
 class _Entry extends StatelessWidget {
   final ConversationEntry e;
   final String time;
+  final String from;    // who it's from, as shown: with a warning for someone using another's name
   final bool named;     // show who it's from: in a channel, not with one person
-  const _Entry(this.e, this.time, {required this.named});
+  const _Entry(this.e, this.time, {required this.from, required this.named});
 
   @override
   Widget build(BuildContext context) {
     if (e.kind != ConversationEntry.text) {
       // A command: what it did, in the middle
-      final what = '${e.mine ? 'You' : e.from} ${e.body}';
+      final what = '${e.mine ? 'You' : from} ${e.body}';
       final blocked = !e.mine && !e.done;
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
@@ -385,7 +387,7 @@ class _Entry extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            if (named && !e.mine) Text(e.from, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+            if (named && !e.mine) Text(from, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
             Text(e.body, style: const TextStyle(fontSize: 15)),
             const SizedBox(height: 2),
             Text(time, style: const TextStyle(color: Kc.dim, fontSize: 11)),

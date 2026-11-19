@@ -17,7 +17,8 @@ class ConversationEntry {
   static const text = 'text', terminal = 'terminal', lovense = 'lovense';
 
   final DateTime time;
-  final String from;        // who sent it ('' for ours)
+  final String from;        // who sent it ('' for ours): their name, then
+  String who;               // and who they are (KnownPerson.id), '' if not known
   final bool mine;
   final String kind;        // text, terminal or lovense
   final String body;        // the text, or what the command did, in words
@@ -25,16 +26,23 @@ class ConversationEntry {
   DateTime updated;         // a Lovense entry's last level, for running them together
 
   ConversationEntry(
-      {required this.from, required this.mine, required this.kind, required this.body, this.done = true, DateTime? time})
+      {required this.from,
+      this.who = '',
+      required this.mine,
+      required this.kind,
+      required this.body,
+      this.done = true,
+      DateTime? time})
       : time = time ?? DateTime.now(),
         updated = time ?? DateTime.now();
 
   Map<String, dynamic> toJson() =>
-      {'t': time.millisecondsSinceEpoch, 'f': from, 'm': mine, 'k': kind, 'b': body, 'd': done};
+      {'t': time.millisecondsSinceEpoch, 'f': from, if (who.isNotEmpty) 'w': who, 'm': mine, 'k': kind, 'b': body, 'd': done};
 
   static ConversationEntry fromJson(Map<String, dynamic> j) => ConversationEntry(
         time: DateTime.fromMillisecondsSinceEpoch((j['t'] as num).toInt()),
         from: j['f'] as String? ?? '',
+        who: j['w'] as String? ?? '',
         mine: j['m'] == true,
         kind: j['k'] as String? ?? text,
         body: j['b'] as String? ?? '',
@@ -137,9 +145,10 @@ class Conversations extends ChangeNotifier {
         prev.kind == ConversationEntry.lovense &&
         prev.mine == e.mine &&
         prev.from == e.from &&
+        prev.who == e.who &&
         e.time.difference(prev.updated) < _runTogether) {
       c.entries[c.entries.length - 1] = ConversationEntry(
-          from: e.from, mine: e.mine, kind: e.kind, body: e.body, done: e.done, time: prev.time)
+          from: e.from, who: e.who, mine: e.mine, kind: e.kind, body: e.body, done: e.done, time: prev.time)
         ..updated = e.time;
     } else {
       c.entries.add(e);
@@ -169,6 +178,20 @@ class Conversations extends ChangeNotifier {
     onSeen?.call(oldKey);
     notifyListeners();
     _saveSoon();
+  }
+
+  /// Someone's to be known by another id now: the lines they sent follow.
+  void renameWho(String oldId, String newId) {
+    var any = false;
+    for (final c in all.values) {
+      for (final e in c.entries) {
+        if (e.who == oldId) {
+          e.who = newId;
+          any = true;
+        }
+      }
+    }
+    if (any) _saveSoon();
   }
 
   void markRead(Conversation c) {

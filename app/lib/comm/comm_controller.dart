@@ -133,8 +133,10 @@ class CommController extends ChangeNotifier {
 
   /// Everyone we've come across, by who they are (known_people.dart).
   late final KnownPeople people = KnownPeople((json) => _prefs?.setString('knownPeople', json))
-    ..onRenamed = (oldId, newId) =>
-        conversations.rekey(Conversation.personKey(oldId), Conversation.personKey(newId));
+    ..onRenamed = (oldId, newId) {
+      conversations.rekey(Conversation.personKey(oldId), Conversation.personKey(newId));
+      conversations.renameWho(oldId, newId);
+    };
   Timer? _reconnect;
   String? serverError;
 
@@ -807,6 +809,13 @@ class CommController extends ChangeNotifier {
   /// that [p] may be passing as them.
   KnownPerson? nameClash(KnownPerson p) => people.clashes(p);
 
+  /// Who a conversation's line is from, as it's shown: their name, with a
+  /// warning if it's someone else using a name someone had first.
+  String fromLabel(ConversationEntry e) {
+    final who = people[e.who];
+    return who != null && nameClash(who) != null ? '⚠ ${e.from}' : e.from;
+  }
+
   /// Ours, as sent to everyone on the server, once it's made for this one.
   Uint8List? _announcement;
   MumbleClient? _announcementFor;
@@ -1321,7 +1330,7 @@ class CommController extends ChangeNotifier {
     ];
     final last = texts.length > 6 ? texts.sublist(texts.length - 6) : texts;
     final group = c.kind != ConversationKind.person;
-    notifier.showTexts(c.key, c.title, [for (final e in last) (e.from, e.body, e.time, _avatarByName(e.from))],
+    notifier.showTexts(c.key, c.title, [for (final e in last) (fromLabel(e), e.body, e.time, _avatarByName(e.from))],
         group: group);
   }
 
@@ -1366,13 +1375,13 @@ class CommController extends ChangeNotifier {
     final who = u == null ? people.named(t.from) : personOfUser(u);
     if (who.muted) return;
     final text = plainText(t.message);
-    if (_seenText(t.from, text)) return;
+    if (_seenText(who.id, text)) return;
     final c = t.private
         ? personConversation(who.id)
         : t.message.contains(_everyoneMark)
             ? everyoneConversation
             : (serverConversation ?? everyoneConversation);
-    conversations.add(c, ConversationEntry(from: t.from, mine: false, kind: ConversationEntry.text, body: text));
+    conversations.add(c, ConversationEntry(from: t.from, who: who.id, mine: false, kind: ConversationEntry.text, body: text));
     _notifyText(c);
   }
 
@@ -1411,11 +1420,12 @@ class CommController extends ChangeNotifier {
       OthersCommand.scopeChannel => (h.direct ? directConversation : serverConversation) ?? everyoneConversation,
       _ => everyoneConversation,
     };
-    if (h.what == Heard.text && _seenText(h.from, h.textOf)) return;
+    if (h.what == Heard.text && _seenText(who.id, h.textOf)) return;
     final e = h.what == Heard.text
-        ? ConversationEntry(from: h.from, mine: false, kind: ConversationEntry.text, body: h.textOf)
+        ? ConversationEntry(from: h.from, who: who.id, mine: false, kind: ConversationEntry.text, body: h.textOf)
         : ConversationEntry(
             from: h.from,
+            who: who.id,
             mine: false,
             kind: h.what == Heard.terminal ? ConversationEntry.terminal : ConversationEntry.lovense,
             body: describeCommand(h.data, mine: false),
@@ -1426,7 +1436,7 @@ class CommController extends ChangeNotifier {
         last != null &&
         !last.done &&
         !last.mine &&
-        last.from == e.from &&
+        last.who == e.who &&
         last.kind == e.kind &&
         last.body == e.body &&
         e.time.difference(last.time) < const Duration(seconds: 5)) {
