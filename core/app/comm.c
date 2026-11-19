@@ -113,6 +113,8 @@
 #define RECORD_BEEP         0x02    // with a sync beep to start
 #define MSG_COMMAND         0x0B    // from the phone: a command for others, in from the server or out over direct
 #define COMMAND_FROM_SERVER 0x01
+#define MSG_MUTED           0x10    // from the phone: who's muted there, whose commands are ignored
+#define MUTED_FIRST         0x01
 #define MSG_HEARD           0x0F    // to the phone: a text or command someone sent, done or not
 #define MSG_DIRECT_AVATAR   0x0D    // to the phone: a piece of a board's avatar, heard over direct comms
 #define PEER_AVATAR_PIECE   100     // pixels a piece
@@ -1591,6 +1593,10 @@ void comm_poll(uint32_t now_ms)
         else if (msg[0] == MSG_COMMAND)
         {
             receive_command(msg, len);
+        }
+        else if (msg[0] == MSG_MUTED && len >= 2)
+        {
+            others_set_muted((msg[1] & MUTED_FIRST) != 0, (const char *)msg + 2, len - 2);
         }
         else if (msg[0] == MSG_UPDATE && len >= 2)
         {

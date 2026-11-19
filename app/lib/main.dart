@@ -16,13 +16,31 @@ import 'ui/theme.dart';
 /// Whether a newer release of the app is out (see release_check.dart).
 final releaseCheck = ReleaseCheck();
 
+/// For opening a conversation from its notification, wherever the app is.
+final navigatorKey = GlobalKey<NavigatorState>();
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterForegroundTask.initCommunicationPort();
   final comm = CommController();
-  comm.init();
+  comm.notifier.opens.listen((key) => _openConversation(comm, key));
+  comm.init().then((_) {
+    // Started by tapping a text's notification: to it, once there's a screen
+    final key = comm.notifier.launchedWith;
+    if (key != null) WidgetsBinding.instance.addPostFrameCallback((_) => _openConversation(comm, key));
+    comm.notifier.askPermission();
+  });
   releaseCheck.start();
   runApp(DroneLabApp(comm: comm));
+}
+
+/// A text's notification's been tapped: its conversation, on the Text tab.
+void _openConversation(CommController comm, String key) {
+  final nav = navigatorKey.currentState;
+  if (nav == null || !comm.conversations.all.containsKey(key)) return;
+  appTab.value = tabText;
+  nav.popUntil((r) => r.isFirst);
+  nav.push(MaterialPageRoute(builder: (_) => ConversationPage(comm: comm, conversationKey: key)));
 }
 
 class DroneLabApp extends StatelessWidget {
@@ -33,6 +51,7 @@ class DroneLabApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'DroneLab',
+      navigatorKey: navigatorKey,
       theme: Kc.theme(),
       darkTheme: Kc.theme(),
       themeMode: ThemeMode.dark,
@@ -41,8 +60,8 @@ class DroneLabApp extends StatelessWidget {
   }
 }
 
-/// HiveMind, the Terminal, controlling others, recording and the remote, each
-/// kept running while another shows, under the links' status strip.
+/// Voice, Text, Record and Remote, each kept running while another shows,
+/// under the links' status strip.
 class HomePage extends StatelessWidget {
   final CommController comm;
   const HomePage({super.key, required this.comm});

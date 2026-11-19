@@ -193,6 +193,7 @@ body:not(.toys) #stop { display: none; }
   <div id="others0-box" hidden>
     <h2>From others</h2>
     <div class="chips" id="permission0"></div>
+    <div class="toggles" id="ignore0" style="margin-bottom:10px"></div>
     <div class="list" id="others0"></div>
     <div class="status" id="others0-status"></div>
   </div>
@@ -274,6 +275,7 @@ body:not(.toys) #stop { display: none; }
   <div id="others1-box" hidden>
     <h2>From others</h2>
     <div class="chips" id="permission1"></div>
+    <div class="toggles" id="ignore1" style="margin-bottom:10px"></div>
     <div class="list" id="others1"></div>
     <div class="status" id="others1-status"></div>
   </div>
@@ -644,6 +646,12 @@ function showOthers(kind) {
   }
   // Who's taken: nobody, those allowed below, or anyone
   for (const x of $("permission" + kind).children) x.classList.toggle("on", +x.dataset.p === o.permission);
+  // What's ignored, whoever it's from
+  for (const x of $("ignore" + kind).children) {
+    const on = ((o.ignore || 0) & +x.dataset.bit) !== 0;
+    x.classList.toggle("on", on);
+    x.textContent = (on ? "✓ " : "") + x.dataset.name;
+  }
   $("others" + kind + "-status").textContent = !o.accept ? "" : o.last && o.age < 60 ? o.last + ", " + o.age + "s ago"
     : o.permission === 2 ? "Accepting everyone"
     : o.senders.length ? "Tap someone to allow them; hold to forget them" : "";
@@ -906,6 +914,17 @@ for (const kind of [0, 1]) {
     b.dataset.p = p;
     b.onclick = () => command("others", { kind, permission: p });
     $("permission" + kind).append(b);
+  });
+  // Ignore broadcasts (2, the open direct channel's too) and channel-wide (4)
+  [["Ignore broadcasts", 2], ["Ignore channel-wide", 4]].forEach(([name, bit]) => {
+    const b = el("button", "", name);
+    b.dataset.bit = bit;
+    b.dataset.name = name;
+    b.onclick = () => {
+      const now = (state.others && state.others[kind].ignore) || 0;
+      command("others", { kind, ignore: now ^ bit });
+    };
+    $("ignore" + kind).append(b);
   });
 }
 // Stop as soon as it's touched, not when the finger lifts

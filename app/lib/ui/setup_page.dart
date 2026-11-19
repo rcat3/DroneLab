@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
+import '../comm/notifier.dart';
 import 'firmware_ui.dart';
 import 'groups_page.dart';
 import 'server_page.dart';
@@ -146,6 +147,8 @@ class SetupPage extends StatelessWidget {
                   ),
                 ]),
               ],
+              const SectionHeader('Notifications'),
+              _NotificationsPanel(comm: comm),
               if (boardUp) ...[
                 const SectionHeader('Firmware'),
                 FirmwarePanel(comm: comm),
@@ -170,6 +173,46 @@ class SetupPage extends StatelessWidget {
 
   void _server(BuildContext context) =>
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => ServerPage(comm: comm)));
+}
+
+/// Which of DroneLab's notifications come, and a way into Android's own
+/// settings for each: its sound, whether it pops up, the status bar.
+class _NotificationsPanel extends StatefulWidget {
+  final CommController comm;
+  const _NotificationsPanel({required this.comm});
+
+  @override
+  State<_NotificationsPanel> createState() => _NotificationsPanelState();
+}
+
+class _NotificationsPanelState extends State<_NotificationsPanel> {
+  @override
+  Widget build(BuildContext context) {
+    final n = widget.comm.notifier;
+    Widget row(String title, String subtitle, String channel, bool on, Future<void> Function(bool) set) => PanelRow(
+          title: title,
+          subtitle: subtitle,
+          trailing: [
+            IconButton(
+              tooltip: 'Sound, pop-up and more',
+              icon: const Icon(Icons.tune, color: Kc.muted),
+              onPressed: () => n.openChannelSettings(channel),
+            ),
+            Switch(
+              value: on,
+              onChanged: (v) async {
+                if (v) await n.askPermission();
+                await set(v);
+                if (mounted) setState(() {});
+              },
+            ),
+          ],
+        );
+    return Panel(children: [
+      row('Text messages', 'Every text that comes in. Tap one to read it', Notifier.textsChannel, n.texts, n.setTexts),
+      row('Unit battery low', 'At 15%, unless it\'s charging', Notifier.batteryChannel, n.battery, n.setBattery),
+    ]);
+  }
 }
 
 /// A step's number, or a tick once it's done.

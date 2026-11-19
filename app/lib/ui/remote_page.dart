@@ -8,6 +8,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
+import 'people.dart';
 
 /// The phone remote: the board's own remote page (core/app/remote_page.html),
 /// with its requests going to the board over Bluetooth instead of the
@@ -18,6 +19,18 @@ import '../comm/comm_controller.dart';
 /// matches the board's firmware, however old the app is. The last one is
 /// kept, and only sent again when it changes. The copy built into the app is
 /// for a board too old to send it.
+/// Who may send you commands (kind 0, the Lovense devices) or put words on
+/// your display (kind 1, the Terminal): the Remote tab, at that tab's
+/// From others.
+void showRemotePermissions(BuildContext context, int kind) {
+  Navigator.of(context).popUntil((r) => r.isFirst);
+  appTab.value = tabRemote;
+  _jump.value = null;
+  _jump.value = kind;
+}
+
+final _jump = ValueNotifier<int?>(null);
+
 class RemotePage extends StatefulWidget {
   final CommController comm;
   const RemotePage({super.key, required this.comm});
@@ -73,11 +86,24 @@ class _RemotePageState extends State<RemotePage> {
     super.initState();
     _board.addListener(_onBoard);
     _onBoard();
+    _jump.addListener(_onJump);
+  }
+
+  /// To a kind's From others (showRemotePermissions): again a moment later,
+  /// in case the page was still coming
+  void _onJump() {
+    final kind = _jump.value;
+    if (kind == null) return;
+    final js = 'showTab("${kind == 0 ? 'toys' : 'term'}");'
+        'var b = document.getElementById("others$kind-box"); if (b) b.scrollIntoView({block: "start"});';
+    _web?.runJavaScript(js).catchError((_) {});
+    Future.delayed(const Duration(milliseconds: 800), () => _web?.runJavaScript(js).catchError((_) {}));
   }
 
   @override
   void dispose() {
     _board.removeListener(_onBoard);
+    _jump.removeListener(_onJump);
     super.dispose();
   }
 

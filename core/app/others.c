@@ -40,7 +40,7 @@ typedef struct
 {
     uint8_t version;
     uint8_t accepting;      // others_permission_t (0 and 1, as it was before Accept, mean the same)
-    uint8_t options;        // none now
+    uint8_t options;        // OTHERS_IGNORE_* (bit 0, unnamed messages hidden, is no more)
     uint8_t count;
     stored_sender_t senders[OTHERS_SENDERS_MAX];
 } stored_t;
@@ -79,6 +79,10 @@ static queued_t *queue;                 // QUEUE_LEN of them
 static void load(void);
 static volatile uint32_t queue_write;   // only direct comms' task moves it
 static volatile uint32_t queue_read;    // only the UI loop moves it
+
+#define MUTED_MAX           24
+static char (*muted)[COMM_NAME_MAX];    // MUTED_MAX of them, made as the first come
+static int muted_count;
 
 static seen_t seen[SEEN_MAX];
 static int seen_count;
@@ -124,6 +128,7 @@ static void load(void)
         {
             list->accepting = OTHERS_ASK;
         }
+        list->options &= OTHERS_IGNORE_EVERYONE | OTHERS_IGNORE_CHANNEL;
         for (int i = 0; i < list->count; i++)
         {
             list->senders[i].name[COMM_NAME_MAX - 1] = '\0';
@@ -360,6 +365,46 @@ static void run(const uint8_t *cmd, size_t len)
 
 /* ----- Taking them ----- */
 
+static bool is_muted(const char *from)
+{
+    for (int i = 0; i < muted_count; i++)
+    {
+        if (strcmp(muted[i], from) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void others_set_muted(bool first, const char *names, size_t len)
+{
+    if (muted == NULL)
+    {
+        muted = lv_malloc(MUTED_MAX * COMM_NAME_MAX);
+        if (muted == NULL)
+        {
+            return;
+        }
+    }
+    if (first)
+    {
+        muted_count = 0;
+    }
+    size_t at = 0;
+    while (at < len && muted_count < MUTED_MAX)
+    {
+        const char *name = names + at;
+        size_t n = strnlen(name, len - at);
+        if (n > 0 && n < COMM_NAME_MAX)
+        {
+            memcpy(muted[muted_count], name, n);
+            muted[muted_count++][n] = '\0';
+        }
+        at += n + 1;
+    }
+}
+
 void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, size_t len)
 {
     if (kinds == NULL || from == NULL || from[0] == '\0' || len < HEADER_LEN || len > OTHERS_CMD_MAX || cmd[0] != OTHERS_VERSION)
@@ -388,7 +433,12 @@ void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
     kind_t *k = &kinds[which];
     comm_heard_t heard = which == OTHERS_LOVENSE ? COMM_HEARD_LOVENSE : COMM_HEARD_TERMINAL;
     bool done = false;
-    if (k->list.accepting != OTHERS_OFF)
+    // To everyone nearby, if it's to the channel in the open direct group
+    bool open = via == COMM_TALK_DIRECT && !settings_get()->direct_keyed;
+    bool everyone = scope == OTHERS_SCOPE_EVERYONE || (scope == OTHERS_SCOPE_CHANNEL && open);
+    bool ignored = is_muted(from) || (everyone && (k->list.options & OTHERS_IGNORE_EVERYONE))
+                   || (scope == OTHERS_SCOPE_CHANNEL && (k->list.options & OTHERS_IGNORE_CHANNEL));
+    if (k->list.accepting != OTHERS_OFF && !ignored)
     {
         bool anyone = k->list.accepting == OTHERS_ACCEPT;
         int i = find(&k->list, via, from);
@@ -438,6 +488,21 @@ void others_set_permission(others_kind_t kind, others_permission_t permission)
         kinds[kind].list.accepting != permission)
     {
         kinds[kind].list.accepting = (uint8_t)permission;
+        changed(&kinds[kind]);
+    }
+}
+
+uint8_t others_ignoring(others_kind_t kind)
+{
+    return kinds != NULL && kind < OTHERS_KIND_COUNT ? kinds[kind].list.options : 0;
+}
+
+void others_set_ignoring(others_kind_t kind, uint8_t ignore)
+{
+    ignore &= OTHERS_IGNORE_EVERYONE | OTHERS_IGNORE_CHANNEL;
+    if (kinds != NULL && kind < OTHERS_KIND_COUNT && kinds[kind].list.options != ignore)
+    {
+        kinds[kind].list.options = ignore;
         changed(&kinds[kind]);
     }
 }

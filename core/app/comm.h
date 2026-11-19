@@ -69,6 +69,12 @@
  *                  the wearer's, to send over direct comms: how many boards
  *                  it's for (1, 0 for all of them), their ids (4 bytes each,
  *                  little endian, as 0x08's), then the command.
+ *     0x10 muted:  10, flags (bit 0 the first piece: the list starts
+ *                  afresh), then names, each in UTF-8 and ended by a 0: who
+ *                  the wearer's muted in the app, whose commands are ignored
+ *                  (others.h). Sent whole each time it connects or the list
+ *                  changes, in pieces if it's long; none, an empty first
+ *                  piece (from COMM_VERSION 9).
  *     0x0E update: 0E, flags (bit 0 the start, bit 1 the end, bit 2 asks
  *                  for an ack), then for the start: the firmware's length
  *                  (4, little endian), the board it's for
@@ -188,8 +194,9 @@
  *      and "update"); the status's bit 5, another version of direct comms
  *      nearby
  *   8  what others send the board, texts and commands, passed on to the app
- *      as it comes, done or not (0x0F), in place of 0x0C */
-#define COMM_VERSION            8
+ *      as it comes, done or not (0x0F), in place of 0x0C
+ *   9  who's muted in the app (0x10) */
+#define COMM_VERSION            9
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

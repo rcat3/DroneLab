@@ -206,7 +206,7 @@ class _PersonRow extends StatelessWidget {
     return Row(children: [
       Expanded(
         child: InkWell(
-          onTap: () => showPerson(context, comm, p.key),
+          onTap: () => showPerson(context, comm, key: p.key),
           child: Semantics(
             button: true,
             label: '${p.name}, $status. Tap for more',

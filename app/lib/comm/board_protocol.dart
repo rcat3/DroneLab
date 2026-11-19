@@ -64,6 +64,7 @@ const commVersionPeerFirmware = 5;
 const commVersionMessages = 6;
 const commVersionUpdate = 7;     // updating the firmware from the app, and status bit 5
 const commVersionHeard = 8;      // what others send the board, passed on as it comes (0x0F)
+const commVersionMuted = 9;      // who's muted here, whose commands the board ignores (0x10)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -83,6 +84,7 @@ const _msgDirectGroup = 0x09;
 const _msgRecord = 0x0A;
 const _msgCommand = 0x0B;
 const _msgHeard = 0x0F;
+const _msgMuted = 0x10;
 const _msgDirectAvatar = 0x0D;
 const _msgUpdate = 0x0E;
 
@@ -471,6 +473,24 @@ const othersCommandMax = 136;
 const directCommandTargets = 12;
 
 /// A command from [from] on the server, for the board.
+/// Who's muted here, for the board to ignore their commands: in pieces, the
+/// first starting the list afresh (an empty one for nobody).
+List<Uint8List> mutedMessages(Iterable<String> names) {
+  const room = 180;
+  final pieces = <Uint8List>[];
+  var piece = <int>[_msgMuted, 0x01];
+  for (final n in names) {
+    final b = _cut(utf8.encode(n), 23);
+    if (piece.length + b.length + 1 > room) {
+      pieces.add(Uint8List.fromList(piece));
+      piece = [_msgMuted, 0x00];
+    }
+    piece..addAll(b)..add(0);
+  }
+  pieces.add(Uint8List.fromList(piece));
+  return pieces;
+}
+
 Uint8List commandFromServer(String from, List<int> cmd) {
   final name = _cut(utf8.encode(from), hearingNameMax);
   return Uint8List.fromList([_msgCommand, 1, name.length, ...name, ...cmd]);

@@ -7,6 +7,8 @@ import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
 import 'control_page.dart';
 import 'people.dart';
+import 'person_sheet.dart';
+import 'remote_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -102,7 +104,11 @@ class _Row extends StatelessWidget {
       onLongPress: () => deleteConversation(context, comm, c),
       child: PanelRow(
         leading: person
-            ? DroneAvatar(picture: picture, size: 36)
+            // Their avatar: who they are, as on the Voice tab
+            ? GestureDetector(
+                onTap: () => showPerson(context, comm, name: CommController.personOf(c)),
+                child: DroneAvatar(picture: picture, size: 36),
+              )
             : Icon(
                 switch (c.kind) {
                   ConversationKind.everyone => Icons.campaign_outlined,
@@ -219,8 +225,13 @@ class _ConversationPageState extends State<ConversationPage> {
                     : null,
               ),
               PopupMenuButton<String>(
-                onSelected: (_) => deleteConversation(context, comm, c, leave: true),
-                itemBuilder: (_) => const [PopupMenuItem(value: 'delete', child: Text('Delete conversation'))],
+                onSelected: (v) => v == 'details'
+                    ? showPerson(context, comm, name: CommController.personOf(c), inConversation: true)
+                    : deleteConversation(context, comm, c, leave: true),
+                itemBuilder: (_) => [
+                  if (c.kind == ConversationKind.person) const PopupMenuItem(value: 'details', child: Text('Details')),
+                  const PopupMenuItem(value: 'delete', child: Text('Delete conversation')),
+                ],
               ),
             ],
           ),
@@ -304,14 +315,29 @@ class _Entry extends StatelessWidget {
           Icon(e.kind == ConversationEntry.terminal ? Icons.terminal : Icons.tune, size: 14, color: Kc.muted),
           const SizedBox(width: 6),
           Flexible(
-            child: Text(
-              blocked
-                  ? '$what (not done: not allowed on your '
-                      '${e.kind == ConversationEntry.terminal ? 'Hive Messages' : 'Hive Commands'} page)'
-                  : what,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: blocked ? Kc.softRed : Kc.muted, fontSize: 13, fontStyle: FontStyle.italic),
-            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                blocked ? '$what (not done)' : what,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: blocked ? Kc.softRed : Kc.muted, fontSize: 13, fontStyle: FontStyle.italic),
+              ),
+              // Not taken: to where it's said who may, on the Remote tab
+              if (blocked)
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => showRemotePermissions(context, e.kind == ConversationEntry.terminal ? 1 : 0),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Text(
+                      'Not taken by your ${e.kind == ConversationEntry.terminal ? 'Hive Messages' : 'Hive Commands'} '
+                      'settings: change them ›',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: Kc.pink, fontSize: 13, decoration: TextDecoration.underline, decorationColor: Kc.pink),
+                    ),
+                  ),
+                ),
+            ]),
           ),
           const SizedBox(width: 6),
           Text(time, style: const TextStyle(color: Kc.dim, fontSize: 11)),

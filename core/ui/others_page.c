@@ -2,7 +2,8 @@
  * A feature's "Others" page (see others_page.h), dark like the Lovense
  * feature's pages: a title, who's taken (Off, Ask or Accept), a row for each
  * person who's sent commands of its kind, and a line saying who sent the
- * last one.
+ * last one; and after it, what it ignores, whoever it's from: broadcasts,
+ * and commands to a whole channel.
  */
 #include "ui/others_page.h"
 
@@ -26,6 +27,9 @@ typedef struct
     lv_obj_t *names[OTHERS_SENDERS_MAX];
     lv_obj_t *vias[OTHERS_SENDERS_MAX];
     lv_obj_t *status;
+    lv_obj_t *ignore_page;
+    lv_obj_t *ignore_everyone;
+    lv_obj_t *ignore_channel;
     int32_t list_y;         // the middle of the list, where the status goes while it's empty
     others_sender_t senders[OTHERS_SENDERS_MAX];
     uint32_t shown_changes;
@@ -50,6 +54,9 @@ static void show(others_kind_t kind, bool always)
 
     others_permission_t permission = others_permission(kind);
     ui_check_choice(p->accept, (uint32_t)permission);
+    uint8_t ignore = others_ignoring(kind);
+    lv_obj_set_state(p->ignore_everyone, LV_STATE_CHECKED, (ignore & OTHERS_IGNORE_EVERYONE) != 0);
+    lv_obj_set_state(p->ignore_channel, LV_STATE_CHECKED, (ignore & OTHERS_IGNORE_CHANNEL) != 0);
     int n = others_senders(kind, p->senders, OTHERS_SENDERS_MAX);
     for (int i = 0; i < OTHERS_SENDERS_MAX; i++)
     {
@@ -101,7 +108,7 @@ static void timer_cb(lv_timer_t *t)
     lv_obj_t *current = ui_current_page();
     for (int k = 0; k < OTHERS_KIND_COUNT; k++)
     {
-        if (pages[k] != NULL && pages[k]->page == current)
+        if (pages[k] != NULL && (pages[k]->page == current || pages[k]->ignore_page == current))
         {
             show((others_kind_t)k, false);
         }
@@ -119,6 +126,27 @@ static void permission_event_cb(lv_event_t *e)
         others_set_permission(kind, (others_permission_t)selected);
     }
     show(kind, true);
+}
+
+static void ignore_event_cb(lv_event_t *e)
+{
+    others_kind_t kind = (others_kind_t)(intptr_t)lv_event_get_user_data(e);
+    others_page_t *p = pages[kind];
+    others_set_ignoring(kind, (lv_obj_has_state(p->ignore_everyone, LV_STATE_CHECKED) ? OTHERS_IGNORE_EVERYONE : 0)
+                                  | (lv_obj_has_state(p->ignore_channel, LV_STATE_CHECKED) ? OTHERS_IGNORE_CHANNEL : 0));
+    show(kind, true);
+}
+
+static lv_obj_t *add_switch(others_page_t *p, others_kind_t kind, const char *text, int32_t y)
+{
+    lv_obj_t *label = lv_label_create(p->ignore_page);
+    lv_label_set_text(label, text);
+    lv_obj_align(label, LV_ALIGN_CENTER, ui_px(-30), y);
+    lv_obj_t *sw = lv_switch_create(p->ignore_page);
+    lv_obj_set_size(sw, ui_px(56), ui_px(28));
+    lv_obj_align(sw, LV_ALIGN_CENTER, ui_px(64), y);
+    lv_obj_add_event_cb(sw, ignore_event_cb, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)kind);
+    return sw;
 }
 
 static void row_event_cb(lv_event_t *e)
@@ -210,6 +238,25 @@ lv_obj_t *ui_others_page_add(ui_feature_t *feature, others_kind_t kind)
     lv_obj_set_style_text_align(p->status, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(p->status, COLOR_MUTED, 0);
     lv_obj_align(p->status, LV_ALIGN_CENTER, 0, ui_px(88));
+
+    // What's ignored, whoever it's from
+    p->ignore_page = ui_feature_add_page(feature, "Ignore", true);
+    lv_obj_set_scrollable(p->ignore_page, false);
+    lv_obj_set_style_text_color(p->ignore_page, lv_color_white(), 0);
+    lv_obj_t *t = lv_label_create(p->ignore_page);
+    lv_label_set_text(t, kind == OTHERS_LOVENSE ? "Hive Commands" : "Hive Messages");
+    lv_obj_set_style_text_color(t, COLOR_MUTED, 0);
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, ui_px(28));
+    lv_obj_t *ignore_heading = lv_label_create(p->ignore_page);
+    lv_label_set_text(ignore_heading, "Ignore, from anyone");
+    lv_obj_align(ignore_heading, LV_ALIGN_CENTER, 0, ui_px(-56));
+    p->ignore_everyone = add_switch(p, kind, "Broadcasts", ui_px(-14));
+    p->ignore_channel = add_switch(p, kind, "To a whole\nchannel", ui_px(30));
+    lv_obj_t *note = lv_label_create(p->ignore_page);
+    lv_label_set_text(note, "The open direct\nchannel's count as\nbroadcasts");
+    lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(note, COLOR_MUTED, 0);
+    lv_obj_align(note, LV_ALIGN_CENTER, 0, ui_px(84));
 
     show(kind, true);
     if (timer == NULL)

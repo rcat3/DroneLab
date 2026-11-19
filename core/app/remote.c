@@ -23,10 +23,12 @@
  *     POST /api/connect?d=<slot>      connect, or disconnect if connected
  *     POST /api/stop                  everything, as the Stop button
 *     POST /api/others?kind=<0 Lovense, 1 Terminal>[&accept=<1 or 0>][&permission=<0 off, 1 ask, 2 accept>]
+*                       [&ignore=<OTHERS_IGNORE_* together>]
 *                       [&name=<who>&via=<0 server, 1 direct>&allow=<1 or 0>][&forget=1]
 *                                     commands from others in the comm channel
 *                                     (app/others.h): who they're taken from
-*                                     (accept=1 is ask), and who may send them
+*                                     (accept=1 is ask), what's ignored, and
+*                                     who may send them
  *     POST /api/show?f=<feature>&p=<page>     bring a page on screen
  *     POST /api/message?append=<1 or 0>&show=<1 or 0>   the body (UTF-8) to
  *                                     the Terminal feature, and show it there
@@ -514,8 +516,9 @@ static void write_state(json_t *j)
     {
         uint32_t age = 0;
         const char *last = others_last((others_kind_t)k, now, &age);
-        jprintf(j, "%s{\"accept\":%d,\"permission\":%d,", k ? "," : "", others_accepting((others_kind_t)k) ? 1 : 0,
-                (int)others_permission((others_kind_t)k));
+        jprintf(j, "%s{\"accept\":%d,\"permission\":%d,\"ignore\":%d,", k ? "," : "",
+                others_accepting((others_kind_t)k) ? 1 : 0, (int)others_permission((others_kind_t)k),
+                (int)others_ignoring((others_kind_t)k));
         jprintf(j, "\"last\":");
         jstring(j, last != NULL ? last : "");
         jprintf(j, ",\"age\":%lu,\"senders\":[", (unsigned long)(age / 1000));
@@ -918,6 +921,11 @@ static bool run_command(const char *name, const char *query, const char *body, s
         if (permission >= OTHERS_OFF && permission <= OTHERS_ACCEPT)
         {
             others_set_permission((others_kind_t)kind, (others_permission_t)permission);
+        }
+        int ignore = query_int(query, "ignore", -1);
+        if (ignore >= 0)
+        {
+            others_set_ignoring((others_kind_t)kind, (uint8_t)ignore);
         }
         char who[COMM_NAME_MAX];
         int via = query_int(query, "via", -1);

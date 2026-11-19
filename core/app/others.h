@@ -22,6 +22,12 @@
  * a server anyone can join, anyone could use a name that's allowed. Texts
  * aren't anything to permit: anyone can text anyone.
  *
+ * Each kind can also ignore commands sent to everyone who can hear the
+ * sender (broadcasts, and those to the channel over the open direct comms
+ * group, which anyone nearby can hear), and those sent to a whole channel,
+ * whoever they're from; and commands from anyone the wearer has muted in
+ * their app (others_set_muted) are ignored, whatever the permission.
+ *
  * Whatever comes is passed on to the wearer's app, with whether it was done,
  * for its conversations (comm_heard_to_phone).
  *
@@ -124,6 +130,18 @@ void others_set_permission(others_kind_t kind, others_permission_t permission);
  * Switching it on goes back to Ask. Remembered. */
 bool others_accepting(others_kind_t kind);
 void others_set_accepting(others_kind_t kind, bool on);
+
+/* What a kind ignores, whoever it's from: OTHERS_IGNORE_* together. */
+#define OTHERS_IGNORE_EVERYONE  0x02    // broadcasts, and the open direct group's channel
+#define OTHERS_IGNORE_CHANNEL   0x04    // those to a whole channel
+uint8_t others_ignoring(others_kind_t kind);
+void others_set_ignoring(others_kind_t kind, uint8_t ignore);
+
+/* The names the wearer's muted in their app, whose commands are ignored:
+ * each NUL-terminated, one after another, [len] bytes in all; [first]
+ * starts the list afresh, otherwise they're added to it. Kept until the
+ * board restarts, as the app sends them each time it connects. */
+void others_set_muted(bool first, const char *names, size_t len);
 
 /* Those who've sent a kind of command, oldest first. Returns how many there
  * are. */

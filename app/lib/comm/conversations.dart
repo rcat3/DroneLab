@@ -92,6 +92,9 @@ class Conversations extends ChangeNotifier {
   /// The one on screen: what comes in for it isn't counted unread.
   String? open;
 
+  /// Told when a conversation's read or deleted, to take its notification away.
+  void Function(String key)? onSeen;
+
   Timer? _save;
   File? _file;
 
@@ -148,6 +151,7 @@ class Conversations extends ChangeNotifier {
   }
 
   void markRead(Conversation c) {
+    onSeen?.call(c.key);
     if (c.unread == 0) return;
     c.unread = 0;
     notifyListeners();
@@ -155,6 +159,7 @@ class Conversations extends ChangeNotifier {
   }
 
   void delete(Conversation c) {
+    onSeen?.call(c.key);
     all.remove(c.key);
     notifyListeners();
     _saveSoon();

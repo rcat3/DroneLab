@@ -32,6 +32,24 @@ class MainActivity : FlutterActivity() {
             }
         }
         channel = c
+        // Android's own settings for one of the app's notification channels:
+        // its sound, pop-up, status bar and so on
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/notifications").setMethodCallHandler { call, result ->
+            if (call.method == "channelSettings") {
+                val id = call.argument<String>("id")
+                val intent = if (id != null && Build.VERSION.SDK_INT >= 26) {
+                    Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                        .putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, id)
+                } else {
+                    Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                }
+                intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+                startActivity(intent)
+                result.success(null)
+            } else {
+                result.notImplemented()
+            }
+        }
     }
 
     private fun press(keyCode: Int) {

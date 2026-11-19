@@ -9,6 +9,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,6 +19,7 @@ import 'background.dart';
 import 'board_link.dart';
 import 'board_protocol.dart';
 import 'conversations.dart';
+import 'notifier.dart';
 import 'firmware_update.dart';
 import 'jitter.dart';
 import 'media_buttons.dart';
@@ -128,6 +130,10 @@ class CommController extends ChangeNotifier {
   /// with (see conversations.dart).
   final Conversations conversations = Conversations();
 
+  /// Notifications: texts that come in, and the unit's battery running low.
+  final Notifier notifier = Notifier();
+  bool _batteryWarned = false;
+
   late final Mixer mixer = Mixer(sampleRate: outputRate, newDecoder: OpusVoiceDecoder.new, targetMs: bufferMs);
   late final AudioOut _audio = AudioOut(mixer);
   Timer? _talkingTimer;
@@ -209,6 +215,8 @@ class CommController extends ChangeNotifier {
     _directAvatarSub = board.directAvatars.listen(_onDirectAvatar);
     _heardSub = board.heard.listen(_onHeard);
     await conversations.load();
+    conversations.onSeen = notifier.clearTexts;
+    await notifier.init();
     // Who's talking, kept up to date whether the voices come from the server
     // or over direct comms
     _talkingTimer ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
@@ -288,6 +296,7 @@ class CommController extends ChangeNotifier {
 
   void _onBoardChanged() {
     if (recording && board.state != BoardState.connected) stopRecording();    // the board's gone
+    _checkBattery();
     _updateHeadset();
     _updateBoardScreen();
     _updateBoardSettings();
@@ -738,15 +747,19 @@ class CommController extends ChangeNotifier {
       }
       _updateTalking(DateTime.now().millisecondsSinceEpoch);
     }
+    _updateBoardScreen();
     notifyListeners();
   }
 
+  /// Muted: not played, nor shown talking, and their texts and commands
+  /// ignored (the board ignores the commands, the app the rest).
   bool isMuted(String name) => muted.contains(name);
 
   // ----- The board's Comm screen -----
 
   Uint8List? _sentServer;
   Uint8List? _sentHearing;
+  String? _sentMuted;
 
   /// Tell the board how the server's doing and who's talking, when it
   /// changes, and all of it when the board's newly there. Avatars go as
@@ -754,8 +767,16 @@ class CommController extends ChangeNotifier {
   void _updateBoardScreen() {
     _boardAvatars.update();
     if (board.state != BoardState.connected || board.status == null) {
-      _sentServer = _sentHearing = null;
+      _sentServer = _sentHearing = _sentMuted = null;
       return;
+    }
+    // Who's muted, for the board to ignore their commands too
+    final mutedNow = (muted.toList()..sort()).join('\n');
+    if (_sentMuted != mutedNow && (board.status?.version ?? 0) >= commVersionMuted) {
+      _sentMuted = mutedNow;
+      for (final piece in mutedMessages(muted)) {
+        board.send(piece);
+      }
     }
     final m = mumble;
     final link = m == null
@@ -924,7 +945,7 @@ class CommController extends ChangeNotifier {
   void _onPluginData(MumbleClient m, MumblePluginData d) {
     if (d.id != commandDataId || !boardTakesCommands) return;
     final name = m.users[d.sender]?.name ?? '';
-    if (name.isEmpty || d.data.length > othersCommandMax) return;
+    if (name.isEmpty || d.data.length > othersCommandMax || isMuted(name)) return;
     board.send(commandFromServer(name, d.data));
   }
 
@@ -1096,12 +1117,56 @@ class CommController extends ChangeNotifier {
     return _recentTexts.putIfAbsent('$from\n$text', () => now) != now;
   }
 
+  /// A text's come in: a notification, unless its conversation's on screen.
+  void _notifyText(Conversation c) {
+    final visible = WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    if (visible && conversations.open == c.key) return;
+    final unread = c.entries.length < c.unread ? c.entries : c.entries.sublist(c.entries.length - c.unread);
+    final texts = [
+      for (final e in unread)
+        if (e.kind == ConversationEntry.text && !e.mine) e
+    ];
+    final last = texts.length > 6 ? texts.sublist(texts.length - 6) : texts;
+    final group = c.kind != ConversationKind.person;
+    notifier.showTexts(c.key, c.title, [for (final e in last) (e.from, e.body, e.time, avatarOf(e.from))], group: group);
+  }
+
+  /// Someone's avatar, by name: theirs on the server, or their board's.
+  Uint8List? avatarOf(String name) {
+    final m = mumble;
+    if (m != null) {
+      for (final u in m.users.values) {
+        if (u.name == name && u.texture != null) return u.texture;
+      }
+    }
+    for (final b in nearby.values) {
+      if (b.name == name && directAvatars[b.id] != null) return directAvatars[b.id];
+    }
+    return null;
+  }
+
+  /// The unit's battery: a notification once it's down to 15%, gone again
+  /// once it's charging or back over 20%.
+  void _checkBattery() {
+    final s = board.status;
+    final pct = board.state == BoardState.connected ? s?.battery : null;
+    if (pct == null) return;
+    if (!_batteryWarned && pct <= 15 && !s!.charging) {
+      _batteryWarned = true;
+      notifier.showBattery(pct);
+    } else if (_batteryWarned && (s!.charging || pct > 20)) {
+      _batteryWarned = false;
+      notifier.clearBattery();
+    }
+  }
+
   /// Marks a server text as one for everyone who can hear us, for others'
   /// apps; Mumble's own apps don't show it.
   static const _everyoneMark = '<!-- everyone -->';
 
   /// A text message on the server: to our channel, or to us alone.
   void _onServerText(MumbleText t) {
+    if (isMuted(t.from)) return;
     final text = plainText(t.message);
     if (_seenText(t.from, text)) return;
     final c = t.private
@@ -1110,11 +1175,13 @@ class CommController extends ChangeNotifier {
             ? everyoneConversation
             : (serverConversation ?? everyoneConversation);
     conversations.add(c, ConversationEntry(from: t.from, mine: false, kind: ConversationEntry.text, body: text));
+    _notifyText(c);
   }
 
   /// What someone sent our board, as it passes it on: into the conversation
   /// it was for.
   void _onHeard(Heard h) {
+    if (isMuted(h.from)) return;
     final c = switch (h.scope) {
       OthersCommand.scopeOne => personConversation(h.from),
       OthersCommand.scopeChannel => (h.direct ? directConversation : serverConversation) ?? everyoneConversation,
@@ -1130,6 +1197,7 @@ class CommController extends ChangeNotifier {
             body: describeCommand(h.data, mine: false),
             done: h.done);
     conversations.add(c, e);
+    if (h.what == Heard.text) _notifyText(c);
   }
 
   // ----- The server -----
