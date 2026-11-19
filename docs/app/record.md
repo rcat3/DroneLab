@@ -14,7 +14,7 @@ Back to [the app](README.md).
 
 1. Pick the voice:
    - **SPEAKER VOICE**: the effect the unit plays from its speaker.
-   - **HIVEMIND VOICE**: the effect the hive hears, if you've set a [different one](hivemind.md#setup-talking) for HiveMind.
+   - **HIVEMIND VOICE**: the effect the hive hears, if you've set a [different one](voice.md#setup-talking) for HiveMind.
 2. Switch on **Sync beep to start**, if you're filming (see below).
 3. Tap **RECORD**, and talk.  The button turns red and counts the time; the unit's display shows *REC*.
 4. Tap it again to stop.

@@ -1,63 +1,76 @@
-# Terminal
+# Text
 
-The Terminal tab sends text messages to other drones: to one, to several, or to the whole hive.  A message shows on their unit's display, in blocky green letters on its [Terminal](../features/terminal.md), and in their app's Terminal tab.  Messages to you arrive here too.
+The Text tab is HiveMind by text, as [Voice](voice.md) is HiveMind by voice.  You text other drones in conversations, as in a chat app: one for everyone who can hear you, one for each channel you're on, and one for each person.  From any conversation you can also put words on their unit's display, or run their [Lovense](../features/lovense.md) toys.
 
 <p align="center">
-<img src="../images/app/terminal.png" width="260" alt="The Terminal tab: a message sent, and the box to write the next">
+<img src="../images/app/text.png" width="260" alt="The Text tab: Broadcast, the server and direct channels, and the people about, with the last message in each and a count of unread ones">
 &nbsp;
-<img src="../images/app/terminal_compose.png" width="260" alt="Writing a message to one drone, with Show on their display on and Show my name off">
+<img src="../images/app/conversation.png" width="260" alt="A conversation with one drone: texts each way, and the commands they sent, one of them not done">
 </p>
 
 Back to [the app](README.md).
 
-## Sending a message
+## Picking a conversation
 
-1. **Pick who it's for**, in the row over the box: *Everyone*, or tap one or more names.  A cloud means they're on the server, an antenna that they're nearby over direct mode.  (The *Message* button on someone in the [HiveMind](hivemind.md#whos-there) list picks just them, and brings you here.)
-2. **Type it**, up to 120 letters.  The displays show plain capital letters, numbers and punctuation; anything else, like emoji, shows as `?`.
-3. **Send**.
+The tab lists every conversation you can use now, with its last message, and a pink number for any you haven't read.  The number on the tab itself counts them all.
 
-Messages go over the same links as your voice: the server, direct mode, or both, so the Terminal needs one of them connected.  *Everyone* means everyone in your server channel and your direct channel.
+- **Channels**:
+  - **Broadcast**: everyone who can hear you, by any link: your server channel and your direct channel together.
+  - **Your server channel**, with a cloud: everyone in it, on the server.
+  - **Your direct channel**, with an antenna: every unit on it nearby.
+- **People**: everyone about, on the server or heard nearby over direct mode, each once even if they're on both.  The *Message* button on someone in the [Voice](voice.md#whos-there) list opens theirs.
+- **Offline**: conversations with people who aren't about, and channels you're not on, to read back.  They're back under *Channels* or *People* once they can be reached.
 
-Two choices under the box go with each message:
+Conversations are kept on the phone, the last 300 messages of each, so they're still there when the app starts again.  **Hold** one to delete it, or use the menu (⋮) inside it.  It starts afresh the next time someone texts it.
 
-- **Show on their display**: on, it's shown on their unit's display and in their app.  Off, it goes to their app's Terminal tab only, for something not everyone around them should see.
-- **Show my name**: on, it's shown after your name (`RUBBERCAT: WE ARE THE HIVE`).  Off, just the message, with no name.
+## Texting
 
-Your messages stay in the list, in pink, saying who they went to, whether your name was on (*UNNAMED* if not), and *ON DISPLAY* or *APP ONLY*.  Messages to you are in green, after the sender's name, or *UNNAMED*.  A number on the Terminal tab counts the ones you haven't seen yet.
+Type in the box at the foot of a conversation and tap send.  Anyone can text you, and you anyone: texts don't need anyone's permission, as they only go to the app, never to the display.
 
-## Is an unnamed message anonymous?
+- **Over the server**, texts are Mumble's own text messages: those in a channel's conversation go to the channel, and those to one person go to them alone.  So people in Mumble's own apps, on a computer, see them too, and can text you back.
+- **Over direct mode**, your unit carries them to the others nearby, up to 120 letters.
+- **To one person**, a text goes over the server if they're on it, and otherwise directly.
+- **Broadcast** goes both ways at once.  Someone who hears you both ways sees it once, under their Broadcast.  (One from a Mumble app to the channel shows in the channel's conversation.)
 
-**No.**  *Show my name* off hides your name from what's **shown**: on their display, and in their app.  Anyone looking at their display can't tell who it's from, and nor can they, from the message itself.  But it isn't anonymous:
+You need a link to send: someone who can't be reached just now says so in place of the box.
 
-- **Their unit knows who sent it.**  It only takes messages from those it's [allowed](#who-can-send-you-messages), so every message carries who it's from, unnamed or not.  Their unit's *Hive Messages* page shows who sent the last one, and an unnamed message from someone new adds them to its list by name, like any other.
-- **Over the server**, the message goes from your account, so whoever runs the server could see it's yours.
-- **They may not take unnamed messages at all**: they can turn them off, and then yours doesn't arrive.
+## Their display
 
-So it's for keeping your name off a public display, not for hiding who you are from the person you're messaging.
+The **Terminal button** (`>_`) at the top of a conversation puts words on their unit's display, on its [Terminal](../features/terminal.md), in blocky green letters.  To a channel, it goes to everyone in it.
 
-## Who can send you messages
+<img src="../images/app/text_terminal.png" width="300" alt="Their display: the words, the letter size, Add a line or Replace, Clear their display, and Switch to it">
 
-Your unit only takes messages from people you've allowed, so a stranger on the server or nearby can't put words on your display.
+It shows just as you type it, with no name added, and the same choices as typing on your own Terminal:
 
-- The first time someone messages you, they're added to your unit's list, **not allowed**, and their message is dropped.  Allow them, and their messages come through from then on.
-- The list is on your unit, on the Terminal feature's second page, *Hive Messages*, and in the app's [Remote](remote.md) tab, under the Terminal tab's *From others*.  Tap someone to allow them, or tap again to stop; on the display, hold them to take them off the list.
-- **Accept** off ignores everyone, and adds nobody to the list.
-- **Unnamed** off drops messages without a name altogether: they don't reach your display or your app.
+- **Letter size** (the `T` icon): *AUTO*, the biggest letters the whole message fits in, or 8 to 48 px.
+- **ADD A LINE** puts it under what's already there; **REPLACE** puts it in its place.
+- **Switch to it** brings their display to the Terminal.  Off, it waits there, for when they next look.
+- **Clear their display** empties their Terminal.
+
+It only shows if they [allow you](#who-can-put-words-on-your-display).  The display has plain capital letters, numbers and punctuation: anything else, like emoji, shows as `?`.
+
+No name is shown, but it isn't anonymous: their unit knows who sent it, as it has to in order to check they allow you, and shows the last sender on its *Hive Messages* page.  Their app notes it in your conversation too.
+
+## Their toys
+
+The **Control button** at the top of a conversation opens [Control](control.md), for the toys of the person, or of everyone in the channel.
+
+## What a conversation shows
+
+Texts, yours on the right in pink and theirs on the left in green, with who sent each in a channel.
+
+Between them, in grey, are the commands for the display and the toys, sent each way: *You put "WE ARE THE HIVE" on their display*, or *RubberCat2 set your vibrate to 8*.  One your unit didn't do, because you don't allow the sender, is in red, *not done*, so you can see who's trying.  Dragging a slider makes one line, not one for every step.
+
+## Who can put words on your display
+
+You choose who can put words on your display, with **Off**, **Ask** or **Accept**, as for your [toys](control.md#who-can-control-your-toys).  It's on your unit, on the Terminal feature's second page, *Hive Messages*, and in the app's [Remote](remote.md) tab, under the Terminal tab's *From others*, with the list of who's sent you something:
+
+- **Ask**, to start with: only people you've allowed.  The first time someone sends you words, they're added to your unit's list, **not allowed**, and nothing shows.  Tap them to allow them, and their words show from then on (tap again to stop; on the display, hold them to take them off the list).
+- **Accept**: anyone's words show, allowed or not.  New people are still added to the list, so you can see who's been sending, and allow them for when you go back to Ask.
+- **Off**: nobody's words show, and nobody's added.
 
 Someone's known by their name and how they're heard, server or direct, so the same person can be on the list twice.  Names can be borrowed: on a direct channel with a passphrase only its members can send at all, but on the open channel, or a server anyone can join, someone could use a name you've allowed.
 
-This list is separate from the one for [Control](control.md#who-can-control-your-toys), so someone can message you without being allowed near your toys.
+It's a separate list from the one for your toys, so someone can put words on your display without being allowed near your toys.  Texts don't need either: they only reach your app.
 
-## What shows on your display, and when
-
-A message to you shows on your unit's display only if all of these are true:
-
-1. The sender's **allowed** on your list.
-2. They left **Show on their display** on.
-3. It has their name, or you take **unnamed** messages.
-
-Then it's added to the Terminal on a line of its own, and the display switches to the Terminal by itself.  A message they sent to your app only goes to your Terminal tab, and leaves the display alone.  Every message your unit takes is also passed to your app's Terminal tab, whichever it is.
-
-How the Terminal looks on the display, its letter sizes and what it can show, are in [Terminal](../features/terminal.md).
-
-Over the server, messages need a Mumble server from version 1.4 on.
+Words for the display, and commands for the toys, need a Mumble server from version 1.4 on.  Texts work on any.

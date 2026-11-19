@@ -15,8 +15,8 @@ New here?  Start with the [project page](../README.md).
 
 - [The DroneLab App](app/README.md): what it does, the screen and its signs.
   - [Connecting](app/connecting.md): pairing the unit, joining the server, your avatar.
-  - [HiveMind](app/hivemind.md): talking to other drones, over the server and direct, and hearing them.
-  - [Terminal](app/terminal.md): messages to one, several or all of the hive, and who can send you theirs.
+  - [HiveMind](app/voice.md): talking to other drones, over the server and direct, and hearing them.
+  - [Text](app/text.md): texts with one drone, a channel or all of the hive, words on their displays, and who can put words on yours.
   - [Control](app/control.md): others' Lovense toys, and who can control yours.
   - [Record](app/record.md): your voice effect to WAV files, for videos.
   - [Remote](app/remote.md): the unit's controls on the phone, and the WiFi hotspot for iPhones.

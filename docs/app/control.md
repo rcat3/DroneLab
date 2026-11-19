@@ -1,14 +1,14 @@
 # Control
 
-The Control tab runs other drones' [Lovense](../features/lovense.md) toys, through their units: over the server or over direct mode, wherever they are.  It only works on toys whose wearers have [allowed you](#who-can-control-your-toys).
+Control runs other drones' [Lovense](../features/lovense.md) toys, through their units: over the server or over direct mode, wherever they are.  It only works on toys whose wearers have [allowed you](#who-can-control-your-toys).
 
-<img src="../images/app/control.png" width="300" alt="The Control tab: who to send to, Levels, Patterns and React, a slider for each kind of motor, and STOP">
+<img src="../images/app/control.png" width="300" alt="Control for one drone: Levels, Patterns and React, a slider for each kind of motor, and STOP">
 
 Back to [the app](README.md).  Running *your own* toys is on your unit's [Lovense](../features/lovense.md) feature, or the [Remote](remote.md) tab's *Toys*.
 
 ## Sending
 
-**Send to** picks who it's for, as on the [Terminal](terminal.md#sending-a-message): *Everyone* in your server and direct channels, or tap one or more names.  The *Control* button on someone in the [HiveMind](hivemind.md#whos-there) list picks just them, and brings you here.
+Open it with the **Control button** at the top of a [Text](text.md) conversation: it's for whoever that conversation is with, which it says at the top.  From a person's conversation it's their toys; from a channel's, the toys of everyone in it; from *Broadcast*, everyone who can hear you.  The *Control* button on someone in the [Voice](voice.md#whos-there) list opens it for them too.
 
 Then one of three sections:
 
@@ -18,7 +18,7 @@ Then one of three sections:
 
 **STOP**, always at the foot of the screen, stops everything on their toys at once: levels, patterns and reactions.  It says *STOPPED* once it's gone.
 
-What you set stays set on their toys until it's changed or stopped, even if you leave the tab.  Each command is sent again a moment later, in case the first was lost.  Over the server, it needs a Mumble server from version 1.4 on.
+What you set stays set on their toys until it's changed or stopped, even once you've closed Control.  Each one is noted in your conversation with them, and in theirs with you.  Each command is sent again a moment later, in case the first was lost.  Over the server, it needs a Mumble server from version 1.4 on.
 
 ## Who can control your toys
 
@@ -29,4 +29,4 @@ The same works the other way, and you choose whose commands your toys take, with
 - **Off**: everyone's commands are ignored, and nobody's added.
 - **STOP** on your own unit, or in your Remote tab, stops whatever anyone's set.
 
-It's a separate list from the [Terminal's](terminal.md#who-can-send-you-messages), so someone can message you without being allowed near your toys.  Names can be borrowed on the open channel or an open server, so only allow people on those if you trust everyone there: see [Commands from others](../features/lovense.md#commands-from-others) for the details.
+It's a separate list from the one for [your display](text.md#who-can-put-words-on-your-display), so someone can put words on your display without being allowed near your toys.  Texting you needs neither.  Names can be borrowed on the open channel or an open server, so only allow people on those if you trust everyone there: see [Commands from others](../features/lovense.md#commands-from-others) for the details.

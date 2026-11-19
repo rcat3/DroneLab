@@ -33,8 +33,8 @@ You hear both modes at once: the app plays the server's voices and the direct on
 ## Getting started
 
 1. [Install the app](../app/installing.md) and [pair it](../app/connecting.md) with your unit: on the unit, switch on the *Phone App* page in [Settings](settings.md), after Brightness.
-2. **For cloud mode**, the hive needs a Mumble server (see [Setting up a Mumble server](#setting-up-a-mumble-server)).  Enter it in the app's *Setup*, behind the gear on the HiveMind tab (*Join the server*): its address, your name and the server password, then connect.
-3. **For direct mode**, switch on *Direct*: on the unit's *Direct* page, in the HiveMind feature, or in the app's *Setup*, behind the gear on the HiveMind tab.  Then [pick a channel](#channels).
+2. **For cloud mode**, the hive needs a Mumble server (see [Setting up a Mumble server](#setting-up-a-mumble-server)).  Enter it in the app's *Setup*, behind the gear on the Voice tab (*Join the server*): its address, your name and the server password, then connect.
+3. **For direct mode**, switch on *Direct*: on the unit's *Direct* page, in the HiveMind feature, or in the app's *Setup*, behind the gear on the Voice tab.  Then [pick a channel](#channels).
 4. Talk: hold the talk button, or set *Voice* mode and just speak.
 
 The *Phone App* stays on, or off, from one startup to the next.  The voice effect has to run the whole time it's on, so it uses more battery: the [speaker model](../build/speaker-housing.md)'s 2000 mAh battery runs about 9.5 hours with comms on, against about 13.5 without.  Direct mode costs a little more again, as the radio has to listen the whole time.
@@ -128,7 +128,7 @@ The unit's *Direct* page, in the HiveMind feature, switches it on, and lists the
 
 ### Channels
 
-Units start on the **open channel**, which any unit in range can hear.  To keep it to your hive, use a channel with a passphrase: in the app's *Setup*, under *Direct*, tap the channel, or *Change* on the HiveMind tab while talking direct.
+Units start on the **open channel**, which any unit in range can hear.  To keep it to your hive, use a channel with a passphrase: in the app's *Setup*, under *Direct*, tap the channel, or *Change* on the Voice tab while talking direct.
 
 - **Create a channel**: give it a name, which others nearby can see, and a passphrase, which they'll need to join.  A few unrelated words make a good passphrase.
 - **Heard nearby**: every unit on a channel says so every couple of seconds, with its channel's name (not its passphrase), so the channels about show up in the list, with how many units are on each.  Tap one and type its passphrase to join; a wrong one's caught straight away, without trying it on the air.
@@ -157,8 +157,8 @@ The radio has to listen the whole time direct mode is on, which costs about 80 m
 The DroneLab app is the phone's side of HiveMind: it joins the server, plays the hive to your headphones, and has the talk button.  It has its own guide, [The DroneLab App](../app/README.md):
 
 - [Connecting](../app/connecting.md): pairing it with the unit, joining the server, your avatar.
-- [HiveMind](../app/hivemind.md): the two links, who's there, the ways to talk, hearing the hive, channels, and the talking settings.
-- [Terminal](../app/terminal.md) and [Control](../app/control.md): messages and Lovense commands to others, and who may send you theirs.
+- [HiveMind](../app/voice.md): the two links, who's there, the ways to talk, hearing the hive, channels, and the talking settings.
+- [Text](../app/text.md) and [Control](../app/control.md): texts, words on displays and Lovense commands to others, and who may send you theirs.
 - The [status strip](../app/README.md#the-status-strip) and the app's other signs.
 
 ## Trying it out

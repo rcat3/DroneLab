@@ -1,8 +1,8 @@
-# HiveMind
+# Voice
 
-HiveMind links every drone in the hive into one mind: you talk, and the others hear you, like a radio.  Your unit picks up your voice, puts it through your [voice effect](../features/voice-effects.md), and sends it; the others' voices come back to your headphones, through the app.
+HiveMind links every drone in the hive into one mind.  The Voice tab is HiveMind by voice: you talk, and the others hear you, like a radio.  (Its other half, by text, is the [Text](text.md) tab.)  Your unit picks up your voice, puts it through your [voice effect](../features/voice-effects.md), and sends it; the others' voices come back to your headphones, through the app.
 
-<img src="../images/app_hivemind.png" width="300" alt="The HiveMind tab: the channel, who's in it, Server or Direct, and Hold to talk">
+<img src="../images/app_hivemind.png" width="300" alt="The Voice tab: the channel, who's in it, Server or Direct, and Hold to talk">
 
 Back to [the app](README.md).  The unit's side, with its own HiveMind screens, is in [HiveMind (Comms)](../features/comms.md).
 
@@ -42,7 +42,7 @@ Under each name it says how they're linked, or what they're doing:
 
 The **speaker button** on each row mutes that person, for you alone: the app doesn't play them, and your unit doesn't show them talking.  The app remembers by name, so they stay muted next time.
 
-Tap someone for more: how they're linked, their signal and when they were last heard, their unit's firmware and app versions (over direct mode), muting, and shortcuts to send them a [message](terminal.md) or [control](control.md) their toys.
+Tap someone for more: how they're linked, their signal and when they were last heard, their unit's firmware and app versions (over direct mode), muting, and shortcuts to open your [conversation](text.md) with them or [control](control.md) their toys.
 
 <img src="../images/app/person.png" width="300" alt="Someone tapped: their link, signal, when last heard, firmware and app, Mute for me, and Message and Control">
 
@@ -50,7 +50,7 @@ Tap someone for more: how they're linked, their signal and when they were last h
 
 ### Where your voice goes
 
-At the foot of the HiveMind tab, **SERVER** or **DIRECT** picks the link your voice goes out on.  Under it, the app says where it's going, and to which channel.
+At the foot of the Voice tab, **SERVER** or **DIRECT** picks the link your voice goes out on.  Under it, the app says where it's going, and to which channel.
 
 If nobody's there to hear you on the link you picked (the server isn't connected, or nobody else is in your channel; or no units are nearby on direct), and somebody is on the other, it goes the other way instead, and the line under the choice turns grey to say so: *Nobody's nearby, so talking to the server*.  That's decided as you start talking, and doesn't change partway through.
 
@@ -60,7 +60,7 @@ Pick whichever suits you.  They all work in either link.
 
 | | How | |
 |---|---|---|
-| **The app's button** | Hold *HOLD TO TALK* on the HiveMind tab, and let go to stop. | The simplest, with the phone in hand. |
+| **The app's button** | Hold *HOLD TO TALK* on the Voice tab, and let go to stop. | The simplest, with the phone in hand. |
 | **The headphones' button** | Press play/pause on your headphones to start talking, and again to stop.  A rising chirp in your ear says you're on, a falling one that you're off. | Hands free, phone in a pocket.  Headphones send a press, not a hold, so it's press-on, press-off; it stops by itself after two minutes, in case it's left on.  Holding the button usually starts the phone's voice assistant instead. |
 | **A talk button** | A small Bluetooth camera shutter remote, paired with the unit: hold it to talk. | Hands free, and a real push-to-talk.  See [The talk button](../features/comms.md#the-talk-button) for which ones work and pairing. |
 | **The unit's display** | Hold the avatar on the unit's HiveMind status screen. | For trying it out with the unit in hand. |
@@ -87,7 +87,7 @@ The app keeps going with the screen off, so the phone can go in a pocket.  A not
 
 ### Direct channels
 
-**Over direct mode**, units start on the *open channel*, which any unit in range can hear.  To keep it to your hive, use a channel with a passphrase: everything on it is encrypted, so units outside it can neither hear it nor send to it.  In Setup, under *Direct*, tap the channel (or *Change* on the HiveMind tab while talking direct):
+**Over direct mode**, units start on the *open channel*, which any unit in range can hear.  To keep it to your hive, use a channel with a passphrase: everything on it is encrypted, so units outside it can neither hear it nor send to it.  In Setup, under *Direct*, tap the channel (or *Change* on the Voice tab while talking direct):
 
 - **Create a channel**: give it a name, which others nearby can see, and a passphrase, which they'll need to join.  A few unrelated words make a good passphrase.
 - **Heard nearby**: channels about, with how many units are on each.  Tap one and type its passphrase to join.

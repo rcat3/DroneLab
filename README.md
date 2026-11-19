@@ -29,7 +29,7 @@ The DroneLab display unit screws into the mask's voice port: a glowing 1.75" rou
 <td width="190" align="center"><a href="docs/features/comms.md"><img src="docs/images/screens/comm_status.png" width="170" alt="The Comms status screen"></a></td>
 <td>
 <h3>HiveMind (Comms)</h3>
-<p>Link every drone in the hive into one mind.  Push to talk, or just speak, and your voice, through the effect of your choice, goes straight into every other drone's headphones, while the display shows which drone is transmitting, with its avatar.  Messages and commands travel the same link, so the hive can reach any drone's terminal, or its toys, if that drone has allowed it.  A cheap Bluetooth camera remote makes a talk button.</p>
+<p>Link every drone in the hive into one mind.  Push to talk, or just speak, and your voice, through the effect of your choice, goes straight into every other drone's headphones, while the display shows which drone is transmitting, with its avatar.  Texts and commands travel the same link: any drone can text any other, and the hive can reach a drone's terminal, or its toys, if that drone has allowed it.  A cheap Bluetooth camera remote makes a talk button.</p>
 <p>HiveMind can operate in two modes:</p>
     <ul><li><b>Cloud mode:</b> through the wearer's phone to the hive's <a href="https://www.mumble.info">Mumble</a> server, so distance doesn't matter, and people without a mask join from any Mumble app.</li><li><b>Direct mode</b> <i>(in development)</i>: unit to unit over the radio, with no server, internet or phone signal.  Encrypted channels, Long Range, and relaying through the drones in between.</li></ul>
 <p><a href="docs/features/comms.md">HiveMind (Comms) →</a></p>
@@ -75,7 +75,7 @@ The DroneLab display unit screws into the mask's voice port: a glowing 1.75" rou
 - **Remote operation:** the DroneLab app for Android runs the whole display unit from a phone over Bluetooth.  Change what's displayed on the screen and operate features without having to see the display.  Phones without the app (including iPhones) can run it through the display unit's own WiFi hotspot, in a web browser.  [The app](docs/app/README.md) · [Hotspot remote](docs/features/phone-remote.md)
 
 <p align="center">
-<a href="docs/app/hivemind.md"><img src="docs/images/app_hivemind.png" width="270" alt="The DroneLab app's HiveMind tab: the hive on the server and a unit heard directly, each with their avatar, and the talk button"></a>
+<a href="docs/app/voice.md"><img src="docs/images/app_hivemind.png" width="270" alt="The DroneLab app's Voice tab: the hive on the server and a unit heard directly, each with their avatar, and the talk button"></a>
 &nbsp;
 <a href="docs/app/remote.md"><img src="docs/images/app_remote.png" width="270" alt="The DroneLab app's Remote tab, running the display unit's screen over Bluetooth"></a>
 </p>
@@ -133,7 +133,7 @@ The [**Build Guide**](docs/build/README.md) walks you through it, step by step:
 - **[Build Guide](docs/build/README.md):** choosing a model, the parts, printing, assembly and setup.
 - **[Installing the Firmware](docs/building-firmware.md):** the web installer, flashing a release by hand, or building it yourself.
 - **[Installing the App](docs/app/installing.md):** the DroneLab app for Android, from the [releases page](https://github.com/rcat3/DroneLab/releases/latest).
-- **[Using the App](docs/app/README.md):** talking to the hive, messages, controlling others' toys, recording, the remote, and updating the unit.
+- **[Using the App](docs/app/README.md):** talking to the hive, texting, controlling others' toys, recording, the remote, and updating the unit.
 - **[Using the Display](docs/using-the-display.md):** finding your way around, and turning it on and off.
 - **[Features](docs/features/README.md):** each feature in detail.
 - **[The board](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md):** technical notes on the ESP32-S3-Touch-AMOLED-1.75: power, audio and the echo canceller.

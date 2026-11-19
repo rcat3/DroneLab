@@ -29,7 +29,7 @@ Whose commands are done is up to you, with **Off**, **Ask** or **Accept** on the
 
 - **Ask**, to start with: only those you've allowed are obeyed.  The first time someone sends you a command, they're added to the *Permissions* list, not allowed, and you tick them there.
 - **Accept**: everyone's commands are done, allowed or not.  Anyone new is still added to the list, so you can see who's been sending, and tick them for when you go back to Ask.
-- **Off**: commands are ignored, and nobody's added.  The list remembers up to 12 people, kept when the board's switched off.  It's the Lovense feature's own: the [Terminal](terminal.md#messages-from-others) has a separate one, for messages.
+- **Off**: commands are ignored, and nobody's added.  The list remembers up to 12 people, kept when the board's switched off.  It's the Lovense feature's own: the [Terminal](terminal.md#messages-from-others) has a separate one, for words on your display.
 
 Someone's known by their name, and whether they're heard in cloud or direct mode, so the same person can be on the list twice.  A name can be borrowed: on a direct channel with a passphrase only its members can send anything, but on the open channel, or on a server anyone can join, someone could use the name of a person you've allowed.
 

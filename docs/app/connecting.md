@@ -1,10 +1,10 @@
 # Connecting the App
 
-The only link the app needs is to **your unit**, over Bluetooth.  With just that, everything works: the [Remote](remote.md), [Record](record.md), [firmware updates](firmware-updates.md), and talking, messaging and controlling toys with drones nearby over [direct mode](hivemind.md#two-links-server-and-direct).
+The only link the app needs is to **your unit**, over Bluetooth.  With just that, everything works: the [Remote](remote.md), [Record](record.md), [firmware updates](firmware-updates.md), and talking, messaging and controlling toys with drones nearby over [direct mode](voice.md#two-links-server-and-direct).
 
 A **Mumble server** on the internet is **optional**.  Join one only if your hive uses one, to reach drones who aren't nearby.
 
-Both are set up once, in *Setup*, behind the gear at the top of the HiveMind tab, under *Get connected*.  Each step gets a green tick once it's done.  After that, the app connects to them by itself whenever it starts.
+Both are set up once, in *Setup*, behind the gear at the top of the Voice tab, under *Get connected*.  Each step gets a green tick once it's done.  After that, the app connects to them by itself whenever it starts.
 
 <img src="../images/app/setup_connected.png" width="300" alt="Setup's Get connected section: the unit paired and connected, the server joined, and an avatar">
 
@@ -25,7 +25,7 @@ Pairing only opens when someone at the display asks for it, because the display 
 
 ## 2. Join a server (optional)
 
-Only if your hive uses a server: it's for the [cloud link](hivemind.md#two-links-server-and-direct), to reach drones anywhere over the internet.  Without one, the app works the same with drones nearby, over direct mode.  Skip this step, and leave *Join the server* unticked.
+Only if your hive uses a server: it's for the [cloud link](voice.md#two-links-server-and-direct), to reach drones anywhere over the internet.  Without one, the app works the same with drones nearby, over direct mode.  Skip this step, and leave *Join the server* unticked.
 
 <img src="../images/app/server.png" width="300" alt="The Server page: address, port, your name, the server password, and the buffer">
 
@@ -54,7 +54,7 @@ Tap the [status strip](README.md#the-status-strip) at the top of any tab to see 
 ## Staying connected
 
 - When the app starts, it connects to the unit and the server it had last, unless you disconnected them.  *Disconnect* is remembered: the app leaves that link alone until you connect it again.
-- If the unit goes out of range, restarts or runs out of battery, the app tries again every few seconds by itself: the HiveMind tab says *Board offline* meanwhile.
+- If the unit goes out of range, restarts or runs out of battery, the app tries again every few seconds by itself: the Voice tab says *Board offline* meanwhile.
 - The app keeps going with the screen off, so you can talk and listen with the phone in a pocket.  A notification says so while it's on.
 
 If the app can't find the unit at all, check its *Phone App* page is on, and that the phone isn't connected to it already from another app.  A unit talks to one phone at a time.
