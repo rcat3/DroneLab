@@ -62,8 +62,8 @@ class BoardLink extends ChangeNotifier {
   Stream<DirectGroupHeard> get directGroups => _directGroups.stream;
   Stream<DirectSound> get directSounds => _directSounds.stream;
   Stream<DirectPeer> get directPeers => _directPeers.stream;
-  final _messages = StreamController<TerminalMessage>.broadcast();
-  Stream<TerminalMessage> get messages => _messages.stream;
+  final _heard = StreamController<Heard>.broadcast();
+  Stream<Heard> get heard => _heard.stream;
   final _directAvatars = StreamController<DirectAvatarPiece>.broadcast();
   Stream<DirectAvatarPiece> get directAvatars => _directAvatars.stream;
   Stream<AvatarAck> get avatarAcks => _avatarAcks.stream;
@@ -234,8 +234,8 @@ class BoardLink extends ChangeNotifier {
       _directPeers.add(msg);
     } else if (msg is DirectAvatarPiece) {
       _directAvatars.add(msg);
-    } else if (msg is TerminalMessage) {
-      _messages.add(msg);
+    } else if (msg is Heard) {
+      _heard.add(msg);
     } else if (msg is DirectGroupHeard) {
       _directGroups.add(msg);
     } else if (msg is RecordedSound) {

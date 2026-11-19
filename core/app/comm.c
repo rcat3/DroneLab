@@ -113,13 +113,13 @@
 #define RECORD_BEEP         0x02    // with a sync beep to start
 #define MSG_COMMAND         0x0B    // from the phone: a command for others, in from the server or out over direct
 #define COMMAND_FROM_SERVER 0x01
-#define MSG_MESSAGE         0x0C    // to the phone: a message for the Terminal
+#define MSG_HEARD           0x0F    // to the phone: a text or command someone sent, done or not
 #define MSG_DIRECT_AVATAR   0x0D    // to the phone: a piece of a board's avatar, heard over direct comms
 #define PEER_AVATAR_PIECE   100     // pixels a piece
 #define PEER_AVATAR_SETTLE_MS 2000  // sent once it's stopped changing this long
 #define PEER_AVATAR_BURST   6       // pieces each comm_poll
-#define MESSAGE_DIRECT      0x01
-#define MESSAGE_APP_ONLY    0x02
+#define HEARD_DIRECT        0x01
+#define HEARD_DONE          0x02
 // The beep comes out of the speaker about this long after the speaker's
 // task makes it (as voice_lab.c), so it's put in the recording then too
 #define BEEP_OUT_DELAY_MS   25
@@ -756,7 +756,8 @@ bool comm_phone_connected(void)
     return running && rcat_hal_ble_peer_connected();
 }
 
-void comm_message_to_phone(comm_transport_t via, const char *from, bool app_only, const uint8_t *text, size_t len)
+void comm_heard_to_phone(comm_transport_t via, const char *from, comm_heard_t what, uint8_t scope, bool done,
+                         const uint8_t *data, size_t len)
 {
     if (!comm_phone_connected())
     {
@@ -765,13 +766,15 @@ void comm_message_to_phone(comm_transport_t via, const char *from, bool app_only
     uint8_t msg[RCAT_HAL_BLE_PEER_MSG_MAX];
     size_t n = strlen(from);
     n = n < COMM_NAME_MAX ? n : COMM_NAME_MAX;
-    msg[0] = MSG_MESSAGE;
-    msg[1] = (via == COMM_TALK_DIRECT ? MESSAGE_DIRECT : 0) | (app_only ? MESSAGE_APP_ONLY : 0);
-    msg[2] = (uint8_t)n;
-    memcpy(msg + 3, from, n);
-    len = len < sizeof(msg) - 3 - n ? len : sizeof(msg) - 3 - n;
-    memcpy(msg + 3 + n, text, len);
-    rcat_hal_ble_peer_send(msg, 3 + n + len);
+    msg[0] = MSG_HEARD;
+    msg[1] = (via == COMM_TALK_DIRECT ? HEARD_DIRECT : 0) | (done ? HEARD_DONE : 0);
+    msg[2] = (uint8_t)what;
+    msg[3] = scope;
+    msg[4] = (uint8_t)n;
+    memcpy(msg + 5, from, n);
+    len = len < sizeof(msg) - 5 - n ? len : sizeof(msg) - 5 - n;
+    memcpy(msg + 5 + n, data, len);
+    send_retrying(msg, 5 + n + len);
 }
 
 bool comm_sending(void)
@@ -1700,7 +1703,8 @@ bool comm_phone_connected(void)
     return false;
 }
 
-void comm_message_to_phone(comm_transport_t via, const char *from, bool app_only, const uint8_t *text, size_t len)
+void comm_heard_to_phone(comm_transport_t via, const char *from, comm_heard_t what, uint8_t scope, bool done,
+                         const uint8_t *data, size_t len)
 {
 }
 

@@ -3,7 +3,6 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'comm/comm_controller.dart';
 import 'comm/release_check.dart';
-import 'ui/control_page.dart';
 import 'ui/firmware_ui.dart';
 import 'ui/hivemind_page.dart';
 import 'ui/people.dart';
@@ -11,7 +10,7 @@ import 'ui/record_page.dart';
 import 'ui/release_banner.dart';
 import 'ui/remote_page.dart';
 import 'ui/status_strip.dart';
-import 'ui/terminal_page.dart';
+import 'ui/text_page.dart';
 import 'ui/theme.dart';
 
 /// Whether a newer release of the app is out (see release_check.dart).
@@ -53,9 +52,9 @@ class HomePage extends StatelessWidget {
     return FirmwarePrompt(
       comm: comm,
       child: ListenableBuilder(
-        listenable: Listenable.merge([appTab, comm]),
+        listenable: Listenable.merge([appTab, comm, comm.conversations]),
         builder: (context, _) {
-          final unread = comm.unread;
+          final unread = comm.conversations.unread;
           return Scaffold(
             body: Column(
               children: [
@@ -69,8 +68,7 @@ class HomePage extends StatelessWidget {
                       index: appTab.value,
                       children: [
                         HiveMindPage(comm: comm),
-                        TerminalPage(comm: comm),
-                        ControlPage(comm: comm),
+                        TextPage(comm: comm),
                         RecordPage(comm: comm),
                         RemotePage(comm: comm),
                       ],
@@ -81,23 +79,19 @@ class HomePage extends StatelessWidget {
             ),
             bottomNavigationBar: NavigationBar(
               selectedIndex: appTab.value,
-              onDestinationSelected: (i) {
-                appTab.value = i;
-                if (i == tabTerminal) comm.markTerminalRead();
-              },
+              onDestinationSelected: (i) => appTab.value = i,
               destinations: [
-                const NavigationDestination(icon: Icon(Icons.hexagon_outlined), label: 'HIVEMIND'),
+                const NavigationDestination(icon: Icon(Icons.mic_none), label: 'VOICE'),
                 NavigationDestination(
                   icon: Badge(
-                    isLabelVisible: unread > 0 && appTab.value != tabTerminal,
+                    isLabelVisible: unread > 0,
                     label: Text('$unread'),
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     textColor: Theme.of(context).colorScheme.onPrimary,
-                    child: const Icon(Icons.terminal),
+                    child: const Icon(Icons.chat_bubble_outline),
                   ),
-                  label: 'TERMINAL',
+                  label: 'TEXT',
                 ),
-                const NavigationDestination(icon: Icon(Icons.tune), label: 'CONTROL'),
                 const NavigationDestination(icon: Icon(Icons.fiber_manual_record_outlined), label: 'RECORD'),
                 const NavigationDestination(icon: Icon(Icons.phone_android), label: 'REMOTE'),
               ],

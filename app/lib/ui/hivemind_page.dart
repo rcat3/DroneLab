@@ -35,7 +35,7 @@ class HiveMindPage extends StatelessWidget {
             title: Row(children: [
               const Icon(Icons.settings_input_antenna, color: Kc.green, size: 22),
               const SizedBox(width: 10),
-              const Text('HiveMind'),
+              const Text('Voice'),
               const Spacer(),
               if (sending) Text('TX', style: Kc.term(16, color: Kc.pink, shadows: Kc.glow(Kc.pink))),
             ]),

@@ -6,18 +6,19 @@ import 'package:flutter/material.dart';
 import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
-import 'people.dart';
+import '../comm/conversations.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
 /// Others' Lovense toys, over the server and direct comms
-/// (core/app/others.h): who to send to, a level for each kind of motor,
-/// patterns and their speed, and reactions; and STOP, always in reach. Each
-/// board only does them if its wearer has allowed us, on that feature's
-/// Others page.
+/// (core/app/others.h), for everyone in a conversation: a level for each
+/// kind of motor, patterns and their speed, and reactions; and STOP, always
+/// in reach. Each board only does them as its wearer allows, on that
+/// feature's Others page.
 class ControlPage extends StatefulWidget {
   final CommController comm;
-  const ControlPage({super.key, required this.comm});
+  final Conversation target;
+  const ControlPage({super.key, required this.comm, required this.target});
 
   @override
   State<ControlPage> createState() => _ControlPageState();
@@ -93,11 +94,11 @@ class _ControlPageState extends State<ControlPage> {
 
   void _send(OthersCommand Function(int source, int seq) make, {bool again = true}) {
     final cmd = comm.newCommand(make);
-    final everyone = recipients.everyone, server = recipients.serverSessions, direct = recipients.directIds;
-    comm.sendCommand(cmd, everyone: everyone, server: server, direct: direct);
+    final target = widget.target;
+    comm.sendCommandTo(target, cmd);
     _again?.cancel();
     if (again) {
-      _again = Timer(_againAfter, () => comm.sendCommand(cmd, everyone: everyone, server: server, direct: direct));
+      _again = Timer(_againAfter, () => comm.sendCommandTo(target, cmd, log: false));
     }
   }
 
@@ -165,7 +166,7 @@ class _ControlPageState extends State<ControlPage> {
     return ListenableBuilder(
       listenable: comm,
       builder: (context, _) {
-        final canSend = comm.canSendCommands;
+        final canSend = comm.isOnline(widget.target);
         const small = TextStyle(color: Kc.muted, fontSize: 13);
         return Scaffold(
           appBar: AppBar(title: const Text('Control')),
@@ -176,21 +177,18 @@ class _ControlPageState extends State<ControlPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (!canSend)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(
-                            comm.board.state == BoardState.connected && !comm.boardTakesCommands
-                                ? 'Direct needs newer firmware on the board for this. Or connect to the server'
-                                : 'Connect to the server, or switch on Direct, to control others',
-                            style: small),
-                      ),
                     Explained(
-                      help: 'Recipient must permit for command to process.',
+                      help: "Their toys only do it if they allow you, on their board's Hive Commands page.",
                       helpPadding: const EdgeInsets.only(bottom: 6),
-                      builder: (context, info) => SectionHeader('Send to', trailing: info),
+                      builder: (context, info) => SectionHeader(
+                          'To ${widget.target.audience}',
+                          trailing: info),
                     ),
-                    RecipientChips(comm: comm),
+                    if (!canSend)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 4),
+                        child: Text("They can't be reached just now", style: small),
+                      ),
                     const SizedBox(height: 10),
                     SegmentedButton<_Section>(
                       showSelectedIcon: false,
@@ -284,7 +282,7 @@ class _ControlPageState extends State<ControlPage> {
                   },
                 ),
               ),
-              StopBar(onPressed: canSend ? _stop : null, label: _stopped ? 'STOPPED' : 'STOP'),
+              SafeArea(top: false, child: StopBar(onPressed: canSend ? _stop : null, label: _stopped ? 'STOPPED' : 'STOP')),
             ],
           ),
         );

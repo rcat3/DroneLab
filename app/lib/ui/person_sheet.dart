@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../comm/comm_controller.dart';
+import 'control_page.dart';
 import 'people.dart';
 import 'status_strip.dart';
+import 'text_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -87,27 +89,22 @@ Future<void> showPerson(BuildContext context, CommController comm, String key) =
                   Row(children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: comm.canSendCommands
-                            ? () {
-                                recipients.only(p.key);
-                                Navigator.pop(sheet);
-                                appTab.value = tabTerminal;
-                              }
-                            : null,
-                        icon: const Icon(Icons.terminal, size: 18),
+                        onPressed: () {
+                          Navigator.pop(sheet);
+                          openConversation(context, comm, comm.personConversation(p.name));
+                        },
+                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
                         label: const Text('Message'),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: comm.canSendCommands
-                            ? () {
-                                recipients.only(p.key);
-                                Navigator.pop(sheet);
-                                appTab.value = tabControl;
-                              }
-                            : null,
+                        onPressed: () {
+                          Navigator.pop(sheet);
+                          Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => ControlPage(comm: comm, target: comm.personConversation(p.name))));
+                        },
                         icon: const Icon(Icons.tune, size: 18),
                         label: const Text('Control'),
                       ),

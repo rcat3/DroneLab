@@ -78,8 +78,9 @@ class MumblePluginData {
 class MumbleText {
   final String from;
   final String message; // may hold HTML
+  final bool private;   // to us alone, not the channel
   final DateTime time;
-  MumbleText(this.from, this.message) : time = DateTime.now();
+  MumbleText(this.from, this.message, {this.private = false}) : time = DateTime.now();
 }
 
 enum MumbleState { connecting, connected, disconnected }
@@ -394,10 +395,20 @@ class MumbleClient {
     return names.join(' / ');
   }
 
+  /// A text message to our channel, as the Mumble apps send them.
   void sendText(String message) {
     if (state != MumbleState.connected) return;
     _send(_textMessage, (ProtoWriter()
           ..int_(3, myChannel)
+          ..string(5, message))
+        .toBytes());
+  }
+
+  /// A private text message, to one user by their session.
+  void sendTextTo(int session, String message) {
+    if (state != MumbleState.connected) return;
+    _send(_textMessage, (ProtoWriter()
+          ..int_(2, session)
           ..string(5, message))
         .toBytes());
   }
@@ -503,7 +514,8 @@ class MumbleClient {
       case _textMessage:
         final m = ProtoMessage.parse(payload);
         final from = users[m.int_(1)]?.name ?? 'Server';
-        _texts.add(MumbleText(from, m.string(5) ?? ''));
+        // To users (2) rather than channels (3) or trees (4): private
+        _texts.add(MumbleText(from, m.string(5) ?? '', private: m.has(2) && !m.has(3) && !m.has(4)));
       case _pluginData:
         final m = ProtoMessage.parse(payload);
         final sender = m.int_(1);

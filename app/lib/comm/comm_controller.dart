@@ -17,6 +17,7 @@ import 'avatars.dart';
 import 'background.dart';
 import 'board_link.dart';
 import 'board_protocol.dart';
+import 'conversations.dart';
 import 'firmware_update.dart';
 import 'jitter.dart';
 import 'media_buttons.dart';
@@ -113,21 +114,6 @@ class NearbyBoard {
   NearbyBoard(this.id, this.name, this.rssi, this.talking, this.seenMs, [this.firmware = '', this.app = '']);
 }
 
-/// A line in the app's Terminal: a message from someone, as the board passed
-/// it on, a server text message, or one we sent.
-class TerminalEntry {
-  final String from;          // '' if they didn't say who it's from
-  final bool mine;
-  final String to;            // ours: who it went to
-  final bool onDisplay;       // shown on the boards' displays too
-  final bool named;           // ours: sent with our name
-  final String text;
-  final DateTime time;
-  TerminalEntry({this.from = '', this.mine = false, this.to = '', this.onDisplay = false, this.named = true,
-      required this.text})
-      : time = DateTime.now();
-}
-
 class CommController extends ChangeNotifier {
   final BoardLink board = BoardLink();
   ServerSettings server = ServerSettings();
@@ -137,31 +123,10 @@ class CommController extends ChangeNotifier {
   bool _serverWanted = false;
   Timer? _reconnect;
   String? serverError;
-  final List<MumbleText> texts = [];
 
-  /// The app's Terminal, oldest first, and how many have come in since it
-  /// was last looked at.
-  final List<TerminalEntry> terminal = [];
-  int unread = 0;
-  static const _terminalKeep = 100;
-
-  void _addTerminal(TerminalEntry e) {
-    terminal.add(e);
-    if (terminal.length > _terminalKeep) terminal.removeAt(0);
-    if (!e.mine) unread++;
-    notifyListeners();
-  }
-
-  /// The Terminal's been looked at.
-  void markTerminalRead() {
-    if (unread == 0) return;
-    unread = 0;
-    notifyListeners();
-  }
-
-  /// One we've sent, for our own Terminal.
-  void logSent(String text, String to, {required bool onDisplay, required bool named}) =>
-      _addTerminal(TerminalEntry(mine: true, to: to, onDisplay: onDisplay, named: named, text: text));
+  /// Texts and commands, to and from others, a conversation for each who
+  /// with (see conversations.dart).
+  final Conversations conversations = Conversations();
 
   late final Mixer mixer = Mixer(sampleRate: outputRate, newDecoder: OpusVoiceDecoder.new, targetMs: bufferMs);
   late final AudioOut _audio = AudioOut(mixer);
@@ -242,8 +207,8 @@ class CommController extends ChangeNotifier {
     recordBeep = p.getBool('recordBeep') ?? false;
     _directPeerSub = board.directPeers.listen(_onDirectPeer);
     _directAvatarSub = board.directAvatars.listen(_onDirectAvatar);
-    _messageSub = board.messages
-        .listen((m) => _addTerminal(TerminalEntry(from: m.from, onDisplay: !m.appOnly, text: m.text)));
+    _heardSub = board.heard.listen(_onHeard);
+    await conversations.load();
     // Who's talking, kept up to date whether the voices come from the server
     // or over direct comms
     _talkingTimer ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
@@ -412,7 +377,7 @@ class CommController extends ChangeNotifier {
 
   StreamSubscription<DirectSound>? _directSoundSub;
   StreamSubscription<DirectPeer>? _directPeerSub;
-  StreamSubscription<TerminalMessage>? _messageSub;
+  StreamSubscription<Heard>? _heardSub;
   StreamSubscription<DirectAvatarPiece>? _directAvatarSub;
 
   /// The avatars of boards heard over direct comms, as PNGs, by board id.
@@ -950,29 +915,9 @@ class CommController extends ChangeNotifier {
   bool get boardTakesCommands =>
       board.state == BoardState.connected && (board.status?.version ?? 0) >= commVersionCommands;
 
-  /// True if commands can go anywhere: to the server, or over direct comms.
-  bool get canSendCommands =>
-      mumble?.state == MumbleState.connected || (boardTakesCommands && (boardSettings?.direct?.on ?? false));
-
   /// A new command, from [make], with its source and the next seq.
   OthersCommand newCommand(OthersCommand Function(int source, int seq) make) =>
       make(_commandSource, _commandSeq = (_commandSeq + 1) & 0xFFFF);
-
-  /// Send a command to everyone (those in our channel on the server, and the
-  /// boards in our direct comms group), or to those picked: by their
-  /// sessions on the server, and their boards' ids over direct comms. Send
-  /// the same command again to make sure of it: it's only done once.
-  void sendCommand(OthersCommand cmd,
-      {bool everyone = true, Iterable<int> server = const [], Iterable<int> direct = const []}) {
-    final m = mumble;
-    if (m != null && m.state == MumbleState.connected) {
-      final sessions = everyone ? [for (final u in m.channelUsers) u.session] : server.toList();
-      m.sendPluginData(sessions, commandDataId, cmd.bytes);
-    }
-    if (boardTakesCommands && (boardSettings?.direct?.on ?? false) && (everyone || direct.isNotEmpty)) {
-      board.send(commandToDirect(everyone ? const [] : direct.take(directCommandTargets).toList(), cmd.bytes));
-    }
-  }
 
   /// A command from someone on the server: on to the board, which decides
   /// whether to do it.
@@ -981,6 +926,210 @@ class CommController extends ChangeNotifier {
     final name = m.users[d.sender]?.name ?? '';
     if (name.isEmpty || d.data.length > othersCommandMax) return;
     board.send(commandFromServer(name, d.data));
+  }
+
+  // ----- Conversations -----
+
+  bool get _serverUp => mumble?.state == MumbleState.connected;
+  bool get _directUp => boardTakesCommands && (boardSettings?.direct?.on ?? false);
+
+  /// Everyone who can hear us, by any means.
+  Conversation get everyoneConversation =>
+      conversations.get(Conversation.everyoneKey(), ConversationKind.everyone, 'Broadcast');
+
+  /// Our channel on the server, and our direct comms channel, while we're
+  /// on them.
+  Conversation? get serverConversation {
+    final m = mumble;
+    if (m == null || !_serverUp) return null;
+    final channel = m.channelPath(m.myChannel);
+    return conversations.get(Conversation.serverKey(channel), ConversationKind.server, channel);
+  }
+
+  Conversation? get directConversation {
+    final d = boardSettings?.direct;
+    if (!_directUp || d == null) return null;
+    return conversations.get(Conversation.directKey(d.id), ConversationKind.direct, d.keyed ? d.group : 'Open channel');
+  }
+
+  Conversation personConversation(String name) =>
+      conversations.get(Conversation.personKey(name), ConversationKind.person, name);
+
+  static String personOf(Conversation c) => c.key.substring('person:'.length);
+
+  /// Someone, by name: on the server (anywhere on it), or heard nearby.
+  MumbleUser? serverUser(String name) {
+    final m = mumble;
+    if (m == null || !_serverUp) return null;
+    for (final u in m.users.values) {
+      if (u.name == name && u.session != m.mySession) return u;
+    }
+    return null;
+  }
+
+  NearbyBoard? directBoard(String name) {
+    if (!_directUp) return null;
+    for (final b in nearby.values) {
+      if (b.name == name) return b;
+    }
+    return null;
+  }
+
+  /// Whether a conversation can be sent to now.
+  bool isOnline(Conversation c) => switch (c.kind) {
+        ConversationKind.everyone => _serverUp || _directUp,
+        ConversationKind.server => serverConversation?.key == c.key,
+        ConversationKind.direct => directConversation?.key == c.key,
+        ConversationKind.person => serverUser(personOf(c)) != null || directBoard(personOf(c)) != null,
+      };
+
+  static int _scopeOf(Conversation c) => switch (c.kind) {
+        ConversationKind.everyone => OthersCommand.scopeEveryone,
+        ConversationKind.server || ConversationKind.direct => OthersCommand.scopeChannel,
+        ConversationKind.person => OthersCommand.scopeOne,
+      };
+
+  static String _html(String text) =>
+      text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>');
+
+  void _toDirect(OthersCommand cmd, List<int> targets) =>
+      board.send(commandToDirect(targets.take(directCommandTargets).toList(), cmd.bytes));
+
+  /// Text a conversation: over the server as a Mumble text message (to the
+  /// channel, or to one person), and over direct comms as one of ours.
+  /// Returns false if it couldn't go anywhere.
+  bool sendText(Conversation c, String text) {
+    text = text.trim();
+    if (text.isEmpty) return false;
+    final m = mumble;
+    var sent = false;
+    OthersCommand direct() => newCommand((source, seq) => OthersCommand.sendText(source, seq, text)).withScope(_scopeOf(c));
+    switch (c.kind) {
+      case ConversationKind.everyone:
+        if (_serverUp) {
+          m!.sendText(_html(text) + _everyoneMark);
+          sent = true;
+        }
+        if (_directUp) {
+          _toDirect(direct(), const []);
+          sent = true;
+        }
+      case ConversationKind.server:
+        if (serverConversation?.key == c.key) {
+          m!.sendText(_html(text));
+          sent = true;
+        }
+      case ConversationKind.direct:
+        if (directConversation?.key == c.key) {
+          _toDirect(direct(), const []);
+          sent = true;
+        }
+      case ConversationKind.person:
+        final u = serverUser(personOf(c));
+        final b = u == null ? directBoard(personOf(c)) : null;
+        if (u != null) {
+          m!.sendTextTo(u.session, _html(text));
+          sent = true;
+        } else if (b != null) {
+          _toDirect(direct(), [b.id]);
+          sent = true;
+        }
+    }
+    if (sent) conversations.add(c, ConversationEntry(from: '', mine: true, kind: ConversationEntry.text, body: text));
+    return sent;
+  }
+
+  /// Send a command (for their Terminals or Lovense devices) to a
+  /// conversation: everyone in it, whichever ways reach them. Returns false
+  /// if it couldn't go anywhere.
+  bool sendCommandTo(Conversation c, OthersCommand command, {bool log = true}) {
+    final cmd = command.withScope(_scopeOf(c));
+    final m = mumble;
+    var sent = false;
+    void toServer(List<int> sessions) {
+      if (sessions.isEmpty) return;
+      m!.sendPluginData(sessions, commandDataId, cmd.bytes);
+      sent = true;
+    }
+    void toDirect(List<int> targets) {
+      _toDirect(cmd, targets);
+      sent = true;
+    }
+    final channelSessions = _serverUp ? [for (final u in m!.channelUsers) u.session] : const <int>[];
+    switch (c.kind) {
+      case ConversationKind.everyone:
+        if (_serverUp) toServer(channelSessions);
+        if (_directUp) toDirect(const []);
+      case ConversationKind.server:
+        if (serverConversation?.key == c.key) toServer(channelSessions);
+      case ConversationKind.direct:
+        if (directConversation?.key == c.key) toDirect(const []);
+      case ConversationKind.person:
+        final u = serverUser(personOf(c));
+        final b = u == null ? directBoard(personOf(c)) : null;
+        if (u != null) {
+          toServer([u.session]);
+        } else if (b != null) {
+          toDirect([b.id]);
+        }
+    }
+    if (sent && log) {
+      final op = Uint8List.sublistView(cmd.bytes, 8);
+      conversations.add(c, ConversationEntry(
+          from: '', mine: true, kind: _kindOf(op), body: describeCommand(op, mine: true)));
+    }
+    return sent;
+  }
+
+  static String _kindOf(Uint8List op) => op.isNotEmpty && (op[0] == OthersCommand.message || op[0] == OthersCommand.clear)
+      ? ConversationEntry.terminal
+      : ConversationEntry.lovense;
+
+  /// Texts lately, by who and what, so one sent to everyone who can hear
+  /// them, which comes both over the server and directly, shows once.
+  final Map<String, int> _recentTexts = {};
+  static const _sameTextFor = 10000;   // ms
+
+  bool _seenText(String from, String text) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _recentTexts.removeWhere((_, at) => now - at > _sameTextFor);
+    return _recentTexts.putIfAbsent('$from\n$text', () => now) != now;
+  }
+
+  /// Marks a server text as one for everyone who can hear us, for others'
+  /// apps; Mumble's own apps don't show it.
+  static const _everyoneMark = '<!-- everyone -->';
+
+  /// A text message on the server: to our channel, or to us alone.
+  void _onServerText(MumbleText t) {
+    final text = plainText(t.message);
+    if (_seenText(t.from, text)) return;
+    final c = t.private
+        ? personConversation(t.from)
+        : t.message.contains(_everyoneMark)
+            ? everyoneConversation
+            : (serverConversation ?? everyoneConversation);
+    conversations.add(c, ConversationEntry(from: t.from, mine: false, kind: ConversationEntry.text, body: text));
+  }
+
+  /// What someone sent our board, as it passes it on: into the conversation
+  /// it was for.
+  void _onHeard(Heard h) {
+    final c = switch (h.scope) {
+      OthersCommand.scopeOne => personConversation(h.from),
+      OthersCommand.scopeChannel => (h.direct ? directConversation : serverConversation) ?? everyoneConversation,
+      _ => everyoneConversation,
+    };
+    if (h.what == Heard.text && _seenText(h.from, h.textOf)) return;
+    final e = h.what == Heard.text
+        ? ConversationEntry(from: h.from, mine: false, kind: ConversationEntry.text, body: h.textOf)
+        : ConversationEntry(
+            from: h.from,
+            mine: false,
+            kind: h.what == Heard.terminal ? ConversationEntry.terminal : ConversationEntry.lovense,
+            body: describeCommand(h.data, mine: false),
+            done: h.done);
+    conversations.add(c, e);
   }
 
   // ----- The server -----
@@ -1009,11 +1158,7 @@ class CommController extends ChangeNotifier {
       mixer.receive(v.session, v.seq, v.opus, v.last, DateTime.now().millisecondsSinceEpoch);
       _heard(v.session, v.last);
     }));
-    _mumbleSubs.add(m.texts.listen((t) {
-      texts.add(t);
-      if (texts.length > 50) texts.removeAt(0);
-      _addTerminal(TerminalEntry(from: t.from, text: plainText(t.message)));
-    }));
+    _mumbleSubs.add(m.texts.listen(_onServerText));
     _mumbleSubs.add(m.pluginData.listen((d) => _onPluginData(m, d)));
     notifyListeners();
     try {
@@ -1118,7 +1263,7 @@ class CommController extends ChangeNotifier {
     _soundSub?.cancel();
     _directSoundSub?.cancel();
     _directPeerSub?.cancel();
-    _messageSub?.cancel();
+    _heardSub?.cancel();
     _directAvatarSub?.cancel();
     _directGroupSub?.cancel();
     _recordSub?.cancel();

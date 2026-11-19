@@ -63,6 +63,7 @@ const commVersionRemote = 2;
 const commVersionPeerFirmware = 5;
 const commVersionMessages = 6;
 const commVersionUpdate = 7;     // updating the firmware from the app, and status bit 5
+const commVersionHeard = 8;      // what others send the board, passed on as it comes (0x0F)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -81,7 +82,7 @@ const _msgDirectPeer = 0x08;
 const _msgDirectGroup = 0x09;
 const _msgRecord = 0x0A;
 const _msgCommand = 0x0B;
-const _msgMessage = 0x0C;
+const _msgHeard = 0x0F;
 const _msgDirectAvatar = 0x0D;
 const _msgUpdate = 0x0E;
 
@@ -163,13 +164,19 @@ class DirectAvatarPiece {
   DirectAvatarPiece(this.id, this.size, this.piece, this.pieces, this.pixels);
 }
 
-/// A message for the Terminal, passed on by the board once it's taken it.
-class TerminalMessage {
-  final String from;        // '' if they didn't say who it's from
+/// What someone sent the board, passed on as it came (commVersion 8): a
+/// text, or a command for its Terminal or Lovense devices, done or not.
+class Heard {
+  static const text = 0, terminal = 1, lovense = 2;    // comm_heard_t
   final bool direct;        // heard over direct comms, not the server
-  final bool appOnly;       // not shown on the display
-  final String text;
-  TerminalMessage(this.from, this.direct, this.appOnly, this.text);
+  final bool done;          // a command: taken, by the permission for its kind
+  final int what;
+  final int scope;          // who it was for (OthersCommand.scope*)
+  final String from;
+  final Uint8List data;     // the text, or the command from what to do on
+  Heard(this.direct, this.done, this.what, this.scope, this.from, this.data);
+
+  String get textOf => utf8.decode(data, allowMalformed: true);
 }
 
 class DirectGroupHeard {
@@ -226,9 +233,9 @@ Object? parseBoardMessage(Uint8List data) {
   if (data[0] == _msgDirectAvatar && data.length >= 8) {
     return DirectAvatarPiece(le32(1), data[5], data[6], data[7], Uint8List.sublistView(data, 8));
   }
-  if (data[0] == _msgMessage && data.length >= 3 && data.length >= 3 + data[2]) {
-    return TerminalMessage(utf8.decode(data.sublist(3, 3 + data[2]), allowMalformed: true), data[1] & 1 != 0,
-        data[1] & 2 != 0, utf8.decode(data.sublist(3 + data[2]), allowMalformed: true));
+  if (data[0] == _msgHeard && data.length >= 5 && data.length >= 5 + data[4]) {
+    return Heard(data[1] & 1 != 0, data[1] & 2 != 0, data[2], data[3],
+        utf8.decode(data.sublist(5, 5 + data[4]), allowMalformed: true), Uint8List.sublistView(data, 5 + data[4]));
   }
   if (data[0] == _msgDirectGroup && data.length >= 9) {
     final id = data.sublist(1, 5).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
@@ -385,14 +392,20 @@ int fnv1a(List<int> bytes) {
 /// does it if its wearer has allowed us, and only once, by its source and
 /// seq. Commands for the Lovense devices, and messages for the Terminal.
 class OthersCommand {
-  static const version = 1;
+  static const version = 2;
   static const stop = 0x00;
   static const level = 0x01;
   static const pattern = 0x02;
   static const speed = 0x03;
   static const react = 0x04;
   static const message = 0x10;
+  static const clear = 0x11;
+  static const text = 0x20;
   static const allMotors = 0xFF;
+
+  /// Who it's for, as the receivers see it: everyone who can hear us, the
+  /// channel it goes on, or them alone.
+  static const scopeEveryone = 0, scopeChannel = 1, scopeOne = 2;
 
   /// The kinds of motor, as lovense_motor_kind_t.
   static const vibrate = 0, rotate = 1, air = 2, oscillate = 3;
@@ -413,8 +426,12 @@ class OthersCommand {
         version,
         source & 0xFF, (source >> 8) & 0xFF, (source >> 16) & 0xFF, (source >> 24) & 0xFF,
         seq & 0xFF, (seq >> 8) & 0xFF,
+        scopeEveryone,      // set as it's sent (withScope)
         ...what,
       ]));
+
+  /// The same, for [scope].
+  OthersCommand withScope(int scope) => OthersCommand._(Uint8List.fromList(bytes)..[7] = scope);
 
   /// Stop every device, and any reaction.
   static OthersCommand stopAll(int source, int seq) => _make(source, seq, [stop]);
@@ -433,12 +450,19 @@ class OthersCommand {
   /// still, 4 motion, 5 tilt).
   static OthersCommand setReact(int source, int seq, int mode) => _make(source, seq, [react, mode & 0xFF]);
 
-  /// A message for the Terminal, shown after our name if it's [named];
-  /// otherwise nobody can see who it's from (but it still only goes to
-  /// those who've allowed us). [appOnly] keeps it off their display: it's
-  /// only in their app's Terminal.
-  static OthersCommand sendMessage(int source, int seq, String text, {bool named = true, bool appOnly = false}) =>
-      _make(source, seq, [message, (named ? 1 : 0) | (appOnly ? 2 : 0), ..._cut(utf8.encode(text), messageMax)]);
+  /// A message for their Terminal, as it is: added on a line of its own
+  /// ([append]) or in place of what's there, at a letter size (0 Auto, 1 to 6
+  /// for 8 to 48 px), and brought on screen if [show].
+  static OthersCommand terminal(int source, int seq, String text,
+          {bool append = true, bool show = true, int size = 0}) =>
+      _make(source, seq, [message, (append ? 1 : 0) | (show ? 2 : 0), size.clamp(0, 6), ..._cut(utf8.encode(text), messageMax)]);
+
+  /// Empty their Terminal.
+  static OthersCommand clearTerminal(int source, int seq) => _make(source, seq, [clear]);
+
+  /// A text, for their app (over direct comms: the server has its own).
+  static OthersCommand sendText(int source, int seq, String message) =>
+      _make(source, seq, [text, ..._cut(utf8.encode(message), messageMax)]);
 }
 
 /// The longest command the board takes (OTHERS_CMD_MAX), and the most

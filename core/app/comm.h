@@ -100,12 +100,16 @@
  *                  the version, and its phone's app's (0 long for none), then
  *                  its name: each board heard over direct comms, every couple
  *                  of seconds.
- *     0x0C message: 0C, flags (bit 0 heard over direct comms, bit 1 for the
- *                  app only, not shown on the display), the sender's name's
- *                  length (1, 0 if they didn't say who it's from) and the
- *                  name, then the text, in UTF-8: a message for the
- *                  Terminal from someone the wearer's allowed (others.h),
- *                  for the app's Terminal.
+ *     0x0C message: before COMM_VERSION 8, a message for the Terminal;
+ *                  0x0F has taken its place.
+ *     0x0F heard:  0F, flags (bit 0 heard over direct comms, bit 1 done:
+ *                  taken, by the permission for its kind), what it is
+ *                  (comm_heard_t), who it was for (OTHERS_SCOPE_*), the
+ *                  sender's name's length (1) and the name, then for a text,
+ *                  the text, in UTF-8, or for a command, the command from
+ *                  what to do on (others.h): a text or a command someone
+ *                  sent this board, done or not, for the app's
+ *                  conversations (from COMM_VERSION 8).
  *     0x0D direct avatar: 0D, a board's id (32, as 0x08's), its avatar's
  *                  size (1, pixels square), the piece (1), how many pieces
  *                  (1), then up to 100 of its pixels, RGB565, little endian,
@@ -182,8 +186,10 @@
  *      direct comms' avatars (0x0D)
  *   7  updating the firmware from the app (0x0E, and /version's "board"
  *      and "update"); the status's bit 5, another version of direct comms
- *      nearby */
-#define COMM_VERSION            7
+ *      nearby
+ *   8  what others send the board, texts and commands, passed on to the app
+ *      as it comes, done or not (0x0F), in place of 0x0C */
+#define COMM_VERSION            8
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4
@@ -255,9 +261,19 @@ void comm_set_talk(bool talk);
 
 bool comm_phone_connected(void);
 
-/* Pass a message for the Terminal, from someone allowed, on to the app
- * (0x0C). from is "" if they didn't say who it's from. From the UI loop. */
-void comm_message_to_phone(comm_transport_t via, const char *from, bool app_only, const uint8_t *text, size_t len);
+/* What someone sent this board, for the app (0x0F). */
+typedef enum
+{
+    COMM_HEARD_TEXT,        // a text, for the app only
+    COMM_HEARD_TERMINAL,    // a command for the Terminal
+    COMM_HEARD_LOVENSE,     // a command for the Lovense devices
+} comm_heard_t;
+
+/* Pass on to the app what someone sent: a text, or a command and whether it
+ * was done (others.h), with who it was for (OTHERS_SCOPE_*); data is the
+ * text, or the command from what to do on. From the UI loop. */
+void comm_heard_to_phone(comm_transport_t via, const char *from, comm_heard_t what, uint8_t scope, bool done,
+                         const uint8_t *data, size_t len);
 
 /* True while it's sending the voice to the phone. */
 bool comm_sending(void);
