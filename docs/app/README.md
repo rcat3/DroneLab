@@ -3,7 +3,7 @@
 The DroneLab app is the phone's half of your unit.  It links your unit to the rest of the hive, so you can talk and listen to other drones, text them and send them commands, records your voice for videos, runs the unit's display from your hand, and keeps the unit's firmware up to date.  It's for Android phones and tablets.
 
 <p align="center">
-<img src="../images/app_hivemind.png" width="260" alt="The Voice tab: who's in the hive, with their avatars, and the talk button">
+<img src="../images/app_hivemind.png" width="260" alt="The Voice tab: the channels, the people about with their avatars, who you're talking to, and the talk button">
 &nbsp;
 <img src="../images/app_remote.png" width="260" alt="The Remote tab: running the unit's display from the phone">
 </p>

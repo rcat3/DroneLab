@@ -75,7 +75,7 @@ The DroneLab display unit screws into the mask's voice port: a glowing 1.75" rou
 - **Remote operation:** the DroneLab app for Android runs the whole display unit from a phone over Bluetooth.  Change what's displayed on the screen and operate features without having to see the display.  Phones without the app (including iPhones) can run it through the display unit's own WiFi hotspot, in a web browser.  [The app](docs/app/README.md) · [Hotspot remote](docs/features/phone-remote.md)
 
 <p align="center">
-<a href="docs/app/voice.md"><img src="docs/images/app_hivemind.png" width="270" alt="The DroneLab app's Voice tab: the hive on the server and a unit heard directly, each with their avatar, and the talk button"></a>
+<a href="docs/app/voice.md"><img src="docs/images/app_hivemind.png" width="270" alt="The DroneLab app's Voice tab: the server and direct channels, the people about with their avatars, one picked to talk to alone, and the talk button"></a>
 &nbsp;
 <a href="docs/app/remote.md"><img src="docs/images/app_remote.png" width="270" alt="The DroneLab app's Remote tab, running the display unit's screen over Bluetooth"></a>
 </p>
