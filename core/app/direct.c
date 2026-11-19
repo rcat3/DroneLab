@@ -121,7 +121,16 @@ typedef struct
     uint8_t flags;
     uint8_t len;
     uint8_t opus[MAX_OPUS];
+    bool alone;                 // for one wearer alone: sealed with the pair's key
+    uint8_t to[OTHERS_KEY_LEN]; // theirs
 } voice_t;
+
+typedef struct
+{
+    uint8_t their[OTHERS_KEY_LEN];  // the other wearer's public key
+    uint8_t key[DIRECT_KEY_LEN];    // the two share
+    uint8_t id[4];                  // the first of the key's SHA-256, where the group's goes
+} pair_t;
 
 typedef struct
 {
@@ -225,7 +234,18 @@ static uint32_t dbg_sent, dbg_send_fail, dbg_heard, dbg_other, dbg_bad, dbg_repl
 
 static direct_voice_cb_t voice_cb;
 static void *voice_cb_data;
-static volatile bool talking;   // the wearer, for the hellos
+static volatile bool talking;   // the wearer, to anyone
+static bool talking_alone;      // to one wearer alone, which the hellos don't say
+
+// The pairs' keys: the UI loop writes, the others copy them whole (pairs_seq
+// is odd while they're being written). The task keys pair_gcm with the one
+// it used last.
+static pair_t pairs[DIRECT_PAIRS_MAX];
+static int pair_count;
+static volatile uint32_t pairs_seq;
+static mbedtls_gcm_context pair_gcm;
+static uint8_t pair_gcm_id[4];
+static bool pair_gcm_keyed;
 
 /* The open group's key, which every board knows. */
 static void open_key(uint8_t key[DIRECT_KEY_LEN])
@@ -281,8 +301,56 @@ static void nonce(uint8_t out[12], const uint8_t *header)
     memcpy(out + 8, header + 2, 4);     // the group
 }
 
-/* Seal plain (len bytes) and broadcast it. */
-static void send_sealed(const uint8_t *plain, size_t len)
+static int copy_pairs(pair_t *out)
+{
+    uint32_t seq;
+    int n;
+    do
+    {
+        seq = __atomic_load_n(&pairs_seq, __ATOMIC_SEQ_CST);
+        n = pair_count;
+        memcpy(out, pairs, sizeof(pairs));
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    } while ((seq & 1) || seq != __atomic_load_n(&pairs_seq, __ATOMIC_SEQ_CST));
+    return n < DIRECT_PAIRS_MAX ? n : DIRECT_PAIRS_MAX;
+}
+
+/* The pair with this id, or with the other wearer's key, if there's one. */
+static bool find_pair(const uint8_t *id, const uint8_t *their, pair_t *out)
+{
+    pair_t copy[DIRECT_PAIRS_MAX];
+    int n = copy_pairs(copy);
+    for (int i = 0; i < n; i++)
+    {
+        if ((id != NULL && memcmp(copy[i].id, id, 4) == 0) ||
+            (their != NULL && memcmp(copy[i].their, their, OTHERS_KEY_LEN) == 0))
+        {
+            *out = copy[i];
+            memset(copy, 0, sizeof(copy));
+            return true;
+        }
+    }
+    memset(copy, 0, sizeof(copy));
+    return false;
+}
+
+/* pair_gcm, keyed with this pair's key. On the task. */
+static mbedtls_gcm_context *pair_cipher(const pair_t *pair)
+{
+    if (!pair_gcm_keyed || memcmp(pair_gcm_id, pair->id, 4) != 0)
+    {
+        mbedtls_gcm_free(&pair_gcm);
+        mbedtls_gcm_init(&pair_gcm);
+        mbedtls_gcm_setkey(&pair_gcm, MBEDTLS_CIPHER_ID_AES, pair->key, 128);
+        memcpy(pair_gcm_id, pair->id, 4);
+        pair_gcm_keyed = true;
+    }
+    return &pair_gcm;
+}
+
+/* Seal plain (len bytes) with this key, its id where the group's goes, and
+ * broadcast it. */
+static void send_sealed_with(mbedtls_gcm_context *key, const uint8_t *key_id, const uint8_t *plain, size_t len)
 {
     uint8_t msg[RCAT_HAL_DIRECT_MAX];
     if (HEADER_LEN + len + TAG_LEN > sizeof(msg))
@@ -292,7 +360,7 @@ static void send_sealed(const uint8_t *plain, size_t len)
     uint32_t c = ++counter;
     msg[0] = MAGIC;
     msg[1] = DIRECT_VERSION;
-    memcpy(msg + 2, group_id, 4);
+    memcpy(msg + 2, key_id, 4);
     memcpy(msg + 6, &own_id, 4);
     msg[10] = (uint8_t)c;
     msg[11] = (uint8_t)(c >> 8);
@@ -301,13 +369,19 @@ static void send_sealed(const uint8_t *plain, size_t len)
     msg[14] = HOPS;
     uint8_t iv[12];
     nonce(iv, msg);
-    if (mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, len, iv, sizeof(iv), msg, CHECKED_LEN, plain,
+    if (mbedtls_gcm_crypt_and_tag(key, MBEDTLS_GCM_ENCRYPT, len, iv, sizeof(iv), msg, CHECKED_LEN, plain,
                                   msg + HEADER_LEN, TAG_LEN, msg + HEADER_LEN + len) == 0)
     {
         bool ok = rcat_hal_direct_send(msg, HEADER_LEN + len + TAG_LEN);
         DBG(ok ? dbg_sent++ : dbg_send_fail++);
         (void)ok;
     }
+}
+
+/* Seal plain with the group's key, and broadcast it. */
+static void send_sealed(const uint8_t *plain, size_t len)
+{
+    send_sealed_with(&gcm, group_id, plain, len);
 }
 
 /* Say the group's here, for boards that aren't in it to see it and ask to
@@ -426,7 +500,7 @@ static void send_hello(void)
 {
     uint8_t plain[2 + ASK_LEN + OTHERS_KEY_LEN + OTHERS_SIG_LEN + 2 * (1 + DIRECT_VERSION_MAX) + DIRECT_NAME_MAX];
     plain[0] = TYPE_HELLO;
-    plain[1] = talking ? HELLO_TALKING : 0;
+    plain[1] = talking && !talking_alone ? HELLO_TALKING : 0;
     size_t at = 2;
     if (avatar_ask(plain + 2))
     {
@@ -455,9 +529,15 @@ static void send_hello(void)
 }
 
 /* A packet of voice, with the REPEATS before it too, so that as many lost in
- * a row come back from the next. */
+ * a row come back from the next: to the group, or sealed for one wearer
+ * alone, if there's a pair's key for them (else it's dropped). */
 static void send_voice(const voice_t *v)
 {
+    pair_t pair;
+    if (v->alone && !find_pair(NULL, v->to, &pair))
+    {
+        return;
+    }
     static voice_t before[REPEATS];     // newest first, from this task only
     uint8_t plain[RCAT_HAL_DIRECT_MAX];
     plain[0] = TYPE_VOICE;
@@ -480,7 +560,15 @@ static void send_voice(const voice_t *v)
         memcpy(plain + len, b->opus, b->len);
         len += b->len;
     }
-    send_sealed(plain, len);
+    if (v->alone)
+    {
+        send_sealed_with(pair_cipher(&pair), pair.id, plain, len);
+        memset(&pair, 0, sizeof(pair));
+    }
+    else
+    {
+        send_sealed(plain, len);
+    }
     memmove(&before[1], &before[0], (REPEATS - 1) * sizeof(before[0]));
     before[0] = *v;
     if (v->flags & DIRECT_LAST)
@@ -839,7 +927,7 @@ static void heard_ask(const uint8_t *ask)
 static void deliver(uint32_t id, uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len)
 {
 #if RCAT_DIRECT_ECHO
-    voice_t v = { .seq = seq, .flags = flags, .len = (uint8_t)len };
+    voice_t v = { .seq = seq, .flags = (uint8_t)(flags & (DIRECT_FIRST | DIRECT_LAST)), .len = (uint8_t)len };
     memcpy(v.opus, opus, len);
     talking = !(flags & DIRECT_LAST);
     send_voice(&v);
@@ -877,6 +965,34 @@ bool direct_other_voice(void)
     return running && at != 0 && rcat_hal_millis() - at < OTHER_VOICE_MS;
 }
 
+/* A board of the group's that's about, if this is one; NULL if not. */
+static peer_t *known_peer(uint32_t id, uint32_t now)
+{
+    for (int i = 0; i < DIRECT_PEERS_MAX; i++)
+    {
+        if (peers[i].used && peers[i].id == id && now - peers[i].heard_ms <= PEER_GONE_MS)
+        {
+            return &peers[i];
+        }
+    }
+    return NULL;
+}
+
+/* One of ours talking to another of ours alone, which can't be opened here:
+ * only passed on, as the group's are, if it's heard from far off. Its
+ * counter can't be trusted, as it can't be checked, so it isn't kept. */
+static void passing_by(const peer_t *p, const uint8_t *msg, size_t len, uint32_t c, int8_t rssi, uint32_t now)
+{
+    if (msg[14] == 0)
+    {
+        relay_cancel(p->id, c);     // passed on by another: no need for us to
+    }
+    else if (rssi < RELAY_RSSI && (int32_t)(c - p->counter) > 0 && !RCAT_DIRECT_ECHO)
+    {
+        relay_later(msg, len, p->id, c, now);
+    }
+}
+
 static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
 {
     DBG(dbg_heard++);
@@ -885,8 +1001,7 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
         heard_beacon(msg, len, rssi, now);
         return;
     }
-    if (len < HEADER_LEN + 1 + TAG_LEN || msg[0] != MAGIC || msg[1] != DIRECT_VERSION ||
-        memcmp(msg + 2, group_id, 4) != 0)
+    if (len < HEADER_LEN + 1 + TAG_LEN || msg[0] != MAGIC || msg[1] != DIRECT_VERSION)
     {
         DBG(dbg_other++);
         if (len >= HEADER_LEN && msg[0] == MAGIC && msg[1] == DIRECT_VERSION)
@@ -894,7 +1009,7 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
             heard_other(now);
         }
         heard_other_firmware(msg, len, now);
-        return;     // not ours: another version, or another group
+        return;     // not ours: another version
     }
     uint32_t id, c;
     memcpy(&id, msg + 6, 4);
@@ -903,15 +1018,41 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
         return;
     }
     c = msg[10] | (msg[11] << 8) | (msg[12] << 16) | ((uint32_t)msg[13] << 24);
+
+    // The group's; or from one of ours, for this board alone, or for another
+    // of ours alone; or another group's
+    bool alone = memcmp(msg + 2, group_id, 4) != 0;
+    pair_t pair;
+    if (alone)
+    {
+        peer_t *from = known_peer(id, now);
+        if (from == NULL)
+        {
+            DBG(dbg_other++);
+            heard_other(now);
+            return;     // another group's
+        }
+        if (!find_pair(msg + 2, NULL, &pair) || !from->has_key ||
+            memcmp(from->key, pair.their, OTHERS_KEY_LEN) != 0)
+        {
+            passing_by(from, msg, len, c, rssi, now);
+            return;
+        }
+    }
     size_t plain_len = len - HEADER_LEN - TAG_LEN;
     uint8_t plain[RCAT_HAL_DIRECT_MAX];
     uint8_t iv[12];
     nonce(iv, msg);
-    if (mbedtls_gcm_auth_decrypt(&gcm, plain_len, iv, sizeof(iv), msg, CHECKED_LEN, msg + HEADER_LEN + plain_len,
-                                 TAG_LEN, msg + HEADER_LEN, plain) != 0)
+    int bad = mbedtls_gcm_auth_decrypt(alone ? pair_cipher(&pair) : &gcm, plain_len, iv, sizeof(iv), msg,
+                                       CHECKED_LEN, msg + HEADER_LEN + plain_len, TAG_LEN, msg + HEADER_LEN, plain);
+    if (alone)
+    {
+        memset(&pair, 0, sizeof(pair));
+    }
+    if (bad != 0 || (alone && plain[0] != TYPE_VOICE))
     {
         DBG(dbg_bad++);
-        return;     // not the group's key, or tampered with
+        return;     // not the key, or tampered with; or more than voice for one alone
     }
 
     __atomic_add_fetch(&peers_seq, 1, __ATOMIC_SEQ_CST);
@@ -921,7 +1062,7 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
     {
         relay_cancel(id, c);    // passed on by another: no need for us to
     }
-    else if (msg[14] > 0 && rssi < RELAY_RSSI && !RCAT_DIRECT_ECHO)
+    else if (!alone && msg[14] > 0 && rssi < RELAY_RSSI && !RCAT_DIRECT_ECHO)
     {
         relay_later(msg, len, id, c, now);  // heard from far off: pass it on
     }
@@ -979,7 +1120,7 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
     {
         DBG(dbg_voice_in++);
         uint16_t seq = plain[1] | (plain[2] << 8);
-        uint8_t flags = plain[3];
+        uint8_t flags = (uint8_t)((plain[3] & (DIRECT_FIRST | DIRECT_LAST)) | (alone ? DIRECT_PRIVATE : 0));
         size_t cur_len = plain[4];
         const uint8_t *cur = plain + 5;
         // Those before it that went missing are in it too, newest first
@@ -1001,7 +1142,7 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
             for (int i = (missed < have ? missed : have) - 1; i >= 0; i--)
             {
                 DBG(dbg_recovered++);
-                deliver(id, (uint16_t)(seq - 1 - i), 0, at[i], lens[i]);
+                deliver(id, (uint16_t)(seq - 1 - i), alone ? DIRECT_PRIVATE : 0, at[i], lens[i]);
             }
         }
         deliver(id, seq, flags, cur, cur_len);
@@ -1031,6 +1172,7 @@ static void direct_task(void *arg)
         {
             voice_t *v = &voice_queue[voice_read % VOICE_QUEUE];
             talking = !(v->flags & DIRECT_LAST);
+            talking_alone = talking && v->alone;
             send_voice(v);
             __atomic_store_n(&voice_read, voice_read + 1, __ATOMIC_RELEASE);
         }
@@ -1201,6 +1343,7 @@ void direct_init(void)
         peer_avatars = NULL;
     }
     mbedtls_gcm_init(&gcm);
+    mbedtls_gcm_init(&pair_gcm);
     const settings_t *s = settings_get();
     if (voice_queue == NULL || !rcat_hal_task_start("direct", direct_task, NULL, TASK_STACK))
     {
@@ -1378,7 +1521,7 @@ const char *direct_own_name(void)
     return own_name;
 }
 
-void direct_send_voice(uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len)
+void direct_send_voice(uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len, const uint8_t *to)
 {
     if (!running || voice_queue == NULL || len > MAX_OPUS)
     {
@@ -1399,7 +1542,61 @@ void direct_send_voice(uint16_t seq, uint8_t flags, const uint8_t *opus, size_t 
     {
         memcpy(v->opus, opus, len);
     }
+    v->alone = to != NULL;
+    if (to != NULL)
+    {
+        memcpy(v->to, to, OTHERS_KEY_LEN);
+    }
     __atomic_store_n(&voice_write, w + 1, __ATOMIC_RELEASE);
+}
+
+void direct_clear_pairs(void)
+{
+    __atomic_add_fetch(&pairs_seq, 1, __ATOMIC_SEQ_CST);
+    memset(pairs, 0, sizeof(pairs));
+    pair_count = 0;
+    __atomic_add_fetch(&pairs_seq, 1, __ATOMIC_SEQ_CST);
+}
+
+void direct_add_pair(const uint8_t *their_key, const uint8_t *key)
+{
+    uint8_t hash[32];
+    mbedtls_sha256(key, DIRECT_KEY_LEN, hash, 0);
+    __atomic_add_fetch(&pairs_seq, 1, __ATOMIC_SEQ_CST);
+    // In place of theirs, if there's one already
+    int at = 0;
+    while (at < pair_count && memcmp(pairs[at].their, their_key, OTHERS_KEY_LEN) != 0)
+    {
+        at++;
+    }
+    if (at < DIRECT_PAIRS_MAX)
+    {
+        memcpy(pairs[at].their, their_key, OTHERS_KEY_LEN);
+        memcpy(pairs[at].key, key, DIRECT_KEY_LEN);
+        memcpy(pairs[at].id, hash, 4);
+        pair_count = at < pair_count ? pair_count : at + 1;
+    }
+    __atomic_add_fetch(&pairs_seq, 1, __ATOMIC_SEQ_CST);
+}
+
+bool direct_can_reach(const uint8_t *their_key)
+{
+    pair_t pair;
+    if (!running || !find_pair(NULL, their_key, &pair))
+    {
+        return false;
+    }
+    memset(&pair, 0, sizeof(pair));
+    direct_peer_t about[DIRECT_PEERS_MAX];
+    int n = direct_peers(about, DIRECT_PEERS_MAX);
+    for (int i = 0; i < n; i++)
+    {
+        if (about[i].has_key && memcmp(about[i].key, their_key, OTHERS_KEY_LEN) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 void direct_set_voice_cb(direct_voice_cb_t cb, void *user_data)
@@ -1574,8 +1771,21 @@ const char *direct_own_name(void)
     return "";
 }
 
-void direct_send_voice(uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len)
+void direct_send_voice(uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len, const uint8_t *to)
 {
+}
+
+void direct_clear_pairs(void)
+{
+}
+
+void direct_add_pair(const uint8_t *their_key, const uint8_t *key)
+{
+}
+
+bool direct_can_reach(const uint8_t *their_key)
+{
+    return false;
 }
 
 void direct_set_voice_cb(direct_voice_cb_t cb, void *user_data)

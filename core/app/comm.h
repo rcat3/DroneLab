@@ -87,6 +87,19 @@
  *                  (others.h; before COMM_VERSION 10, names). Sent whole each time it connects or the list
  *                  changes, in pieces if it's long; none, an empty first
  *                  piece (from COMM_VERSION 9).
+ *     0x13 talk to: 13, who to (comm_to_t), flags (bit 0 the person's on
+ *                  the server, so they can be talked to through it), then
+ *                  for one person their public key (32), then the name to
+ *                  show (the channel's, the group's or theirs), in UTF-8.
+ *                  Each time it connects, and when any of it changes (from
+ *                  COMM_VERSION 11). In its place, the board talks to the
+ *                  channel or group last picked.
+ *     0x14 pairs:  14, flags (bit 0 the first piece: the list starts
+ *                  afresh), then for each person: their public key (32) and
+ *                  the key the two wearers share (16), for talking to them
+ *                  alone over direct comms (direct_add_pair). Each time it
+ *                  connects and when there's a new one, in pieces if it's
+ *                  long (from COMM_VERSION 11).
  *     0x0E update: 0E, flags (bit 0 the start, bit 1 the end, bit 2 asks
  *                  for an ack), then for the start: the firmware's length
  *                  (4, little endian), the board it's for
@@ -111,7 +124,14 @@
  *     0x0A recorded sound: as 0x01 sound, while recording, at 48 kb/s.
  *     0x07 direct sound: 07, the sender's id (32 bits, little endian), seq
  *                  (16), flags, then the Opus packet: another board's voice,
- *                  heard over direct comms (see direct.h), as 0x01's.
+ *                  heard over direct comms (see direct.h), as 0x01's; flags
+ *                  bit 2 marks voice for this board's wearer alone (from
+ *                  COMM_VERSION 11).
+ *     0x13 talked: 13, what (0 a transmission started, 1 it ended, 2 it
+ *                  was refused: nobody would hear it), flags (bit 0 voice
+ *                  mode started it, bit 1 it goes over direct comms, bit 2
+ *                  to one person alone): for the app's tones (from
+ *                  COMM_VERSION 11). Not for recording.
  *     0x08 direct peer: 08, a board's id (32), how strong it's heard (dBm,
  *                  signed), flags (bit 0 talking, bit 1 versions follow,
  *                  bit 2 its wearer's key follows), then, with bit 2, its
@@ -213,8 +233,13 @@
  *   9  who's muted in the app (0x10)
  *  10  commands signed by their sender's identity key: the wearer's key
  *      (0x11), the sender's key in what's heard (0x0F), and who's muted by
- *      key (0x10) */
-#define COMM_VERSION            10
+ *      key (0x10)
+ *  11  who talking goes to (0x13 from the phone), in place of the server or
+ *      direct comms picked in the settings (/api/comm's "talk"); the pairs'
+ *      keys for talking to one alone over direct comms (0x14); voice for
+ *      the wearer alone (0x07's bit 2); and transmissions started, ended
+ *      and refused (0x13 to the phone) */
+#define COMM_VERSION            11
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4
@@ -258,20 +283,36 @@ bool comm_running(void);
 comm_mode_t comm_mode(void);
 void comm_set_mode(comm_mode_t mode);
 
-/* Where talking goes: to the server, through the phone, or board to board
- * over direct comms (direct.h); never both. It's the one chosen, unless
- * nobody's there to hear it and someone's on the other, decided as each
- * transmission starts. */
+/* How talking goes: to the server, through the phone, or board to board
+ * over direct comms (direct.h); never both. */
 typedef enum
 {
     COMM_TALK_SERVER,
     COMM_TALK_DIRECT,
     COMM_TALK_COUNT,
 } comm_transport_t;
-void comm_set_talk_on(comm_transport_t transport);
-comm_transport_t comm_talk_on(void);            // as chosen
-comm_transport_t comm_talk_now(void);           // where talking would go now, or is going
-bool comm_talk_switched(void);                  // comm_talk_now() isn't the one chosen
+
+/* Who talking goes to: the channel on the server, the direct comms group,
+ * or one person alone, as the app picks (0x13). One person goes over direct
+ * comms if their board's about, else over the server, if the app says
+ * they're on it. Decided as each transmission starts: if nobody would hear
+ * it, it doesn't start, and the app's told (0x13), for a tone. */
+typedef enum
+{
+    COMM_TO_SERVER,
+    COMM_TO_DIRECT,
+    COMM_TO_PERSON,
+    COMM_TO_COUNT,
+} comm_to_t;
+
+/* Talk to the server's channel or the direct comms group. Remembered, for
+ * the next startup; one person isn't. */
+void comm_talk_to_channel(comm_transport_t channel);
+comm_to_t comm_talk_to(void);
+const char *comm_talk_to_name(void);            // the channel, group or person, to show; from the UI loop
+comm_transport_t comm_talk_now(void);           // how talking would go now, or is going
+bool comm_talk_heard(void);                     // whether anyone would hear it now
+bool comm_talk_refused(void);                   // talking was refused just now, as nobody would hear it
 
 /* True while the phone's recording (0x0A). */
 bool comm_recording(void);

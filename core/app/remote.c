@@ -555,7 +555,7 @@ static void write_comm(json_t *j)
     jprintf(j, "{\"available\":%d,\"mode\":%d,\"mute\":%u,\"show\":%u,\"voice\":%d,\"talk\":%d,\"talk_now\":%d,"
                "\"voices\":[",
             comm_available() ? 1 : 0, (int)comm_mode(), s->comm_mute_speaker, s->comm_auto_show, comm_voice_effect(),
-            (int)comm_talk_on(), (int)comm_talk_now());
+            (int)comm_talk_to(), (int)comm_talk_now());
     for (size_t i = 0; i < voice_fx_preset_count(); i++)
     {
         jprintf(j, "%s", i ? "," : "");
@@ -742,10 +742,11 @@ static void set_comm(const char *query)
     {
         comm_set_mode((comm_mode_t)mode);
     }
+    // From apps before COMM_VERSION 11: the channel to talk to
     int talk = query_int(query, "talk", -1);
     if (talk >= 0 && talk < COMM_TALK_COUNT)
     {
-        comm_set_talk_on((comm_transport_t)talk);
+        comm_talk_to_channel((comm_transport_t)talk);
     }
     int voice = query_int(query, "voice", -2);
     if (voice >= -1)

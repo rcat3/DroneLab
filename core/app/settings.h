@@ -66,7 +66,7 @@ typedef struct
     char direct_group[SETTINGS_DIRECT_NAME_LEN];    // the group's name, to show
     char direct_name[SETTINGS_DIRECT_NAME_LEN];     // what the others see this board as; empty for its own name
     uint8_t comm_voice_effect;              // the comm channel's own voice effect: 0 the speaker's, else its preset + 1
-    uint8_t comm_talk_on;                   // comm_transport_t: where talking goes, by choice
+    uint8_t comm_talk_on;                   // comm_transport_t: the channel talked to, the server's or direct comms' group
     uint8_t direct_channel;                 // direct comms' group's channel: 1, 6 or 11; 0 for 6
     uint8_t direct_long_range;              // 1 if the group sends in Long Range mode
     uint8_t speaker;                        // SETTINGS_SPEAKER_*: whether the housing has a speaker

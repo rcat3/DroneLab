@@ -66,8 +66,9 @@ const char *remote_page_html(size_t *len);
  * {"available", "mode", "mute" (the speaker while it sends), "show" (when to
  * come to the Comm screen: SETTINGS_SHOW_* bits), "voice" (its own voice
  * effect, -1 for the speaker's), "voices" (the effects' names), "talk"
- * (comm_transport_t, as chosen), "talk_now" (where talking goes now)}, and
- * POST /api/comm?m=&mute=&show=&voice=&talk= changes any of them and answers
+ * (comm_to_t: who talking goes to), "talk_now" (comm_transport_t: how it
+ * goes now)}, and POST /api/comm?m=&mute=&show=&voice=&talk= changes any of
+ * them, talk being the channel to talk to (comm_transport_t), and answers
  * the same. With direct comms (see
  * direct.h), the answer has "direct": {"on", "keyed" (1 for a group with a
  * key, 0 for the open group), "group" (its name), "name" (this board's),

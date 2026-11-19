@@ -406,10 +406,12 @@ static void show_status(void)
     }
     else if (tx)
     {
-        // Where it's going: the server's channel, or the direct group
-        const char *channel = comm_server_channel();
-        snprintf(text, sizeof(text), "%s",
-                 transport == COMM_TALK_DIRECT ? direct_group_name() : channel[0] ? channel : "SERVER");
+        // Who it's going to: the server's channel, the direct group, or one person
+        snprintf(text, sizeof(text), "%s", comm_talk_to_name());
+    }
+    else if (comm_talk_refused())
+    {
+        snprintf(text, sizeof(text), "NOBODY HEARS");
     }
     else if (hearing > 0)
     {
@@ -780,13 +782,27 @@ static lv_obj_t *direct_page;
 static lv_obj_t *direct_switch;
 static lv_obj_t *direct_group_label;
 static lv_obj_t *direct_peers_label;
-static lv_obj_t *talk_on_buttons;
+static lv_obj_t *talk_to_label;
+static lv_obj_t *talk_to_buttons;
 
 static void show_direct(void)
 {
     bool on = direct_running();
     lv_obj_set_state(direct_switch, LV_STATE_CHECKED, on);
-    ui_check_choice(talk_on_buttons, comm_talk_on());     // the app can change it too
+    // Who talking goes to: the app can change it too, to one person
+    comm_to_t to = comm_talk_to();
+    if (to == COMM_TO_PERSON)
+    {
+        lv_buttonmatrix_clear_button_ctrl_all(talk_to_buttons, LV_BUTTONMATRIX_CTRL_CHECKED);
+        char who[16 + COMM_NAME_MAX];
+        snprintf(who, sizeof(who), "Talk to: %s", comm_talk_to_name());
+        set_label(talk_to_label, who);
+    }
+    else
+    {
+        ui_check_choice(talk_to_buttons, to == COMM_TO_DIRECT ? 1 : 0);
+        set_label(talk_to_label, "Talk to");
+    }
     char text[160];
     snprintf(text, sizeof(text), "%s, freq %u%s\nAs: %s", direct_group_name(), direct_channel(),
              direct_long_range() ? ", LR" : "", direct_own_name());
@@ -839,12 +855,12 @@ static void direct_switch_cb(lv_event_t *e)
     show_direct();
 }
 
-static void talk_on_cb(lv_event_t *e)
+static void talk_to_cb(lv_event_t *e)
 {
-    uint32_t selected = lv_buttonmatrix_get_selected_button(talk_on_buttons);
+    uint32_t selected = lv_buttonmatrix_get_selected_button(talk_to_buttons);
     if (selected < COMM_TALK_COUNT)
     {
-        comm_set_talk_on((comm_transport_t)selected);
+        comm_talk_to_channel((comm_transport_t)selected);
     }
 }
 
@@ -861,15 +877,18 @@ static void add_direct_page(ui_feature_t *feature)
     lv_obj_set_size(direct_switch, ui_px(64), ui_px(32));
     lv_obj_align(direct_switch, LV_ALIGN_CENTER, 0, ui_px(-60));
 
-    // Where talking goes; the other, if nobody's on this one and someone's
-    // on that
-    lv_obj_t *talk_label = lv_label_create(direct_page);
-    lv_label_set_text(talk_label, "Talk on");
-    lv_obj_set_style_text_color(talk_label, COLOR_MUTED, 0);
-    lv_obj_align(talk_label, LV_ALIGN_CENTER, 0, ui_px(-32));
-    static const char *const transports[] = { "Server", "Direct", "" };
-    talk_on_buttons = ui_add_choices(direct_page, transports, ui_px(170), ui_px(30), ui_px(-9));
-    lv_obj_add_event_cb(talk_on_buttons, talk_on_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    // Who talking goes to: the server's channel or the direct one, from here, or
+    // one person, from the app
+    talk_to_label = lv_label_create(direct_page);
+    lv_label_set_text(talk_to_label, "Talk to");
+    lv_label_set_long_mode(talk_to_label, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(talk_to_label, ui_px(170));
+    lv_obj_set_style_text_align(talk_to_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(talk_to_label, COLOR_MUTED, 0);
+    lv_obj_align(talk_to_label, LV_ALIGN_CENTER, 0, ui_px(-32));
+    static const char *const channels[] = { "Server", "Direct", "" };
+    talk_to_buttons = ui_add_choices(direct_page, channels, ui_px(170), ui_px(30), ui_px(-9));
+    lv_obj_add_event_cb(talk_to_buttons, talk_to_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(direct_switch, direct_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     direct_group_label = lv_label_create(direct_page);

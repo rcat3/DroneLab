@@ -64,6 +64,19 @@
  * A board ignores the group's broadcasts from a sender whose counter hasn't
  * gone up, so a recorded one can't be played back.
  *
+ * Talking to one wearer alone: voice as above, but sealed with a key only
+ * the two of them have, a pair's (direct_add_pair), and its id (the first 4
+ * bytes of its SHA-256) where the group's goes. Their apps make the key from
+ * the two wearers' identity keys, so there's nothing to swap first. A board
+ * holds its pairs' keys as well as its group's, so it hears the group and
+ * the one talking to it alone, on the same channel. It only takes what's
+ * sealed with a pair's key from the board whose wearer's key (from its
+ * hello, checked) is the other of the pair. The other boards of the group
+ * can't open it: they see it's from one of theirs, and leave it, but for
+ * relaying it as they would their group's. Nothing else changes, so it
+ * needs no new DIRECT_VERSION, and boards from before it hear their group
+ * as ever.
+ *
  * Relaying: a board that hears one of its group's broadcasts weakly, as if
  * from far off, passes it on, as it is but for one hop fewer, after a short,
  * random wait, unless it hears another board pass it on first. So boards
@@ -106,8 +119,11 @@
 #define DIRECT_COMMAND_TARGETS  1       // boards a command's for, at most: one, or every board (0)
 #define DIRECT_CHANNEL_DEFAULT  6       // and the open group's
 
+#define DIRECT_PAIRS_MAX        DIRECT_PEERS_MAX
+
 #define DIRECT_FIRST            0x01    // voice flags, as the comm channel's
 #define DIRECT_LAST             0x02
+#define DIRECT_PRIVATE          0x04    // as passed on to direct_voice_cb_t: for this board alone, by a pair's key
 
 /* Set it up, and start it if it was on when the board was last switched
  * off. Call it once at startup. */
@@ -166,8 +182,22 @@ const char *direct_own_name(void);
  * The app makes it the same way. Slow: a second or so. */
 void direct_key(const char *group, const char *passphrase, uint8_t key[DIRECT_KEY_LEN]);
 
-/* Broadcast one packet of the wearer's voice. From any one task. */
-void direct_send_voice(uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len);
+/* Broadcast one packet of the wearer's voice: to the group, or, with to,
+ * sealed with the key of the pair with that wearer (their public key), for
+ * them alone. From any one task. */
+void direct_send_voice(uint16_t seq, uint8_t flags, const uint8_t *opus, size_t len, const uint8_t *to);
+
+/* The pairs' keys, from the app: for each, the other wearer's public key
+ * (32, as a peer's hello gives it) and the key the two share
+ * (DIRECT_KEY_LEN). Cleared, then added one by one, from the UI loop; kept
+ * until the board's switched off. */
+void direct_clear_pairs(void);
+void direct_add_pair(const uint8_t *their_key, const uint8_t *key);
+
+/* Whether the wearer with this public key can be talked to alone now: their
+ * board's about, with their key checked, and there's a pair's key for them.
+ * From any task. */
+bool direct_can_reach(const uint8_t *their_key);
 
 /* Send a command for others (others.h) to the boards with these ids
  * (direct_peer_t's), or, with count 0, to every board in the group. From the

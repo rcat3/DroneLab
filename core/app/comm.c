@@ -124,6 +124,19 @@
 #define PEER_AVATAR_BURST   6       // pieces each comm_poll
 #define HEARD_DIRECT        0x01
 #define HEARD_DONE          0x02
+#define MSG_TALK_TO         0x13    // from the phone: who talking goes to
+#define TALK_TO_ON_SERVER   0x01
+#define MSG_TALKED          0x13    // to the phone: a transmission started, ended or was refused
+#define TALKED_STARTED      0
+#define TALKED_ENDED        1
+#define TALKED_REFUSED      2
+#define TALKED_BY_VOICE     0x01
+#define TALKED_DIRECT       0x02
+#define TALKED_ALONE        0x04
+#define MSG_PAIRS           0x14    // from the phone: the pairs' keys, for talking to one alone over direct comms
+#define PAIRS_FIRST         0x01
+#define PAIR_ENTRY          (OTHERS_KEY_LEN + DIRECT_KEY_LEN)
+#define REFUSED_SHOWN_MS    1500    // the screen says nobody would hear, for this long
 // The beep comes out of the speaker about this long after the speaker's
 // task makes it (as voice_lab.c), so it's put in the recording then too
 #define BEEP_OUT_DELAY_MS   25
@@ -191,7 +204,21 @@ static char hearing[COMM_HEARING_MAX][COMM_NAME_MAX];
 static uint8_t hearing_avatar[COMM_HEARING_MAX];
 static uint8_t hearing_transport[COMM_HEARING_MAX];
 static bool audio_on;               // the voice is listened to, and the talk button used
-static volatile comm_transport_t tx_transport;  // where the transmission going out goes
+static volatile comm_transport_t tx_transport;  // how the transmission going out goes
+static volatile bool tx_alone;                  // to one person alone, over direct comms
+
+// Who talking goes to: the UI loop writes it, the encoder copies it whole
+// (target_seq is odd while it's being written)
+typedef struct
+{
+    comm_to_t to;
+    bool on_server;                 // the person's on the server, as the app says
+    uint8_t key[OTHERS_KEY_LEN];    // theirs
+    char name[COMM_NAME_MAX];
+} target_t;
+static target_t target;
+static volatile uint32_t target_seq;
+static volatile uint32_t refused_ms;            // when talking was last refused, 0 for never
 static volatile bool recording;     // the phone's recording what's said, and nothing goes anywhere else
 static uint32_t beep_seen;          // speaker_beep_count(), by the microphone's task
 static uint32_t beep_pos = UINT32_MAX;  // samples since the speaker made it, UINT32_MAX while there's none
@@ -370,26 +397,64 @@ static void send_status(void)
     send_retrying(msg, sizeof(msg));
 }
 
-/* Where talking goes now: the one chosen, unless nobody's on it to hear and
- * someone's on the other. From any task: what it reads is set whole. */
-static comm_transport_t choose_transport(void)
+static void copy_target(target_t *out)
 {
-    comm_transport_t pref = settings_get()->comm_talk_on < COMM_TALK_COUNT ?
-                            (comm_transport_t)settings_get()->comm_talk_on : COMM_TALK_SERVER;
-    // The server, through the phone; an app that doesn't say, as if it's there
-    bool server_up = running && rcat_hal_ble_peer_connected() &&
-                     (server_state == COMM_SERVER_CONNECTED || server_state == COMM_SERVER_UNKNOWN);
-    bool server_heard = server_up && (server_state == COMM_SERVER_UNKNOWN || server_others > 0);
-    bool direct_up = direct_running();
-    direct_peer_t peers[DIRECT_PEERS_MAX];
-    bool direct_heard = direct_up && direct_peers(peers, DIRECT_PEERS_MAX) > 0;
-    if (pref == COMM_TALK_SERVER)
+    uint32_t seq;
+    do
     {
-        return server_up && (server_heard || !direct_heard) ? COMM_TALK_SERVER :
-               direct_up                                    ? COMM_TALK_DIRECT : COMM_TALK_SERVER;
+        seq = __atomic_load_n(&target_seq, __ATOMIC_SEQ_CST);
+        memcpy(out, &target, sizeof(target));
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    } while ((seq & 1) || seq != __atomic_load_n(&target_seq, __ATOMIC_SEQ_CST));
+}
+
+static void set_target(const target_t *t)
+{
+    __atomic_add_fetch(&target_seq, 1, __ATOMIC_SEQ_CST);
+    target = *t;
+    __atomic_add_fetch(&target_seq, 1, __ATOMIC_SEQ_CST);
+}
+
+typedef enum
+{
+    ROUTE_NONE,             // nobody would hear it
+    ROUTE_SERVER,
+    ROUTE_DIRECT,           // to the group
+    ROUTE_DIRECT_ALONE,     // to one person, sealed for them
+} route_t;
+
+/* How talking would go to who it's for now, if anyone would hear it: one
+ * person over direct comms if their board's about, else over the server.
+ * From any task: what it reads is set whole. */
+static route_t choose_route(const target_t *t)
+{
+    // The server, through the phone; an app that doesn't say, as if it's there
+    bool phone = running && rcat_hal_ble_peer_connected();
+    bool server_up = phone && (server_state == COMM_SERVER_CONNECTED || server_state == COMM_SERVER_UNKNOWN);
+    bool direct_up = direct_running();
+    switch (t->to)
+    {
+    case COMM_TO_PERSON:
+        if (direct_up && direct_can_reach(t->key))
+        {
+            return ROUTE_DIRECT_ALONE;
+        }
+        return phone && server_state == COMM_SERVER_CONNECTED && t->on_server ? ROUTE_SERVER : ROUTE_NONE;
+    case COMM_TO_DIRECT:
+    {
+        direct_peer_t peers[DIRECT_PEERS_MAX];
+        return direct_up && direct_peers(peers, DIRECT_PEERS_MAX) > 0 ? ROUTE_DIRECT : ROUTE_NONE;
     }
-    return direct_up && (direct_heard || !server_heard) ? COMM_TALK_DIRECT :
-           server_up                                    ? COMM_TALK_SERVER : COMM_TALK_DIRECT;
+    default:
+        return server_up && (server_state == COMM_SERVER_UNKNOWN || server_others > 0) ? ROUTE_SERVER : ROUTE_NONE;
+    }
+}
+
+/* Tell the phone a transmission started, ended or was refused. */
+static void send_talked(uint8_t what, uint8_t flags)
+{
+    uint8_t msg[3] = { MSG_TALKED, what, flags };
+    send_retrying(msg, sizeof(msg));
 }
 
 static bool talking(void)
@@ -422,6 +487,9 @@ static void encoder_task(void *arg)
     uint16_t seq = 0;
     bool first = false;
     bool tx_record = false;     // the transmission going out is a recording
+    bool refused = false;       // nobody would hear it: not until it's let go, and talked again
+    uint8_t tx_flags = 0;       // TALKED_*, for its end
+    uint8_t tx_key[OTHERS_KEY_LEN];     // who it's for alone
     uint16_t last_status = 0xFFFF;
     uint32_t status_ms = 0;
     int16_t pcm[FRAME];
@@ -453,7 +521,33 @@ static void encoder_task(void *arg)
         uint32_t w = __atomic_load_n(&ring_write, __ATOMIC_ACQUIRE);
         // A recording starting or stopping ends what's going out first
         bool rec = recording;
-        bool talk = talking() && !(sending && tx_record != rec);
+        bool want = talking() && !(sending && tx_record != rec);
+        refused = refused && want;
+        bool talk = want && !refused;
+        route_t route = ROUTE_SERVER;   // a recording's, to the phone
+
+        if (!sending && talk && !rec)
+        {
+            // Who it's for, and whether anyone would hear it
+            target_t t;
+            copy_target(&t);
+            route = choose_route(&t);
+            bool by_voice = mode == COMM_VOICE && !screen_talk && !phone_talk && !talk_button_held();
+            tx_flags = (uint8_t)((by_voice ? TALKED_BY_VOICE : 0) |
+                                 (route == ROUTE_DIRECT || route == ROUTE_DIRECT_ALONE ? TALKED_DIRECT : 0) |
+                                 (t.to == COMM_TO_PERSON ? TALKED_ALONE : 0));
+            if (route == ROUTE_NONE)
+            {
+                refused = true;
+                talk = false;
+                __atomic_store_n(&refused_ms, rcat_hal_millis() | 1, __ATOMIC_RELEASE);     // never 0
+                if (phone)
+                {
+                    send_talked(TALKED_REFUSED, tx_flags);
+                }
+            }
+            memcpy(tx_key, t.key, sizeof(tx_key));
+        }
 
         if (!sending && talk)
         {
@@ -463,8 +557,14 @@ static void encoder_task(void *arg)
                 pre = w;
             }
             read = w - pre;
-            tx_transport = choose_transport();  // one way, for the whole transmission
+            // One way, for the whole transmission
+            tx_transport = route == ROUTE_SERVER ? COMM_TALK_SERVER : COMM_TALK_DIRECT;
+            tx_alone = route == ROUTE_DIRECT_ALONE;
             tx_record = rec;
+            if (phone && !rec)
+            {
+                send_talked(TALKED_STARTED, tx_flags);
+            }
             sending = true;
             releasing = false;
             first = true;
@@ -523,7 +623,8 @@ static void encoder_task(void *arg)
             first = false;
             if (direct && !tx_record && tx_transport == COMM_TALK_DIRECT)
             {
-                direct_send_voice((uint16_t)(seq - 1), packet[3], packet + HEADER_BYTES, (size_t)n);
+                direct_send_voice((uint16_t)(seq - 1), packet[3], packet + HEADER_BYTES, (size_t)n,
+                                  tx_alone ? tx_key : NULL);
             }
             if (phone && (tx_record || tx_transport == COMM_TALK_SERVER) && !send_retrying(packet, HEADER_BYTES + n))
             {
@@ -545,11 +646,15 @@ static void encoder_task(void *arg)
             seq++;
             if (direct && !tx_record && tx_transport == COMM_TALK_DIRECT)
             {
-                direct_send_voice((uint16_t)(seq - 1), packet[3], NULL, 0);
+                direct_send_voice((uint16_t)(seq - 1), packet[3], NULL, 0, tx_alone ? tx_key : NULL);
             }
             if (phone && (tx_record || tx_transport == COMM_TALK_SERVER))
             {
                 send_retrying(packet, HEADER_BYTES);
+            }
+            if (phone && !tx_record)
+            {
+                send_talked(TALKED_ENDED, tx_flags);
             }
             sending = false;
             releasing = false;
@@ -628,6 +733,8 @@ void comm_init(void)
 
     const settings_t *s = settings_get();
     mode = s->comm_mode < COMM_MODE_COUNT ? (comm_mode_t)s->comm_mode : COMM_PUSH_TO_TALK;
+    target_t t = { .to = s->comm_talk_on == COMM_TALK_DIRECT ? COMM_TO_DIRECT : COMM_TO_SERVER };
+    set_target(&t);
 
     if (!voice_fx_start())
     {
@@ -712,28 +819,63 @@ void comm_set_talk(bool talk)
     screen_talk = talk;
 }
 
-void comm_set_talk_on(comm_transport_t transport)
+void comm_talk_to_channel(comm_transport_t channel)
 {
-    if (transport < COMM_TALK_COUNT)
+    if (channel >= COMM_TALK_COUNT)
     {
-        settings_set_comm_talk_on((uint8_t)transport);
+        return;
+    }
+    target_t t = { .to = channel == COMM_TALK_DIRECT ? COMM_TO_DIRECT : COMM_TO_SERVER };
+    set_target(&t);
+    if (settings_get()->comm_talk_on != channel)
+    {
+        settings_set_comm_talk_on((uint8_t)channel);
     }
 }
 
-comm_transport_t comm_talk_on(void)
+comm_to_t comm_talk_to(void)
 {
-    uint8_t t = settings_get()->comm_talk_on;
-    return t < COMM_TALK_COUNT ? (comm_transport_t)t : COMM_TALK_SERVER;
+    return target.to;
+}
+
+const char *comm_talk_to_name(void)
+{
+    switch (target.to)
+    {
+    case COMM_TO_PERSON:
+        return target.name;
+    case COMM_TO_DIRECT:
+        return direct_group_name();
+    default:
+        return server_channel[0] ? server_channel : "SERVER";
+    }
 }
 
 comm_transport_t comm_talk_now(void)
 {
-    return sending ? tx_transport : choose_transport();
+    if (sending)
+    {
+        return tx_transport;
+    }
+    target_t t;
+    copy_target(&t);
+    route_t r = choose_route(&t);
+    return r == ROUTE_SERVER                        ? COMM_TALK_SERVER
+           : r != ROUTE_NONE || t.to == COMM_TO_DIRECT ? COMM_TALK_DIRECT
+                                                     : COMM_TALK_SERVER;
 }
 
-bool comm_talk_switched(void)
+bool comm_talk_heard(void)
 {
-    return comm_talk_now() != comm_talk_on();
+    target_t t;
+    copy_target(&t);
+    return sending || choose_route(&t) != ROUTE_NONE;
+}
+
+bool comm_talk_refused(void)
+{
+    uint32_t at = __atomic_load_n(&refused_ms, __ATOMIC_ACQUIRE);
+    return at != 0 && rcat_hal_millis() - at < REFUSED_SHOWN_MS;
 }
 
 bool comm_recording(void)
@@ -1493,6 +1635,47 @@ static void receive_command(const uint8_t *msg, size_t len)
     }
 }
 
+/* Who talking goes to, as the app picks (0x13). */
+static void receive_talk_to(const uint8_t *msg, size_t len)
+{
+    if (len < 3 || msg[1] >= COMM_TO_COUNT)
+    {
+        return;
+    }
+    target_t t = { .to = (comm_to_t)msg[1], .on_server = (msg[2] & TALK_TO_ON_SERVER) != 0 };
+    size_t at = 3;
+    if (t.to == COMM_TO_PERSON)
+    {
+        if (len < at + OTHERS_KEY_LEN)
+        {
+            return;
+        }
+        memcpy(t.key, msg + at, OTHERS_KEY_LEN);
+        at += OTHERS_KEY_LEN;
+    }
+    copy_name(t.name, msg + at, len - at);
+    set_target(&t);
+    // A channel's kept for the next startup
+    comm_transport_t channel = t.to == COMM_TO_DIRECT ? COMM_TALK_DIRECT : COMM_TALK_SERVER;
+    if (t.to != COMM_TO_PERSON && settings_get()->comm_talk_on != channel)
+    {
+        settings_set_comm_talk_on((uint8_t)channel);
+    }
+}
+
+/* The pairs' keys, for talking to one alone over direct comms (0x14). */
+static void receive_pairs(const uint8_t *msg, size_t len)
+{
+    if (msg[1] & PAIRS_FIRST)
+    {
+        direct_clear_pairs();
+    }
+    for (size_t at = 2; at + PAIR_ENTRY <= len; at += PAIR_ENTRY)
+    {
+        direct_add_pair(msg + at, msg + at + OTHERS_KEY_LEN);
+    }
+}
+
 /* A piece of the firmware from the app (0x0E): see updater.h. */
 static void receive_update(const uint8_t *msg, size_t len)
 {
@@ -1622,6 +1805,14 @@ void comm_poll(uint32_t now_ms)
         {
             receive_update(msg, len);
         }
+        else if (msg[0] == MSG_TALK_TO)
+        {
+            receive_talk_to(msg, len);
+        }
+        else if (msg[0] == MSG_PAIRS && len >= 2)
+        {
+            receive_pairs(msg, len);
+        }
         else if (msg[0] == MSG_RECORD && len >= 3)
         {
             set_recording(msg[1] != 0, (msg[2] & RECORD_SPEAKER) != 0, (msg[2] & RECORD_BEEP) != 0);
@@ -1695,23 +1886,33 @@ void comm_set_voice_effect(int preset)
 {
 }
 
-void comm_set_talk_on(comm_transport_t transport)
+void comm_talk_to_channel(comm_transport_t channel)
 {
 }
 
-comm_transport_t comm_talk_on(void)
+comm_to_t comm_talk_to(void)
 {
-    return COMM_TALK_SERVER;
+    return COMM_TO_SERVER;
+}
+
+const char *comm_talk_to_name(void)
+{
+    return "";
+}
+
+bool comm_talk_heard(void)
+{
+    return false;
+}
+
+bool comm_talk_refused(void)
+{
+    return false;
 }
 
 comm_transport_t comm_talk_now(void)
 {
     return COMM_TALK_SERVER;
-}
-
-bool comm_talk_switched(void)
-{
-    return false;
 }
 
 bool comm_recording(void)
