@@ -125,4 +125,4 @@ Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp
 </tr>
 </table>
 
-Each feature can be left out of the firmware when building it yourself (see [Choosing features](../building-firmware.md#choosing-features)), and a feature that needs hardware the board doesn't have hides itself.  The firmware also runs on a few [other boards](../other-boards.md), which have fewer features.
+Each feature can be left out of the firmware when building it yourself (see [Choosing features](../building-firmware.md#choosing-features)), and a feature that needs hardware the board doesn't have hides itself.

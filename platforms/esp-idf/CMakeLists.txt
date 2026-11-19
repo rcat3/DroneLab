@@ -1,6 +1,5 @@
 # ESP-IDF build for the ESP32 based boards.
 #
-#   idf.py -C platforms/esp-idf -B build-s3-146 -DBOARD=waveshare_esp32s3_touch_lcd_1_46 build
 #   idf.py -C platforms/esp-idf -B build-s3-175 -DBOARD=waveshare_esp32s3_touch_amoled_1_75 build
 #
 # See boards/ for the supported boards. What they share is in components/rcat_esp32.
@@ -9,7 +8,7 @@ cmake_minimum_required(VERSION 3.16)
 
 set(REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../..)
 
-set(BOARD waveshare_esp32s3_touch_lcd_1_46 CACHE STRING "Target board (see platforms/esp-idf/boards/)")
+set(BOARD waveshare_esp32s3_touch_amoled_1_75 CACHE STRING "Target board (see platforms/esp-idf/boards/)")
 set(BOARD_DIR ${CMAKE_CURRENT_LIST_DIR}/boards/${BOARD})
 if(NOT EXISTS ${BOARD_DIR}/board.cmake)
     file(GLOB KNOWN_BOARDS RELATIVE ${CMAKE_CURRENT_LIST_DIR}/boards ${CMAKE_CURRENT_LIST_DIR}/boards/*)

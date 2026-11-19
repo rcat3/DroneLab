@@ -133,57 +133,15 @@ If something doesn't seem to change after an update, delete the `build-s3-175` f
 
 ## Choosing features
 
-Each of the display's [features](features/README.md) can be left out of the build, in `platforms/esp-idf/features.cmake` (or `platforms/pico/features.cmake` for the RP2040 and RP2350 boards).  Set a feature to `OFF` to leave it out, or `ON` to build it in, then build as usual.  The build prints the features it's building, for example `-- Features: IMAGES, VOICE, SOUND`.  Settings is always built in.  A feature that needs hardware the board doesn't have, like a microphone or a speaker, hides itself even when it's built in.
+Each of the display's [features](features/README.md) can be left out of the build, in `platforms/esp-idf/features.cmake`.  Set a feature to `OFF` to leave it out, or `ON` to build it in, then build as usual.  The build prints the features it's building, for example `-- Features: IMAGES, VOICE, SOUND`.  Settings is always built in.  A feature that needs hardware the board doesn't have, like a microphone or a speaker, hides itself even when it's built in.
 
 Two more settings are fixed when the firmware is built:
 
-- `RCAT_VOICE_FX`, in each ESP32 board's `board.cmake`, picks whether [voice effects](features/voice-effects.md) are built in.  They're on for the ESP32-S3-Touch-AMOLED-1.75, whose echo canceller lets them play on the speaker without feeding back, and off for the ESP32-S3-Touch-LCD-1.46.
-- `RCAT_LARGE_IMAGES`, in each board's `.cmake` file, picks whether full screen animated GIFs are built in (see [Animated GIF memory use](features/images.md#animated-gif-memory-use)).
-- `RCAT_DEFAULT_ROTATION`, in a board's `.cmake` file, sets the display's [Rotation](features/settings.md#rotation) on a new board, in clockwise quarter turns, to suit the way its housing holds it.  It's 2 (180 degrees) for the ESP32-S3-Touch-AMOLED-1.75, and 0 when it isn't set.  A board that already has saved settings keeps its own.
-- `RCAT_SPEAKER_OPTIONAL`, in a board's `.cmake` file, is for a board whose speaker plugs in, so a housing may not have one.  A new board then asks which model it is at its first start, and Settings has a [Model](features/settings.md#model) page.  It's on for the ESP32-S3-Touch-AMOLED-1.75.
+- `RCAT_VOICE_FX`, in the board's `board.cmake`, picks whether [voice effects](features/voice-effects.md) are built in.  They're on for the ESP32-S3-Touch-AMOLED-1.75, whose echo canceller lets them play on the speaker without feeding back.
+- `RCAT_LARGE_IMAGES`, in the board's `board.cmake`, picks whether full screen animated GIFs are built in (see [Animated GIF memory use](features/images.md#animated-gif-memory-use)).
+- `RCAT_DEFAULT_ROTATION`, in the board's `board.cmake`, sets the display's [Rotation](features/settings.md#rotation) on a new board, in clockwise quarter turns, to suit the way its housing holds it.  It's 2 (180 degrees) for the ESP32-S3-Touch-AMOLED-1.75, and 0 when it isn't set.  A board that already has saved settings keeps its own.
+- `RCAT_SPEAKER_OPTIONAL`, in the board's `board.cmake`, is for a board whose speaker plugs in, so a housing may not have one.  A new board then asks which model it is at its first start, and Settings has a [Model](features/settings.md#model) page.  It's on for the ESP32-S3-Touch-AMOLED-1.75.
 
-## Other boards
+## Former boards
 
-> [!NOTE]
-> **These boards aren't supported.**  DroneLab is built and tested for the ESP32-S3-Touch-AMOLED-1.75, and its housings are only for that board.  The firmware still builds for the [other boards](other-boards.md) below, for anyone who wants to use them in a project of their own, but they're not tested with each release, they have fewer features, and there are no ready-made firmware downloads for them.
-
-### ESP32-S3-Touch-LCD-1.46
-
-As above, with its own build folder and board name:
-
-```
-idf.py -C platforms/esp-idf -B build-s3-146 -DBOARD=waveshare_esp32s3_touch_lcd_1_46 build
-idf.py -C platforms/esp-idf -B build-s3-146 -p /dev/ttyACM0 flash monitor
-```
-
-### RP2040 and RP2350 boards
-
-The 1.28" boards.
-
-These are built with the Raspberry Pi [pico-sdk](https://github.com/raspberrypi/pico-sdk), and Python 3 with Pillow (`pip install pillow`).  Clone the pico-sdk somewhere, and point `PICO_SDK_PATH` at it, with an absolute path (a relative one is resolved from inside the build folder, which is confusing):
-
-```
-git clone https://github.com/raspberrypi/pico-sdk.git
-export PICO_SDK_PATH=$HOME/pico-sdk
-```
-
-Then, from the top of the repo, for the RP2350 board:
-
-```
-cmake -S platforms/pico -B build-rp2350 -DBOARD=waveshare_rp2350_touch_lcd_1_28
-cmake --build build-rp2350 -j
-```
-
-or for the RP2040 board:
-
-```
-cmake -S platforms/pico -B build-rp2040 -DBOARD=waveshare_rp2040_touch_lcd_1_28
-cmake --build build-rp2040 -j
-```
-
-The firmware is `dronelab.uf2` in the build folder.  If CMake complains that `PICO_PLATFORM` doesn't match the board, the build folder was set up for the other board: use the other board's folder, or delete it and run the `cmake -S` command again.
-
-To flash it, either:
-
-- **With the buttons:** connect the board's USB-C port to your computer.  Hold `BOOT`, press and release `RESET`, then release `BOOT`.  A USB drive appears on the computer: copy the `.uf2` file onto it, and the board restarts with the new firmware.
-- **Without the buttons**, if [picotool](https://github.com/raspberrypi/picotool) is installed and the board is already running this firmware: `picotool load -f -x build-rp2350/dronelab.uf2`.
+The firmware used to build for three other Waveshare boards, the RP2040-Touch-LCD-1.28, the RP2350-Touch-LCD-1.28 and the ESP32-S3-Touch-LCD-1.46.  It was dropped after release 0.9.7: [Former Boards](other-boards.md) says which commits to build from for them.

@@ -31,6 +31,6 @@ New here?  Start with the [project page](../README.md).
 - [Hardware designs](../hardware/README.md): the housings' OpenSCAD designs.
 - [Developing](development/README.md): how the firmware is put together, [adding a feature](development/adding-a-feature.md), [the hardware abstraction layer](development/hardware-abstraction.md), [adding a board](development/adding-a-board.md) and [contributing](development/contributing.md).
 - [The app's source](../app/README.md): building the app yourself.
-- [Other Boards](other-boards.md): the other displays the firmware runs on.
+- [Former Boards](other-boards.md): the other displays the firmware used to run on.
 
 The pictures of the housings and travel cases in `images/` are rendered from their designs by `tools/doc_renders/render.sh`, and the README's How it works diagram by `tools/doc_renders/make_diagram.py`.

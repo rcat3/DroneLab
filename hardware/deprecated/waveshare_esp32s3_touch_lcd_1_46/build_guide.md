@@ -49,7 +49,9 @@ There's a hinged case to carry the housing in, in [`travel_case`](travel_case/).
 
 ## Building the firmware
 
-Set up ESP-IDF as described in [Installing the Firmware](../../../docs/building-firmware.md#esp32-s3-touch-lcd-146), then from the top of the repo:
+The current firmware no longer runs on this board.  Check out the commit [Former Boards](../../../docs/other-boards.md) gives as its *last run on the board* first, and follow that commit's own copy of this guide and of Installing the Firmware.  The steps below are as they were.
+
+Set up ESP-IDF as described in that commit's `docs/building-firmware.md`, then from the top of the repo:
 
 ```
 idf.py -C platforms/esp-idf -B build-s3-146 -DBOARD=waveshare_esp32s3_touch_lcd_1_46 build

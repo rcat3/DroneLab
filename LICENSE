@@ -12,8 +12,8 @@ What this license does not cover:
 - The 3D printable designs in hardware/, which are under the Creative Commons
   licenses described in hardware/README.md and in each folder's README.
 - Third-party code, which keeps its own license. This includes the submodules
-  in third_party/ (LVGL, dr_libs), the ESP-IDF and Pico SDK components the
-  build fetches, and any file whose header carries its own copyright and
+  in third_party/ (LVGL, dr_libs), the ESP-IDF components the build
+  fetches, and any file whose header carries its own copyright and
   license notice, such as the Waveshare driver files.
 
 -------------------------------------------------------------------------------

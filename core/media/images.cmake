@@ -1,7 +1,6 @@
 # Converts every image in imgs/, and the firmware's own pictures in
 # core/ui/assets/ (like the logo shown at startup), into C files sized for the
-# board's screen, using tools/img2c.py. Used by both the pico-sdk and ESP-IDF
-# builds.
+# board's screen, using tools/img2c.py. Used by the ESP-IDF build.
 #
 #   rcat_generate_images(<out_var> <screen_size> <python>)
 #

@@ -2,7 +2,7 @@
 
 ![The speaker housing](images/speaker_housing_1_46.png)
 
-**This housing is no longer supported.**  The [ESP32-S3-Touch-AMOLED-1.75](../../boards/waveshare_esp32s3_touch_amoled_1_75/) and its speaker housing replace it.  The design is kept here for anyone who wants to build it or bring it back, for example as a stereo player.  The board's [simple housing](../waveshare_esp32s3_touch_lcd_1_46/) is deprecated too, but the firmware still supports the board (see [Other Boards](../../../docs/other-boards.md)).
+**This housing is no longer supported.**  The [ESP32-S3-Touch-AMOLED-1.75](../../boards/waveshare_esp32s3_touch_amoled_1_75/) and its speaker housing replace it.  The design is kept here for anyone who wants to build it or bring it back, for example as a stereo player.  The board's [simple housing](../waveshare_esp32s3_touch_lcd_1_46/) is deprecated too, and the firmware no longer runs on the board (see [Former Boards](../../../docs/other-boards.md)).
 
 It's an all-in-one housing that screws into the voice port of an MSA Millennium mask: the display in the middle, a small speaker in a pod on each side, and a chamber behind for a 2000 mAh battery, two MAX98357A amplifier boards and a USB-C charging port, with a turning collar.  It was fully assembled and worn.
 
@@ -15,9 +15,9 @@ It's an all-in-one housing that screws into the voice port of an MSA Millennium 
 
 ## Firmware
 
-The current firmware doesn't drive the amplifiers, and leaves voice effects out on the 1.46" board: it plays sound on the board's built-in speaker.
+The current firmware doesn't run on the 1.46" board at all, and the last firmware for it didn't drive the amplifiers.
 
-The last firmware that drives them is in the repository's history.  `git log --diff-filter=A --format=%h -- hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46_speaker_housing/README.md` names the commit that moved this housing here.  Check out the commit before it, and build with `set(RCAT_SPEAKER EXTERNAL)` in `platforms/esp-idf/features.cmake`.  It switches the amplifiers on with SD only while sound is playing.  The amplifiers are on I2S port 0: BCLK on GPIO12, LRC on GPIO13, DIN on GPIO3 and SD on GPIO1.  That firmware mixes the sound down to one channel and plays it on both speakers.
+The last firmware that drives them is in the repository's history, at commit `f45ee43` (2026-11-13), the one before this housing moved here.  It also updates over WiFi, so a board already running firmware from `77b9390` on can take it without coming out (see [Former Boards](../../../docs/other-boards.md#the-146-speaker-housing)).  Check it out, and build with `set(RCAT_SPEAKER EXTERNAL)` in `platforms/esp-idf/features.cmake`.  It switches the amplifiers on with SD only while sound is playing.  The amplifiers are on I2S port 0: BCLK on GPIO12, LRC on GPIO13, DIN on GPIO3 and SD on GPIO1.  That firmware mixes the sound down to one channel and plays it on both speakers.
 
 ## Making the STL files
 

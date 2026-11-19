@@ -1,14 +1,8 @@
 # Adding a Board
 
-A new display means a board folder with its HAL and its screen size, without copying the application around.  Use the closest existing board as the starting point.
+A new display means a board folder with its HAL and its screen size, without copying the application around.  Start from the 1.75" board's folder.  The firmware used to run on RP2040 and RP2350 boards too, with a pico-sdk build of its own: the [former boards](../other-boards.md) page says which commits have it, for a board that isn't an ESP32.
 
 ## In the firmware
-
-### An RP2040 or RP2350 board
-
-1. Add `platforms/pico/boards/<board>.cmake`, like [`waveshare_rp2350_touch_lcd_1_28.cmake`](../../platforms/pico/boards/waveshare_rp2350_touch_lcd_1_28.cmake).  It sets `PICO_BOARD`, `BOARD_DIR` (the folder with its HAL), `RCAT_IMAGE_SIZE` (the screen's size in pixels) and `RCAT_LARGE_IMAGES` (whether full screen animated GIFs fit in its RAM), and optionally `RCAT_DEFAULT_ROTATION` (the display's rotation on a new board, in clockwise quarter turns, if its housing turns it) and `RCAT_SPEAKER_OPTIONAL` (on if the speaker plugs in, so a housing may have none).
-2. If its hardware differs from the 1.28" boards, add a folder for its HAL and drivers under `platforms/pico/boards/`, and point `BOARD_DIR` at it.
-3. Build it with `-DBOARD=<board>`.
 
 ### An ESP32 board
 
@@ -26,7 +20,7 @@ Build it with `-DBOARD=<board>` and its own build folder.  The [ESP32-S3-Touch-A
 ### Then
 
 - Check which features it can run, and set them in the platform's `features.cmake` if a feature needs switching off for the whole platform.
-- Add it to [Other Boards](../other-boards.md), with its features, and give it board notes in [`docs/hardware/`](../hardware/).  A board with a housing for the mask gets a build guide in [`docs/build/`](../build/README.md), and a place in the [top-level README](../../README.md#the-two-models).
+- Give it board notes in [`docs/hardware/`](../hardware/).  A board with a housing for the mask gets a build guide in [`docs/build/`](../build/README.md), and a place in the [top-level README](../../README.md#the-two-models).
 
 ## A housing for it
 

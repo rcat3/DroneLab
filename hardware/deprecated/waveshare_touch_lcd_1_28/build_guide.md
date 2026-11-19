@@ -72,7 +72,9 @@ There's a hinged case to carry the housing in, in [`travel_case`](travel_case/).
 
 ## Building and flashing the firmware
 
-Set up pico-sdk as described in [Installing the Firmware](../../../docs/building-firmware.md#rp2040-and-rp2350-boards), then from the top of the repo, for the RP2350 board:
+The current firmware no longer runs on this board.  Check out the commit [Former Boards](../../../docs/other-boards.md) gives as its *last run on the board* first, and follow that commit's own copy of this guide and of Installing the Firmware.  The steps below are as they were.
+
+Set up pico-sdk as described in that commit's `docs/building-firmware.md`, then from the top of the repo, for the RP2350 board:
 
 ```
 cmake -S platforms/pico -B build-rp2350 -DBOARD=waveshare_rp2350_touch_lcd_1_28

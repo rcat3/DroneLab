@@ -71,7 +71,7 @@ static void send_shot_line(size_t i)
         printf("SHOT: FAILED\n");
         return;
     }
-    const uint8_t *bytes = (const uint8_t *)shot_px + at;   // little-endian, as the ESP32 and RP2040 are
+    const uint8_t *bytes = (const uint8_t *)shot_px + at;   // little-endian, as the ESP32 is
     size_t n = shot_bytes - at < SHOT_LINE_BYTES ? shot_bytes - at : SHOT_LINE_BYTES;
     char text[SHOT_LINE_BYTES / 3 * 4 + 1];
     base64(bytes, n, text);

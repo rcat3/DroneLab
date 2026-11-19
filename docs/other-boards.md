@@ -1,56 +1,28 @@
-# Other Boards
+# Former Boards
 
-DroneLab is built around the [Waveshare ESP32-S3-Touch-AMOLED-1.75](hardware/waveshare_esp32s3_touch_amoled_1_75.md).  The same firmware also runs on three other Waveshare round displays, which may be useful for projects of your own:
+DroneLab is built around the [Waveshare ESP32-S3-Touch-AMOLED-1.75](hardware/waveshare_esp32s3_touch_amoled_1_75.md), and its firmware runs on that board only.  It used to run on three other Waveshare round displays too: the RP2040-Touch-LCD-1.28, the RP2350-Touch-LCD-1.28 and the ESP32-S3-Touch-LCD-1.46.  Their firmware was dropped after release 0.9.7, so it's no longer built, tested or kept up to date.
+
+Their gas mask housings are kept, with their build guides, in [`hardware/deprecated`](../hardware/deprecated/): the [1.28" housing](../hardware/deprecated/waveshare_touch_lcd_1_28/), the [1.46" housing](../hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46/) and the [1.46" speaker housing](../hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46_speaker_housing/).
+
+## Getting their firmware back
+
+Their code is still in the project's history.  Check out one of the commits below and build it as that commit's own [Installing the Firmware](building-firmware.md) says.  The board notes and the features each one had are in that commit's `docs/other-boards.md`.
 
 | | RP2040-Touch-LCD-1.28 | RP2350-Touch-LCD-1.28 | ESP32-S3-Touch-LCD-1.46 |
 |---|---|---|---|
-| Screen | 1.28" round LCD, 240x240 | 1.28" round LCD, 240x240 | 1.46" round LCD, 412x412 |
-| Processor | RP2040, 2 cores, 133 MHz | RP2350, 2 cores, 150 MHz | ESP32-S3, 2 cores, 240 MHz |
-| RAM | 264 kB | 520 kB | 512 kB + 8 MB PSRAM |
-| Microphone | | | One |
-| Speaker | | | Built in |
-| Micro SD card | | | Yes |
-| WiFi and Bluetooth LE | | | Yes |
-| Accelerometer | Yes (not supported yet) | Yes (not supported yet) | Yes |
-| Battery charging | 1 A, set by a resistor | 1 A, set by a resistor | Up to 2 A, set by a resistor |
-| Power button | | | Yes |
+| **Last actively developed** | [`951a636`](https://github.com/rcat3/DroneLab/tree/951a636), 2026-11-11: battery curves learned from the board's own runs | [`951a636`](https://github.com/rcat3/DroneLab/tree/951a636), 2026-11-11 | [`b40f542`](https://github.com/rcat3/DroneLab/tree/b40f542), 2026-11-13: the speaker housing dropped, voice effects off |
+| **Last run on the board** | [`951a636`](https://github.com/rcat3/DroneLab/tree/951a636), 2026-11-11 | [`951a636`](https://github.com/rcat3/DroneLab/tree/951a636), 2026-11-11 | [`713892e`](https://github.com/rcat3/DroneLab/tree/713892e), 2026-11-15: direct comms and commands with a 1.75" |
+| **Last built** (compiled, not run) | [`2a2e8e5`](https://github.com/rcat3/DroneLab/tree/2a2e8e5), 2026-11-19 | [`a06d99c`](https://github.com/rcat3/DroneLab/tree/a06d99c), 2026-11-17 | [`c0b2cb1`](https://github.com/rcat3/DroneLab/tree/c0b2cb1), 2026-11-18 |
+| **Housing retired** | [`d614135`](https://github.com/rcat3/DroneLab/tree/d614135), 2026-11-14 | [`d614135`](https://github.com/rcat3/DroneLab/tree/d614135), 2026-11-14 | [`d614135`](https://github.com/rcat3/DroneLab/tree/d614135), 2026-11-14 |
+| **Last with its code** | [`v0.9.7`](https://github.com/rcat3/DroneLab/tree/v0.9.7) | [`v0.9.7`](https://github.com/rcat3/DroneLab/tree/v0.9.7) | [`v0.9.7`](https://github.com/rcat3/DroneLab/tree/v0.9.7) |
 
-Their gas mask housings are no longer supported.  They're kept, with their build guides, in [`hardware/deprecated`](../hardware/deprecated/): the [1.28" housing](../hardware/deprecated/waveshare_touch_lcd_1_28/) and the [1.46" housing](../hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46/).
+Commits after *last run on the board* weren't tried on it, and those after *last built* weren't even compiled for it.  To use one of these boards, start from the *last run on the board* commit: it's the newest one known to work.
 
-## Which features run on them
+### The 1.46" speaker housing
 
-| Feature | RP2040 1.28" | RP2350 1.28" | ESP32-S3 1.46" |
-|---|:-:|:-:|:-:|
-| [Images](features/images.md) | Yes | Yes | Yes |
-| [Full screen animated GIFs](features/images.md#animated-gif-memory-use) | | Yes | From the SD card |
-| [Images from the SD card](features/images.md#images-on-the-sd-card) | | | Yes |
-| [Visualizer](features/visualizer.md) | | | Yes |
-| [Voice Ring](features/voice-ring.md) | | | Yes |
-| [Voice Effects](features/voice-effects.md) | | | |
-| [Voice Lab](features/voice-lab.md) | | | Yes |
-| [Sound](features/sound.md) | | | Yes |
-| [Lovense](features/lovense.md) | | | Yes |
-| [Level](features/level.md) | | | Yes |
-| [Terminal](features/terminal.md) | | | Yes |
-| [Comms](features/comms.md) | | | |
-| [WiFi Hotspot Remote](features/phone-remote.md) | | | Yes |
-| [Settings](features/settings.md) | Yes | Yes | Yes |
+The speaker housing has two external amplifiers on the board's J9 header, and its board's USB-C port can't be reached, so it was updated over WiFi.
 
-The RP2040 and RP2350 boards have no microphone, speaker, SD card slot, WiFi or Bluetooth, so they show images and settings.  They do have an accelerometer, which the firmware doesn't support yet, so the Level isn't on them.  The RP2350 has twice the RAM of the RP2040, enough for full screen animated GIFs.
+- **Last with its amplifiers:** [`f45ee43`](https://github.com/rcat3/DroneLab/tree/f45ee43), 2026-11-13, built with `set(RCAT_SPEAKER EXTERNAL)` (see [the housing's README](../hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46_speaker_housing/README.md#firmware)).  The next commit, [`b40f542`](https://github.com/rcat3/DroneLab/tree/b40f542), dropped the housing, and with it the amplifiers' code and voice effects on the 1.46".
+- **Updates over WiFi:** added in [`77b9390`](https://github.com/rcat3/DroneLab/tree/77b9390) (2026-11-10, tested on the board that day), and last in [`e3fb8d9`](https://github.com/rcat3/DroneLab/tree/e3fb8d9), the last release with them being [0.9.6](https://github.com/rcat3/DroneLab/releases/tag/v0.9.6).  [`38eadfb`](https://github.com/rcat3/DroneLab/tree/38eadfb) (2026-11-18) replaced them with updates from the app over Bluetooth.
 
-The ESP32-S3-Touch-LCD-1.46 has no voice effects: it can't hear what its speaker is playing, so it can't cancel it out of its microphone, and would feed back long before an effect was loud enough to hear.
-
-## Board notes
-
-### RP2040-Touch-LCD-1.28 and RP2350-Touch-LCD-1.28
-
-- **Power:** they have no power button.  They run from USB-C, or from a 3.7 V LiPo on their JST 1.25 mm battery socket, and are switched on and off by connecting the battery, so a switch in its lead is the usual way.  Check the battery's polarity against the board before plugging it in: many batteries are wired the other way.
-- **Charging:** they charge their battery at 1 A, set by R15 (160k) next to the charger chip, and the firmware can't change it.  That's too much for a small battery, so change R15 (560k gives about 0.3 A), or charge the battery separately.  R15 is an 0201 surface mount part, 0.6 x 0.3 mm: changing it takes a microscope, a capable soldering station and advanced soldering skills.  The [1.28" build guide](../hardware/deprecated/waveshare_touch_lcd_1_28/build_guide.md#charging) has the details.
-- **Flashing:** see [Installing the Firmware](building-firmware.md#rp2040-and-rp2350-boards).  The images are built into the firmware, so changing them means rebuilding it.
-
-### ESP32-S3-Touch-LCD-1.46
-
-- **Power:** it runs from USB-C or from a 3.7 V LiPo on its MX1.25 socket (check the polarity first).  Press `PWR` to turn it on, and hold it for 2 seconds to turn it off.
-- **Charging:** it charges its battery at up to 2 A, set by R8 (82k) next to the charger chip, and the firmware can't change it.  That's too much for most small batteries, so change R8 (390k gives about 0.4 A).  R8 is an 0201 surface mount part, 0.6 x 0.3 mm: changing it takes a microscope, a capable soldering station and advanced soldering skills.  The [1.46" build guide](../hardware/deprecated/waveshare_esp32s3_touch_lcd_1_46/build_guide.md#board-notes) has the details.
-- **Speaker:** the small round trimmer on the back of the board sets the built-in speaker's volume, on top of the volume setting.
-- **Flashing:** see [Installing the Firmware](building-firmware.md#esp32-s3-touch-lcd-146), with `build-s3-146` and `-DBOARD=waveshare_esp32s3_touch_lcd_1_46`.  Images for this board are 412 pixels across.
+So the newest firmware for the housing as built, with its amplifiers and updates over WiFi, is [`f45ee43`](https://github.com/rcat3/DroneLab/tree/f45ee43).  A board already running firmware from `77b9390` on takes it over WiFi; an older one has to come out of the housing to be flashed over USB.

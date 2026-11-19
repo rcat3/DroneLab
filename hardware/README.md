@@ -27,7 +27,7 @@ hardware/
                         who wants to build them or bring them back
 ```
 
-The board folders have the same names as the firmware's board folders in `platforms/*/boards/`, so it's easy to find both halves of a board.  (The two 1.28" boards, now deprecated, share one folder, as they share `platforms/pico/boards/touch_lcd_1_28/` in the firmware, with a setting to pick between them.)  Inside one:
+The board folders have the same names as the firmware's board folders in `platforms/esp-idf/boards/`, so it's easy to find both halves of a board.  Inside one:
 
 - `board.scad` - The board's dimensions, in the coordinates of the maker's 3D model: the front of the glass at z = 0, the board towards -z, and x/y seen from the front with the USB port at the bottom.  Every housing for the board includes it.
 - `<mask>_<kind>.scad` - A housing, named for the mask it fits and what it is, such as `msa_speaker_housing.scad`.  Each has a `part` setting that picks which part to render.
@@ -37,7 +37,7 @@ The board folders have the same names as the firmware's board folders in `platfo
 
 ## Deprecated designs
 
-Designs that are no longer supported are in [`deprecated/`](deprecated/), with a README each saying why and what replaces it: the 1.28" housing, the 1.46" housing, and the 1.46" board's speaker housing, with its two speakers and the J9 header adapter PCB.  The 1.75" board's housings replace them all.  The firmware still supports the 1.28" and 1.46" boards, for other projects.
+Designs that are no longer supported are in [`deprecated/`](deprecated/), with a README each saying why and what replaces it: the 1.28" housing, the 1.46" housing, and the 1.46" board's speaker housing, with its two speakers and the J9 header adapter PCB.  The 1.75" board's housings replace them all.  The firmware no longer runs on the 1.28" and 1.46" boards: [Former Boards](../docs/other-boards.md) says which commits to build it from for them.
 
 ## Adding a board
 

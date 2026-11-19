@@ -23,4 +23,4 @@ The screenshots in this documentation were taken over USB instead, with `tools/s
 
 ## Turning it on and off
 
-Press `PWR` on the side to turn it on.  Hold it for 2 seconds to turn it off.  (On the [other boards](other-boards.md) the firmware runs on, see their notes.)
+Press `PWR` on the side to turn it on.  Hold it for 2 seconds to turn it off.

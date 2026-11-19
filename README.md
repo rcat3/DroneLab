@@ -139,7 +139,7 @@ The [**Build Guide**](docs/build/README.md) walks you through it, step by step:
 - **[The board](docs/hardware/waveshare_esp32s3_touch_amoled_1_75.md):** technical notes on the ESP32-S3-Touch-AMOLED-1.75: power, audio and the echo canceller.
 - **[Developing](docs/development/README.md):** how the firmware is put together, adding a feature or a board, and contributing.
 - **[Hardware designs](hardware/README.md):** the housings' OpenSCAD designs, and how they're organized.
-- **[Other Boards](docs/other-boards.md):** the other Waveshare displays the firmware runs on, for projects of your own.
+- **[Former Boards](docs/other-boards.md):** the other Waveshare displays the firmware used to run on, and the commits to build it from for them.
 
 Questions, build reports, or a unit of your own to show off? Post them in [Discussions](https://github.com/rcat3/DroneLab/discussions). Found a bug? Open an [issue](https://github.com/rcat3/DroneLab/issues).
 

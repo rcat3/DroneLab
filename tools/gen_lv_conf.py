@@ -22,7 +22,6 @@ COMMON = {
 }
 
 PLATFORMS = {
-    "pico": {},
     "esp-idf": {
         # LVGL's memory from PSRAM, leaving internal RAM for DMA, WiFi and
         # Bluetooth (see the board's lvgl_mem.c)

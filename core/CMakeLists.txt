@@ -1,6 +1,6 @@
 # Portable application code shared by every platform.
 #
-# Nothing in here may include vendor SDK headers (pico-sdk, ESP-IDF, ...).
+# Nothing in here may include vendor SDK headers (ESP-IDF, ...).
 # Hardware access goes through include/hal.h, which each board implements.
 #
 # The including project must define an `lvgl` library target first, and set

@@ -19,7 +19,7 @@ knows it's already sized and doesn't scale it again.
 Usage:
     python3 tools/prepare_sd.py imgs/*.gif my_photos/*.jpg --size 412 --out /media/me/SDCARD/images
 
---size is the screen size: 412 for the ESP32-S3-Touch-LCD-1.46.
+--size is the screen size: 466 for the ESP32-S3-Touch-AMOLED-1.75.
 
 Needs Pillow:  pip install pillow
 """

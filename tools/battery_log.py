@@ -8,7 +8,6 @@ charger stops, unplug USB, and leave the board running until it switches off
 or stops responding. Then, within ten minutes of plugging it back in (after
 that, the next run's log replaces it), run, for example:
 
-    tools/battery_log.py rp2350
     tools/battery_log.py esp32 --port /dev/ttyACM0
 
 It prints the log, and writes it to battery_log.csv (--csv to change). It also
@@ -17,9 +16,7 @@ rcat_hal_battery_curve: the board draws about the same all the time, so the
 share of the run left is the share of the charge left. It finds the run the
 same way the board does (see core/app/battery_log.c).
 
-The RP2040 and RP2350 boards are read with picotool, which restarts the board
-to read it. The ESP32 boards are read with esptool, from ESP-IDF's
-environment. --file reads a log saved earlier instead.
+The board is read with esptool, from ESP-IDF's environment. --file reads a log saved earlier instead.
 """
 
 import argparse
@@ -36,20 +33,8 @@ LOG_VERSIONS = (1, 2)
 FLAG_CHARGING = 0x01
 FLAG_GAUGE = 0x02
 
-# Where each board keeps its log: the RP boards in the sector before the
-# settings, at the end of flash (see platforms/pico/boards/touch_lcd_1_28/
-# hal_board.c), and the ESP32 boards in the batlog partition.
-SECTOR = 4096
-PICO_LOG = {
-    "rp2040": 0x10000000 + 2 * 1024 * 1024 - 2 * SECTOR,
-    "rp2350": 0x10000000 + 4 * 1024 * 1024 - 2 * SECTOR,
-}
+# Where the board keeps its log: the batlog partition.
 ESP_LOG = 0xE12000
-
-
-def read_pico(board, path):
-    start = PICO_LOG[board]
-    subprocess.run(["picotool", "save", "-r", hex(start), hex(start + LOG_SIZE), "-f", path], check=True)
 
 
 def read_esp(port, path):
@@ -124,7 +109,7 @@ def curve(entries):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("board", choices=["rp2040", "rp2350", "esp32"], nargs="?",
+    parser.add_argument("board", choices=["esp32"], nargs="?",
                         help="the board to read it from")
     parser.add_argument("--port", help="the ESP32 board's serial port")
     parser.add_argument("--file", help="read a log saved earlier, instead of a board")
@@ -140,10 +125,7 @@ def main():
             parser.error("say which board to read, or give --file")
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "battery_log.bin")
-            if args.board == "esp32":
-                read_esp(args.port, path)
-            else:
-                read_pico(args.board, path)
+            read_esp(args.port, path)
             with open(path, "rb") as f:
                 data = f.read()
         if args.save:

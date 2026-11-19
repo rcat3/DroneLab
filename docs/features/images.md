@@ -40,16 +40,9 @@ The conversion is done by `tools/img2c.py`.  You don't normally need to run it y
 
 ## Animated GIF memory use
 
-Animated GIFs are decoded in RAM while they're on screen, so on the RP2040 and RP2350 boards you need to be mindful of how large an animated GIF you load.  If you run out of memory, the firmware will likely crash at startup.  Each GIF needs about:
+Animated GIFs are decoded in RAM while they're on screen, about 2 bytes x width x height each, plus about 24 kB for the decoder.  The board decodes them into its 8 MB of PSRAM, so even full screen GIFs fit easily.
 
-- 2 bytes x image width x image height, plus
-- about 24 kB for the decoder
-
-For example, a 200x168 GIF needs about 90 kB, and a full screen 240x240 GIF needs about 140 kB.  The RP2040 has 264 kB of RAM in total and the RP2350 has 520 kB, and the rest of the firmware needs some of that too.  If you flash a new image and it doesn't start running as expected, you've likely run out of memory.  Make the animated GIF smaller and try again.
-
-GIFs that are too big for the RP2040 can still go in for the other boards.  Put their lines in `core/media/image_list.c` inside `#if RCAT_LARGE_IMAGES`, like the full screen `radar3c` GIF.  Each board's `.cmake` file sets `RCAT_LARGE_IMAGES`: it's on for the RP2350, and off for the RP2040.  It's off for the ESP32-S3 boards too, because converted for their bigger screens these GIFs take up a lot of the firmware's space.  Put them on the SD card instead.
-
-The ESP32-S3 boards decode GIFs into their 8 MB of PSRAM, so even full screen GIFs fit easily.
+Built into the firmware, though, a full screen GIF converted for the 466 pixel screen takes up a lot of its space, so put big ones on the SD card instead.  Lines in `core/media/image_list.c` inside `#if RCAT_LARGE_IMAGES`, like the full screen `radar3c` GIF, are only built in when the board's `board.cmake` turns `RCAT_LARGE_IMAGES` on, and it's off for the 1.75".
 
 ## Images on the SD card
 
@@ -69,7 +62,7 @@ Images are sized for the screen the same way as the built-in images.  Still imag
 python3 tools/prepare_sd.py my_images/*.gif my_images/*.png --size 466 --out /media/you/SDCARD/images
 ```
 
-Use the path where your card is mounted.  `--size` is the board's screen size: 466 for the ESP32-S3-Touch-AMOLED-1.75 (or 412 for the [ESP32-S3-Touch-LCD-1.46](../other-boards.md)).
+Use the path where your card is mounted.  `--size` is the board's screen size: 466 for the ESP32-S3-Touch-AMOLED-1.75.
 
 Limits:
 

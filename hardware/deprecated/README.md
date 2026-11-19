@@ -10,6 +10,6 @@ The [ESP32-S3-Touch-AMOLED-1.75](../boards/waveshare_esp32s3_touch_amoled_1_75/)
 | [1.46" housing](waveshare_esp32s3_touch_lcd_1_46/) | Waveshare ESP32-S3-Touch-LCD-1.46 | Needs a tiny resistor on the board changed to charge its small battery safely.  Its speaker faces into the mask, so it has no voice effects. |
 | [1.46" speaker housing](waveshare_esp32s3_touch_lcd_1_46_speaker_housing/) | Waveshare ESP32-S3-Touch-LCD-1.46, with two speakers, their amplifiers and the J9 header adapter PCB | A hard build, with a custom PCB and fine soldering, no USB access, and one microphone.  The firmware no longer drives its amplifiers. |
 
-The firmware still supports the 1.28" and 1.46" boards, for other projects: see [Other Boards](../../docs/other-boards.md).  The housings for them each have their build guide (`build_guide.md`) in their folder.
+The firmware for the 1.28" and 1.46" boards was dropped after release 0.9.7.  [Former Boards](../../docs/other-boards.md) says which commits were last developed, run and built for each, and, for the speaker housing, the last with its amplifiers and with updates over WiFi.  The housings each have their build guide (`build_guide.md`) in their folder.
 
 Each design keeps its own license, given in its README.

@@ -21,19 +21,12 @@ flowchart TB
         media["media/: images, built in and from the SD card"]
     end
     hal["core/include/hal.h"]
-    subgraph pico["platforms/pico/ (pico-sdk)"]
-        p128["boards/touch_lcd_1_28/<br>RP2040 and RP2350 1.28"]
-    end
     subgraph esp["platforms/esp-idf/ (ESP-IDF)"]
         shared["components/rcat_esp32/<br>WiFi, hotspot, Bluetooth, settings, SD card, IMU"]
-        b146["boards/waveshare_esp32s3_touch_lcd_1_46/"]
         b175["boards/waveshare_esp32s3_touch_amoled_1_75/"]
     end
     core --> hal
-    hal --> p128
-    hal --> b146
     hal --> b175
-    b146 --> shared
     b175 --> shared
 ```
 
@@ -41,7 +34,7 @@ A few ideas run through it:
 
 - **A board without some hardware just says so.**  A HAL function the board can't do returns `false` (or does nothing), and the feature that needs it hides itself.  So the same application runs on a board with no microphone or WiFi, without any `#if` for the board.
 - **Features are modules.**  Each section of the display is one file, `core/ui/feature_<name>.c`, and can be switched on or off for a build in the platform's `features.cmake`.  Switched off, its file isn't compiled at all.
-- **Boards share what they can.**  The ESP32 boards share everything that doesn't depend on the board in one component, so a new ESP32 board only needs its own display, touch, audio and power code.
+- **Boards share what they can.**  Everything on an ESP32 board that doesn't depend on the board is in one component, so a new ESP32 board would only need its own display, touch, audio and power code.  There's one board now, the 1.75"; the [former boards](../other-boards.md) were dropped after 0.9.7.
 - **Sizes come from the board.**  Everything on screen is laid out for 240x240 and scaled with `ui_px()`, and the images are converted at build time for the board's screen size, so the same layout and the same image files work on every screen.
 - **The hardware follows the same pattern.**  The 3D printable housings are organized by board, and what every housing for a mask shares (its thread, the turning collar, the shape of the mask around the port) is in one place (see [`hardware/`](../../hardware/)).
 
@@ -54,8 +47,7 @@ A few ideas run through it:
   - `core/audio/` - The microphone level, voice effects, the Voice Lab stream, and the sound player and its decoders.
   - `core/media/` - The built-in images and the SD card's images.
   - `core/features.cmake` - The list of optional features.  Each platform's `features.cmake` picks which ones to build.
-- `platforms/pico/` - Build files for the RP2040 and RP2350 boards.  `boards/*.cmake` lists the supported boards, and `boards/touch_lcd_1_28/` has the HAL and Waveshare's drivers for the 1.28" round display.
-- `platforms/esp-idf/` - Build files for the ESP32-S3 boards.  `boards/` has one folder per board, with its HAL, pin assignments, drivers and settings, and `components/rcat_esp32/` has the parts of the HAL that are the same on all of them.
+- `platforms/esp-idf/` - The firmware's build files.  `boards/` has one folder per board, with its HAL, pin assignments, drivers and settings, and `components/rcat_esp32/` has the parts of the HAL that don't depend on the board.
 - `hardware/` - The 3D printable housings, PCBs and cases, by board (see [its README](../../hardware/)).
 - `third_party/lvgl/` - The [LVGL](https://lvgl.io) graphics library (git submodule).
 - `third_party/dr_libs/` - The [dr_libs](https://github.com/mackron/dr_libs) WAV, MP3 and FLAC decoders (git submodule).
@@ -163,8 +155,7 @@ Things to know:
 - **The partition is only made when flashing over USB.**  An update from the app doesn't change the partition table, so a board that has only ever been updated from the app since this was added has no `coredump` partition.  It still restarts, without the core dump.
 - **A new task that runs all the time should be watched too.**  Call `esp_task_wdt_add(NULL)` when it starts and `esp_task_wdt_reset()` each time round its loop, as `audio_task()` in the 1.75" board's `hal_board.c` does.  And don't keep a core busy for seconds at a time without blocking, or its idle task misses its check-in and the board restarts.
 - **The settings are in [`platforms/esp-idf/sdkconfig.defaults`](../../platforms/esp-idf/sdkconfig.defaults)** (`CONFIG_ESP_TASK_WDT_PANIC` and `CONFIG_ESP_COREDUMP_*`).  An existing build folder keeps its old configuration, so build in a new one after changing them.
-- **The RP2040 and RP2350 boards don't have any of this.**
 
 ## Checking a change
 
-Build every platform the change touches, as described in [Installing the Firmware](../building-firmware.md).  A change to `core/` or `hal.h` touches all of them: the RP2040, the RP2350 and both ESP32-S3 boards.  Every build should finish without warnings.  It's also worth building once with the new feature switched off.
+Build the firmware, as described in [Installing the Firmware](../building-firmware.md).  Every build should finish without warnings.  It's also worth building once with the new feature switched off.
