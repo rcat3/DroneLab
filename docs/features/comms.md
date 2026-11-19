@@ -136,6 +136,8 @@ Units start on the **open channel**, which any unit in range can hear.  To keep 
 
 The app turns the channel's name and passphrase into a key (PBKDF2, deliberately slow), and the unit encrypts everything with it (AES-128-GCM), so units outside the channel can neither hear it nor send to it, however they're changed.  The passphrase never leaves the phone.  What's not hidden: that a channel's there, its name, and how many are on it; and anyone who's been given the passphrase is on it, so start a new channel if someone shouldn't be any more.  The unit keeps its channel's key in its settings, so someone with the unit itself could read it out.
 
+Commands, texts and words for the display are signed by whoever sent them (see [Commands from others](lovense.md#commands-from-others)), so nobody can send them as someone else, on any channel.  Voice isn't: it's too much to sign every few milliseconds, so it's shown as coming from the unit it says it's from.  On a channel with a passphrase only its members can talk at all; on the open channel someone could talk as another unit nearby.  On the server, voice is tied to each person's certificate, so it can't be.
+
 The app's status strip shows a grey arrow when someone's talking on another channel nearby: the unit hears it on the air, but can't listen to it.
 
 ### Frequencies and Long Range

@@ -809,6 +809,15 @@ class CommController extends ChangeNotifier {
   /// that [p] may be passing as them.
   KnownPerson? nameClash(KnownPerson p) => people.clashes(p);
 
+  /// Someone who was [old] has a new identity, [now]: the new one's them
+  /// from now on, and the old one's forgotten (see KnownPeople.replace).
+  void acceptNewIdentity(KnownPerson old, KnownPerson now) {
+    people.replace(old.id, now.id);
+    _sentMuted = null;    // the board's list, by key, again
+    _updateBoardScreen();
+    notifyListeners();
+  }
+
   /// Who a conversation's line is from, as it's shown: their name, with a
   /// warning if it's someone else using a name someone had first.
   String fromLabel(ConversationEntry e) {

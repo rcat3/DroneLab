@@ -96,7 +96,7 @@ Future<void> showPerson(BuildContext context, CommController comm,
                     kv('Known by', value(_knownBy(p.who))),
                     kv('Mute for me', Switch(value: p.mutedByMe, onChanged: (on) => comm.setMuted(p.id, on))),
                   ]),
-                  if (clash != null) _ClashNote(clash.name),
+                  if (clash != null) _ClashNote(comm: comm, old: clash, now: p.who),
                   const _MuteNote(),
                   const SizedBox(height: 12),
                   Row(children: [
@@ -151,23 +151,51 @@ String _knownBy(KnownPerson who) => who.key != null
         ? 'Certificate ${who.id.substring(2, 10)}'
         : 'Name only';
 
-/// Someone's using a name someone else had first.
+/// Someone's using a name someone else had first: a warning, and, if it
+/// really is them with a new identity (a new phone, or the app put back
+/// without their backup code), a way to say so.
 class _ClashNote extends StatelessWidget {
-  final String name;
-  const _ClashNote(this.name);
+  final CommController comm;
+  final KnownPerson old;    // who had the name first
+  final KnownPerson now;    // who's using it
+  const _ClashNote({required this.comm, required this.old, required this.now});
 
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Icon(Icons.warning_amber, size: 18, color: Kc.softRed),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text('Not the $name you knew before: someone else using the name.',
-                style: const TextStyle(color: Kc.softRed, fontSize: 13)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Icon(Icons.warning_amber, size: 18, color: Kc.softRed),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text('Not the ${old.name} you knew before: someone else using the name.',
+                  style: const TextStyle(color: Kc.softRed, fontSize: 13)),
+            ),
+          ]),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(onPressed: () => _confirm(context), child: Text("It's ${old.name}, with a new identity")),
           ),
         ]),
       );
+
+  Future<void> _confirm(BuildContext context) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text('Is this ${old.name}?'),
+        content: Text(
+            "Only if you're sure, say by asking them in person: anyone can use a name. Their new identity takes the "
+            "place of the old one here, with your conversation, and the old one's forgotten.\n\n"
+            "If you'd allowed them on your unit, allow them again there: it knows them by identity too."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialog, true), child: Text("It's ${old.name}")),
+        ],
+      ),
+    );
+    if (yes == true) comm.acceptNewIdentity(old, now);
+  }
 }
 
 /// Someone not about just now: their name, and muting them.

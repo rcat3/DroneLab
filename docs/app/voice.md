@@ -118,6 +118,10 @@ The app makes you an identity the first time it runs: a key pair kept in the pho
 
 *Your identity* in Setup shows its first characters.  **Back up** shows a code that brings it all back: keep it somewhere safe, as anyone with it can pass as you.  **Restore** takes that code, after reinstalling the app or on another phone, and makes that phone you; the identity it had before is gone, unless it's backed up too.  The phone's own backups leave it out.
 
+Without the code, a new phone, or the app put back, is a new identity: others' apps show you with the ⚠, as someone new using your name, and their units don't take your commands until they allow you again.  When it really is someone you know with a new identity (ask them, as anyone can use a name), tap them, then **It's (their name), with a new identity** under the warning: the new one takes the old one's place in the app, with your conversation, and the old one's forgotten.  If you'd allowed them on your unit, allow them again there.
+
+There's no way to call an identity back.  If your phone's lost, or someone's seen your code, whoever has it can pass as you until those who know you forget you: on their units, hold your name in the *Permissions* list to forget it, and allow your new identity instead.  So keep the code safe, and a screen lock on the phone.
+
 ## When it doesn't work
 
 - **Nobody hears you**: check the status strip's up arrow lights pink while you talk, and that the line under SERVER/DIRECT names the link the others are on.

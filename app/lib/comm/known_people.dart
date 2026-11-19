@@ -9,6 +9,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'identity.dart';
@@ -161,6 +162,21 @@ class KnownPeople {
       _changed();
     }
     return p;
+  }
+
+  /// [newId] is who [oldId] was, as when someone's reinstalled the app
+  /// without their backup code and has a new identity: it takes the old
+  /// one's place (as long known, muted if it was), and the old one's
+  /// forgotten, so the name's theirs again.
+  void replace(String oldId, String newId) {
+    final old = _all[oldId], p = _all[newId];
+    if (old == null || p == null || oldId == newId) return;
+    _all.remove(oldId);
+    old.certs.forEach(_byCert.remove);
+    _all[newId] = KnownPerson(p.id, p.name,
+        key: p.key, certs: p.certs, muted: p.muted || old.muted, firstSeen: min(p.firstSeen, old.firstSeen));
+    onRenamed?.call(oldId, newId);
+    _changed();
   }
 
   void setMuted(String id, bool muted) {

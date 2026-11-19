@@ -43,4 +43,23 @@ void main() {
       expect(b.onServer('cc' * 20, 'Bob').id, p.id);
     });
   });
+
+  test('a new identity can take the place of the old one', () async {
+    final renamed = <(String, String)>[];
+    final people = KnownPeople((_) {})..onRenamed = (a, b) => renamed.add((a, b));
+    final old = people.bind(key, 'aa' * 20, 'Alice');
+    people.setMuted(old.id, true);
+    await Future.delayed(const Duration(milliseconds: 5));
+    final now = people.bind(Uint8List.fromList(List.filled(32, 9)), 'bb' * 20, 'Alice');
+    expect(people.clashes(now)?.id, old.id);
+    people.replace(old.id, now.id);
+    expect(people[old.id], isNull);
+    expect(people.clashes(people[now.id]!), isNull);
+    expect(people[now.id]!.muted, isTrue);
+    expect(renamed.last, (old.id, now.id));
+    // The old one, if it turns up again, is someone new now
+    await Future.delayed(const Duration(milliseconds: 5));
+    final back = people.bind(key, 'aa' * 20, 'Alice');
+    expect(people.clashes(back)?.id, now.id);
+  });
 }
