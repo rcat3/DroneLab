@@ -65,6 +65,7 @@ typedef struct
 {
     uint32_t source;
     uint16_t seq;
+    bool done;              // done, rather than refused: a copy by another way may be allowed
 } seen_t;
 
 static const char *const store_names[OTHERS_KIND_COUNT] = { "oth_lovense", "oth_terminal" };
@@ -187,22 +188,26 @@ static int add(kind_t *k, comm_transport_t via, const char *name)
 }
 
 /* True if this command's been done already. */
-static bool seen_before(uint32_t source, uint16_t seq)
+// A command by its sender's id and seq: the one seen before, or a new one
+static seen_t *seen_entry(uint32_t source, uint16_t seq, bool *again)
 {
     for (int i = 0; i < seen_count; i++)
     {
         if (seen[i].source == source && seen[i].seq == seq)
         {
-            return true;
+            *again = true;
+            return &seen[i];
         }
     }
-    seen[seen_next] = (seen_t){ source, seq };
+    seen_t *s = &seen[seen_next];
+    *s = (seen_t){ source, seq, false };
     seen_next = (seen_next + 1) % SEEN_MAX;
     if (seen_count < SEEN_MAX)
     {
         seen_count++;
     }
-    return false;
+    *again = false;
+    return s;
 }
 
 /* ----- What they do ----- */
@@ -416,10 +421,14 @@ void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
     {
         return;
     }
-    // Once, however many times it comes, and by whichever way
+    // Once, however many times it comes, and by whichever way. Senders send
+    // to someone both ways they can reach them, so one refused may come
+    // again by a way that's allowed: that's tried, but one done isn't again.
     uint32_t source = cmd[1] | (cmd[2] << 8) | (cmd[3] << 16) | ((uint32_t)cmd[4] << 24);
     uint16_t seq = (uint16_t)(cmd[5] | (cmd[6] << 8));
-    if (seen_before(source, seq))
+    bool again;
+    seen_t *seen_as = seen_entry(source, seq, &again);
+    if (again && (seen_as->done || which == OTHERS_KIND_COUNT))
     {
         return;
     }
@@ -450,8 +459,13 @@ void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
         }
         done = anyone || (i >= 0 && k->list.senders[i].allowed);
     }
+    if (!done && again)
+    {
+        return;     // refused again: the app's been told
+    }
     if (done)
     {
+        seen_as->done = true;
         run(cmd, len);
         snprintf(k->last_from, sizeof(k->last_from), "%s", from);
         k->last_ms = rcat_hal_millis();

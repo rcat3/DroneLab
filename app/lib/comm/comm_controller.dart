@@ -1046,12 +1046,14 @@ class CommController extends ChangeNotifier {
           sent = true;
         }
       case ConversationKind.person:
+        // Both ways they can be reached: they keep the first that comes
         final u = serverUser(personOf(c));
-        final b = u == null ? directBoard(personOf(c)) : null;
+        final b = directBoard(personOf(c));
         if (u != null) {
           m!.sendTextTo(u.session, _html(text));
           sent = true;
-        } else if (b != null) {
+        }
+        if (b != null) {
           _toDirect(direct(), [b.id]);
           sent = true;
         }
@@ -1086,13 +1088,12 @@ class CommController extends ChangeNotifier {
       case ConversationKind.direct:
         if (directConversation?.key == c.key) toDirect(const []);
       case ConversationKind.person:
+        // Both ways they can be reached: their board does it once, by
+        // whichever way first comes that they allow
         final u = serverUser(personOf(c));
-        final b = u == null ? directBoard(personOf(c)) : null;
-        if (u != null) {
-          toServer([u.session]);
-        } else if (b != null) {
-          toDirect([b.id]);
-        }
+        final b = directBoard(personOf(c));
+        if (u != null) toServer([u.session]);
+        if (b != null) toDirect([b.id]);
     }
     if (sent && log) {
       final op = Uint8List.sublistView(cmd.bytes, 8);
@@ -1196,6 +1197,19 @@ class CommController extends ChangeNotifier {
             kind: h.what == Heard.terminal ? ConversationEntry.terminal : ConversationEntry.lovense,
             body: describeCommand(h.data, mine: false),
             done: h.done);
+    // Refused by one way, then done when it came the other: done, once
+    final last = c.entries.isEmpty ? null : c.entries.last;
+    if (e.done &&
+        last != null &&
+        !last.done &&
+        !last.mine &&
+        last.from == e.from &&
+        last.kind == e.kind &&
+        last.body == e.body &&
+        e.time.difference(last.time) < const Duration(seconds: 5)) {
+      c.entries.removeLast();
+      if (c.unread > 0) c.unread--;
+    }
     conversations.add(c, e);
     if (h.what == Heard.text) _notifyText(c);
   }

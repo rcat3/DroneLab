@@ -6,9 +6,11 @@ import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
 import 'control_page.dart';
+import 'groups_page.dart';
 import 'people.dart';
 import 'person_sheet.dart';
 import 'remote_page.dart';
+import 'setup_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -46,12 +48,33 @@ class TextPage extends StatelessWidget {
             if (!online.contains(c.key) && c.entries.isNotEmpty) c
         ]..sort((a, b) => (b.last ?? DateTime(0)).compareTo(a.last ?? DateTime(0)));
         final names = people.keys.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        final direct = comm.boardSettings?.direct;
         return Scaffold(
-          appBar: AppBar(title: const Text('Text')),
+          appBar: AppBar(
+            title: const Text('Text'),
+            actions: [
+              IconButton(
+                tooltip: 'Setup',
+                icon: const Icon(Icons.settings),
+                onPressed: () =>
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => SetupPage(comm: comm))),
+              ),
+            ],
+          ),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              const SectionHeader('Channels'),
+              SectionHeader(
+                'Channels',
+                // Which direct channel to be on, as from Voice's Change
+                trailing: direct == null
+                    ? null
+                    : OutlinedButton(
+                        onPressed: () =>
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupsPage(comm: comm))),
+                        child: const Text('Direct channel'),
+                      ),
+              ),
               if (channels.isEmpty)
                 const Panel(children: [
                   PanelRow(title: 'Not linked to the hive', subtitle: 'Connect to the server, or switch on Direct'),
