@@ -89,7 +89,7 @@ Two more choices, under it (on the unit, on the page after *Hive Messages*), ign
 
 So with both on, only commands sent to you alone get through.
 
-Someone's known by their name and how they're heard, server or direct, so the same person can be on the list twice.  Someone on both sends you their words both ways, so allowing either is enough.  Names can be borrowed: on a direct channel with a passphrase only its members can send at all, but on the open channel, or a server anyone can join, someone could use a name you've allowed.
+Someone's known by their identity, not their name: their app signs each command with a key only it has, and the list shows the first few characters of that key beside their name.  So it's one entry whether they reach you over the server or direct, and someone else can't pass as them by using their name.  Someone new who uses a name already on the list is marked ⚠: it's someone else.
 
 It's a separate list from the one for your toys, so someone can put words on your display without being allowed near your toys.  Texts don't need either: they only reach your app.
 

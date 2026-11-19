@@ -65,6 +65,7 @@ const commVersionMessages = 6;
 const commVersionUpdate = 7;     // updating the firmware from the app, and status bit 5
 const commVersionHeard = 8;      // what others send the board, passed on as it comes (0x0F)
 const commVersionMuted = 9;      // who's muted here, whose commands the board ignores (0x10)
+const commVersionKeys = 10;     // commands signed by their sender's key; the wearer's key (0x11)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -85,6 +86,8 @@ const _msgRecord = 0x0A;
 const _msgCommand = 0x0B;
 const _msgHeard = 0x0F;
 const _msgMuted = 0x10;
+const _msgIdentity = 0x11;
+const _msgBinding = 0x12;
 const _msgDirectAvatar = 0x0D;
 const _msgUpdate = 0x0E;
 
@@ -117,9 +120,10 @@ class BoardStatus {
   final bool charging;
   final bool otherVoice;    // someone's talking in another direct comms group nearby
   final bool otherFirmware; // boards with another version of direct comms nearby, which can't be heard
+  final int? directId;      // the board's own id over direct comms (commVersion 10)
   BoardStatus(this.version, this.mode, this.sending, this.hearsVoice, this.buttonConnected,
       [this.recording = false, this.battery, this.charging = false, this.otherVoice = false,
-      this.otherFirmware = false]);
+      this.otherFirmware = false, this.directId]);
 }
 
 /// The board's voice while recording: as [BoardSound], kept apart from it.
@@ -152,7 +156,8 @@ class DirectPeer {
   final String name;
   final String firmware;    // its version, '' if it didn't say
   final String app;         // its phone's app's version, '' for none
-  DirectPeer(this.id, this.rssi, this.talking, this.name, [this.firmware = '', this.app = '']);
+  final Uint8List? key;     // its wearer's public key, as its hello says
+  DirectPeer(this.id, this.rssi, this.talking, this.name, [this.firmware = '', this.app = '', this.key]);
 }
 
 /// A piece of a board's avatar, heard over direct comms: [size] pixels
@@ -175,8 +180,9 @@ class Heard {
   final int what;
   final int scope;          // who it was for (OthersCommand.scope*)
   final String from;
+  final Uint8List key;      // who it's from: their public key
   final Uint8List data;     // the text, or the command from what to do on
-  Heard(this.direct, this.done, this.what, this.scope, this.from, this.data);
+  Heard(this.direct, this.done, this.what, this.scope, this.from, this.key, this.data);
 
   String get textOf => utf8.decode(data, allowMalformed: true);
 }
@@ -212,7 +218,7 @@ Object? parseBoardMessage(Uint8List data) {
       final charge = data.length >= 5 && data[4] != 0xFF ? data[4] : null;
       return BoardStatus(data[1], mode, data[3] & 1 != 0, data[3] & 2 != 0, data[3] & 4 != 0, data[3] & 8 != 0,
           charge == null ? null : charge & 0x7F, charge != null && charge & 0x80 != 0, data[3] & 16 != 0,
-          data[3] & 32 != 0);
+          data[3] & 32 != 0, data.length >= 9 ? data[5] | (data[6] << 8) | (data[7] << 16) | (data[8] << 24) : null);
     case _msgRecord:
       return RecordedSound(BoardSound(data[1] | (data[2] << 8), data[3] & 1 != 0, data[3] & 2 != 0,
           Uint8List.sublistView(data, 4)));
@@ -224,20 +230,27 @@ Object? parseBoardMessage(Uint8List data) {
   }
   if (data[0] == _msgDirectPeer && data.length >= 7) {
     var at = 7;
+    Uint8List? key;
+    if (data[6] & 4 != 0 && at + 32 <= data.length) {
+      key = Uint8List.fromList(data.sublist(at, at + 32));
+      at += 32;
+    }
     final versions = ['', ''];
     for (var i = 0; i < 2 && data[6] & 2 != 0 && at < data.length && at + 1 + data[at] <= data.length; i++) {
       versions[i] = utf8.decode(data.sublist(at + 1, at + 1 + data[at]), allowMalformed: true);
       at += 1 + data[at];
     }
     return DirectPeer(le32(1), data[5].toSigned(8), data[6] & 1 != 0,
-        utf8.decode(data.sublist(at), allowMalformed: true), versions[0], versions[1]);
+        utf8.decode(data.sublist(at), allowMalformed: true), versions[0], versions[1], key);
   }
   if (data[0] == _msgDirectAvatar && data.length >= 8) {
     return DirectAvatarPiece(le32(1), data[5], data[6], data[7], Uint8List.sublistView(data, 8));
   }
-  if (data[0] == _msgHeard && data.length >= 5 && data.length >= 5 + data[4]) {
+  if (data[0] == _msgHeard && data.length >= 5 && data.length >= 5 + data[4] + 32) {
+    final at = 5 + data[4];
     return Heard(data[1] & 1 != 0, data[1] & 2 != 0, data[2], data[3],
-        utf8.decode(data.sublist(5, 5 + data[4]), allowMalformed: true), Uint8List.sublistView(data, 5 + data[4]));
+        utf8.decode(data.sublist(5, at), allowMalformed: true), Uint8List.fromList(data.sublist(at, at + 32)),
+        Uint8List.sublistView(data, at + 32));
   }
   if (data[0] == _msgDirectGroup && data.length >= 9) {
     final id = data.sublist(1, 5).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
@@ -389,12 +402,15 @@ int fnv1a(List<int> bytes) {
 }
 
 /// A command for others' boards (core/app/others.h), the same over the
-/// server and over direct comms: the version, who it's from ([source], made
-/// up each time the app starts), [seq], then what to do. Each board only
-/// does it if its wearer has allowed us, and only once, by its source and
-/// seq. Commands for the Lovense devices, and messages for the Terminal.
+/// server and over direct comms: the version, our public key, a counter
+/// (our clock in ms, always more than our last), who it's for, then what to
+/// do, signed with our identity key (identity.dart) for where it's sent
+/// ([contextEveryone] and so on), so it can't be taken anywhere else. Each
+/// board only does it if its wearer has allowed us, and only once, by our
+/// key and the counter. Commands for the Lovense devices, and messages for
+/// the Terminal.
 class OthersCommand {
-  static const version = 2;
+  static const version = 3;
   static const stop = 0x00;
   static const level = 0x01;
   static const pattern = 0x02;
@@ -418,79 +434,138 @@ class OthersCommand {
   /// The longest a pattern's name can be, in bytes.
   static const nameMax = 32;
 
-  /// The longest a message can be, in bytes.
-  static const messageMax = 120;
+  /// The longest a message for the Terminal, and a text, can be, in bytes
+  /// (OTHERS_WHAT_MAX, less what goes before them).
+  static const messageMax = whatMax - 3;
+  static const textMax = whatMax - 1;
 
-  final Uint8List bytes;
-  OthersCommand._(this.bytes);
+  static const keyLength = 32, signatureLength = 64;
+  static const headerLength = 40;     // OTHERS_HEADER_LEN
+  static const whatMax = 117;         // OTHERS_WHAT_MAX
+  static const _signedPrefix = 'dronelab-command\n';
 
-  static OthersCommand _make(int source, int seq, List<int> what) => OthersCommand._(Uint8List.fromList([
-        version,
-        source & 0xFF, (source >> 8) & 0xFF, (source >> 16) & 0xFF, (source >> 24) & 0xFF,
-        seq & 0xFF, (seq >> 8) & 0xFF,
-        scopeEveryone,      // set as it's sent (withScope)
-        ...what,
-      ]));
+  /// What to do and its arguments.
+  final Uint8List what;
+  final int counter;
+  final int scope;
+  const OthersCommand._(this.what, [this.counter = 0, this.scope = scopeEveryone]);
+
+  static OthersCommand _make(List<int> what) => OthersCommand._(Uint8List.fromList(what));
+
+  /// The same, numbered (counted from our clock, by the controller).
+  OthersCommand withCounter(int c) => OthersCommand._(what, c, scope);
 
   /// The same, for [scope].
-  OthersCommand withScope(int scope) => OthersCommand._(Uint8List.fromList(bytes)..[7] = scope);
+  OthersCommand withScope(int s) => OthersCommand._(what, counter, s);
+
+  /// The command but its signature, from [key].
+  Uint8List body(List<int> key) => Uint8List.fromList([
+        version,
+        ...key,
+        for (var i = 0; i < 6; i++) (counter >> (8 * i)) & 0xFF,
+        scope,
+        ...what,
+      ]);
+
+  /// What it's sent in, signed with it but not sent (others.h).
+  static List<int> contextEveryone() => [0x45];                          // 'E'
+  static List<int> contextDirectChannel(List<int> groupId) => [0x43, ...groupId];  // 'C'
+  static List<int> contextServerChannel(List<int> serverFingerprint, int channel) =>
+      [0x53, ...serverFingerprint, channel & 0xFF, (channel >> 8) & 0xFF, (channel >> 16) & 0xFF, (channel >> 24) & 0xFF];
+  static List<int> contextOne(List<int> theirKey) => [0x4F, ...theirKey];  // 'O'
+
+  /// What's signed: the prefix, the context, then the command but its
+  /// signature.
+  static List<int> signedPart(List<int> context, List<int> body) =>
+      [...utf8.encode(_signedPrefix), ...context, ...body];
 
   /// Stop every device, and any reaction.
-  static OthersCommand stopAll(int source, int seq) => _make(source, seq, [stop]);
-  static OthersCommand setLevel(int source, int seq, int kind, int value) =>
-      _make(source, seq, [level, kind & 0xFF, value.clamp(0, levelTop)]);
+  static OthersCommand stopAll() => _make([stop]);
+  static OthersCommand setLevel(int kind, int value) => _make([level, kind & 0xFF, value.clamp(0, levelTop)]);
 
   /// Play a pattern on every device, by its name; no name stops them.
-  static OthersCommand play(int source, int seq, String? name) =>
-      _make(source, seq, [pattern, ..._cut(utf8.encode(name ?? ''), nameMax)]);
-  static OthersCommand setSpeed(int source, int seq, int percent) {
+  static OthersCommand play(String? name) => _make([pattern, ..._cut(utf8.encode(name ?? ''), nameMax)]);
+  static OthersCommand setSpeed(int percent) {
     final p = percent.clamp(25, 300);
-    return _make(source, seq, [speed, p & 0xFF, p >> 8]);
+    return _make([speed, p & 0xFF, p >> 8]);
   }
 
   /// React to the wearer (reactive_mode_t: 0 none, 1 voice, 2 moving, 3
   /// still, 4 motion, 5 tilt).
-  static OthersCommand setReact(int source, int seq, int mode) => _make(source, seq, [react, mode & 0xFF]);
+  static OthersCommand setReact(int mode) => _make([react, mode & 0xFF]);
 
   /// A message for their Terminal, as it is: added on a line of its own
   /// ([append]) or in place of what's there, at a letter size (0 Auto, 1 to 6
   /// for 8 to 48 px), and brought on screen if [show].
-  static OthersCommand terminal(int source, int seq, String text,
-          {bool append = true, bool show = true, int size = 0}) =>
-      _make(source, seq, [message, (append ? 1 : 0) | (show ? 2 : 0), size.clamp(0, 6), ..._cut(utf8.encode(text), messageMax)]);
+  static OthersCommand terminal(String text, {bool append = true, bool show = true, int size = 0}) =>
+      _make([message, (append ? 1 : 0) | (show ? 2 : 0), size.clamp(0, 6), ..._cut(utf8.encode(text), messageMax)]);
 
   /// Empty their Terminal.
-  static OthersCommand clearTerminal(int source, int seq) => _make(source, seq, [clear]);
+  static OthersCommand clearTerminal() => _make([clear]);
 
   /// A text, for their app (over direct comms: the server has its own).
-  static OthersCommand sendText(int source, int seq, String message) =>
-      _make(source, seq, [text, ..._cut(utf8.encode(message), messageMax)]);
+  static OthersCommand sendText(String message) => _make([text, ..._cut(utf8.encode(message), textMax)]);
+}
+
+/// A command as it came, read: who it's from, and the rest.
+class ReadCommand {
+  final Uint8List key;
+  final int counter;
+  final int scope;
+  final Uint8List body;         // all but the signature
+  final Uint8List signature;
+  ReadCommand(this.key, this.counter, this.scope, this.body, this.signature);
+
+  /// One signed, as sent; null if it isn't one.
+  static ReadCommand? parse(Uint8List cmd) {
+    const h = OthersCommand.headerLength, s = OthersCommand.signatureLength;
+    if (cmd.length < h + 1 + s || cmd.length > othersCommandMax || cmd[0] != OthersCommand.version) return null;
+    var counter = 0;
+    for (var i = 5; i >= 0; i--) {
+      counter = (counter << 8) | cmd[33 + i];
+    }
+    return ReadCommand(Uint8List.sublistView(cmd, 1, 33), counter, cmd[39], Uint8List.sublistView(cmd, 0, cmd.length - s),
+        Uint8List.sublistView(cmd, cmd.length - s));
+  }
 }
 
 /// The longest command the board takes (OTHERS_CMD_MAX), and the most
 /// boards one sent over direct comms can be for (DIRECT_COMMAND_TARGETS).
-const othersCommandMax = 136;
-const directCommandTargets = 12;
+const othersCommandMax = OthersCommand.headerLength + OthersCommand.whatMax + OthersCommand.signatureLength;
+const directCommandTargets = 1;
 
-/// A command from [from] on the server, for the board.
-/// Who's muted here, for the board to ignore their commands: in pieces, the
-/// first starting the list afresh (an empty one for nobody).
-List<Uint8List> mutedMessages(Iterable<String> names) {
+/// Who's muted here, for the board to ignore their commands: the first 8
+/// bytes of each one's key, in pieces, the first starting the list afresh
+/// (an empty one for nobody).
+List<Uint8List> mutedMessages(Iterable<List<int>> keys) {
   const room = 180;
   final pieces = <Uint8List>[];
   var piece = <int>[_msgMuted, 0x01];
-  for (final n in names) {
-    final b = _cut(utf8.encode(n), 23);
-    if (piece.length + b.length + 1 > room) {
+  for (final k in keys) {
+    if (piece.length + 8 > room) {
       pieces.add(Uint8List.fromList(piece));
       piece = [_msgMuted, 0x00];
     }
-    piece..addAll(b)..add(0);
+    piece.addAll(k.take(8));
   }
   pieces.add(Uint8List.fromList(piece));
   return pieces;
 }
 
+/// Who the wearer is: their public key, for commands to them alone.
+Uint8List identityMessage(List<int> key) => Uint8List.fromList([_msgIdentity, ...key]);
+
+/// What the wearer signs to say the board's theirs (its direct comms id,
+/// as the status gives it), and the message that gives the board the
+/// signature.
+List<int> boardBindingSigned(int directId) => [
+      ...utf8.encode('dronelab-board\n'),
+      directId & 0xFF, (directId >> 8) & 0xFF, (directId >> 16) & 0xFF, (directId >> 24) & 0xFF,
+    ];
+Uint8List bindingMessage(List<int> signature) => Uint8List.fromList([_msgBinding, ...signature]);
+
+/// A command from [from] on the server, for the board: without its
+/// signature, which we've checked.
 Uint8List commandFromServer(String from, List<int> cmd) {
   final name = _cut(utf8.encode(from), hearingNameMax);
   return Uint8List.fromList([_msgCommand, 1, name.length, ...name, ...cmd]);

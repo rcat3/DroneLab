@@ -36,4 +36,4 @@ Two more choices, under it (on the unit, on the page after *Hive Commands*), ign
 
 So with both on, only commands sent to you alone get through.  Someone you've [muted](text.md#what-a-conversation-shows) is ignored too.
 
-It's a separate list from the one for [your display](text.md#who-can-put-words-on-your-display), so someone can put words on your display without being allowed near your toys.  Texting you needs neither.  Names can be borrowed on the open channel or an open server, so only allow people on those if you trust everyone there: see [Commands from others](../features/lovense.md#commands-from-others) for the details.
+It's a separate list from the one for [your display](text.md#who-can-put-words-on-your-display), so someone can put words on your display without being allowed near your toys.  Texting you needs neither.  People are known by their identity, not their name, so nobody can pass as someone you've allowed: see [Commands from others](../features/lovense.md#commands-from-others) for the details.

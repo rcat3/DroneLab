@@ -115,6 +115,8 @@
 #define COMMAND_FROM_SERVER 0x01
 #define MSG_MUTED           0x10    // from the phone: who's muted there, whose commands are ignored
 #define MUTED_FIRST         0x01
+#define MSG_IDENTITY        0x11    // from the phone: the wearer's public key
+#define MSG_BINDING         0x12    // from the phone: the wearer's signature that this board's theirs
 #define MSG_HEARD           0x0F    // to the phone: a text or command someone sent, done or not
 #define MSG_DIRECT_AVATAR   0x0D    // to the phone: a piece of a board's avatar, heard over direct comms
 #define PEER_AVATAR_PIECE   100     // pixels a piece
@@ -362,7 +364,9 @@ static void send_status(void)
     {
         charge = (uint8_t)((b.percent > 100 ? 100 : b.percent) | (b.charging_known && b.charging ? 0x80 : 0));
     }
-    uint8_t msg[5] = { MSG_STATUS, COMM_VERSION, (uint8_t)mode, status_flags(), charge };
+    uint32_t id = direct_own_id();
+    uint8_t msg[9] = { MSG_STATUS, COMM_VERSION, (uint8_t)mode, status_flags(), charge,
+                       (uint8_t)id, (uint8_t)(id >> 8), (uint8_t)(id >> 16), (uint8_t)(id >> 24) };
     send_retrying(msg, sizeof(msg));
 }
 
@@ -758,8 +762,8 @@ bool comm_phone_connected(void)
     return running && rcat_hal_ble_peer_connected();
 }
 
-void comm_heard_to_phone(comm_transport_t via, const char *from, comm_heard_t what, uint8_t scope, bool done,
-                         const uint8_t *data, size_t len)
+void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, comm_heard_t what,
+                         uint8_t scope, bool done, const uint8_t *data, size_t len)
 {
     if (!comm_phone_connected())
     {
@@ -774,9 +778,12 @@ void comm_heard_to_phone(comm_transport_t via, const char *from, comm_heard_t wh
     msg[3] = scope;
     msg[4] = (uint8_t)n;
     memcpy(msg + 5, from, n);
-    len = len < sizeof(msg) - 5 - n ? len : sizeof(msg) - 5 - n;
-    memcpy(msg + 5 + n, data, len);
-    send_retrying(msg, 5 + n + len);
+    size_t at = 5 + n;
+    memcpy(msg + at, key, OTHERS_KEY_LEN);
+    at += OTHERS_KEY_LEN;
+    len = len < sizeof(msg) - at ? len : sizeof(msg) - at;
+    memcpy(msg + at, data, len);
+    send_retrying(msg, at + len);
 }
 
 bool comm_sending(void)
@@ -1374,12 +1381,17 @@ static void send_direct_peers(uint32_t now_ms)
     int n = direct_peers(peers, DIRECT_PEERS_MAX);
     for (int i = 0; i < n; i++)
     {
-        uint8_t msg[7 + 2 * DIRECT_VERSION_MAX + DIRECT_NAME_MAX];
+        uint8_t msg[7 + sizeof(peers[i].key) + 2 * DIRECT_VERSION_MAX + DIRECT_NAME_MAX];
         msg[0] = MSG_DIRECT_PEER;
         memcpy(msg + 1, &peers[i].id, 4);
         msg[5] = (uint8_t)peers[i].rssi;
-        msg[6] = (peers[i].talking ? 1 : 0) | 2;
+        msg[6] = (peers[i].talking ? 1 : 0) | 2 | (peers[i].has_key ? 4 : 0);
         size_t at = 7;
+        if (peers[i].has_key)
+        {
+            memcpy(msg + at, peers[i].key, sizeof(peers[i].key));
+            at += sizeof(peers[i].key);
+        }
         const char *versions[2] = { peers[i].firmware, peers[i].app };
         for (int k = 0; k < 2; k++)
         {
@@ -1596,7 +1608,15 @@ void comm_poll(uint32_t now_ms)
         }
         else if (msg[0] == MSG_MUTED && len >= 2)
         {
-            others_set_muted((msg[1] & MUTED_FIRST) != 0, (const char *)msg + 2, len - 2);
+            others_set_muted((msg[1] & MUTED_FIRST) != 0, msg + 2, len - 2);
+        }
+        else if (msg[0] == MSG_IDENTITY && len >= 1 + OTHERS_KEY_LEN)
+        {
+            others_set_owner(msg + 1);
+        }
+        else if (msg[0] == MSG_BINDING && len >= 1 + OTHERS_SIG_LEN)
+        {
+            others_set_binding(msg + 1);
         }
         else if (msg[0] == MSG_UPDATE && len >= 2)
         {
@@ -1709,8 +1729,8 @@ bool comm_phone_connected(void)
     return false;
 }
 
-void comm_heard_to_phone(comm_transport_t via, const char *from, comm_heard_t what, uint8_t scope, bool done,
-                         const uint8_t *data, size_t len)
+void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, comm_heard_t what,
+                         uint8_t scope, bool done, const uint8_t *data, size_t len)
 {
 }
 

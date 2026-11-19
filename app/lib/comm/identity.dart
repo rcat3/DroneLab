@@ -72,8 +72,10 @@ class Identity {
         hash.sha1.convert(cert).toString());
   }
 
-  /// A short id for a public key, hex: for showing, and for keying things.
-  static String idOf(List<int> publicKey) => _hex(hash.sha256.convert(publicKey).bytes.sublist(0, 8));
+  /// A short id for a public key: its first 8 bytes, hex, as the boards
+  /// show it and the muted list gives it (others.h), for showing, and for
+  /// keying things.
+  static String idOf(List<int> publicKey) => _hex(publicKey.sublist(0, 8));
 
   String get id => idOf(publicKey);
 

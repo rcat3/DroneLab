@@ -419,6 +419,16 @@ static const char *state_name(lovense_device_state_t state)
     }
 }
 
+/* Someone's key's id, as the list's shown and changed by: its first bytes,
+ * in hex. */
+static void key_id(const uint8_t *key, char out[2 * OTHERS_ID_LEN + 1])
+{
+    for (int i = 0; i < OTHERS_ID_LEN; i++)
+    {
+        snprintf(out + 2 * i, 3, "%02x", key[i]);
+    }
+}
+
 static void write_state(json_t *j)
 {
     char status[40] = "";
@@ -522,13 +532,16 @@ static void write_state(json_t *j)
         jprintf(j, "\"last\":");
         jstring(j, last != NULL ? last : "");
         jprintf(j, ",\"age\":%lu,\"senders\":[", (unsigned long)(age / 1000));
-        others_sender_t senders[OTHERS_SENDERS_MAX];
-        int n = others_senders((others_kind_t)k, senders, OTHERS_SENDERS_MAX);
-        for (int i = 0; i < n && i < OTHERS_SENDERS_MAX; i++)
+        others_sender_t senders[OTHERS_PEOPLE_MAX];
+        int n = others_senders((others_kind_t)k, senders, OTHERS_PEOPLE_MAX);
+        for (int i = 0; i < n && i < OTHERS_PEOPLE_MAX; i++)
         {
             jprintf(j, "%s{\"name\":", i ? "," : "");
             jstring(j, senders[i].name);
-            jprintf(j, ",\"via\":%d,\"allowed\":%d}", (int)senders[i].via, senders[i].allowed ? 1 : 0);
+            char id[2 * OTHERS_ID_LEN + 1];
+            key_id(senders[i].key, id);
+            jprintf(j, ",\"id\":\"%s\",\"allowed\":%d,\"clash\":%d}", id, senders[i].allowed ? 1 : 0,
+                    senders[i].clash ? 1 : 0);
         }
         jprintf(j, "]}");
     }
@@ -927,17 +940,29 @@ static bool run_command(const char *name, const char *query, const char *body, s
         {
             others_set_ignoring((others_kind_t)kind, (uint8_t)ignore);
         }
-        char who[COMM_NAME_MAX];
-        int via = query_int(query, "via", -1);
-        if (query_str(query, "name", who, sizeof(who)) && via >= 0 && via < COMM_TALK_COUNT)
+        // Someone in the list, by their key's id
+        char want[2 * OTHERS_ID_LEN + 1];
+        if (query_str(query, "id", want, sizeof(want)))
         {
-            if (query_int(query, "forget", 0))
+            others_sender_t senders[OTHERS_PEOPLE_MAX];
+            int n = others_senders((others_kind_t)kind, senders, OTHERS_PEOPLE_MAX);
+            for (int i = 0; i < n && i < OTHERS_PEOPLE_MAX; i++)
             {
-                others_forget((others_kind_t)kind, (comm_transport_t)via, who);
-            }
-            else
-            {
-                others_allow((others_kind_t)kind, (comm_transport_t)via, who, query_int(query, "allow", 0) != 0);
+                char id[2 * OTHERS_ID_LEN + 1];
+                key_id(senders[i].key, id);
+                if (strcmp(id, want) != 0)
+                {
+                    continue;
+                }
+                if (query_int(query, "forget", 0))
+                {
+                    others_forget((others_kind_t)kind, senders[i].key);
+                }
+                else
+                {
+                    others_allow((others_kind_t)kind, senders[i].key, query_int(query, "allow", 0) != 0);
+                }
+                break;
             }
         }
     }

@@ -18,20 +18,21 @@
 #define COLOR_OUTLINE       lv_color_hex(0x3a3a3a)
 #define COLOR_MUTED         lv_color_hex(0x8a8a8a)
 #define COLOR_ALLOWED       lv_palette_main(LV_PALETTE_GREEN)
+#define COLOR_CLASH         lv_palette_main(LV_PALETTE_DEEP_ORANGE)   // someone else using a listed name
 
 typedef struct
 {
     lv_obj_t *page;
     lv_obj_t *accept;       // Off, Ask and Accept
-    lv_obj_t *rows[OTHERS_SENDERS_MAX];
-    lv_obj_t *names[OTHERS_SENDERS_MAX];
-    lv_obj_t *vias[OTHERS_SENDERS_MAX];
+    lv_obj_t *rows[OTHERS_PEOPLE_MAX];
+    lv_obj_t *names[OTHERS_PEOPLE_MAX];
+    lv_obj_t *vias[OTHERS_PEOPLE_MAX];
     lv_obj_t *status;
     lv_obj_t *ignore_page;
     lv_obj_t *ignore_everyone;
     lv_obj_t *ignore_channel;
     int32_t list_y;         // the middle of the list, where the status goes while it's empty
-    others_sender_t senders[OTHERS_SENDERS_MAX];
+    others_sender_t senders[OTHERS_PEOPLE_MAX];
     uint32_t shown_changes;
     uint32_t shown_age_s;
 } others_page_t;
@@ -57,8 +58,8 @@ static void show(others_kind_t kind, bool always)
     uint8_t ignore = others_ignoring(kind);
     lv_obj_set_state(p->ignore_everyone, LV_STATE_CHECKED, (ignore & OTHERS_IGNORE_EVERYONE) != 0);
     lv_obj_set_state(p->ignore_channel, LV_STATE_CHECKED, (ignore & OTHERS_IGNORE_CHANNEL) != 0);
-    int n = others_senders(kind, p->senders, OTHERS_SENDERS_MAX);
-    for (int i = 0; i < OTHERS_SENDERS_MAX; i++)
+    int n = others_senders(kind, p->senders, OTHERS_PEOPLE_MAX);
+    for (int i = 0; i < OTHERS_PEOPLE_MAX; i++)
     {
         lv_obj_set_hidden(p->rows[i], i >= n);
         if (i >= n)
@@ -74,7 +75,10 @@ static void show(others_kind_t kind, bool always)
         {
             lv_label_set_text(p->names[i], o->name);
         }
-        lv_label_set_text(p->vias[i], o->via == COMM_TALK_DIRECT ? "direct" : "server");
+        // Who they are is their key: its first bytes, and a warning if
+        // they took the name of someone listed before them
+        lv_label_set_text_fmt(p->vias[i], "%s%02x%02x", o->clash ? LV_SYMBOL_WARNING " " : "", o->key[0], o->key[1]);
+        lv_obj_set_style_text_color(p->vias[i], o->clash ? COLOR_CLASH : COLOR_MUTED, 0);
         lv_obj_set_style_border_color(p->rows[i], o->allowed ? COLOR_ALLOWED : COLOR_OUTLINE, 0);
         lv_obj_set_style_text_color(p->names[i], o->allowed ? COLOR_ALLOWED : lv_color_white(), 0);
     }
@@ -152,15 +156,15 @@ static lv_obj_t *add_switch(others_page_t *p, others_kind_t kind, const char *te
 static void row_event_cb(lv_event_t *e)
 {
     int at = (int)(intptr_t)lv_event_get_user_data(e);
-    others_kind_t kind = (others_kind_t)(at / OTHERS_SENDERS_MAX);
-    const others_sender_t *o = &pages[kind]->senders[at % OTHERS_SENDERS_MAX];
+    others_kind_t kind = (others_kind_t)(at / OTHERS_PEOPLE_MAX);
+    const others_sender_t *o = &pages[kind]->senders[at % OTHERS_PEOPLE_MAX];
     if (lv_event_get_code(e) == LV_EVENT_LONG_PRESSED)
     {
-        others_forget(kind, o->via, o->name);
+        others_forget(kind, o->key);
     }
     else
     {
-        others_allow(kind, o->via, o->name, !o->allowed);
+        others_allow(kind, o->key, !o->allowed);
     }
     show(kind, true);
 }
@@ -207,7 +211,7 @@ lv_obj_t *ui_others_page_add(ui_feature_t *feature, others_kind_t kind)
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
 
-    for (int i = 0; i < OTHERS_SENDERS_MAX; i++)
+    for (int i = 0; i < OTHERS_PEOPLE_MAX; i++)
     {
         lv_obj_t *row = lv_button_create(list);
         lv_obj_set_size(row, ui_px(176), ui_px(30));
@@ -217,7 +221,7 @@ lv_obj_t *ui_others_page_add(ui_feature_t *feature, others_kind_t kind)
         lv_obj_set_style_border_width(row, LV_MAX(1, ui_px(1)), 0);
         lv_obj_set_style_border_color(row, COLOR_OUTLINE, 0);
         lv_obj_set_style_shadow_width(row, 0, 0);
-        void *at = (void *)(intptr_t)(kind * OTHERS_SENDERS_MAX + i);
+        void *at = (void *)(intptr_t)(kind * OTHERS_PEOPLE_MAX + i);
         lv_obj_add_event_cb(row, row_event_cb, LV_EVENT_SHORT_CLICKED, at);
         lv_obj_add_event_cb(row, row_event_cb, LV_EVENT_LONG_PRESSED, at);
         p->names[i] = lv_label_create(row);

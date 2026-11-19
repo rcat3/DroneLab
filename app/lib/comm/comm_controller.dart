@@ -115,7 +115,8 @@ class NearbyBoard {
   int seenMs;
   String firmware;    // its version, '' if not known
   String app;         // its phone's app's version, '' for none or not known
-  NearbyBoard(this.id, this.name, this.rssi, this.talking, this.seenMs, [this.firmware = '', this.app = '']);
+  Uint8List? key;     // its wearer's public key, checked by our board
+  NearbyBoard(this.id, this.name, this.rssi, this.talking, this.seenMs, [this.firmware = '', this.app = '', this.key]);
 }
 
 class CommController extends ChangeNotifier {
@@ -131,7 +132,7 @@ class CommController extends ChangeNotifier {
   Identity? identity;
 
   /// Everyone we've come across, by who they are (known_people.dart).
-  late final KnownPeople people = KnownPeople((json) => _prefs?.setString('people', json))
+  late final KnownPeople people = KnownPeople((json) => _prefs?.setString('knownPeople', json))
     ..onRenamed = (oldId, newId) =>
         conversations.rekey(Conversation.personKey(oldId), Conversation.personKey(newId));
   Timer? _reconnect;
@@ -202,6 +203,7 @@ class CommController extends ChangeNotifier {
     board.appVersion = (await PackageInfo.fromPlatform()).version;
     bundledFirmware = await BundledFirmware.load();
     final p = _prefs = await SharedPreferences.getInstance();
+    _commandCounter = p.getInt('commandCounter') ?? 0;
     server = ServerSettings(
       host: p.getString('host') ?? '',
       port: p.getInt('port') ?? 64738,
@@ -211,7 +213,7 @@ class CommController extends ChangeNotifier {
     bufferMs = p.getInt('bufferMs') ?? 60;
     final a = p.getString('avatar');
     avatar = a == null ? null : base64Decode(a);
-    people.load(p.getString('people'));
+    people.load(p.getString('knownPeople'));
     try {
       identity = await Identity.load();
     } catch (e) {
@@ -545,10 +547,11 @@ class CommController extends ChangeNotifier {
     final now = DateTime.now().millisecondsSinceEpoch;
     final b = nearby[p.id];
     if (b == null) {
-      nearby[p.id] = NearbyBoard(p.id, p.name, p.rssi, p.talking, now, p.firmware, p.app);
+      nearby[p.id] = NearbyBoard(p.id, p.name, p.rssi, p.talking, now, p.firmware, p.app, p.key);
     } else {
       b
         ..name = p.name
+        ..key = p.key
         ..firmware = p.firmware.isNotEmpty ? p.firmware : b.firmware
         ..app = p.app
         ..rssi = p.rssi
@@ -791,8 +794,9 @@ class CommController extends ChangeNotifier {
   /// Someone on the server, by their certificate (known_people.dart).
   KnownPerson personOfUser(MumbleUser u) => people.onServer(u.certHash, u.name);
 
-  /// A board heard over direct comms: by its name, for now.
-  KnownPerson personOfBoard(NearbyBoard b) => people.named(b.name);
+  /// A board heard over direct comms: by its wearer's key, which their app
+  /// signed for it, or only its name without one.
+  KnownPerson personOfBoard(NearbyBoard b) => b.key != null ? people.byKey(b.key!, b.name) : people.named(b.name);
 
   bool _sessionMuted(int session) {
     final u = mumble?.users[session];
@@ -845,6 +849,8 @@ class CommController extends ChangeNotifier {
   Uint8List? _sentServer;
   Uint8List? _sentHearing;
   String? _sentMuted;
+  bool _sentIdentity = false;
+  int? _boundId;      // the board's direct id we've signed it's ours for
 
   /// Tell the board how the server's doing and who's talking, when it
   /// changes, and all of it when the board's newly there. Avatars go as
@@ -853,14 +859,33 @@ class CommController extends ChangeNotifier {
     _boardAvatars.update();
     if (board.state != BoardState.connected || board.status == null) {
       _sentServer = _sentHearing = _sentMuted = null;
+      _sentIdentity = false;
+      _boundId = null;
       return;
     }
-    // Who's muted, for the board to ignore their commands too
-    final mutedNames = {for (final p in muted) p.name}.toList()..sort();
-    final mutedNow = mutedNames.join('\n');
-    if (_sentMuted != mutedNow && (board.status?.version ?? 0) >= commVersionMuted) {
+    final keys = (board.status?.version ?? 0) >= commVersionKeys;
+    // Who we are, and that the board's ours, for its hello over direct comms
+    final me = identity;
+    if (keys && me != null) {
+      if (!_sentIdentity) {
+        _sentIdentity = true;
+        _boundId = null;
+        board.send(identityMessage(me.publicKey));
+      }
+      final id = board.status?.directId;
+      if (id != null && id != _boundId) {
+        _boundId = id;
+        me.sign(boardBindingSigned(id)).then((sig) {
+          if (_boundId == id && board.state == BoardState.connected) board.send(bindingMessage(sig));
+        });
+      }
+    }
+    // Who's muted, by key, for the board to ignore their commands too
+    final mutedKeys = [for (final p in muted) if (p.key != null) p.key!];
+    final mutedNow = (mutedKeys.map(Identity.idOf).toList()..sort()).join('\n');
+    if (_sentMuted != mutedNow && keys) {
       _sentMuted = mutedNow;
-      for (final piece in mutedMessages(mutedNames)) {
+      for (final piece in mutedMessages(mutedKeys)) {
         board.send(piece);
       }
     }
@@ -1015,28 +1040,70 @@ class CommController extends ChangeNotifier {
   /// What commands are called in Mumble's plugin data.
   static const commandDataId = 'dronelab-command';
 
-  final int _commandSource = Random.secure().nextInt(0xFFFFFFFF);
-  int _commandSeq = 0;
+  /// Our last command's counter: our clock in ms, but always more than the
+  /// last, so a board can tell an old one played back. Kept, in case the
+  /// clock goes back.
+  int _commandCounter = 0;
 
   /// True if the board takes commands for others.
   bool get boardTakesCommands =>
-      board.state == BoardState.connected && (board.status?.version ?? 0) >= commVersionCommands;
+      board.state == BoardState.connected && (board.status?.version ?? 0) >= commVersionKeys;
 
-  /// A new command, from [make], with its source and the next seq.
-  OthersCommand newCommand(OthersCommand Function(int source, int seq) make) =>
-      make(_commandSource, _commandSeq = (_commandSeq + 1) & 0xFFFF);
+  /// A command, numbered: sent again as it is, it's only done once.
+  OthersCommand newCommand(OthersCommand cmd) {
+    _commandCounter = max(_commandCounter + 1, DateTime.now().millisecondsSinceEpoch);
+    _prefs?.setInt('commandCounter', _commandCounter);
+    return cmd.withCounter(_commandCounter);
+  }
 
-  /// A command from someone on the server: on to the board, which decides
-  /// whether to do it.
+  /// Commands go out in order, each signed as it goes.
+  Future<void> _sending = Future.value();
+
+  void _sendSigned(OthersCommand cmd, List<int> context, void Function(Uint8List signed) send) {
+    final me = identity;
+    if (me == null) return;
+    _sending = _sending.then((_) async {
+      final body = cmd.body(me.publicKey);
+      final sig = await me.sign(OthersCommand.signedPart(context, body));
+      send(Uint8List.fromList([...body, ...sig]));
+    }).catchError((Object e) => debugPrint('command: $e'));
+  }
+
+  static List<int> _unhex(String hex) =>
+      [for (var i = 0; i + 1 < hex.length; i += 2) int.parse(hex.substring(i, i + 2), radix: 16)];
+
+  /// What a command to a channel on the server is signed for: the server's
+  /// certificate and the channel.
+  List<int> _serverChannelContext(MumbleClient m) =>
+      OthersCommand.contextServerChannel(_unhex(m.fingerprint ?? ''), m.myChannel);
+
+  /// A command from someone on the server: checked, then on to the board,
+  /// which decides whether to do it.
   void _onPluginData(MumbleClient m, MumblePluginData d) {
     if (d.id == IdentityAnnouncement.dataId) {
       _onAnnouncement(m, d);
       return;
     }
     if (d.id != commandDataId || !boardTakesCommands) return;
-    final name = m.users[d.sender]?.name ?? '';
-    if (name.isEmpty || d.data.length > othersCommandMax || _sessionMuted(d.sender)) return;
-    board.send(commandFromServer(name, d.data));
+    final u = m.users[d.sender];
+    final cmd = ReadCommand.parse(d.data);
+    final me = identity;
+    if (u == null || u.name.isEmpty || cmd == null || me == null) return;
+    final context = switch (cmd.scope) {
+      OthersCommand.scopeEveryone => OthersCommand.contextEveryone(),
+      OthersCommand.scopeChannel => _serverChannelContext(m),
+      OthersCommand.scopeOne => OthersCommand.contextOne(me.publicKey),
+      _ => null,
+    };
+    if (context == null) return;
+    Identity.verify(cmd.key, OthersCommand.signedPart(context, cmd.body), cmd.signature).then((good) {
+      if (!good) {
+        debugPrint('command: a bad signature from ${u.name}, dropped');
+        return;
+      }
+      if (people.byKey(cmd.key, u.name).muted || !boardTakesCommands) return;
+      board.send(commandFromServer(u.name, cmd.body));
+    });
   }
 
   // ----- Conversations -----
@@ -1105,8 +1172,34 @@ class CommController extends ChangeNotifier {
   static String _html(String text) =>
       text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>');
 
-  void _toDirect(OthersCommand cmd, List<int> targets) =>
-      board.send(commandToDirect(targets.take(directCommandTargets).toList(), cmd.bytes));
+  /// Over direct comms: to every board in our group, signed for everyone or
+  /// for the group's channel, or to one board, signed for its wearer.
+  void _toDirect(OthersCommand cmd, {NearbyBoard? to}) {
+    final List<int> context;
+    if (to != null) {
+      if (to.key == null) return;     // nobody we can sign for
+      context = OthersCommand.contextOne(to.key!);
+    } else if (cmd.scope == OthersCommand.scopeChannel) {
+      context = OthersCommand.contextDirectChannel(_unhex(boardSettings?.direct?.id ?? ''));
+    } else {
+      context = OthersCommand.contextEveryone();
+    }
+    _sendSigned(cmd, context, (signed) => board.send(commandToDirect(to == null ? const [] : [to.id], signed)));
+  }
+
+  /// Over the server, to these sessions.
+  void _toServer(MumbleClient m, OthersCommand cmd, List<int> sessions, {Uint8List? theirKey}) {
+    if (sessions.isEmpty) return;
+    final context = switch (cmd.scope) {
+      OthersCommand.scopeChannel => _serverChannelContext(m),
+      OthersCommand.scopeOne => OthersCommand.contextOne(theirKey!),
+      _ => OthersCommand.contextEveryone(),
+    };
+    _sendSigned(cmd, context, (signed) => m.sendPluginData(sessions, commandDataId, signed));
+  }
+
+  /// Someone's key, by who they are, if they've one.
+  Uint8List? _keyOf(String personId) => people[personId]?.key;
 
   /// Text a conversation: over the server as a Mumble text message (to the
   /// channel, or to one person), and over direct comms as one of ours.
@@ -1116,7 +1209,7 @@ class CommController extends ChangeNotifier {
     if (text.isEmpty) return false;
     final m = mumble;
     var sent = false;
-    OthersCommand direct() => newCommand((source, seq) => OthersCommand.sendText(source, seq, text)).withScope(_scopeOf(c));
+    OthersCommand direct() => newCommand(OthersCommand.sendText(text)).withScope(_scopeOf(c));
     switch (c.kind) {
       case ConversationKind.everyone:
         if (_serverUp) {
@@ -1124,7 +1217,7 @@ class CommController extends ChangeNotifier {
           sent = true;
         }
         if (_directUp) {
-          _toDirect(direct(), const []);
+          _toDirect(direct());
           sent = true;
         }
       case ConversationKind.server:
@@ -1134,7 +1227,7 @@ class CommController extends ChangeNotifier {
         }
       case ConversationKind.direct:
         if (directConversation?.key == c.key) {
-          _toDirect(direct(), const []);
+          _toDirect(direct());
           sent = true;
         }
       case ConversationKind.person:
@@ -1145,8 +1238,8 @@ class CommController extends ChangeNotifier {
           m!.sendTextTo(u.session, _html(text));
           sent = true;
         }
-        if (b != null) {
-          _toDirect(direct(), [b.id]);
+        if (b != null && b.key != null) {
+          _toDirect(direct(), to: b);
           sent = true;
         }
     }
@@ -1161,34 +1254,35 @@ class CommController extends ChangeNotifier {
     final cmd = command.withScope(_scopeOf(c));
     final m = mumble;
     var sent = false;
-    void toServer(List<int> sessions) {
+    void toServer(List<int> sessions, {Uint8List? theirKey}) {
       if (sessions.isEmpty) return;
-      m!.sendPluginData(sessions, commandDataId, cmd.bytes);
+      _toServer(m!, cmd, sessions, theirKey: theirKey);
       sent = true;
     }
-    void toDirect(List<int> targets) {
-      _toDirect(cmd, targets);
+    void toDirect({NearbyBoard? to}) {
+      _toDirect(cmd, to: to);
       sent = true;
     }
     final channelSessions = _serverUp ? [for (final u in m!.channelUsers) u.session] : const <int>[];
     switch (c.kind) {
       case ConversationKind.everyone:
         if (_serverUp) toServer(channelSessions);
-        if (_directUp) toDirect(const []);
+        if (_directUp) toDirect();
       case ConversationKind.server:
         if (serverConversation?.key == c.key) toServer(channelSessions);
       case ConversationKind.direct:
-        if (directConversation?.key == c.key) toDirect(const []);
+        if (directConversation?.key == c.key) toDirect();
       case ConversationKind.person:
-        // Both ways they can be reached: their board does it once, by
-        // whichever way first comes that they allow
+        // Both ways they can be reached, signed for them alone: their board
+        // does it once, by whichever way first comes that they allow
+        final key = _keyOf(personOf(c));
         final u = serverUser(personOf(c));
         final b = directBoard(personOf(c));
-        if (u != null) toServer([u.session]);
-        if (b != null) toDirect([b.id]);
+        if (u != null && key != null) toServer([u.session], theirKey: key);
+        if (b != null && b.key != null) toDirect(to: b);
     }
     if (sent && log) {
-      final op = Uint8List.sublistView(cmd.bytes, 8);
+      final op = cmd.what;
       conversations.add(c, ConversationEntry(
           from: '', mine: true, kind: _kindOf(op), body: describeCommand(op, mine: true)));
     }
@@ -1279,8 +1373,8 @@ class CommController extends ChangeNotifier {
   /// What someone sent our board, as it passes it on: into the conversation
   /// it was for.
   void _onHeard(Heard h) {
-    // Who, by the name the board gives, for now: whoever goes by it about
-    final who = _byName(h.from, direct: h.direct);
+    // Who, by the key they signed it with
+    final who = people.byKey(h.key, h.from);
     if (who.muted) return;
     final c = switch (h.scope) {
       OthersCommand.scopeOne => personConversation(who.id),
@@ -1311,20 +1405,6 @@ class CommController extends ChangeNotifier {
     }
     conversations.add(c, e);
     if (h.what == Heard.text) _notifyText(c);
-  }
-
-  KnownPerson _byName(String name, {required bool direct}) {
-    if (direct) {
-      for (final b in nearby.values) {
-        if (b.name == name) return personOfBoard(b);
-      }
-    } else {
-      final m = mumble;
-      for (final u in m?.users.values ?? const <MumbleUser>[]) {
-        if (u.name == name && u.session != m!.mySession) return personOfUser(u);
-      }
-    }
-    return people.named(name);
   }
 
   // ----- The server -----

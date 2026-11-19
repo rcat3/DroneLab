@@ -292,7 +292,7 @@ class _ConversationPageState extends State<ConversationPage> {
                           minLines: 1,
                           maxLines: 4,
                           textCapitalization: TextCapitalization.sentences,
-                          maxLength: c.kind == ConversationKind.server ? null : OthersCommand.messageMax,
+                          maxLength: c.kind == ConversationKind.server ? null : OthersCommand.textMax,
                           decoration: InputDecoration(
                               hintText: 'Text ${c.kind == ConversationKind.everyone ? 'everyone' : c.title}',
                               counterText: '',
@@ -415,7 +415,7 @@ Future<void> showTerminalSheet(BuildContext context, CommController comm, Conver
           final t = text.text.trim();
           if (t.isEmpty) return;
           comm.sendCommandTo(
-              c, comm.newCommand((s, q) => OthersCommand.terminal(s, q, t, append: _append, show: _show, size: _size)));
+              c, comm.newCommand(OthersCommand.terminal(t, append: _append, show: _show, size: _size)));
           Navigator.pop(sheet);
         }
 
@@ -486,7 +486,7 @@ Future<void> showTerminalSheet(BuildContext context, CommController comm, Conver
                     icon: const Icon(Icons.clear_all),
                     label: const Text('Clear their display'),
                     onPressed: () {
-                      comm.sendCommandTo(c, comm.newCommand(OthersCommand.clearTerminal));
+                      comm.sendCommandTo(c, comm.newCommand(OthersCommand.clearTerminal()));
                       Navigator.pop(sheet);
                     },
                   ),

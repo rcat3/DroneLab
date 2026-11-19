@@ -92,8 +92,8 @@ class _ControlPageState extends State<ControlPage> {
     }
   }
 
-  void _send(OthersCommand Function(int source, int seq) make, {bool again = true}) {
-    final cmd = comm.newCommand(make);
+  void _send(OthersCommand what, {bool again = true}) {
+    final cmd = comm.newCommand(what);
     final target = widget.target;
     comm.sendCommandTo(target, cmd);
     _again?.cancel();
@@ -111,7 +111,7 @@ class _ControlPageState extends State<ControlPage> {
       _reacting = 0;
       _stopped = true;
     });
-    _send(OthersCommand.stopAll);
+    _send(OthersCommand.stopAll());
   }
 
   void _level(int kind, double v, {required bool done}) {
@@ -123,7 +123,7 @@ class _ControlPageState extends State<ControlPage> {
     final last = _sentAt[kind];
     if (!done && last != null && now.difference(last) < _dragEvery) return;
     _sentAt[kind] = now;
-    _send((source, seq) => OthersCommand.setLevel(source, seq, kind, v.round()), again: done);
+    _send(OthersCommand.setLevel(kind, v.round()), again: done);
   }
 
   void _play(String? name) {
@@ -131,7 +131,7 @@ class _ControlPageState extends State<ControlPage> {
       _playing = name;
       _stopped = false;
     });
-    _send((source, seq) => OthersCommand.play(source, seq, name));
+    _send(OthersCommand.play(name));
   }
 
   void _react(int mode) {
@@ -139,12 +139,12 @@ class _ControlPageState extends State<ControlPage> {
       _reacting = mode;
       _stopped = false;
     });
-    _send((source, seq) => OthersCommand.setReact(source, seq, mode));
+    _send(OthersCommand.setReact(mode));
   }
 
   void _setSpeed(int percent) {
     setState(() => _speed = percent.clamp(25, 300));
-    _send((source, seq) => OthersCommand.setSpeed(source, seq, _speed));
+    _send(OthersCommand.setSpeed(_speed));
   }
 
   Widget _chip(String label, bool selected, VoidCallback? onTap) => ChoiceChip(

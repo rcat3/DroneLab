@@ -22,6 +22,7 @@
 
 #include "app/comm.h"
 #include "app/others.h"
+#include "crypto/monocypher-ed25519.h"
 #include "app/settings.h"
 #include "hal.h"
 #include "lvgl.h"
@@ -56,6 +57,7 @@
 #define BEACON_LR           0x01
 #define HELLO_TALKING       0x01
 #define HELLO_ASKS          0x02        // it asks for pieces of an avatar
+#define HELLO_KEY           0x04        // the wearer's public key follows
 #define ASK_LEN             (4 + 1 + 16)    // whose, its version, and the pieces, a bit each
 #define MAX_OPUS            160
 
@@ -104,6 +106,8 @@ typedef struct
     char name[DIRECT_NAME_MAX];
     char firmware[DIRECT_VERSION_MAX];
     char app[DIRECT_VERSION_MAX];
+    uint8_t key[OTHERS_KEY_LEN];    // its wearer's, as its hello says
+    bool has_key;
     int8_t rssi;
     bool used;
     uint8_t avatar_version;     // of the avatar coming in, 0 for none
@@ -418,7 +422,7 @@ static bool avatar_ask(uint8_t out[ASK_LEN]);
 /* Who we are, and, if we're missing pieces of a board's avatar, which. */
 static void send_hello(void)
 {
-    uint8_t plain[2 + ASK_LEN + 2 * (1 + DIRECT_VERSION_MAX) + DIRECT_NAME_MAX];
+    uint8_t plain[2 + ASK_LEN + OTHERS_KEY_LEN + OTHERS_SIG_LEN + 2 * (1 + DIRECT_VERSION_MAX) + DIRECT_NAME_MAX];
     plain[0] = TYPE_HELLO;
     plain[1] = talking ? HELLO_TALKING : 0;
     size_t at = 2;
@@ -426,6 +430,11 @@ static void send_hello(void)
     {
         plain[1] |= HELLO_ASKS;
         at += ASK_LEN;
+    }
+    if (others_owner(plain + at, plain + at + OTHERS_KEY_LEN))
+    {
+        plain[1] |= HELLO_KEY;
+        at += OTHERS_KEY_LEN + OTHERS_SIG_LEN;
     }
     char app[DIRECT_VERSION_MAX];
     snprintf(app, sizeof(app), comm_app_os()[0] ? "%s %s" : "%s%s", comm_app_os(), comm_app_version());
@@ -479,6 +488,9 @@ static void send_voice(const voice_t *v)
 }
 
 /* The peer that sent this, made if it's new: the weakest or oldest goes. */
+_Static_assert(HEADER_LEN + 2 + 4 * DIRECT_COMMAND_TARGETS + OTHERS_CMD_MAX + TAG_LEN <= RCAT_HAL_DIRECT_MAX,
+               "a signed command for others doesn't fit in a broadcast");
+
 /* A command for others, for the boards it's for (all of them, with none). */
 static void send_command(const command_t *l)
 {
@@ -509,6 +521,29 @@ static void heard_command(const peer_t *p, const uint8_t *plain, size_t len)
     {
         size_t at = 2 + 4 * (size_t)plain[1];
         others_queue(p->name, plain + at, len - at);
+    }
+}
+
+/* A board's wearer's key, from its hello: believed if they've signed that
+ * the board's theirs, which is only checked when it's new. */
+static void heard_key(peer_t *p, const uint8_t *key, const uint8_t *sig)
+{
+    if (p->has_key && memcmp(p->key, key, OTHERS_KEY_LEN) == 0)
+    {
+        return;
+    }
+    static const char prefix[] = "dronelab-board\n";
+    uint8_t msg[sizeof(prefix) - 1 + 4];
+    memcpy(msg, prefix, sizeof(prefix) - 1);
+    memcpy(msg + sizeof(prefix) - 1, &p->id, 4);
+    p->has_key = crypto_ed25519_check(sig, key, msg, sizeof(msg)) == 0;
+    if (p->has_key)
+    {
+        memcpy(p->key, key, OTHERS_KEY_LEN);
+    }
+    else
+    {
+        printf("direct: %s says it's someone it can't prove it is\n", p->name);
     }
 }
 
@@ -873,6 +908,15 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
             {
                 heard_ask(plain + 2);
                 at += ASK_LEN;
+            }
+            if ((plain[1] & HELLO_KEY) && at + OTHERS_KEY_LEN + OTHERS_SIG_LEN <= plain_len)
+            {
+                heard_key(p, plain + at, plain + at + OTHERS_KEY_LEN);
+                at += OTHERS_KEY_LEN + OTHERS_SIG_LEN;
+            }
+            else
+            {
+                p->has_key = false;
             }
             char *versions[2] = { p->firmware, p->app };
             for (int i = 0; i < 2 && at < plain_len && at + 1 + plain[at] <= plain_len; i++)
@@ -1332,6 +1376,11 @@ bool direct_send_command(const uint32_t *targets, int count, const uint8_t *cmd,
     return true;
 }
 
+uint32_t direct_own_id(void)
+{
+    return own_id;
+}
+
 void direct_group_id(uint8_t out[4])
 {
     memcpy(out, group_id, 4);
@@ -1392,6 +1441,8 @@ int direct_peers(direct_peer_t *out, int max)
         memcpy(p.name, copy[i].name, sizeof(p.name));
         memcpy(p.firmware, copy[i].firmware, sizeof(p.firmware));
         memcpy(p.app, copy[i].app, sizeof(p.app));
+        memcpy(p.key, copy[i].key, sizeof(p.key));
+        p.has_key = copy[i].has_key;
         // Strongest first
         int at = n++;
         while (at > 0 && out[at - 1].rssi < p.rssi)
@@ -1482,6 +1533,11 @@ void direct_set_voice_cb(direct_voice_cb_t cb, void *user_data)
 bool direct_send_command(const uint32_t *targets, int count, const uint8_t *cmd, size_t len)
 {
     return false;
+}
+
+uint32_t direct_own_id(void)
+{
+    return 0;
 }
 
 void direct_group_id(uint8_t out[4])

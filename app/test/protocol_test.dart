@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:dronelab/comm/avatars.dart';
 import 'package:dronelab/comm/board_protocol.dart';
+import 'package:dronelab/comm/identity.dart';
 import 'package:dronelab/comm/recorder.dart';
 import 'package:image/image.dart' as img;
 import 'package:dronelab/comm/protobuf.dart';
@@ -150,10 +151,13 @@ void main() {
     final noPhone = parseBoardMessage(Uint8List.fromList(
         [0x08, 1, 0, 0, 0, 0xC4, 2, 6, ...'v0.9.4'.codeUnits, 0, ...'Pup'.codeUnits])) as DirectPeer;
     expect([noPhone.firmware, noPhone.app, noPhone.name], ['v0.9.4', '', 'Pup']);
-    final m = parseBoardMessage(Uint8List.fromList([0x0C, 3, 3, ...'Pup'.codeUnits, ...'HI'.codeUnits])) as TerminalMessage;
-    expect([m.from, m.direct, m.appOnly, m.text], ['Pup', true, true, 'HI']);
-    final unnamed = parseBoardMessage(Uint8List.fromList([0x0C, 0, 0, ...'HI'.codeUnits])) as TerminalMessage;
-    expect([unnamed.from, unnamed.direct, unnamed.appOnly, unnamed.text], ['', false, false, 'HI']);
+    final key = List.generate(32, (i) => i + 1);
+    final keyed = parseBoardMessage(Uint8List.fromList([0x08, 1, 0, 0, 0, 0xC4, 4, ...key, ...'Pup'.codeUnits]))
+        as DirectPeer;
+    expect([keyed.key, keyed.name], [key, 'Pup']);
+    final h = parseBoardMessage(Uint8List.fromList([0x0F, 3, 0, 2, 3, ...'Pup'.codeUnits, ...key, ...'HI'.codeUnits]))
+        as Heard;
+    expect([h.direct, h.done, h.what, h.scope, h.from, h.key, h.textOf], [true, true, 0, 2, 'Pup', key, 'HI']);
     final av = parseBoardMessage(Uint8List.fromList([0x0D, 2, 0, 0, 0, 112, 3, 126, 0x1F, 0xF8])) as DirectAvatarPiece;
     expect([av.id, av.size, av.piece, av.pieces, av.pixels], [2, 112, 3, 126, [0x1F, 0xF8]]);
   });
@@ -196,26 +200,38 @@ void main() {
     expect(h.lengthInBytes, 44);
   });
 
-  test('commands for others, as others.h', () {
-    const source = 0x04030201;
-    expect(OthersCommand.stopAll(source, 0x0605).bytes, [1, 1, 2, 3, 4, 5, 6, 0x00]);
-    expect(OthersCommand.setLevel(source, 7, OthersCommand.rotate, 25).bytes, [1, 1, 2, 3, 4, 7, 0, 0x01, 1, 20]);
-    expect(OthersCommand.setLevel(source, 7, OthersCommand.allMotors, 5).bytes.sublist(7), [0x01, 0xFF, 5]);
-    expect(OthersCommand.play(source, 7, 'Wave').bytes.sublist(7), [0x02, ...utf8.encode('Wave')]);
-    expect(OthersCommand.play(source, 7, null).bytes.sublist(7), [0x02]);
-    expect(OthersCommand.setSpeed(source, 7, 1000).bytes.sublist(7), [0x03, 300 & 0xFF, 300 >> 8]);
-    expect(OthersCommand.setReact(source, 7, 2).bytes.sublist(7), [0x04, 2]);
-    expect(OthersCommand.sendMessage(source, 7, 'hi').bytes.sublist(7), [0x10, 1, ...utf8.encode('hi')]);
-    expect(OthersCommand.sendMessage(source, 7, 'hi', named: false).bytes.sublist(7), [0x10, 0, ...utf8.encode('hi')]);
-    expect(OthersCommand.sendMessage(source, 7, 'hi', appOnly: true).bytes.sublist(7), [0x10, 3, ...utf8.encode('hi')]);
-    final long = OthersCommand.sendMessage(source, 7, 'x' * 500).bytes.length;
-    expect(long, 9 + OthersCommand.messageMax);
-    expect(long, lessThanOrEqualTo(othersCommandMax));
+  test('commands for others, as others.h', () async {
+    final me = await Identity.fromSeed(List.generate(32, (i) => i));
+    final key = me.publicKey;
+    final cmd = OthersCommand.stopAll().withCounter(0x060504030201).withScope(OthersCommand.scopeOne);
+    expect(cmd.body(key), [3, ...key, 1, 2, 3, 4, 5, 6, 2, 0x00]);
+    expect(OthersCommand.setLevel(OthersCommand.rotate, 25).what, [0x01, 1, 20]);
+    expect(OthersCommand.setLevel(OthersCommand.allMotors, 5).what, [0x01, 0xFF, 5]);
+    expect(OthersCommand.play('Wave').what, [0x02, ...utf8.encode('Wave')]);
+    expect(OthersCommand.play(null).what, [0x02]);
+    expect(OthersCommand.setSpeed(1000).what, [0x03, 300 & 0xFF, 300 >> 8]);
+    expect(OthersCommand.setReact(2).what, [0x04, 2]);
+    expect(OthersCommand.terminal('hi', append: false, show: true, size: 3).what, [0x10, 2, 3, ...utf8.encode('hi')]);
+    // The longest fit, signed
+    final long = OthersCommand.terminal('x' * 500).body(key).length + OthersCommand.signatureLength;
+    expect(long, othersCommandMax);
+    expect(OthersCommand.sendText('y' * 500).body(key).length + OthersCommand.signatureLength, othersCommandMax);
 
-    final cmd = OthersCommand.stopAll(source, 1).bytes;
-    expect(commandFromServer('Ann', cmd), [0x0B, 1, 3, ...utf8.encode('Ann'), ...cmd]);
-    expect(commandToDirect(const [], cmd), [0x0B, 0, 0, ...cmd]);
-    expect(commandToDirect(const [0x11223344], cmd), [0x0B, 0, 1, 0x44, 0x33, 0x22, 0x11, ...cmd]);
+    // Signed for one person, it's only good for them
+    final theirs = List.filled(32, 9);
+    final body = cmd.body(key);
+    final sig = await me.sign(OthersCommand.signedPart(OthersCommand.contextOne(theirs), body));
+    final read = ReadCommand.parse(Uint8List.fromList([...body, ...sig]))!;
+    expect([read.key, read.counter, read.scope], [key, 0x060504030201, OthersCommand.scopeOne]);
+    expect(await Identity.verify(read.key, OthersCommand.signedPart(OthersCommand.contextOne(theirs), read.body),
+        read.signature), isTrue);
+    expect(await Identity.verify(read.key, OthersCommand.signedPart(OthersCommand.contextOne(key), read.body),
+        read.signature), isFalse);
+
+    expect(commandFromServer('Ann', body), [0x0B, 1, 3, ...utf8.encode('Ann'), ...body]);
+    expect(commandToDirect(const [], body), [0x0B, 0, 0, ...body]);
+    expect(commandToDirect(const [0x11223344], body), [0x0B, 0, 1, 0x44, 0x33, 0x22, 0x11, ...body]);
+    expect(mutedMessages([key]), [[0x10, 1, ...key.take(8)]]);
   });
 
   test('packed repeated fields', () {

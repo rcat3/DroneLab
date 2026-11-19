@@ -27,10 +27,15 @@
  *            channel's sound (comm.h); then, but for the first, up to two
  *            packets before it again, newest first, each its length (1) then
  *            it, so two lost in a row come back from the next
- *     hello: 02, flags (bit 0 talking, bit 1 asks for pieces of an avatar),
- *            if it asks: whose (the sender's id, 4), its version (1), and
- *            which pieces (16 bytes, a bit each, from bit 0 of the first);
- *            then its firmware's version's length (1) and the version
+ *     hello: 02, flags (bit 0 talking, bit 1 asks for pieces of an avatar,
+ *            bit 2 the wearer's key follows), if it asks: whose (the
+ *            sender's id, 4), its version (1), and which pieces (16 bytes,
+ *            a bit each, from bit 0 of the first); then the wearer's public
+ *            key (32, others_owner) and their signature that this board's
+ *            theirs (64: of "dronelab-board\n" and the sender's id), if
+ *            their app's given them: who they are, for commands to them
+ *            alone (others.h). Boards check the signature, so the key
+ *            can't be copied to another board; then its firmware's version's length (1) and the version
  *            (rcat_hal_firmware_version), then the length (1) and version
  *            of the app on the phone linked to it, after what the phone is
  *            ("Android 1.2.0", from comm_app_os and comm_app_version; 0 long
@@ -48,8 +53,9 @@
  *            minutes, and the coarsest two layers every half minute; a
  *            piece at a time, and never while talking
  *     command: 04, how many boards it's for (1, 0 for every board in the
- *            group), their ids (4 bytes each), then a command for the
- *            others (see others.h). Sent three times, 100 ms apart, as nothing
+ *            group; at most DIRECT_COMMAND_TARGETS, as a signed command
+ *            leaves room for no more), their ids (4 bytes each), then a
+ *            command for the others (see others.h), signed. Sent three times, 100 ms apart, as nothing
  *            says it came; the command says which it is, so it's only done
  *            once
  *   then an 8-byte tag.
@@ -87,7 +93,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define DIRECT_VERSION          7       // 7: the hello has the firmware's and app's versions
+#define DIRECT_VERSION          8       // 8: commands signed by their sender (others.h), for one board or all
 #define DIRECT_KEY_LEN          16
 #define DIRECT_NAME_MAX         16      // with its terminating zero
 #define DIRECT_VERSION_MAX      32      // a firmware or app version, with its terminating zero
@@ -95,7 +101,7 @@
 #define DIRECT_GROUPS_MAX       8
 #define DIRECT_KEY_ROUNDS       20000   // PBKDF2's, for direct_key
 #define DIRECT_AVATAR_PX        112     // the avatars sent over the air
-#define DIRECT_COMMAND_TARGETS  DIRECT_PEERS_MAX    // boards a command's for, at most
+#define DIRECT_COMMAND_TARGETS  1       // boards a command's for, at most: one, or every board (0)
 #define DIRECT_CHANNEL_DEFAULT  6       // and the open group's
 
 #define DIRECT_FIRST            0x01    // voice flags, as the comm channel's
@@ -180,10 +186,15 @@ typedef struct
     char name[DIRECT_NAME_MAX];
     char firmware[DIRECT_VERSION_MAX];      // its version, "" until its hello
     char app[DIRECT_VERSION_MAX];           // its phone's app's, "" for none
+    uint8_t key[32];        // its wearer's public key, as its hello says, checked
+    bool has_key;
     int8_t rssi;            // dBm
     bool talking;
 } direct_peer_t;
 int direct_peers(direct_peer_t *out, int max);
+
+/* This board's id over direct comms: random, each time it starts. */
+uint32_t direct_own_id(void);
 
 /* The group this board's in: its id (the first 4 bytes of its key's
  * SHA-256). */

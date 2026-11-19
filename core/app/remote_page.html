@@ -633,11 +633,15 @@ function showOthers(kind) {
   box.replaceChildren();
   for (const p of o.senders) {
     const b = el("button", p.allowed ? "ok" : "");
-    b.append(el("span", "", p.name), el("span", "muted", (p.via === 1 ? "direct" : "server") + (p.allowed ? "  ✓" : "")));
-    b.onclick = () => command("others", { kind, name: p.name, via: p.via, allow: p.allowed ? 0 : 1 });
+    // Who they are is their key: its id, and a warning if they took the
+    // name of someone listed before them
+    b.append(el("span", "", (p.clash ? "⚠ " : "") + p.name),
+      el("span", "muted", p.id.slice(0, 8) + (p.allowed ? "  ✓" : "")));
+    if (p.clash) b.title = "Not the " + p.name + " listed before: someone else using the name";
+    b.onclick = () => command("others", { kind, id: p.id, allow: p.allowed ? 0 : 1 });
     b.oncontextmenu = e => {
       e.preventDefault();
-      if (confirm("Forget " + p.name + "?")) command("others", { kind, name: p.name, via: p.via, forget: 1 });
+      if (confirm("Forget " + p.name + " (" + p.id.slice(0, 8) + ")?")) command("others", { kind, id: p.id, forget: 1 });
     };
     box.append(b);
   }

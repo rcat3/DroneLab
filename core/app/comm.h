@@ -25,7 +25,9 @@
  *                  of direct comms nearby, which can't be heard, from
  *                  COMM_VERSION 7), the
  *                  battery (its percent, bit 7 set while charging; 0xFF
- *                  not known; from COMM_VERSION 6), when the phone turns
+ *                  not known; from COMM_VERSION 6), this board's direct
+ *                  comms id (4, little endian, direct_own_id; from
+ *                  COMM_VERSION 10), when the phone turns
  *                  notifications on, when any of it changes, and every few
  *                  seconds.
  *
@@ -65,14 +67,24 @@
  *     0x0B command: 0B, flags (bit 0 from the server), then a command for
  *                  the others (see others.h). From the server: who it's from,
  *                  their name's length (1) then their name, in UTF-8, then
- *                  the command, for this board's devices. Otherwise it's
+ *                  the command, for this board's devices, without its
+                  signature: the phone's checked it (others.h). Otherwise it's
  *                  the wearer's, to send over direct comms: how many boards
  *                  it's for (1, 0 for all of them), their ids (4 bytes each,
- *                  little endian, as 0x08's), then the command.
+ *                  little endian, as 0x08's), then the command, signed.
+ *     0x11 identity: 11, then the wearer's public key (32 bytes): who
+ *                  they are to the others, for commands sent to this board
+ *                  alone (others_set_owner). Each time it connects (from
+ *                  COMM_VERSION 10).
+ *     0x12 binding: 12, then the wearer's Ed25519 signature (64 bytes) of
+ *                  "dronelab-board\n" and this board's direct comms id (4,
+ *                  little endian, as the status gives it): that the board's
+ *                  theirs, for its hello (direct.h). Each time it connects,
+ *                  and whenever the id changes (from COMM_VERSION 10).
  *     0x10 muted:  10, flags (bit 0 the first piece: the list starts
- *                  afresh), then names, each in UTF-8 and ended by a 0: who
+ *                  afresh), then the first 8 bytes of the public key of each
  *                  the wearer's muted in the app, whose commands are ignored
- *                  (others.h). Sent whole each time it connects or the list
+ *                  (others.h; before COMM_VERSION 10, names). Sent whole each time it connects or the list
  *                  changes, in pieces if it's long; none, an empty first
  *                  piece (from COMM_VERSION 9).
  *     0x0E update: 0E, flags (bit 0 the start, bit 1 the end, bit 2 asks
@@ -101,8 +113,10 @@
  *                  (16), flags, then the Opus packet: another board's voice,
  *                  heard over direct comms (see direct.h), as 0x01's.
  *     0x08 direct peer: 08, a board's id (32), how strong it's heard (dBm,
- *                  signed), flags (bit 0 talking, bit 1 versions follow),
- *                  then, with bit 1, its firmware's version's length (1) and
+ *                  signed), flags (bit 0 talking, bit 1 versions follow,
+ *                  bit 2 its wearer's key follows), then, with bit 2, its
+ *                  wearer's public key (32, from its hello: see direct.h;
+ *                  from COMM_VERSION 10), then, with bit 1, its firmware's version's length (1) and
  *                  the version, and its phone's app's (0 long for none), then
  *                  its name: each board heard over direct comms, every couple
  *                  of seconds.
@@ -111,7 +125,8 @@
  *     0x0F heard:  0F, flags (bit 0 heard over direct comms, bit 1 done:
  *                  taken, by the permission for its kind), what it is
  *                  (comm_heard_t), who it was for (OTHERS_SCOPE_*), the
- *                  sender's name's length (1) and the name, then for a text,
+ *                  sender's name's length (1) and the name, their public
+ *                  key (32, from COMM_VERSION 10), then for a text,
  *                  the text, in UTF-8, or for a command, the command from
  *                  what to do on (others.h): a text or a command someone
  *                  sent this board, done or not, for the app's
@@ -195,8 +210,11 @@
  *      nearby
  *   8  what others send the board, texts and commands, passed on to the app
  *      as it comes, done or not (0x0F), in place of 0x0C
- *   9  who's muted in the app (0x10) */
-#define COMM_VERSION            9
+ *   9  who's muted in the app (0x10)
+ *  10  commands signed by their sender's identity key: the wearer's key
+ *      (0x11), the sender's key in what's heard (0x0F), and who's muted by
+ *      key (0x10) */
+#define COMM_VERSION            10
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4
@@ -277,10 +295,11 @@ typedef enum
 } comm_heard_t;
 
 /* Pass on to the app what someone sent: a text, or a command and whether it
- * was done (others.h), with who it was for (OTHERS_SCOPE_*); data is the
- * text, or the command from what to do on. From the UI loop. */
-void comm_heard_to_phone(comm_transport_t via, const char *from, comm_heard_t what, uint8_t scope, bool done,
-                         const uint8_t *data, size_t len);
+ * was done (others.h), with who sent it (their name and 32-byte key) and who
+ * it was for (OTHERS_SCOPE_*); data is the text, or the command from what to
+ * do on. From the UI loop. */
+void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, comm_heard_t what,
+                         uint8_t scope, bool done, const uint8_t *data, size_t len);
 
 /* True while it's sending the voice to the phone. */
 bool comm_sending(void);

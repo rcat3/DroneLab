@@ -10,17 +10,25 @@
  * controls do, and stay set until they're changed or Stop's touched; for the
  * Terminal, on the display; and texts, for the wearer's app only.
  *
- * The Lovense devices and the Terminal each have their own list of who may
- * send them commands, and their permission: Off, nobody (and nobody's added
- * to the list either); Ask, only those the wearer has allowed in the list;
- * or Accept, anyone. Anyone new who sends one is added to that kind's list,
- * not allowed, for the wearer to tick if they want to, in Ask and Accept
- * both, so the list says who's been sending. Someone's known by their name
- * and how they're heard (server or direct), so the same person can be in a
- * list twice. Names can be borrowed: in a direct comms group with a
- * passphrase, only its members can send at all, but in the open group, or on
- * a server anyone can join, anyone could use a name that's allowed. Texts
- * aren't anything to permit: anyone can text anyone.
+ * Everyone is known by their identity key: an Ed25519 key pair their app
+ * makes and keeps, which signs each command they send. A board checks the
+ * signature of each command heard over direct comms against the key in it;
+ * one from the server, the phone has checked already (it knows the server
+ * and channel the signature covers), and passes on without its signature.
+ * Names are only labels, so nobody can pass as someone else by taking
+ * their name.
+ *
+ * Those who've sent commands are kept in one list of people, by key, each
+ * with their name, whether they're allowed for each kind, and the counter
+ * of the last command they sent (so a recorded one can't be played back).
+ * The Lovense devices and the Terminal each have their permission: Off,
+ * nobody (and nobody's added to the list either); Ask, only those the
+ * wearer has allowed for that kind; or Accept, anyone. Anyone new who sends
+ * one is added to the list, not allowed, for the wearer to tick if they want
+ * to, in Ask and Accept both, so the list says who's been sending. Someone
+ * new who uses the name of someone already listed is marked (clash): it's
+ * someone else using that name. Texts aren't anything to permit: anyone can
+ * text anyone, though they're signed too.
  *
  * Each kind can also ignore commands sent to everyone who can hear the
  * sender (broadcasts, and those to the channel over the open direct comms
@@ -32,11 +40,21 @@
  * for its conversations (comm_heard_to_phone).
  *
  * A command, the same however it comes:
- *   version (OTHERS_VERSION), the sender's id (4 bytes, little endian, made
- *   up each time their app starts), seq (2, little endian, goes up with each
- *   command), who it's for (OTHERS_SCOPE_*: everyone who can hear the sender,
- *   the channel it came on, or this board alone), then what to do. For the
- *   Lovense devices:
+ *   version (OTHERS_VERSION), the sender's public key (32 bytes), a counter
+ *   (6, little endian: the sender's clock in ms, and always more than their
+ *   last), who it's for (OTHERS_SCOPE_*: everyone who can hear the sender,
+ *   the channel it came on, or this board alone), what to do and its
+ *   arguments (at most OTHERS_WHAT_MAX bytes), then the Ed25519 signature
+ *   (64) of
+ *     "dronelab-command\n", what it's sent in (below), then the command
+ *     before the signature.
+ *   What it's sent in is part of what's signed, though it isn't sent, so a
+ *   command can't be taken from where it was sent and played somewhere
+ *   else: 'E' for everyone; to a channel, 'C' and the direct comms group's
+ *   id (4 bytes, direct_group_id), or 'S', the server's certificate's
+ *   SHA-256 (32) and the channel's id (4, little endian); to one person,
+ *   'O' and their public key (32: the board's wearer's, others_set_owner).
+ *   What to do: for the Lovense devices,
  *     00 stop:     stop everything, as the Stop button, reactions too
  *     01 level:    01, the kind of motor (lovense_motor_kind_t, or 0xFF for
  *                  all of them), the level (0 to 20, scaled to each motor's
@@ -59,7 +77,9 @@
  *     20 text:     20, then the text, in UTF-8: a text, only passed on to
  *                  the app, whoever it's from
  * A command that comes more than once, by both ways, or sent again in case
- * one was lost, is only done once: by its sender's id and seq.
+ * one was lost, is only done once: by its sender's key and counter. One
+ * whose counter is no more than the last from someone listed is a replay,
+ * and dropped.
  */
 
 #include <stdbool.h>
@@ -68,9 +88,14 @@
 
 #include "app/comm.h"
 
-#define OTHERS_VERSION          2       // 2: who it's for, the Terminal's own controls, and texts
-#define OTHERS_SENDERS_MAX      12      // in each kind's list
-#define OTHERS_CMD_MAX          136     // the longest command, with a message
+#define OTHERS_VERSION          3       // 3: signed, by the sender's identity key
+#define OTHERS_KEY_LEN          32
+#define OTHERS_SIG_LEN          64
+#define OTHERS_ID_LEN           8       // a key's first bytes, as the muted list gives them
+#define OTHERS_HEADER_LEN       40      // version, key, counter, who it's for
+#define OTHERS_WHAT_MAX         117     // what to do and its arguments, at most
+#define OTHERS_CMD_MAX          (OTHERS_HEADER_LEN + OTHERS_WHAT_MAX + OTHERS_SIG_LEN)
+#define OTHERS_PEOPLE_MAX       16      // in the list
 
 #define OTHERS_STOP             0x00
 #define OTHERS_LEVEL            0x01
@@ -98,29 +123,46 @@ typedef enum
 
 typedef struct
 {
+    uint8_t key[OTHERS_KEY_LEN];
     char name[COMM_NAME_MAX];
-    comm_transport_t via;
     bool allowed;
+    bool clash;             // took the name of someone listed before them
 } others_sender_t;
 
-/* Set it up, and read the lists. Call it once at startup, after LVGL and
+/* Set it up, and read the list. Call it once at startup, after LVGL and
  * before direct comms. */
 void others_init(void);
 
-/* A command, from the server through the phone (via COMM_TALK_SERVER) or
- * over direct comms (COMM_TALK_DIRECT), from the one named. From the UI
- * loop. */
+/* A command from the server, through the phone (via COMM_TALK_SERVER),
+ * checked by the phone and without its signature, from the one named. From
+ * the UI loop. */
 void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, size_t len);
 
-/* The same, from direct comms' own task: it's queued, for the UI loop to do
- * on its next others_poll(). Nothing else may call it. */
+/* One heard over direct comms, signed, from its own task: it's queued, to
+ * be checked on a task of its own, and done on the UI loop's next
+ * others_poll() if it's good. Nothing else may call it. */
 void others_queue(const char *from, const uint8_t *cmd, size_t len);
+
+/* The wearer's own public key, from their app: commands to this board
+ * alone are signed for it. Remembered. */
+void others_set_owner(const uint8_t key[OTHERS_KEY_LEN]);
+
+/* The wearer's app's signature, with their key, of "dronelab-board\n" and
+ * this board's direct comms id (4 bytes, little endian): that this board's
+ * theirs, for the others to check (direct.h's hello). Not kept, as the id's
+ * new each time the board starts. */
+void others_set_binding(const uint8_t sig[OTHERS_SIG_LEN]);
+
+/* The wearer's public key, and their signature that this board's theirs:
+ * false until their app's given both. From any task: direct comms says them
+ * in its hello. */
+bool others_owner(uint8_t key[OTHERS_KEY_LEN], uint8_t sig[OTHERS_SIG_LEN]);
 
 /* Who a kind of command is taken from. Remembered. */
 typedef enum
 {
     OTHERS_OFF,         // nobody
-    OTHERS_ASK,         // those allowed in its list
+    OTHERS_ASK,         // those allowed for it in the list
     OTHERS_ACCEPT,      // anyone
 } others_permission_t;
 others_permission_t others_permission(others_kind_t kind);
@@ -137,19 +179,21 @@ void others_set_accepting(others_kind_t kind, bool on);
 uint8_t others_ignoring(others_kind_t kind);
 void others_set_ignoring(others_kind_t kind, uint8_t ignore);
 
-/* The names the wearer's muted in their app, whose commands are ignored:
- * each NUL-terminated, one after another, [len] bytes in all; [first]
- * starts the list afresh, otherwise they're added to it. Kept until the
- * board restarts, as the app sends them each time it connects. */
-void others_set_muted(bool first, const char *names, size_t len);
+/* Those the wearer's muted in their app, whose commands are ignored: the
+ * first OTHERS_ID_LEN bytes of each one's key, one after another, [len]
+ * bytes in all; [first] starts the list afresh, otherwise they're added to
+ * it. Kept until the board restarts, as the app sends them each time it
+ * connects. */
+void others_set_muted(bool first, const uint8_t *ids, size_t len);
 
-/* Those who've sent a kind of command, oldest first. Returns how many there
- * are. */
+/* Those who've sent a kind of command, or are allowed for it, oldest
+ * first. Returns how many there are. */
 int others_senders(others_kind_t kind, others_sender_t *out, int max);
 
-/* Allow one of them, or not, or forget them. Remembered. */
-void others_allow(others_kind_t kind, comm_transport_t via, const char *name, bool allow);
-void others_forget(others_kind_t kind, comm_transport_t via, const char *name);
+/* Allow someone for a kind, or not, or forget them for it, by their key.
+ * Remembered. */
+void others_allow(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN], bool allow);
+void others_forget(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN]);
 
 /* Who sent the last command of a kind that was done, and how long ago, in
  * ms; NULL if none has been. */
@@ -158,8 +202,8 @@ const char *others_last(others_kind_t kind, uint32_t now_ms, uint32_t *age_ms);
 /* Goes up whenever any of the above changes, for screens to redraw. */
 uint32_t others_changes(void);
 
-/* Do what's queued, and save the lists once they've settled. Call it every
- * 50 ms or so, from the UI loop. */
+/* Check and do what's queued, and save the list once it's settled. Call it
+ * every 50 ms or so, from the UI loop. */
 void others_poll(uint32_t now_ms);
 
 #endif

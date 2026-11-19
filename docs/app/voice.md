@@ -112,6 +112,12 @@ In Setup, behind the gear, while the unit's connected:
 
 These are the unit's own settings, so they also show on its display, in the HiveMind feature.
 
+## Setup: your identity
+
+The app makes you an identity the first time it runs: a key pair kept in the phone's secure storage.  Others know you by it, not your name, on the server and directly both: it signs your commands, and gives the server the same certificate each time you connect.  So nobody else can pass as you by taking your name, and when someone new turns up with a name you already know, the app marks them ⚠ and says it isn't the person you knew.
+
+*Your identity* in Setup shows its first characters.  **Back up** shows a code that brings it all back: keep it somewhere safe, as anyone with it can pass as you.  **Restore** takes that code, after reinstalling the app or on another phone, and makes that phone you; the identity it had before is gone, unless it's backed up too.  The phone's own backups leave it out.
+
 ## When it doesn't work
 
 - **Nobody hears you**: check the status strip's up arrow lights pink while you talk, and that the line under SERVER/DIRECT names the link the others are on.

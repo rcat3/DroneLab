@@ -103,6 +103,18 @@ class KnownPeople {
     return p;
   }
 
+  /// Someone by their key, as a signed command or a board's checked hello
+  /// gives it, made if they're new; their name kept up to date.
+  KnownPerson byKey(Uint8List key, String name) {
+    final id = KnownPerson.keyId(key);
+    final known = _all[id];
+    if (known != null) return _label(known, name);
+    final p = KnownPerson(id, name, key: Uint8List.fromList(key));
+    _put(p);
+    _changed();
+    return p;
+  }
+
   /// Someone known only by name.
   KnownPerson named(String name) {
     final id = KnownPerson.nameId(name);
