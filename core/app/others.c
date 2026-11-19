@@ -33,7 +33,7 @@
 #define KNOWN_GOOD          6           // commands checked lately, whose copies needn't be again
 #define CHECKER_STACK       8192
 #define CHECKER_IDLE_MS     10
-#define SEEN_MAX            32          // commands remembered, so each is only done once
+#define SEEN_MAX            64          // commands remembered, so each is only done once
 #define KEY_AT              1
 #define COUNTER_AT          33
 #define SCOPE_AT            39
@@ -614,14 +614,21 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
     person_t *p = find(key);
     if (p != NULL && !again)
     {
-        if (counter <= p->counter)
+        // A text may come a little behind; anything else must be newer
+        bool text = which == OTHERS_KIND_COUNT;
+        uint64_t oldest = text ? (p->counter > OTHERS_TEXT_WINDOW_MS ? p->counter - OTHERS_TEXT_WINDOW_MS : 0)
+                               : p->counter;
+        if (counter <= oldest)
         {
             printf("others: an old command from %s again, dropped\n", from);
             return;
         }
-        p->counter = counter;
+        if (!text)
+        {
+            p->counter = counter;
+            changed();  // the counter's to be saved
+        }
         rename_person(p, from);
-        changed();      // the counter's to be saved
     }
     uint8_t scope = cmd[SCOPE_AT];
     if (which == OTHERS_KIND_COUNT)

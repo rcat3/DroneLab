@@ -1388,22 +1388,40 @@ class CommController extends ChangeNotifier {
   /// What someone sent our board, as it passes it on: into the conversation
   /// it was for.
   /// Long texts' parts, as they come, by who and the text's id: put back
-  /// together once they're all here.
-  final Map<String, (int, Map<int, Uint8List>, int)> _textParts = {};
-  static const _partsFor = 30000;   // ms to wait for the rest
+  /// together once they're all here, or shown as far as they go if some
+  /// haven't come after a while, as over direct comms nothing sends a lost
+  /// one again.
+  final Map<String, PartialText> _textParts = {};
+  final Map<String, int> _textsDone = {};       // those shown, so late parts are dropped
+  static const _partsFor = Duration(seconds: 30);
 
   Heard? _textFromParts(Heard h) {
     final d = h.data;
     if (d.length < 4 || d[2] >= d[3]) return null;
     final now = DateTime.now().millisecondsSinceEpoch;
-    _textParts.removeWhere((_, p) => now - p.$3 > _partsFor);
+    _textsDone.removeWhere((_, at) => now - at > 2 * _partsFor.inMilliseconds);
     final key = '${Identity.idOf(h.key)}:${d[0] | (d[1] << 8)}';
-    final got = _textParts.putIfAbsent(key, () => (d[3], <int, Uint8List>{}, now));
-    got.$2[d[2]] = Uint8List.sublistView(d, 4);
-    if (got.$2.length < got.$1) return null;
+    if (_textsDone.containsKey(key)) return null;
+    final got = _textParts.putIfAbsent(key, () {
+      final p = PartialText(h, d[3]);
+      p.timer = Timer(_partsFor, () => _flushText(key));
+      return p;
+    });
+    got.parts[d[2]] = Uint8List.sublistView(d, 4);
+    if (got.parts.length < got.count) return null;
+    (got.timer as Timer?)?.cancel();
     _textParts.remove(key);
-    final whole = <int>[for (var i = 0; i < got.$1; i++) ...?got.$2[i]];
-    return Heard(h.direct, true, Heard.text, h.scope, h.from, h.key, Uint8List.fromList(whole));
+    _textsDone[key] = now;
+    return got.text();
+  }
+
+  /// A long text some of whose parts never came: what did, with a gap for
+  /// each run that's missing.
+  void _flushText(String key) {
+    final got = _textParts.remove(key);
+    if (got == null) return;
+    _textsDone[key] = DateTime.now().millisecondsSinceEpoch;
+    _onHeard(got.text());
   }
 
   void _onHeard(Heard h) {
@@ -1602,3 +1620,4 @@ enum FirmwareStanding {
   needsInstaller,   // older, and too old for the app to update: the web installer
   newer,            // newer than the app's: the app wants updating
 }
+

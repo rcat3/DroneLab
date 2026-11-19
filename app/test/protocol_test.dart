@@ -248,6 +248,20 @@ void main() {
     expect(mutedMessages([key]), [[0x10, 1, ...key.take(8)]]);
   });
 
+  test('a long text from its parts, with gaps for those that never came', () {
+    final key = Uint8List(32);
+    final first = Heard(true, true, Heard.textPart, 0, 'Ann', key, Uint8List(0));
+    final p = PartialText(first, 5)
+      ..parts[0] = Uint8List.fromList(utf8.encode('one '))
+      ..parts[2] = Uint8List.fromList(utf8.encode('three '))
+      ..parts[4] = Uint8List.fromList(utf8.encode('five'));
+    expect(p.text().textOf, 'one ${PartialText.missing}three ${PartialText.missing}five');
+    p.parts.remove(4);
+    p.parts.remove(2);
+    expect(p.text().textOf, 'one ${PartialText.missing}');   // one gap for a run
+    expect([p.text().what, p.text().from, p.text().direct], [Heard.text, 'Ann', true]);
+  });
+
   test('packed repeated fields', () {
     final m = ProtoMessage.parse((ProtoWriter()..packed(2, [5, 300])).toBytes());
     expect(m.bytes(2), [5, 0xAC, 0x02]);

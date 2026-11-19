@@ -81,9 +81,12 @@
  *                  parts, then that part of the text, in UTF-8: a text too
  *                  long for one command, which the app puts back together
  * A command that comes more than once, by both ways, or sent again in case
- * one was lost, is only done once: by its sender's key and counter. One
- * whose counter is no more than the last from someone listed is a replay,
- * and dropped.
+ * one was lost, is only done once: by its sender's key and counter. A
+ * command whose counter is no more than the last done from someone listed
+ * is a replay, and dropped. Texts (and their parts), which only go to the
+ * app, may come out of order, as the copies of a long text's parts are
+ * spread out: one is taken if it's no more than OTHERS_TEXT_WINDOW_MS older
+ * than that, and hasn't been seen.
  */
 
 #include <stdbool.h>
@@ -100,6 +103,7 @@
 #define OTHERS_WHAT_MAX         117     // what to do and its arguments, at most
 #define OTHERS_CMD_MAX          (OTHERS_HEADER_LEN + OTHERS_WHAT_MAX + OTHERS_SIG_LEN)
 #define OTHERS_PEOPLE_MAX       16      // in the list
+#define OTHERS_TEXT_WINDOW_MS   10000   // how far a text may come behind (see above)
 
 #define OTHERS_STOP             0x00
 #define OTHERS_LEVEL            0x01

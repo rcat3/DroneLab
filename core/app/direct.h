@@ -55,9 +55,11 @@
  *     command: 04, how many boards it's for (1, 0 for every board in the
  *            group; at most DIRECT_COMMAND_TARGETS, as a signed command
  *            leaves room for no more), their ids (4 bytes each), then a
- *            command for the others (see others.h), signed. Sent three times, 100 ms apart, as nothing
- *            says it came; the command says which it is, so it's only done
- *            once
+ *            command for the others (see others.h), signed. Sent three
+ *            times, as nothing says it came, 100 ms between sends; those
+ *            waiting take turns, each one's first copy in the order they
+ *            came, so the copies of each are spread out. The command says
+ *            which it is, so it's only done once
  *   then an 8-byte tag.
  * A board ignores the group's broadcasts from a sender whose counter hasn't
  * gone up, so a recorded one can't be played back.

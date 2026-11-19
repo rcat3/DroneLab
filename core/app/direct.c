@@ -70,7 +70,7 @@
 #define REPEATS             2           // packets sent again in each after them
 #define COMMAND_QUEUE       8           // commands for others, waiting to go: a long text's parts all fit
 #define COMMAND_SENDS       3           // each is sent this many times, as nothing says it came
-#define COMMAND_GAP_MS      100         // this far apart
+#define COMMAND_GAP_MS      100         // one every so often: those going take turns, a send each
 
 // Relaying
 #define HOPS                1           // how many times a broadcast may be passed on
@@ -210,8 +210,9 @@ static volatile uint32_t voice_write, voice_read;
 // one going out, and how many more times it's to go
 static command_t *command_queue;       // COMMAND_QUEUE of them, and the one going out after
 static volatile uint32_t command_write, command_read;
-static command_t *command_out;
-static int command_sends_left;
+static command_t *command_out;         // COMMAND_QUEUE of them, going out in turn
+static uint8_t command_sends_left[COMMAND_QUEUE];
+static uint32_t command_order[COMMAND_QUEUE];  // when each was queued, as command_read was
 static uint32_t command_sent_ms;
 
 #if DIRECT_DEBUG
@@ -1044,19 +1045,41 @@ static void direct_task(void *arg)
         heard_keys();
         relay_due(now);
 
-        // Commands for others, each a few times over
-        if (command_sends_left == 0 && command_read != __atomic_load_n(&command_write, __ATOMIC_ACQUIRE))
+        // Commands for others, each a few times over. Those going take
+        // turns, so the copies of each are spread out, and a moment's
+        // interference doesn't take all of one (a long text's parts, most
+        // of all): the one sent fewest times goes next, the oldest of
+        // those first, so each one's first copy goes in the order they
+        // came, as a board only does one newer than the last it did
+        if (now - command_sent_ms >= COMMAND_GAP_MS)
         {
-            *command_out = command_queue[command_read % COMMAND_QUEUE];
-            __atomic_store_n(&command_read, command_read + 1, __ATOMIC_RELEASE);
-            command_sends_left = COMMAND_SENDS;
-            command_sent_ms = now - COMMAND_GAP_MS;
-        }
-        if (command_sends_left > 0 && now - command_sent_ms >= COMMAND_GAP_MS)
-        {
-            command_sent_ms = now;
-            command_sends_left--;
-            send_command(command_out);
+            for (int i = 0; i < COMMAND_QUEUE; i++)
+            {
+                if (command_sends_left[i] == 0 && command_read != __atomic_load_n(&command_write, __ATOMIC_ACQUIRE))
+                {
+                    command_out[i] = command_queue[command_read % COMMAND_QUEUE];
+                    command_order[i] = command_read;
+                    __atomic_store_n(&command_read, command_read + 1, __ATOMIC_RELEASE);
+                    command_sends_left[i] = COMMAND_SENDS;
+                }
+            }
+            int next = -1;
+            for (int i = 0; i < COMMAND_QUEUE; i++)
+            {
+                if (command_sends_left[i] > 0
+                    && (next < 0 || command_sends_left[i] > command_sends_left[next]
+                        || (command_sends_left[i] == command_sends_left[next]
+                            && (int32_t)(command_order[i] - command_order[next]) < 0)))
+                {
+                    next = i;
+                }
+            }
+            if (next >= 0)
+            {
+                command_sent_ms = now;
+                command_sends_left[next]--;
+                send_command(&command_out[next]);
+            }
         }
 
         // Scanning: a couple of seconds on each channel, then back
@@ -1161,7 +1184,7 @@ void direct_init(void)
     own_id = rcat_hal_random();
     voice_queue = calloc(VOICE_QUEUE, sizeof(voice_t));
     // Out of internal RAM, which WiFi and Bluetooth need (PSRAM first)
-    command_queue = lv_malloc((COMMAND_QUEUE + 1) * sizeof(command_t));
+    command_queue = lv_malloc(2 * COMMAND_QUEUE * sizeof(command_t));
     command_out = command_queue != NULL ? &command_queue[COMMAND_QUEUE] : NULL;
     // Big enough to go in PSRAM
     own_avatar = calloc(AVATAR_PIXELS, sizeof(uint16_t));

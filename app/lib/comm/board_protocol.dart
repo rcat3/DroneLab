@@ -646,3 +646,33 @@ Uint8List updateDataMessage(int offset, Uint8List data, {bool ack = false}) =>
 Uint8List updateEndMessage() => Uint8List.fromList([_msgUpdate, 0x02]);
 
 List<int> _le32(int v) => [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF];
+
+/// A long text coming in parts (OthersCommand.textPart).
+class PartialText {
+  /// Shown where parts never came.
+  static const missing = '…(part missing)…';
+
+  final Heard first;
+  final int count;
+  final Map<int, Uint8List> parts = {};
+  Object? timer;      // the controller's, to show it if the rest don't come
+  PartialText(this.first, this.count);
+
+  /// What's come, in order, marking each run of parts that hasn't.
+  Heard text() {
+    final out = StringBuffer();
+    var gap = false;
+    for (var i = 0; i < count; i++) {
+      final p = parts[i];
+      if (p == null) {
+        if (!gap) out.write(missing);
+        gap = true;
+      } else {
+        out.write(utf8.decode(p, allowMalformed: true));
+        gap = false;
+      }
+    }
+    final h = first;
+    return Heard(h.direct, true, Heard.text, h.scope, h.from, h.key, Uint8List.fromList(utf8.encode(out.toString())));
+  }
+}
