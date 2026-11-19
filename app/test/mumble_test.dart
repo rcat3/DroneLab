@@ -3,6 +3,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:dronelab/comm/identity.dart';
 import 'package:dronelab/comm/mumble_client.dart';
 import 'package:dronelab/comm/voice_packet.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -103,6 +104,21 @@ void main() {
     a.close();
     b.close();
     expect(texts, isEmpty, reason: 'nothing shows in the chat');
+  }, skip: host == null ? 'set MUMBLE_HOST to run it' : false, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('a client certificate is seen by others as its hash', () async {
+    final me = await Identity.fromSeed(List.generate(32, (i) => 100 + i));
+    final a = MumbleClient(host: host!, username: 'test-cert', password: password, identity: me);
+    final b = MumbleClient(host: host, username: 'test-cert-watcher', password: password);
+    await a.connect();
+    await b.connect();
+    for (var i = 0; i < 20 && b.users[a.mySession]?.certHash == null; i++) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    final seen = b.users[a.mySession]?.certHash;
+    a.close();
+    b.close();
+    expect(seen, me.certificateHash);
   }, skip: host == null ? 'set MUMBLE_HOST to run it' : false, timeout: const Timeout(Duration(seconds: 30)));
 
   test('a wrong password is turned away', () async {

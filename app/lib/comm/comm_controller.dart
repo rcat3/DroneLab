@@ -21,6 +21,8 @@ import 'board_protocol.dart';
 import 'conversations.dart';
 import 'notifier.dart';
 import 'firmware_update.dart';
+import 'identity.dart';
+import 'known_people.dart';
 import 'jitter.dart';
 import 'media_buttons.dart';
 import 'recorder.dart';
@@ -123,6 +125,15 @@ class CommController extends ChangeNotifier {
 
   MumbleClient? mumble;
   bool _serverWanted = false;
+
+  /// Who we are (identity.dart): null if the phone's secure storage
+  /// couldn't be used, and then we're only a name.
+  Identity? identity;
+
+  /// Everyone we've come across, by who they are (known_people.dart).
+  late final KnownPeople people = KnownPeople((json) => _prefs?.setString('people', json))
+    ..onRenamed = (oldId, newId) =>
+        conversations.rekey(Conversation.personKey(oldId), Conversation.personKey(newId));
   Timer? _reconnect;
   String? serverError;
 
@@ -200,7 +211,12 @@ class CommController extends ChangeNotifier {
     bufferMs = p.getInt('bufferMs') ?? 60;
     final a = p.getString('avatar');
     avatar = a == null ? null : base64Decode(a);
-    muted.addAll(p.getStringList('muted') ?? const []);
+    people.load(p.getString('people'));
+    try {
+      identity = await Identity.load();
+    } catch (e) {
+      debugPrint('identity: $e');
+    }
     channel = p.getString('channel');
     groups.addAll([
       for (final g in jsonDecode(p.getString('directGroups') ?? '[]') as List<dynamic>)
@@ -544,8 +560,8 @@ class CommController extends ChangeNotifier {
 
   void _onDirectSound(DirectSound d) {
     final now = DateTime.now().millisecondsSinceEpoch;
-    final name = nearby[d.sender]?.name;
-    if (name != null && muted.contains(name)) return;
+    final b = nearby[d.sender];
+    if (b != null && personOfBoard(b).muted) return;
     // Its seq wraps at 65536: count on past that, in the server's 10 ms frames
     final prev = _directSeq[d.sender];
     int counted;
@@ -731,17 +747,18 @@ class CommController extends ChangeNotifier {
 
   // ----- Muting people, here only -----
 
-  /// The names of those muted: they aren't played, nor shown talking on the
-  /// board. Kept by name, as their session changes each time they connect.
-  final Set<String> muted = {};
+  /// Those muted: they aren't played, nor shown talking on the board. Kept
+  /// by who they are (known_people.dart), not their session, which changes
+  /// each time they connect.
+  Iterable<KnownPerson> get muted => people.muted;
 
-  Future<void> setMuted(String name, bool mute) async {
-    if (mute ? !muted.add(name) : !muted.remove(name)) return;
-    await _prefs?.setStringList('muted', muted.toList()..sort());
+  Future<void> setMuted(String personId, bool mute) async {
+    if (people[personId] == null || people[personId]!.muted == mute) return;
+    people.setMuted(personId, mute);
     final m = mumble;
     if (mute && m != null) {
       // Stop them now, mid-sentence
-      for (final u in m.users.values.where((u) => u.name == name)) {
+      for (final u in m.users.values.where((u) => personOfUser(u).id == personId)) {
         mixer.remove(u.session);
         _heardAt.remove(u.session);
       }
@@ -753,7 +770,75 @@ class CommController extends ChangeNotifier {
 
   /// Muted: not played, nor shown talking, and their texts and commands
   /// ignored (the board ignores the commands, the app the rest).
-  bool isMuted(String name) => muted.contains(name);
+  bool isMuted(String personId) => people[personId]?.muted ?? false;
+
+  /// Become whoever an exported code is (Identity.exportCode), in place of
+  /// who we were: back on the server as them. Returns what's wrong with the
+  /// code, or null.
+  Future<String?> importIdentity(String code) async {
+    try {
+      identity = await Identity.import(code);
+    } on FormatException catch (e) {
+      return e.message;
+    }
+    if (_serverWanted) await _connectServer();
+    notifyListeners();
+    return null;
+  }
+
+  // ----- Who people are -----
+
+  /// Someone on the server, by their certificate (known_people.dart).
+  KnownPerson personOfUser(MumbleUser u) => people.onServer(u.certHash, u.name);
+
+  /// A board heard over direct comms: by its name, for now.
+  KnownPerson personOfBoard(NearbyBoard b) => people.named(b.name);
+
+  bool _sessionMuted(int session) {
+    final u = mumble?.users[session];
+    return u != null && personOfUser(u).muted;
+  }
+
+  /// Someone known before by the name [p] goes by, who isn't [p]: a warning
+  /// that [p] may be passing as them.
+  KnownPerson? nameClash(KnownPerson p) => people.clashes(p);
+
+  /// Ours, as sent to everyone on the server, once it's made for this one.
+  Uint8List? _announcement;
+  MumbleClient? _announcementFor;
+  final Set<int> _announcedTo = {};
+
+  /// Tell those on the server who we are, signed, as they're seen: everyone
+  /// there as we arrive, then each who comes after.
+  Future<void> _announce(MumbleClient m) async {
+    final me = identity, fp = m.fingerprint, mine = m.mySession;
+    if (me == null || fp == null || mine == null || m.state != MumbleState.connected) return;
+    if (_announcementFor != m) {
+      _announcementFor = m;
+      _announcedTo.clear();
+      _announcement = null;
+      _announcement = await IdentityAnnouncement.make(me, fp);
+    }
+    final data = _announcement;
+    if (data == null || m != mumble) return;
+    final to = [for (final s in m.users.keys) if (s != mine && !_announcedTo.contains(s)) s];
+    if (to.isEmpty) return;
+    _announcedTo.addAll(to);
+    m.sendPluginData(to, IdentityAnnouncement.dataId, data);
+  }
+
+  /// Someone's told us who they are: believed if it's signed by the key it
+  /// gives, for the certificate the server says they have, on this server.
+  Future<void> _onAnnouncement(MumbleClient m, MumblePluginData d) async {
+    final a = await IdentityAnnouncement.read(d.data);
+    final u = m.users[d.sender];
+    if (a == null || u == null || u.certHash != a.certificateHash || a.serverFingerprint != m.fingerprint) {
+      debugPrint('identity: a bad announcement from ${u?.name ?? d.sender}');
+      return;
+    }
+    people.bind(a.publicKey, a.certificateHash, u.name);
+    notifyListeners();
+  }
 
   // ----- The board's Comm screen -----
 
@@ -771,10 +856,11 @@ class CommController extends ChangeNotifier {
       return;
     }
     // Who's muted, for the board to ignore their commands too
-    final mutedNow = (muted.toList()..sort()).join('\n');
+    final mutedNames = {for (final p in muted) p.name}.toList()..sort();
+    final mutedNow = mutedNames.join('\n');
     if (_sentMuted != mutedNow && (board.status?.version ?? 0) >= commVersionMuted) {
       _sentMuted = mutedNow;
-      for (final piece in mutedMessages(muted)) {
+      for (final piece in mutedMessages(mutedNames)) {
         board.send(piece);
       }
     }
@@ -943,9 +1029,13 @@ class CommController extends ChangeNotifier {
   /// A command from someone on the server: on to the board, which decides
   /// whether to do it.
   void _onPluginData(MumbleClient m, MumblePluginData d) {
+    if (d.id == IdentityAnnouncement.dataId) {
+      _onAnnouncement(m, d);
+      return;
+    }
     if (d.id != commandDataId || !boardTakesCommands) return;
     final name = m.users[d.sender]?.name ?? '';
-    if (name.isEmpty || d.data.length > othersCommandMax || isMuted(name)) return;
+    if (name.isEmpty || d.data.length > othersCommandMax || _sessionMuted(d.sender)) return;
     board.send(commandFromServer(name, d.data));
   }
 
@@ -973,25 +1063,27 @@ class CommController extends ChangeNotifier {
     return conversations.get(Conversation.directKey(d.id), ConversationKind.direct, d.keyed ? d.group : 'Open channel');
   }
 
-  Conversation personConversation(String name) =>
-      conversations.get(Conversation.personKey(name), ConversationKind.person, name);
+  /// Someone's conversation, by who they are (KnownPerson.id).
+  Conversation personConversation(String personId) => conversations.get(
+      Conversation.personKey(personId), ConversationKind.person, people[personId]?.name ?? '');
 
   static String personOf(Conversation c) => c.key.substring('person:'.length);
 
-  /// Someone, by name: on the server (anywhere on it), or heard nearby.
-  MumbleUser? serverUser(String name) {
+  /// Someone, by who they are: on the server (anywhere on it), or heard
+  /// nearby.
+  MumbleUser? serverUser(String personId) {
     final m = mumble;
     if (m == null || !_serverUp) return null;
     for (final u in m.users.values) {
-      if (u.name == name && u.session != m.mySession) return u;
+      if (u.session != m.mySession && personOfUser(u).id == personId) return u;
     }
     return null;
   }
 
-  NearbyBoard? directBoard(String name) {
+  NearbyBoard? directBoard(String personId) {
     if (!_directUp) return null;
     for (final b in nearby.values) {
-      if (b.name == name) return b;
+      if (personOfBoard(b).id == personId) return b;
     }
     return null;
   }
@@ -1129,16 +1221,19 @@ class CommController extends ChangeNotifier {
     ];
     final last = texts.length > 6 ? texts.sublist(texts.length - 6) : texts;
     final group = c.kind != ConversationKind.person;
-    notifier.showTexts(c.key, c.title, [for (final e in last) (e.from, e.body, e.time, avatarOf(e.from))], group: group);
+    notifier.showTexts(c.key, c.title, [for (final e in last) (e.from, e.body, e.time, _avatarByName(e.from))],
+        group: group);
   }
 
-  /// Someone's avatar, by name: theirs on the server, or their board's.
-  Uint8List? avatarOf(String name) {
-    final m = mumble;
-    if (m != null) {
-      for (final u in m.users.values) {
-        if (u.name == name && u.texture != null) return u.texture;
-      }
+  /// Someone's avatar, by who they are: theirs on the server, or their
+  /// board's.
+  Uint8List? avatarOf(String personId) =>
+      serverUser(personId)?.texture ?? (directBoard(personId) == null ? null : directAvatars[directBoard(personId)!.id]);
+
+  /// For a notification, by the name on a text: theirs, if they're about.
+  Uint8List? _avatarByName(String name) {
+    for (final u in mumble?.users.values ?? const <MumbleUser>[]) {
+      if (u.name == name && u.texture != null) return u.texture;
     }
     for (final b in nearby.values) {
       if (b.name == name && directAvatars[b.id] != null) return directAvatars[b.id];
@@ -1167,11 +1262,13 @@ class CommController extends ChangeNotifier {
 
   /// A text message on the server: to our channel, or to us alone.
   void _onServerText(MumbleText t) {
-    if (isMuted(t.from)) return;
+    final u = t.session == null ? null : mumble?.users[t.session];
+    final who = u == null ? people.named(t.from) : personOfUser(u);
+    if (who.muted) return;
     final text = plainText(t.message);
     if (_seenText(t.from, text)) return;
     final c = t.private
-        ? personConversation(t.from)
+        ? personConversation(who.id)
         : t.message.contains(_everyoneMark)
             ? everyoneConversation
             : (serverConversation ?? everyoneConversation);
@@ -1182,9 +1279,11 @@ class CommController extends ChangeNotifier {
   /// What someone sent our board, as it passes it on: into the conversation
   /// it was for.
   void _onHeard(Heard h) {
-    if (isMuted(h.from)) return;
+    // Who, by the name the board gives, for now: whoever goes by it about
+    final who = _byName(h.from, direct: h.direct);
+    if (who.muted) return;
     final c = switch (h.scope) {
-      OthersCommand.scopeOne => personConversation(h.from),
+      OthersCommand.scopeOne => personConversation(who.id),
       OthersCommand.scopeChannel => (h.direct ? directConversation : serverConversation) ?? everyoneConversation,
       _ => everyoneConversation,
     };
@@ -1214,6 +1313,20 @@ class CommController extends ChangeNotifier {
     if (h.what == Heard.text) _notifyText(c);
   }
 
+  KnownPerson _byName(String name, {required bool direct}) {
+    if (direct) {
+      for (final b in nearby.values) {
+        if (b.name == name) return personOfBoard(b);
+      }
+    } else {
+      final m = mumble;
+      for (final u in m?.users.values ?? const <MumbleUser>[]) {
+        if (u.name == name && u.session != m!.mySession) return personOfUser(u);
+      }
+    }
+    return people.named(name);
+  }
+
   // ----- The server -----
 
   Future<void> connectServer() async {
@@ -1229,14 +1342,18 @@ class CommController extends ChangeNotifier {
     if (!_serverWanted) return;
     _closeMumble();
     final m = MumbleClient(
-        host: server.host, port: server.port, username: server.username, password: server.password)
+        host: server.host,
+        port: server.port,
+        username: server.username,
+        password: server.password,
+        identity: identity)
       ..avatar = avatar;
     mumble = m;
     serverError = null;
     _updateBoardScreen();
     _mumbleSubs.add(m.changes.listen((_) => _onMumbleChanged(m)));
     _mumbleSubs.add(m.voice.listen((v) {
-      if (muted.isNotEmpty && muted.contains(m.users[v.session]?.name)) return;
+      if (_sessionMuted(v.session)) return;
       mixer.receive(v.session, v.seq, v.opus, v.last, DateTime.now().millisecondsSinceEpoch);
       _heard(v.session, v.last);
     }));
@@ -1277,6 +1394,7 @@ class CommController extends ChangeNotifier {
     if (m != mumble) return;
     if (m.state != MumbleState.connected) _channelTried = false;
     _joinPickedChannel(m);
+    _announce(m);
     // Forget those who left
     for (final session in mixer.speakers.keys.toList()) {
       if (!isDirectSession(session) && !m.users.containsKey(session)) mixer.remove(session);

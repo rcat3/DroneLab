@@ -14,6 +14,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 
 import 'crypt_state.dart';
+import 'identity.dart';
 import 'protobuf.dart';
 import 'voice_packet.dart';
 
@@ -38,6 +39,9 @@ const _pluginData = 26;
 // to send to everyone, which RequestBlob fetches
 const _fieldTexture = 11;
 const _fieldTextureHash = 17;
+// The SHA-1 of their client certificate, hex: who they are, as long as they
+// keep it
+const _fieldHash = 15;
 
 const _voiceTypePing = 1;
 const _udpPingInterval = Duration(seconds: 5);
@@ -53,6 +57,8 @@ class MumbleUser {
   final int session;
   String name = '';
   int channel = 0;
+  /// Their certificate's SHA-1, hex, as the server says; null for none.
+  String? certHash;
   // Muted or deafened, by the server (6, 7) or by themselves (9, 10): the
   // UserState fields, which only come when they change
   final Map<int, bool> _flags = {};
@@ -76,11 +82,12 @@ class MumblePluginData {
 }
 
 class MumbleText {
+  final int? session;   // who it's from; null for the server
   final String from;
   final String message; // may hold HTML
   final bool private;   // to us alone, not the channel
   final DateTime time;
-  MumbleText(this.from, this.message, {this.private = false}) : time = DateTime.now();
+  MumbleText(this.session, this.from, this.message, {this.private = false}) : time = DateTime.now();
 }
 
 enum MumbleState { connecting, connected, disconnected }
@@ -99,6 +106,10 @@ class MumbleClient {
   final String password;
   final String clientName;
   final bool useUdp;
+
+  /// Whose certificate to present, so the server and everyone on it know us
+  /// by it each time; none, and we're only a name.
+  final Identity? identity;
 
   SecureSocket? _socket;
   Timer? _pingTimer;
@@ -136,6 +147,7 @@ class MumbleClient {
     this.password = '',
     this.clientName = 'DroneLab',
     this.useUdp = true,
+    this.identity,
   });
 
   // ----- UDP -----
@@ -275,8 +287,14 @@ class MumbleClient {
     error = null;
     _changes.add(null);
     try {
+      final me = identity;
+      final context = me == null
+          ? null
+          : (SecurityContext(withTrustedRoots: false)
+            ..useCertificateChainBytes(me.certificatePem)
+            ..usePrivateKeyBytes(me.privateKeyPem));
       final socket = await SecureSocket.connect(host, port,
-          timeout: timeout, onBadCertificate: (_) => true);
+          context: context, timeout: timeout, onBadCertificate: (_) => true);
       _socket = socket;
       socket.setOption(SocketOption.tcpNoDelay, true);
       final cert = socket.peerCertificate;
@@ -485,6 +503,10 @@ class MumbleClient {
         final u = users.putIfAbsent(session, () => MumbleUser(session));
         if (m.has(3)) u.name = m.string(3)!;
         if (m.has(5)) u.channel = m.int_(5)!;
+        if (m.has(_fieldHash)) {
+          final h = m.string(_fieldHash)!.toLowerCase();
+          u.certHash = h.isEmpty ? null : h;
+        }
         for (final f in const [6, 7, 9, 10]) {
           if (m.has(f)) u._flags[f] = m.bool_(f)!;
         }
@@ -513,9 +535,10 @@ class MumbleClient {
         _changes.add(null);
       case _textMessage:
         final m = ProtoMessage.parse(payload);
-        final from = users[m.int_(1)]?.name ?? 'Server';
+        final sender = users[m.int_(1)];
         // To users (2) rather than channels (3) or trees (4): private
-        _texts.add(MumbleText(from, m.string(5) ?? '', private: m.has(2) && !m.has(3) && !m.has(4)));
+        _texts.add(MumbleText(sender?.session, sender?.name ?? 'Server', m.string(5) ?? '',
+            private: m.has(2) && !m.has(3) && !m.has(4)));
       case _pluginData:
         final m = ProtoMessage.parse(payload);
         final sender = m.int_(1);

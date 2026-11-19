@@ -35,19 +35,23 @@ class TextPage extends StatelessWidget {
           ?comm.directConversation,
         ];
         // Everyone about, and anyone we've a conversation with who's reachable
+        // by who they are
         final people = <String, Person?>{};
         for (final p in hivePeople(comm)) {
-          people.putIfAbsent(p.name, () => p);
+          people.putIfAbsent(p.id, () => p);
         }
         for (final c in convs.all.values) {
-          if (c.kind == ConversationKind.person && comm.isOnline(c)) people.putIfAbsent(c.title, () => null);
+          if (c.kind == ConversationKind.person && comm.isOnline(c)) {
+            people.putIfAbsent(CommController.personOf(c), () => null);
+          }
         }
-        final online = {for (final c in channels) c.key, for (final n in people.keys) Conversation.personKey(n)};
+        final online = {for (final c in channels) c.key, for (final id in people.keys) Conversation.personKey(id)};
         final offline = [
           for (final c in convs.all.values)
             if (!online.contains(c.key) && c.entries.isNotEmpty) c
         ]..sort((a, b) => (b.last ?? DateTime(0)).compareTo(a.last ?? DateTime(0)));
-        final names = people.keys.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        String nameOf(String id) => (people[id]?.name ?? comm.people[id]?.name ?? '').toLowerCase();
+        final ids = people.keys.toList()..sort((a, b) => nameOf(a).compareTo(nameOf(b)));
         final direct = comm.boardSettings?.direct;
         return Scaffold(
           appBar: AppBar(
@@ -82,12 +86,12 @@ class TextPage extends StatelessWidget {
               else
                 Panel(children: [for (final c in channels) _Row(comm: comm, c: c)]),
               const SectionHeader('People'),
-              if (names.isEmpty)
+              if (ids.isEmpty)
                 const Panel(children: [PanelRow(title: 'Nobody about')])
               else
                 Panel(children: [
-                  for (final n in names)
-                    _Row(comm: comm, c: comm.personConversation(n), picture: people[n]?.picture, person: true),
+                  for (final id in ids)
+                    _Row(comm: comm, c: comm.personConversation(id), picture: people[id]?.picture, person: true),
                 ]),
               if (offline.isNotEmpty) ...[
                 const SectionHeader('Offline'),
@@ -129,7 +133,7 @@ class _Row extends StatelessWidget {
         leading: person
             // Their avatar: who they are, as on the Voice tab
             ? GestureDetector(
-                onTap: () => showPerson(context, comm, name: CommController.personOf(c)),
+                onTap: () => showPerson(context, comm, id: CommController.personOf(c)),
                 child: DroneAvatar(picture: picture, size: 36),
               )
             : Icon(
@@ -249,7 +253,7 @@ class _ConversationPageState extends State<ConversationPage> {
               ),
               PopupMenuButton<String>(
                 onSelected: (v) => v == 'details'
-                    ? showPerson(context, comm, name: CommController.personOf(c), inConversation: true)
+                    ? showPerson(context, comm, id: CommController.personOf(c), inConversation: true)
                     : deleteConversation(context, comm, c, leave: true),
                 itemBuilder: (_) => [
                   if (c.kind == ConversationKind.person) const PopupMenuItem(value: 'details', child: Text('Details')),

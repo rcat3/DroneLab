@@ -220,7 +220,13 @@ class _PersonRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Row(children: [
+                        Flexible(child: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600))),
+                        if (comm.nameClash(p.who) != null) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.warning_amber, size: 16, color: Kc.softRed, semanticLabel: 'Not the one known by that name'),
+                        ],
+                      ]),
                       Text(status,
                           style: talking
                               ? Kc.term(14, color: Kc.green)
@@ -237,7 +243,7 @@ class _PersonRow extends StatelessWidget {
       IconButton(
         tooltip: p.mutedByMe ? 'Hear ${p.name}' : 'Mute ${p.name}, here only',
         icon: Icon(p.mutedByMe ? Icons.volume_off : Icons.volume_up, color: p.mutedByMe ? Kc.softRed : Kc.muted),
-        onPressed: () => comm.setMuted(p.name, !p.mutedByMe),
+        onPressed: () => comm.setMuted(p.id, !p.mutedByMe),
       ),
       const SizedBox(width: 4),
     ]);

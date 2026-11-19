@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../comm/comm_controller.dart';
+import '../comm/known_people.dart';
 import 'control_page.dart';
 import 'people.dart';
 import 'status_strip.dart';
@@ -10,25 +11,28 @@ import 'widgets.dart';
 
 /// Someone in the hive: who they are, how they're linked, what they run, and
 /// muting them; and shortcuts to message or control them. Found by [key]
-/// (one of their links), or by [name] (the first link they're on, or just
-/// their name and muting if they're not about). [inConversation] leaves out
-/// Message, as it's opened from their conversation.
+/// (one of their links), or by [id], who they are (the first link they're
+/// on, or just their name and muting if they're not about).
+/// [inConversation] leaves out Message, as it's opened from their
+/// conversation.
 Future<void> showPerson(BuildContext context, CommController comm,
-        {String? key, String? name, bool inConversation = false}) =>
+        {String? key, String? id, bool inConversation = false}) =>
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (sheet) => ListenableBuilder(
         listenable: comm,
         builder: (sheet, _) {
-          final found = hivePeople(comm).where((p) => key != null ? p.key == key : p.name == name);
-          if (found.isEmpty && name == null) {
+          final found = hivePeople(comm).where((p) => key != null ? p.key == key : p.id == id);
+          final known = id == null ? null : comm.people[id];
+          if (found.isEmpty && known == null) {
             return const SafeArea(
               child: Padding(padding: EdgeInsets.all(24), child: Text("They've gone", textAlign: TextAlign.center)),
             );
           }
-          if (found.isEmpty) return _away(context, sheet, comm, name!, inConversation);
+          if (found.isEmpty) return _away(context, sheet, comm, known!, inConversation);
           final p = found.first;
+          final clash = comm.nameClash(p.who);
           final talking = p.talking && !p.mutedByMe;
           final b = p.board;
           final m = comm.mumble;
@@ -89,8 +93,10 @@ Future<void> showPerson(BuildContext context, CommController comm,
                     if (ago != null) kv('Last heard', value(ago < 3 ? 'Now' : '$ago s ago')),
                     if (b != null) kv('Firmware', value(b.firmware.isEmpty ? 'Not known' : b.firmware)),
                     if (b != null) kv('App', value(b.app.isEmpty ? 'None linked' : b.app)),
-                    kv('Mute for me', Switch(value: p.mutedByMe, onChanged: (on) => comm.setMuted(p.name, on))),
+                    kv('Known by', value(_knownBy(p.who))),
+                    kv('Mute for me', Switch(value: p.mutedByMe, onChanged: (on) => comm.setMuted(p.id, on))),
                   ]),
+                  if (clash != null) _ClashNote(clash.name),
                   const _MuteNote(),
                   const SizedBox(height: 12),
                   Row(children: [
@@ -99,7 +105,7 @@ Future<void> showPerson(BuildContext context, CommController comm,
                         child: OutlinedButton.icon(
                           onPressed: () {
                             Navigator.pop(sheet);
-                            openConversation(context, comm, comm.personConversation(p.name));
+                            openConversation(context, comm, comm.personConversation(p.id));
                           },
                           icon: const Icon(Icons.chat_bubble_outline, size: 18),
                           label: const Text('Message'),
@@ -112,7 +118,7 @@ Future<void> showPerson(BuildContext context, CommController comm,
                         onPressed: () {
                           Navigator.pop(sheet);
                           Navigator.of(context).push(MaterialPageRoute(
-                              builder: (_) => ControlPage(comm: comm, target: comm.personConversation(p.name))));
+                              builder: (_) => ControlPage(comm: comm, target: comm.personConversation(p.id))));
                         },
                         icon: const Icon(Icons.tune, size: 18),
                         label: const Text('Control'),
@@ -138,8 +144,34 @@ class _MuteNote extends StatelessWidget {
       );
 }
 
+/// How we know who someone is.
+String _knownBy(KnownPerson who) => who.key != null
+    ? 'Identity ${who.id.substring(2, 10)}'
+    : who.identified
+        ? 'Certificate ${who.id.substring(2, 10)}'
+        : 'Name only';
+
+/// Someone's using a name someone else had first.
+class _ClashNote extends StatelessWidget {
+  final String name;
+  const _ClashNote(this.name);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.warning_amber, size: 18, color: Kc.softRed),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text('Not the $name you knew before: someone else using the name.',
+                style: const TextStyle(color: Kc.softRed, fontSize: 13)),
+          ),
+        ]),
+      );
+}
+
 /// Someone not about just now: their name, and muting them.
-Widget _away(BuildContext context, BuildContext sheet, CommController comm, String name, bool inConversation) =>
+Widget _away(BuildContext context, BuildContext sheet, CommController comm, KnownPerson who, bool inConversation) =>
     SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -149,9 +181,9 @@ Widget _away(BuildContext context, BuildContext sheet, CommController comm, Stri
             const SizedBox(width: 16),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(name, style: Kc.term(24)),
+                Text(who.name, style: Kc.term(24)),
                 const SizedBox(height: 4),
-                Text(comm.isMuted(name) ? 'Muted by you' : 'Not about just now',
+                Text(who.muted ? 'Muted by you' : 'Not about just now',
                     style: const TextStyle(color: Kc.muted)),
               ]),
             ),
@@ -160,7 +192,7 @@ Widget _away(BuildContext context, BuildContext sheet, CommController comm, Stri
           Panel(color: Kc.bg, children: [
             PanelRow(
               title: 'Mute for me',
-              trailing: [Switch(value: comm.isMuted(name), onChanged: (on) => comm.setMuted(name, on))],
+              trailing: [Switch(value: who.muted, onChanged: (on) => comm.setMuted(who.id, on))],
             ),
           ]),
           const _MuteNote(),
@@ -169,7 +201,7 @@ Widget _away(BuildContext context, BuildContext sheet, CommController comm, Stri
             OutlinedButton.icon(
               onPressed: () {
                 Navigator.pop(sheet);
-                openConversation(context, comm, comm.personConversation(name));
+                openConversation(context, comm, comm.personConversation(who.id));
               },
               icon: const Icon(Icons.chat_bubble_outline, size: 18),
               label: const Text('Message'),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../comm/board_link.dart';
@@ -147,6 +148,8 @@ class SetupPage extends StatelessWidget {
                   ),
                 ]),
               ],
+              const SectionHeader('Your identity'),
+              _IdentityPanel(comm: comm),
               const SectionHeader('Notifications'),
               _NotificationsPanel(comm: comm),
               if (boardUp) ...[
@@ -156,11 +159,12 @@ class SetupPage extends StatelessWidget {
               if (comm.muted.isNotEmpty) ...[
                 const SectionHeader('Muted by you'),
                 Panel(children: [
-                  for (final name in comm.muted.toList()..sort())
+                  for (final p in comm.muted.toList()..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())))
                     PanelRow(
                       leading: const Icon(Icons.volume_off, color: Kc.softRed),
-                      title: name,
-                      trailing: [OutlinedButton(onPressed: () => comm.setMuted(name, false), child: const Text('Unmute'))],
+                      title: p.name,
+                      subtitle: p.identified ? null : 'Known by name only',
+                      trailing: [OutlinedButton(onPressed: () => comm.setMuted(p.id, false), child: const Text('Unmute'))],
                     ),
                 ]),
               ],
@@ -173,6 +177,91 @@ class SetupPage extends StatelessWidget {
 
   void _server(BuildContext context) =>
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => ServerPage(comm: comm)));
+}
+
+/// Who others know us as: the key the app made, which signs what we send.
+/// Backing it up is its code; the same code on another phone, or after
+/// reinstalling, makes that phone us.
+class _IdentityPanel extends StatelessWidget {
+  final CommController comm;
+  const _IdentityPanel({required this.comm});
+
+  @override
+  Widget build(BuildContext context) {
+    final me = comm.identity;
+    return Panel(children: [
+      PanelRow(
+        leading: const Icon(Icons.fingerprint, color: Kc.muted),
+        title: me == null ? 'None' : 'Identity ${me.id.substring(0, 8)}',
+        subtitle: me == null
+            ? "The phone's secure storage couldn't be used"
+            : 'Others know you by this, not your name. Back it up to keep it.',
+        trailing: [
+          if (me != null)
+            OutlinedButton(onPressed: () => _showCode(context, me.exportCode), child: const Text('Back up')),
+        ],
+      ),
+      PanelRow(
+        title: 'Restore an identity',
+        subtitle: 'Become the identity in a backed-up code',
+        trailing: [OutlinedButton(onPressed: () => _restore(context), child: const Text('Restore'))],
+      ),
+    ]);
+  }
+
+  void _showCode(BuildContext context, String code) => showDialog<void>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: const Text('Your identity code'),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SelectableText(code, style: Kc.term(16)),
+            const SizedBox(height: 12),
+            const Text('Anyone with this code can pass as you. Keep it somewhere safe, and nowhere else.',
+                style: TextStyle(color: Kc.muted, fontSize: 13)),
+          ]),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: code));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+              },
+              child: const Text('Copy'),
+            ),
+            TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Done')),
+          ],
+        ),
+      );
+
+  Future<void> _restore(BuildContext context) async {
+    final field = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Restore an identity'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: field,
+            autofocus: true,
+            minLines: 2,
+            maxLines: 3,
+            decoration: const InputDecoration(hintText: 'XXXX-XXXX-...'),
+          ),
+          const SizedBox(height: 12),
+          const Text("This phone's identity is replaced: back it up first if you'll want it again.",
+              style: TextStyle(color: Kc.muted, fontSize: 13)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialog, field.text), child: const Text('Restore')),
+        ],
+      ),
+    );
+    if (code == null || code.trim().isEmpty) return;
+    final error = await comm.importIdentity(code);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'Identity restored')));
+    }
+  }
 }
 
 /// Which of DroneLab's notifications come, and a way into Android's own

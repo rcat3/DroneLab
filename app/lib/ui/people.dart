@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../comm/board_link.dart';
 import '../comm/comm_controller.dart';
+import '../comm/known_people.dart';
 import '../comm/mumble_client.dart';
 
 /// The tab showing: [tabVoice] and so on. Kept here so a sheet can move to
@@ -18,16 +19,18 @@ const tabRemote = 3;
 /// direct comms.
 class Person {
   final String key;           // 's<session>' or 'd<board id>'
+  final KnownPerson who;      // who they are
   final String name;
   final MumbleUser? user;
   final NearbyBoard? board;
   final bool talking;
   final bool mutedByMe;
   final Uint8List? picture;     // their avatar, if it's come
-  const Person(this.key, this.name,
+  const Person(this.key, this.who, this.name,
       {this.user, this.board, this.talking = false, this.mutedByMe = false, this.picture});
 
   bool get onServer => user != null;
+  String get id => who.id;
 }
 
 /// Everyone about: those in our server channel, then the boards heard over
@@ -39,10 +42,12 @@ List<Person> hivePeople(CommController comm) {
   final boards = directOn ? (comm.nearby.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi))) : <NearbyBoard>[];
   return [
     for (final u in users)
-      Person('s${u.session}', u.name,
-          user: u, talking: comm.talking.contains(u.session), mutedByMe: comm.isMuted(u.name), picture: u.texture),
+      if (comm.personOfUser(u) case final who)
+        Person('s${u.session}', who, u.name,
+            user: u, talking: comm.talking.contains(u.session), mutedByMe: who.muted, picture: u.texture),
     for (final b in boards)
-      Person('d${b.id}', b.name,
-          board: b, talking: b.talking, mutedByMe: comm.isMuted(b.name), picture: comm.directAvatars[b.id]),
+      if (comm.personOfBoard(b) case final who)
+        Person('d${b.id}', who, b.name,
+            board: b, talking: b.talking, mutedByMe: who.muted, picture: comm.directAvatars[b.id]),
   ];
 }

@@ -150,6 +150,27 @@ class Conversations extends ChangeNotifier {
     _saveSoon();
   }
 
+  /// A conversation that's to be known by another key now, as when someone
+  /// known by their certificate shows their identity: joined to any there
+  /// is by that key already.
+  void rekey(String oldKey, String newKey) {
+    final old = all.remove(oldKey);
+    if (old == null) return;
+    final into = all[newKey];
+    if (into == null) {
+      all[newKey] = Conversation(newKey, old.kind, old.title, old.entries, old.unread);
+    } else {
+      into.entries
+        ..addAll(old.entries)
+        ..sort((a, b) => a.time.compareTo(b.time));
+      if (into.entries.length > _keep) into.entries.removeRange(0, into.entries.length - _keep);
+      into.unread += old.unread;
+    }
+    onSeen?.call(oldKey);
+    notifyListeners();
+    _saveSoon();
+  }
+
   void markRead(Conversation c) {
     onSeen?.call(c.key);
     if (c.unread == 0) return;
