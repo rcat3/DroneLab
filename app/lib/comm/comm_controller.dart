@@ -295,6 +295,7 @@ class CommController extends ChangeNotifier {
     _talkingTimer ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
       final now = DateTime.now().millisecondsSinceEpoch;
       _updateTalking(now);
+      _fixTalkTo();
       nearby.removeWhere((_, b) => now - b.seenMs > _nearbyFor);
       // Groups on other channels are only heard while scanning: keep them a while
       heardGroups.removeWhere((_, g) => now - g.seenMs > _heardGroupFor);
@@ -669,8 +670,44 @@ class CommController extends ChangeNotifier {
   bool get boardTalksTo => (board.status?.version ?? 0) >= commVersionTalkTo;
 
   Future<void> setTalkTo(TalkTarget t) async {
-    _talkTo = t;
+    _talkTo = _picked = t;
     await _prefs?.setString('talkTo', t.pref);
+    _updateBoardScreen();
+    notifyListeners();
+  }
+
+  /// What was picked to talk to, which [talkTo] goes back to once it's
+  /// there again after standing in for it.
+  TalkTarget? _picked;
+
+  /// Whether talking to it is there to pick: the server's channel while
+  /// connected, the direct channel while direct's on, someone while
+  /// there's a call with them.
+  bool _talkable(TalkTarget t) => switch (t.kind) {
+        TalkTo.server => _serverUp,
+        TalkTo.direct => _directOn,
+        TalkTo.person => calls.containsKey(t.personId),
+      };
+
+  /// What's picked went (the server disconnected, direct went off): talk
+  /// to the first that's there, the server's channel, then direct, or to
+  /// nothing if neither is; and back to what was picked once it's there
+  /// again. Every tenth of a second, with the rest.
+  void _fixTalkTo() {
+    final picked = _picked ?? _talkTo;
+    TalkTarget? next;
+    if (_talkable(picked)) {
+      if (_talkTo != picked) next = picked;
+    } else if (!_talkable(_talkTo)) {
+      for (final t in const [TalkTarget.server(), TalkTarget.direct()]) {
+        if (_talkable(t)) {
+          next = t;
+          break;
+        }
+      }
+    }
+    if (next == null || next == _talkTo) return;
+    _talkTo = next;
     _updateBoardScreen();
     notifyListeners();
   }

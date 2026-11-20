@@ -62,6 +62,8 @@ Tap someone's picture for more: how they're linked, their signal and when they w
 
 **When nobody would hear you**, because the channel's empty or the one you picked is out of reach, they stay picked, and the talk button turns grey and says *NOBODY TO HEAR*.  Talking then doesn't go anywhere else: press to talk and you hear a **low buzz** in your headphones, as on a trunked radio, so you know without looking.  It's the same for the unit's own talk button.  Once they're back, the button lights up again.
 
+**When the link itself goes**, the server disconnecting or direct mode going off, talking moves to the first link that's still there, your server channel and then your direct channel, so something's always picked while anything's up.  When the one you picked comes back, talking goes back to it.
+
 ### Who you hear
 
 You hear only what you're talking to, so you always know who you're answering: your server channel's voices when that's picked, your direct channel's when that is, and in a call, only the one you're calling.  The others still show *TALKING* on their rows, so you can see something's going on elsewhere.

@@ -5,6 +5,7 @@ import 'comm/comm_controller.dart';
 import 'comm/release_check.dart';
 import 'ui/firmware_ui.dart';
 import 'ui/call_ui.dart';
+import 'ui/splash.dart';
 import 'ui/hivemind_page.dart';
 import 'ui/people.dart';
 import 'ui/record_page.dart';
@@ -46,7 +47,13 @@ void main() {
       comm.clearMissed(personId);     // a missed call's notification: seen
     }
   });
+  final started = DateTime.now();
+  // Not held up by a board that's slow to connect, either
+  Future.delayed(splashAtMost, () => appStarted.value = true);
   comm.init().then((_) {
+    // The logo stays a moment, however quick the start
+    final shown = DateTime.now().difference(started);
+    Future.delayed(splashAtLeast - shown, () => appStarted.value = true);
     // Started by tapping a text's notification: to it, once there's a screen
     final key = comm.notifier.launchedWith;
     if (key != null) WidgetsBinding.instance.addPostFrameCallback((_) => _openConversation(comm, key));
@@ -78,7 +85,7 @@ class DroneLabApp extends StatelessWidget {
       theme: Kc.theme(),
       darkTheme: Kc.theme(),
       themeMode: ThemeMode.dark,
-      home: WithForegroundTask(child: HomePage(comm: comm)),
+      home: WithForegroundTask(child: Splash(child: HomePage(comm: comm))),
     );
   }
 }
