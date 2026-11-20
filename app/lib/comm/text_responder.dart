@@ -238,9 +238,11 @@ class TextResponder {
 ///
 ///   adb shell am broadcast -a io.github.rcat3.dronelab.DEV -p io.github.rcat3.dronelab -e c "/nearby"
 ///
-/// c is a responder command (/help lists them), or: dev on|off (the
+/// c is a responder command (/help lists them), or: dev off (hides the
 /// developer options), voice on|off, text on|off, echo on|off; none says how
-/// they are. Each is in `adb logcat -s flutter` too.
+/// they are. Each is in `adb logcat -s flutter` too. Nothing's taken while
+/// the developer options are hidden: they're only shown from the app, by
+/// tapping its version on About ten times.
 class DevRemote {
   static const _channel = MethodChannel('dronelab/dev');
 
@@ -256,6 +258,7 @@ class DevRemote {
 
   static Future<String> _run(CommController comm, String line) async {
     final r = comm.textResponder;
+    if (!comm.developerOptions) return 'Developer options are off: tap the version on About ten times, in the app';
     if (line.startsWith('/')) return r.run(line);
     final words = line.toLowerCase().split(RegExp(r'\s+'));
     final on = words.length > 1 ? switch (words[1]) { 'on' => true, 'off' => false, _ => null } : null;
@@ -264,22 +267,20 @@ class DevRemote {
       case 'state':
         return 'Developer options ${comm.developerOptions ? 'shown' : 'hidden'}; '
             'voice ${comm.voiceResponder.on ? 'on' : 'off'}, text ${r.on ? 'on' : 'off'}, echo ${r.echo ? 'on' : 'off'}';
-      case 'dev' when on != null:
-        await comm.setDeveloperOptions(on);
-        return 'Developer options ${on ? 'shown' : 'hidden'}';
+      case 'dev' when on == false:
+        await comm.setDeveloperOptions(false);
+        return 'Developer options hidden, and the responders off';
       case 'voice' when on != null:
-        if (on) await comm.setDeveloperOptions(true);
         await comm.setVoiceResponder(on);
         return 'Voice responder ${on ? 'on' : 'off'}';
       case 'text' when on != null:
-        if (on) await comm.setDeveloperOptions(true);
         await comm.setTextResponder(on);
         return 'Text responder ${on ? 'on' : 'off'}';
       case 'echo' when on != null:
         await comm.setTextEcho(on);
         return 'Echo ${on ? 'on' : 'off'}';
       default:
-        return 'c is a /command, or dev|voice|text|echo on|off; none says how they are\n${TextResponder.help}';
+        return 'c is a /command, voice|text|echo on|off, or dev off; none says how they are\n${TextResponder.help}';
     }
   }
 }
