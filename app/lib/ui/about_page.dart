@@ -241,6 +241,7 @@ class _AboutPageState extends State<AboutPage> {
   /// shortened to what's on its box.
   static String _boardName(String board) => switch (board) {
         'waveshare_esp32s3_touch_amoled_1_75' => 'Waveshare ESP32-S3 Touch AMOLED 1.75"',
+        'virtual_unit' => 'Virtual unit, on a computer',
         _ => board,
       };
 

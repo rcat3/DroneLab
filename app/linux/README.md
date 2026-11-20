@@ -51,3 +51,6 @@ app's writes one way and the unit's notifications the other, each as its
 length (2 bytes, little-endian) and then the message, up to 244 bytes. The
 app connects once the unit's listening; while it's connected, it's as if the
 phone were connected, paired and had notifications on. One app at a time.
+
+`platforms/host` builds one: the firmware itself, running on the computer
+(see its README).
