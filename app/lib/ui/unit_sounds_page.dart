@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../comm/board_link.dart';
@@ -24,33 +22,31 @@ class _UnitSoundsPageState extends State<UnitSoundsPage> {
 
   /// The one being played on the unit, to hear it, till it ends or is stopped.
   UnitSoundEvent? _playing;
-  Timer? _watch;
+  int _plays = 0;     // counts plays, so an old one's watch knows it's been overtaken
 
   Future<void> _play(UnitSoundEvent e, String track) async {
-    await comm.chimeOnUnit(track);
-    if (!mounted) return;
+    final play = ++_plays;
     setState(() => _playing = e);
-    // Watch for its end: the unit says whether it's still playing
-    _watch?.cancel();
-    _watch = Timer.periodic(const Duration(milliseconds: 800), (_) async {
-      if (!await comm.unitChiming() && mounted) _stopped();
-    });
+    await comm.chimeOnUnit(track);
+    // Watch for its end, asking the unit one answer at a time, till it's
+    // done, stopped, or another's played
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    while (mounted && play == _plays && _playing == e) {
+      if (!await comm.unitChiming()) break;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    if (mounted && play == _plays) setState(() => _playing = null);
   }
 
+  /// Stop whatever's playing from here.
   Future<void> _stop() async {
-    await comm.stopChimeOnUnit();
-    _stopped();
-  }
-
-  void _stopped() {
-    _watch?.cancel();
-    _watch = null;
+    _plays++;
     if (mounted) setState(() => _playing = null);
+    await comm.stopChimeOnUnit();
   }
 
   @override
   void dispose() {
-    _watch?.cancel();
     if (_playing != null) comm.stopChimeOnUnit();
     super.dispose();
   }
@@ -110,6 +106,11 @@ class _UnitSoundsPageState extends State<UnitSoundsPage> {
                       playing: _playing == e,
                       onPlay: (t) => _play(e, t),
                       onStop: _stop,
+                      // A new pick plays nothing, and stops whatever the unit's playing
+                      onPicked: (t) {
+                        comm.setUnitSound(e, t);
+                        _stop();
+                      },
                     ),
                 ]),
               ],
@@ -128,13 +129,15 @@ class _EventRow extends StatelessWidget {
   final bool playing;
   final void Function(String track) onPlay;
   final VoidCallback onStop;
+  final void Function(String? track) onPicked;
   const _EventRow(
       {required this.comm,
       required this.event,
       required this.tracks,
       required this.playing,
       required this.onPlay,
-      required this.onStop});
+      required this.onStop,
+      required this.onPicked});
 
   @override
   Widget build(BuildContext context) {
@@ -154,10 +157,7 @@ class _EventRow extends StatelessWidget {
               value: picked,
               dropdownColor: Kc.raised,
               underline: const SizedBox.shrink(),
-              onChanged: (t) {
-                comm.setUnitSound(event, t);
-                if (t != null) onPlay(t);
-              },
+              onChanged: onPicked,
               items: [
                 const DropdownMenuItem<String?>(value: null, child: Text('None', style: TextStyle(color: Kc.muted))),
                 if (missing)
