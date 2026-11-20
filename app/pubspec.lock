@@ -26,7 +26,7 @@ packages:
     source: hosted
     version: "2.13.1"
   bluez:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: bluez
       sha256: "4747e4f25abf91a9a341a1c3f83a9081be9bdd189d913e391b6707db4214b4d2"
@@ -114,7 +114,7 @@ packages:
     source: hosted
     version: "1.0.9"
   dbus:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: dbus
       sha256: f7db8504e715b835f5ebe5fe74604ccd961d504c73389a5d8e81bafc2e2f3612

@@ -3,6 +3,8 @@
 /// a moment to wake up, which would cut off the start of what's said.
 library;
 
+import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
@@ -96,6 +98,7 @@ class AudioOut {
   }
 
   Future<void> _start() async {
+    if (Platform.isLinux) return _startPipe();
     await FlutterPcmSound.setLogLevel(LogLevel.error);
     await FlutterPcmSound.setup(
         sampleRate: outputRate,
@@ -121,10 +124,52 @@ class AudioOut {
     FlutterPcmSound.feed(PcmArrayInt16(bytes: out.buffer.asByteData()));
   }
 
+  // On Linux (for now): the mixer piped to pacat, which plays it through
+  // PulseAudio or PipeWire, kept _queuedMs ahead by the wall clock.
+  Process? _pipe;
+  Timer? _pipeTimer;
+
+  Future<void> _startPipe() async {
+    final p = await Process.start('pacat', [
+      '--playback', '--raw', '--format=s16le', '--rate=$outputRate', '--channels=1',
+      '--latency-msec=$_thresholdMs', '--client-name=DroneLab', '--stream-name=HiveMind',
+    ]);
+    p.stdout.drain<void>();
+    p.stderr.drain<void>();
+    _pipe = p;
+    _running = true;
+    final started = DateTime.now().microsecondsSinceEpoch;
+    var written = 0;
+    _pipeTimer = Timer.periodic(const Duration(milliseconds: _blockMs), (_) {
+      if (!_running) return;
+      final played = (DateTime.now().microsecondsSinceEpoch - started) * outputRate ~/ 1000000;
+      // Fallen behind (the app was held up): start again from now
+      if (written < played) written = played;
+      final want = played + outputRate * _queuedMs ~/ 1000 - written;
+      final blocks = want <= 0 ? 0 : (want + _block - 1) ~/ _block;
+      if (blocks == 0) return;
+      final out = Int16List(blocks * _block);
+      for (var b = 0; b < blocks; b++) {
+        _clockMs = DateTime.now().millisecondsSinceEpoch;
+        out.setRange(b * _block, (b + 1) * _block, mixer.pull(_block, _clockMs));
+      }
+      written += out.length;
+      p.stdin.add(out.buffer.asUint8List());
+    });
+  }
+
   Future<void> stop() async {
     await _starting;
     if (!_running) return;
     _running = false;
+    if (_pipe != null) {
+      _pipeTimer?.cancel();
+      _pipeTimer = null;
+      await _pipe!.stdin.close().catchError((_) {});
+      _pipe!.kill();
+      _pipe = null;
+      return;
+    }
     FlutterPcmSound.setFeedCallback(null);
     await FlutterPcmSound.release();
   }

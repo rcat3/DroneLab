@@ -79,6 +79,11 @@ class BoardLink extends ChangeNotifier {
   BoardState state = BoardState.off;
   String? error;
   String? deviceId;
+
+  /// Pairs with the board before it's used, where the system doesn't by
+  /// itself (Linux: linux_pairing.dart): true once it's paired, false if it
+  /// didn't, and null if the wearer turned it down.
+  Future<bool?> Function(String id)? pairFirst;
   String? name;
   BoardStatus? status;
   int mtu = 23;
@@ -160,9 +165,16 @@ class BoardLink extends ChangeNotifier {
     await _connect();
   }
 
+  /// Which try at connecting is the current one: one that's been overtaken
+  /// (the link dropped meanwhile, as it does while it pairs, and it's being
+  /// tried again) stops where it is, instead of carrying on beside the new.
+  int _attempt = 0;
+
   Future<void> _connect() async {
     final id = deviceId;
     if (id == null || !_wanted) return;
+    final attempt = ++_attempt;
+    bool overtaken() => attempt != _attempt || !_wanted;
     state = BoardState.connecting;
     error = null;
     notifyListeners();
@@ -178,7 +190,25 @@ class BoardLink extends ChangeNotifier {
     });
     try {
       await UniversalBle.connect(id, timeout: const Duration(seconds: 15));
-      await UniversalBle.discoverServices(id);
+      if (overtaken()) return;
+      await UniversalBle.discoverServices(id).timeout(const Duration(seconds: 15));
+      if (overtaken()) return;
+      final pairFirst = this.pairFirst;
+      if (pairFirst != null) {
+        final paired = await pairFirst(id);
+        if (overtaken()) return;
+        if (paired == null) {
+          await disconnect();
+          error = 'Not paired: the code was not given';
+          notifyListeners();
+          return;
+        }
+        if (!paired) {
+          _lost("The board didn't pair. On the board, open Settings, Paired Phones, and tap Pair a phone, "
+              'then type the code it shows');
+          return;
+        }
+      }
       try {
         mtu = await UniversalBle.requestMtu(id, 247);
       } catch (_) {}
@@ -187,12 +217,16 @@ class BoardLink extends ChangeNotifier {
           await UniversalBle.requestConnectionPriority(id, BleConnectionPriority.highPerformance);
         } catch (_) {}
       }
+      if (overtaken()) return;
       await _valueSub?.cancel();
       _valueSub = UniversalBle.characteristicValueStream(id, toPhoneUuid).listen(_onValue);
-      await UniversalBle.subscribeNotifications(id, serviceUuid, toPhoneUuid);
+      await UniversalBle.subscribeNotifications(id, serviceUuid, toPhoneUuid).timeout(const Duration(seconds: 10));
+      if (overtaken()) return;
       state = BoardState.connected;
       notifyListeners();
     } catch (e) {
+      debugPrint('board: failed $e');
+      if (overtaken()) return;
       _lost("Couldn't connect to the board");
     }
   }
@@ -266,7 +300,7 @@ class BoardLink extends ChangeNotifier {
         // Paired and talking: swap versions. Asked again at the next status
         // until it's answered, as the first can come before the link's up.
         _askingVersion = true;
-        request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}&os=${Platform.isIOS ? 'iPhone' : 'Android'}').then((a) {
+        request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}&os=${Platform.isIOS ? 'iPhone' : Platform.isLinux ? 'Linux' : 'Android'}').then((a) {
           if (a.status == 200) {
             final v = jsonDecode(a.body) as Map<String, dynamic>;
             firmware = v['firmware'] as String?;
@@ -373,6 +407,7 @@ class BoardLink extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _wanted = false;
+    _attempt++;
     _retry?.cancel();
     final id = deviceId;
     await _valueSub?.cancel();

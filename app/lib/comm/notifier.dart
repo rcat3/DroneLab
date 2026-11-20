@@ -48,7 +48,9 @@ class Notifier {
     missed = _prefs!.getBool('notifyMissed') ?? true;
     try {
       await _plugin.initialize(
-        settings: const InitializationSettings(android: AndroidInitializationSettings('ic_notify')),
+        settings: const InitializationSettings(
+            android: AndroidInitializationSettings('ic_notify'),
+            linux: LinuxInitializationSettings(defaultActionName: 'Open')),
         onDidReceiveNotificationResponse: (r) {
           final key = r.payload;
           if (key != null && key.startsWith(_callPrefix)) {
