@@ -36,6 +36,10 @@ void audio_player_play(size_t index);
  * player ends it. */
 void audio_player_chime(size_t index);
 
+/* Stop a chime part way, back to what was there; and whether one's playing. */
+void audio_player_chime_stop(void);
+bool audio_player_chiming(void);
+
 /* Choose a track without playing it. Resuming plays it from the start. */
 void audio_player_cue(size_t index);
 

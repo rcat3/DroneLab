@@ -157,7 +157,7 @@ On a unit with a speaker, Setup's **Unit sounds** picks a sound file from the un
 - **Display message**: someone's words for your display, when they're taken.
 - **Unit nearby**: a unit heard over direct mode that hasn't been heard in the last 10 minutes, so one at the edge of range, coming and going, doesn't keep sounding; and not those already about when the unit connects or direct comes on.
 
-The unit plays it once, over whatever its Sound player is doing, which carries on afterwards where it was.  Short files suit it best, but any will do.  The same event again within three seconds plays nothing, so a slider dragged, or a burst of texts, is one sound.  Picking a file plays it, and the play button by each plays it again.  The app tells the unit, so it has to be connected; the low-profile unit has no speaker, so the page isn't there.
+The unit plays it once, over whatever its Sound player is doing, which carries on afterwards where it was.  While one's playing from here, its play button turns to a stop button, to cut a long one short.  Short files suit it best, but any will do.  The same event again within three seconds plays nothing, so a slider dragged, or a burst of texts, is one sound.  Picking a file plays it, and the play button by each plays it again.  The app tells the unit, so it has to be connected; the low-profile unit has no speaker, so the page isn't there.
 
 ## Setup: your identity
 

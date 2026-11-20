@@ -46,7 +46,7 @@
  *                                     uptime and battery, for the app's About page
  *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>]   the voice
  *                                     effect, Play on speaker and Effect Volume
- *     POST /api/sound?[play=<1 or 0>][&skip=<1 or -1>][&t=<track>][&seek=<ms>][&chime=<track>]
+ *     POST /api/sound?[play=<1 or 0>][&skip=<1 or -1>][&t=<track>][&seek=<ms>][&chime=<track>][&chimestop=1]
  *                     [&v=<percent>][&r=<audio_repeat_t>][&auto=<1 or 0>]   the
  *                                     sound player: play or pause, the next or
  *                                     last track, play a track, move in it,
@@ -492,9 +492,10 @@ static void write_state(json_t *j)
         uint32_t position, length;
         audio_player_progress(&position, &length);
         jprintf(j, ",\"sound\":{\"track\":%u,\"playing\":%d,\"position\":%lu,\"length\":%lu,\"volume\":%u,"
-                   "\"repeat\":%u,\"autoplay\":%u}",
+                   "\"repeat\":%u,\"autoplay\":%u,\"chime\":%d}",
                 (unsigned)audio_player_current(), audio_player_is_playing() ? 1 : 0, (unsigned long)position,
-                (unsigned long)length, s->sound_volume, s->sound_repeat, s->sound_autoplay);
+                (unsigned long)length, s->sound_volume, s->sound_repeat, s->sound_autoplay,
+                audio_player_chiming() ? 1 : 0);
     }
     jprintf(j, ",\"devices\":[");
     bool first = true;
@@ -1159,6 +1160,10 @@ static bool run_command(const char *name, const char *query, const char *body, s
         if (chime >= 0)
         {
             audio_player_chime((size_t)chime);
+        }
+        if (query_int(query, "chimestop", 0) == 1)
+        {
+            audio_player_chime_stop();
         }
         if (track >= 0 && (size_t)track < count)
         {

@@ -310,6 +310,10 @@ typedef enum
 /* Talk to the server's channel or the direct comms group. Remembered, for
  * the next startup; one person isn't. */
 void comm_talk_to_channel(comm_transport_t channel);
+/* Who talking goes to just now: comm_talk_to(), but the direct channel in
+ * place of the server's while there's no phone to reach it through. */
+comm_to_t comm_talk_to_now(void);
+
 comm_to_t comm_talk_to(void);
 const char *comm_talk_to_name(void);            // the channel, group or person, to show; from the UI loop
 comm_transport_t comm_talk_now(void);           // how talking would go now, or is going

@@ -47,6 +47,7 @@ typedef enum
     CMD_RESUME,
     CMD_SEEK,
     CMD_CHIME,
+    CMD_CHIME_STOP,
 } command_t;
 
 typedef enum
@@ -395,12 +396,18 @@ static void handle_commands(void)
     seen_seq = seq;
 
     // Anything else asked for ends a chime first, back to what was there
-    if (chiming && cmd != CMD_CHIME)
+    if (chiming && cmd != CMD_CHIME && cmd != CMD_CHIME_STOP)
     {
         end_chime();
     }
     switch (cmd)
     {
+        case CMD_CHIME_STOP:
+            if (chiming)
+            {
+                end_chime();
+            }
+            break;
         case CMD_CHIME:
             if (!chiming)
             {
@@ -681,6 +688,16 @@ void audio_player_chime(size_t index)
     post(CMD_CHIME, index);
 }
 
+void audio_player_chime_stop(void)
+{
+    post(CMD_CHIME_STOP, 0);
+}
+
+bool audio_player_chiming(void)
+{
+    return chiming;
+}
+
 void audio_player_seek(uint32_t position_ms)
 {
     if (track_count == 0)
@@ -742,6 +759,11 @@ size_t audio_player_fill(int16_t *frames, size_t max_frames, uint32_t *sample_ra
 void audio_player_play(size_t index) {}
 void audio_player_cue(size_t index) {}
 void audio_player_chime(size_t index) {}
+void audio_player_chime_stop(void) {}
+bool audio_player_chiming(void)
+{
+    return false;
+}
 void audio_player_pause(void) {}
 void audio_player_seek(uint32_t position_ms) {}
 void audio_player_resume(void) {}

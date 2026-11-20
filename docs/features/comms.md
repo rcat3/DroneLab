@@ -65,7 +65,7 @@ The first page shows how comms are doing at a glance, as a green screen like the
 - In the middle, an avatar in a frame, with a tag on its bottom edge:
   - **RX**: whoever's talking, their avatar in full color and the frame lit up, with their name underneath, and "+1" and so on for others talking at once.
   - **TX**: your own avatar, in full color, the frame white-hot, and a ring round the edge of the screen.  A cloud (cloud mode) or a handheld radio (direct mode) shows where it's going, with the channel's name.
-  - *PTT* or *VOX*, the mode, while it's quiet: your avatar, dim and green, with how things are underneath: how many others are online, or what's missing.  With no phone, it says how many units are nearby in direct mode.
+  - *PTT* or *VOX*, the mode, while it's quiet: your avatar, dim and green, with the channel talking goes to underneath, a cloud for the server's or a handheld radio for direct, then its name; *PRIVATE* in a [call](../app/voice.md#calls); or what's missing (*NO UPLINK*, *NO SERVER*, *COMMS OFF*).
 
 Holding the avatar talks, for trying it out with the display in hand.  It waits a moment before it starts, so a swipe across it doesn't, and once it's talking the page holds still until you let go.  In the mask, the app, the headphones' button or the talk button does the talking.
 
@@ -74,7 +74,7 @@ The status screen can be picked to show when the display turns on, in [Settings]
 ### HiveMind Setup
 
 - *Push to talk* or *Voice*: in *Push to talk*, the unit sends while the talk button (or the app's, or the avatar) is held, and in *Voice*, whenever it hears you speak.
-- *Speaker off while talking*: the speaker goes quiet while the unit's sending, voice effect and sound files alike, so those nearby don't hear what goes to the hive.
+- *Speaker off while talking*: the speaker goes quiet while the unit's sending, voice effect and sound files alike, so those nearby don't hear what goes to the hive.  Not on the low-profile unit, which has no speaker.
 - *Show HiveMind while*: *Talk*, *Hear* or *Both* comes to the status screen by itself while the unit's sending, while someone else is talking, or both, and goes back to the page you were on two seconds after it stops.  If you swipe somewhere else in the meantime, it stays where you went.  It waits while you're touching the screen.
 
 ### HiveMind Voice
@@ -83,7 +83,7 @@ Titled *HiveMind Voice Effect* on the screen: the voice effect for what the hive
 
 ### Talk to
 
-Talking goes to one place at a time: your server channel, your direct channel, or one person alone, picked on the app's [Voice tab](../app/voice.md#where-your-voice-goes).  A channel goes its own way, the server's or direct; one person goes direct if their unit's nearby, else through the server.  The unit's *Direct* page shows who, and *Talk to* there switches between the server's channel (*Server*) and the direct channel (*Direct*), for when the phone's not about.
+Talking goes to one place at a time: your server channel, your direct channel, or one person alone, picked on the app's [Voice tab](../app/voice.md#where-your-voice-goes).  A channel goes its own way, the server's or direct; one person goes direct if their unit's nearby, else through the server.  Without the phone there's no server, so talking goes to the direct channel meanwhile, by itself.
 
 If nobody would hear you (the server isn't connected or nobody else is in your channel, no units are nearby on direct, or the one you picked is out of reach), the unit doesn't talk at all: the app buzzes in your headphones, and the unit's HiveMind screen says *NOBODY HEARS*.  Let go and talk again once they're back.  That's decided as you start talking, and doesn't change partway through.
 

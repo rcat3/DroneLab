@@ -447,6 +447,12 @@ static route_t choose_route(const target_t *t)
         return direct_up && direct_peers(peers, DIRECT_PEERS_MAX) > 0 ? ROUTE_DIRECT : ROUTE_NONE;
     }
     default:
+        if (!phone && direct_up)
+        {
+            // No phone, so no server: the direct channel, as without the app
+            direct_peer_t peers[DIRECT_PEERS_MAX];
+            return direct_peers(peers, DIRECT_PEERS_MAX) > 0 ? ROUTE_DIRECT : ROUTE_NONE;
+        }
         return server_up && (server_state == COMM_SERVER_UNKNOWN || server_others > 0) ? ROUTE_SERVER : ROUTE_NONE;
     }
 }
@@ -839,9 +845,16 @@ comm_to_t comm_talk_to(void)
     return target.to;
 }
 
+comm_to_t comm_talk_to_now(void)
+{
+    // No phone, so no server: talking goes to the direct channel meanwhile
+    bool phone = running && rcat_hal_ble_peer_connected();
+    return target.to == COMM_TO_SERVER && !phone && direct_running() ? COMM_TO_DIRECT : target.to;
+}
+
 const char *comm_talk_to_name(void)
 {
-    switch (target.to)
+    switch (comm_talk_to_now())
     {
     case COMM_TO_PERSON:
         return target.name;
@@ -1911,6 +1924,11 @@ void comm_talk_to_channel(comm_transport_t channel)
 }
 
 comm_to_t comm_talk_to(void)
+{
+    return COMM_TO_SERVER;
+}
+
+comm_to_t comm_talk_to_now(void)
 {
     return COMM_TO_SERVER;
 }

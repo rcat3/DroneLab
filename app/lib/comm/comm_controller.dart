@@ -957,6 +957,23 @@ class CommController extends ChangeNotifier {
     if (i >= 0) await board.request('POST', '/api/sound?chime=$i');
   }
 
+  /// Stop a sound the unit's playing for something, part way.
+  Future<void> stopChimeOnUnit() async {
+    if (unitCanPlay) await board.request('POST', '/api/sound?chimestop=1');
+  }
+
+  /// Whether the unit's playing one of those sounds just now.
+  Future<bool> unitChiming() async {
+    try {
+      final a = await board.request('GET', '/api/state');
+      if (a.status != 200) return false;
+      final s = (jsonDecode(a.body) as Map<String, dynamic>)['sound'] as Map<String, dynamic>?;
+      return s?['chime'] == 1;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Something happened: its sound on the unit, if one's picked, and not
   /// just played for the same.
   void playUnitSound(UnitSoundEvent e) {

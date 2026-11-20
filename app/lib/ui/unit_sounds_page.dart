@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../comm/board_link.dart';
@@ -19,6 +21,39 @@ class UnitSoundsPage extends StatefulWidget {
 class _UnitSoundsPageState extends State<UnitSoundsPage> {
   CommController get comm => widget.comm;
   List<String>? _tracks;
+
+  /// The one being played on the unit, to hear it, till it ends or is stopped.
+  UnitSoundEvent? _playing;
+  Timer? _watch;
+
+  Future<void> _play(UnitSoundEvent e, String track) async {
+    await comm.chimeOnUnit(track);
+    if (!mounted) return;
+    setState(() => _playing = e);
+    // Watch for its end: the unit says whether it's still playing
+    _watch?.cancel();
+    _watch = Timer.periodic(const Duration(milliseconds: 800), (_) async {
+      if (!await comm.unitChiming() && mounted) _stopped();
+    });
+  }
+
+  Future<void> _stop() async {
+    await comm.stopChimeOnUnit();
+    _stopped();
+  }
+
+  void _stopped() {
+    _watch?.cancel();
+    _watch = null;
+    if (mounted) setState(() => _playing = null);
+  }
+
+  @override
+  void dispose() {
+    _watch?.cancel();
+    if (_playing != null) comm.stopChimeOnUnit();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -67,7 +102,15 @@ class _UnitSoundsPageState extends State<UnitSoundsPage> {
               else ...[
                 const SectionHeader('When'),
                 Panel(children: [
-                  for (final e in UnitSoundEvent.values) _EventRow(comm: comm, event: e, tracks: tracks),
+                  for (final e in UnitSoundEvent.values)
+                    _EventRow(
+                      comm: comm,
+                      event: e,
+                      tracks: tracks,
+                      playing: _playing == e,
+                      onPlay: (t) => _play(e, t),
+                      onStop: _stop,
+                    ),
                 ]),
               ],
             ],
@@ -82,7 +125,16 @@ class _EventRow extends StatelessWidget {
   final CommController comm;
   final UnitSoundEvent event;
   final List<String> tracks;
-  const _EventRow({required this.comm, required this.event, required this.tracks});
+  final bool playing;
+  final void Function(String track) onPlay;
+  final VoidCallback onStop;
+  const _EventRow(
+      {required this.comm,
+      required this.event,
+      required this.tracks,
+      required this.playing,
+      required this.onPlay,
+      required this.onStop});
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +156,7 @@ class _EventRow extends StatelessWidget {
               underline: const SizedBox.shrink(),
               onChanged: (t) {
                 comm.setUnitSound(event, t);
-                if (t != null) comm.chimeOnUnit(t);
+                if (t != null) onPlay(t);
               },
               items: [
                 const DropdownMenuItem<String?>(value: null, child: Text('None', style: TextStyle(color: Kc.muted))),
@@ -115,11 +167,18 @@ class _EventRow extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            tooltip: 'Play it on the unit',
-            icon: const Icon(Icons.play_arrow, color: Kc.muted),
-            onPressed: picked == null || missing ? null : () => comm.chimeOnUnit(picked),
-          ),
+          // Play it on the unit, and stop it part way
+          playing
+              ? IconButton(
+                  tooltip: 'Stop it',
+                  icon: const Icon(Icons.stop, color: Kc.pink),
+                  onPressed: onStop,
+                )
+              : IconButton(
+                  tooltip: 'Play it on the unit',
+                  icon: const Icon(Icons.play_arrow, color: Kc.muted),
+                  onPressed: picked == null || missing ? null : () => onPlay(picked),
+                ),
         ]),
       ]),
     );

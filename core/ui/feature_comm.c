@@ -391,15 +391,11 @@ static void show_status(void)
     set_label(tag, rec ? "REC" : l == LOOK_TX ? "TX" : l == LOOK_RX ? "RX" : l == LOOK_OFF ? "OFF" :
                    comm_mode() == COMM_VOICE ? "VOX" : "PTT");
 
-    // Under it: where it's sending, who's talking, or how things are
+    // Under it: where it's sending, who's talking, or, idle, the channel
+    // talked to, with an icon for the server or direct
     char text[64];
-    // The icon: where it's sending, or how the one talking is heard
     bool show_icon = (tx || hearing > 0) && !rec;
     int transport = tx ? (int)comm_talk_now() : comm_hearing_transport(0);
-    if (show_icon && lv_image_get_src(transport_icon) != &transport_icons[transport])
-    {
-        lv_image_set_src(transport_icon, &transport_icons[transport]);
-    }
     if (rec)
     {
         snprintf(text, sizeof(text), "RECORDING");
@@ -428,29 +424,41 @@ static void show_status(void)
     {
         snprintf(text, sizeof(text), "COMMS OFF");
     }
-    else if (!uplink && direct_running())
-    {
-        // Board to board: how many are about
-        direct_peer_t peers[DIRECT_PEERS_MAX];
-        int n = direct_peers(peers, DIRECT_PEERS_MAX);
-        snprintf(text, sizeof(text), n == 0 ? "DIRECT" : "%d NEARBY", n);
-    }
-    else if (!uplink)
-    {
-        snprintf(text, sizeof(text), "NO UPLINK");
-    }
-    else if (server == COMM_SERVER_CONNECTING)
-    {
-        snprintf(text, sizeof(text), "LINKING...");
-    }
-    else if (server != COMM_SERVER_CONNECTED)
-    {
-        snprintf(text, sizeof(text), "NO SERVER");
-    }
     else
     {
-        int others = comm_server_others();
-        snprintf(text, sizeof(text), others == 0 ? "ALONE" : "%d ONLINE", others);
+        comm_to_t to = comm_talk_to_now();
+        if (to == COMM_TO_PERSON)
+        {
+            snprintf(text, sizeof(text), "PRIVATE");     // a call, from the app
+        }
+        else if (to == COMM_TO_DIRECT)
+        {
+            show_icon = direct_running();
+            transport = COMM_TALK_DIRECT;
+            snprintf(text, sizeof(text), "%s", show_icon ? direct_group_name() : "DIRECT OFF");
+        }
+        else if (!uplink)
+        {
+            snprintf(text, sizeof(text), "NO UPLINK");
+        }
+        else if (server == COMM_SERVER_CONNECTING)
+        {
+            snprintf(text, sizeof(text), "LINKING...");
+        }
+        else if (server != COMM_SERVER_CONNECTED)
+        {
+            snprintf(text, sizeof(text), "NO SERVER");
+        }
+        else
+        {
+            show_icon = true;
+            transport = COMM_TALK_SERVER;
+            snprintf(text, sizeof(text), "%s", comm_talk_to_name());
+        }
+    }
+    if (show_icon && lv_image_get_src(transport_icon) != &transport_icons[transport])
+    {
+        lv_image_set_src(transport_icon, &transport_icons[transport]);
     }
     if (lv_obj_is_hidden(transport_icon) == show_icon)
     {
@@ -795,27 +803,11 @@ static lv_obj_t *direct_page;
 static lv_obj_t *direct_switch;
 static lv_obj_t *direct_group_label;
 static lv_obj_t *direct_peers_label;
-static lv_obj_t *talk_to_label;
-static lv_obj_t *talk_to_buttons;
 
 static void show_direct(void)
 {
     bool on = direct_running();
     lv_obj_set_state(direct_switch, LV_STATE_CHECKED, on);
-    // Who talking goes to: the app can change it too, to one person
-    comm_to_t to = comm_talk_to();
-    if (to == COMM_TO_PERSON)
-    {
-        lv_buttonmatrix_clear_button_ctrl_all(talk_to_buttons, LV_BUTTONMATRIX_CTRL_CHECKED);
-        char who[16 + COMM_NAME_MAX];
-        snprintf(who, sizeof(who), "Talk to: %s", comm_talk_to_name());
-        set_label(talk_to_label, who);
-    }
-    else
-    {
-        ui_check_choice(talk_to_buttons, to == COMM_TO_DIRECT ? 1 : 0);
-        set_label(talk_to_label, "Talk to");
-    }
     char text[160];
     snprintf(text, sizeof(text), "%s, freq %u%s\nAs: %s", direct_group_name(), direct_channel(),
              direct_long_range() ? ", LR" : "", direct_own_name());
@@ -868,15 +860,6 @@ static void direct_switch_cb(lv_event_t *e)
     show_direct();
 }
 
-static void talk_to_cb(lv_event_t *e)
-{
-    uint32_t selected = lv_buttonmatrix_get_selected_button(talk_to_buttons);
-    if (selected < COMM_TALK_COUNT)
-    {
-        comm_talk_to_channel((comm_transport_t)selected);
-    }
-}
-
 static void add_direct_page(ui_feature_t *feature)
 {
     direct_page = ui_feature_add_page(feature, "Direct", false);
@@ -890,30 +873,20 @@ static void add_direct_page(ui_feature_t *feature)
     lv_obj_set_size(direct_switch, ui_px(64), ui_px(32));
     lv_obj_align(direct_switch, LV_ALIGN_CENTER, 0, ui_px(-60));
 
-    // Who talking goes to: the server's channel or the direct one, from here, or
-    // one person, from the app
-    talk_to_label = lv_label_create(direct_page);
-    lv_label_set_text(talk_to_label, "Talk to");
-    lv_label_set_long_mode(talk_to_label, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(talk_to_label, ui_px(170));
-    lv_obj_set_style_text_align(talk_to_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(talk_to_label, COLOR_MUTED, 0);
-    lv_obj_align(talk_to_label, LV_ALIGN_CENTER, 0, ui_px(-32));
-    static const char *const channels[] = { "Server", "Direct", "" };
-    talk_to_buttons = ui_add_choices(direct_page, channels, ui_px(170), ui_px(30), ui_px(-9));
-    lv_obj_add_event_cb(talk_to_buttons, talk_to_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    // Who talking goes to is the app's to say, as is the channel's name;
+    // without the app it's the direct channel (comm_talk_to_now)
     lv_obj_add_event_cb(direct_switch, direct_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     direct_group_label = lv_label_create(direct_page);
     lv_label_set_text(direct_group_label, "");
     lv_obj_set_style_text_align(direct_group_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(direct_group_label, LV_ALIGN_CENTER, 0, ui_px(30));
+    lv_obj_align(direct_group_label, LV_ALIGN_CENTER, 0, ui_px(-8));
 
     direct_peers_label = lv_label_create(direct_page);
     lv_label_set_text(direct_peers_label, "");
     lv_obj_set_style_text_align(direct_peers_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(direct_peers_label, COLOR_MUTED, 0);
-    lv_obj_align(direct_peers_label, LV_ALIGN_CENTER, 0, ui_px(72));
+    lv_obj_align(direct_peers_label, LV_ALIGN_CENTER, 0, ui_px(44));
 
     show_direct();
 }
