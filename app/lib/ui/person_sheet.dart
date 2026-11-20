@@ -125,6 +125,21 @@ Future<void> showPerson(BuildContext context, CommController comm,
                       ),
                     ),
                   ]),
+                  // To the direct channel we're on, if it's one with a passphrase
+                  if (comm.invitableGroup case final g?) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: comm.whyNotInvite(p.id) != null
+                          ? null
+                          : () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final why = await comm.invite(p.id, g);
+                              messenger.showSnackBar(SnackBar(content: Text(why ?? 'Invitation sent to ${p.name}')));
+                            },
+                      icon: const Icon(Icons.person_add_alt, size: 18),
+                      label: Text('Invite to ${g.name}'),
+                    ),
+                  ],
                 ],
               ),
             ),

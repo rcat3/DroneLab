@@ -30,6 +30,7 @@ void main() {
   final comm = CommController();
   comm.notifier.opens.listen((key) => _openConversation(comm, key));
   comm.incomingCalls.listen((call) => showIncomingCall(comm, call.personId));
+  comm.invitations.listen((inv) => showInvitation(comm, inv));
   comm.callNotices.listen((text) => messengerKey.currentState?.showSnackBar(SnackBar(content: Text(text))));
   comm.notifier.callActions.listen((a) {
     final (action, personId) = a;

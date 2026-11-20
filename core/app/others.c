@@ -446,6 +446,8 @@ static int kind_of(const uint8_t *what, size_t len)
         return len > 5 && what[3] < what[4] ? OTHERS_KIND_COUNT : -1;
     case OTHERS_CALL:
         return len >= 6 ? OTHERS_KIND_COUNT : -1;
+    case OTHERS_INVITE:
+        return len > 29 ? OTHERS_KIND_COUNT : -1;     // a nonce (12), something, and a tag (16)
     default:
         return -1;
     }
@@ -646,9 +648,10 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
     uint8_t scope = cmd[SCOPE_AT];
     if (which == OTHERS_KIND_COUNT)
     {
-        // A text, part of one, or a call's signal: for the app, whoever it's from
+        // A text, part of one, a call's signal or an invitation: for the app, whoever it's from
         comm_heard_t kind = what[0] == OTHERS_TEXT_PART ? COMM_HEARD_TEXT_PART
                             : what[0] == OTHERS_CALL    ? COMM_HEARD_CALL
+                            : what[0] == OTHERS_INVITE  ? COMM_HEARD_INVITE
                                                         : COMM_HEARD_TEXT;
         comm_heard_to_phone(via, from, key, kind, scope, true, what + 1, what_len - 1);
         return;

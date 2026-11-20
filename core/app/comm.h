@@ -335,6 +335,7 @@ typedef enum
     COMM_HEARD_LOVENSE,     // a command for the Lovense devices
     COMM_HEARD_TEXT_PART,   // a part of a long text, for the app to put together
     COMM_HEARD_CALL,        // a call's signal (OTHERS_CALL), for the app
+    COMM_HEARD_INVITE,      // an invitation to a direct channel (OTHERS_INVITE), for the app
 } comm_heard_t;
 
 /* Pass on to the app what someone sent: a text, or a command and whether it

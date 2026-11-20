@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../comm/calls.dart';
+import '../comm/invites.dart';
 import '../comm/comm_controller.dart';
 import '../main.dart';
 import 'people.dart';
@@ -98,4 +99,76 @@ class _OneLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       FittedBox(fit: BoxFit.scaleDown, child: Text(text, maxLines: 1, softWrap: false));
+}
+
+/// Someone's invited us to a direct channel: join it, or not.
+void showInvitation(CommController comm, Invitation inv) {
+  final context = navigatorKey.currentContext;
+  if (context == null) return;
+  showDialog<void>(
+    context: context,
+    builder: (dialog) => AlertDialog(
+      title: Text('> INVITATION', style: Kc.term(16, color: Kc.green, shadows: Kc.glow(Kc.green))),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('${inv.from} invites you to the direct channel', style: const TextStyle(color: Kc.muted)),
+        const SizedBox(height: 8),
+        Row(children: [
+          const Icon(Icons.lock, color: Kc.green, size: 20),
+          const SizedBox(width: 8),
+          Flexible(child: Text(inv.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600))),
+        ]),
+        const SizedBox(height: 4),
+        Text('Frequency ${inv.channel}${inv.longRange ? ', Long Range' : ''}', style: const TextStyle(color: Kc.muted)),
+        const SizedBox(height: 12),
+        const Text("Joining switches your unit to it, and keeps it under Your channels. You won't need its passphrase.",
+            style: TextStyle(color: Kc.muted, fontSize: 13)),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Not now')),
+        FilledButton(
+          onPressed: () async {
+            Navigator.pop(dialog);
+            final messenger = messengerKey.currentState;
+            final why = await comm.joinGroup(inv.name, inv.passphrase, channel: inv.channel, longRange: inv.longRange);
+            if (why == null) await comm.setTalkTo(const TalkTarget.direct());
+            messenger?.showSnackBar(SnackBar(content: Text(why ?? 'Joined ${inv.name}')));
+          },
+          child: const Text('Join'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Pick someone to invite to [g]: those about with the app.
+Future<void> pickInvitee(BuildContext context, CommController comm, DirectGroup g) async {
+  final people = peopleOnce(comm)..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  final picked = await showModalBottomSheet<String>(
+    context: context,
+    builder: (sheet) => SafeArea(
+      child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), children: [
+        SectionHeader('Invite to ${g.name}'),
+        if (people.isEmpty)
+          const Panel(children: [PanelRow(title: 'Nobody about')])
+        else
+          Panel(color: Kc.bg, children: [
+            for (final p in people)
+              PanelRow(
+                leading: DroneAvatar(picture: p.picture, size: 36),
+                title: p.name,
+                subtitle: comm.whyNotInvite(p.id),
+                onTap: comm.whyNotInvite(p.id) == null ? () => Navigator.pop(sheet, p.id) : null,
+                trailing: [
+                  if (comm.whyNotInvite(p.id) == null) const Icon(Icons.person_add_alt, color: Kc.pink),
+                  const SizedBox(width: 8),
+                ],
+              ),
+          ]),
+      ]),
+    ),
+  );
+  if (picked == null || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final why = await comm.invite(picked, g);
+  messenger.showSnackBar(SnackBar(content: Text(why ?? 'Invitation sent to ${comm.people[picked]?.name}')));
 }

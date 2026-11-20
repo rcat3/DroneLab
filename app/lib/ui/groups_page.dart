@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../comm/board_link.dart';
 import '../comm/comm_controller.dart';
+import 'call_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -90,11 +91,18 @@ class _GroupsPageState extends State<GroupsPage> {
                       title: g.name,
                       subtitle: '${g.mine ? 'Made here' : 'Joined'} · ${_radio(g.channel, g.longRange)}${nearby(g.id)}',
                       onTap: usable && currentId != g.id ? () => joinSavedGroup(context, comm, g) : null,
-                      trailing: IconButton(
-                        tooltip: 'Delete ${g.name} from this phone',
-                        icon: const Icon(Icons.delete_outline, color: Kc.muted),
-                        onPressed: () => _delete(context, g),
-                      ),
+                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        IconButton(
+                          tooltip: 'Invite someone to ${g.name}',
+                          icon: const Icon(Icons.person_add_alt, color: Kc.pink),
+                          onPressed: () => pickInvitee(context, comm, g),
+                        ),
+                        IconButton(
+                          tooltip: 'Delete ${g.name} from this phone',
+                          icon: const Icon(Icons.delete_outline, color: Kc.muted),
+                          onPressed: () => _delete(context, g),
+                        ),
+                      ]),
                     ),
                 ]),
               if (on) ...[

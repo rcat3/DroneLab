@@ -20,6 +20,7 @@ import 'background.dart';
 import 'board_link.dart';
 import 'board_protocol.dart';
 import 'calls.dart';
+import 'invites.dart';
 import 'conversations.dart';
 import 'notifier.dart';
 import 'firmware_update.dart';
@@ -1043,14 +1044,84 @@ class CommController extends ChangeNotifier {
   }
 
   /// A call's signal, signed for them alone, over both ways that reach them.
-  void _sendCall(String personId, int op, int id) {
+  void _sendCall(String personId, int op, int id) =>
+      _sendToOne(personId, OthersCommand.callSignal(op, id));
+
+  /// A command for one person alone, signed for them, both ways that reach
+  /// them. False if neither does, or they've no key.
+  bool _sendToOne(String personId, OthersCommand what) {
     final key = _keyOf(personId);
-    if (key == null) return;
-    final cmd = newCommand(OthersCommand.callSignal(op, id)).withScope(OthersCommand.scopeOne);
+    if (key == null) return false;
+    final cmd = newCommand(what).withScope(OthersCommand.scopeOne);
     final u = serverUser(personId);
     final b = directBoard(personId);
+    final direct = b != null && b.key != null && boardTakesCommands;
     if (u != null) _toServer(mumble!, cmd, [u.session], theirKey: key);
-    if (b != null && b.key != null && boardTakesCommands) _toDirect(cmd, to: b);
+    if (direct) _toDirect(cmd, to: b);
+    return u != null || direct;
+  }
+
+  // ----- Invitations to a direct channel (invites.dart) -----
+
+  /// Someone's invited us: for the app to ask whether to join.
+  final _invitations = StreamController<Invitation>.broadcast();
+  Stream<Invitation> get invitations => _invitations.stream;
+  final Map<String, int> _invitesSeen = {};
+
+  /// The direct channel the board's on, if it's one with a passphrase kept
+  /// here, to invite others to.
+  DirectGroup? get invitableGroup {
+    final d = board.state == BoardState.connected ? boardSettings?.direct : null;
+    if (d == null || !d.keyed) return null;
+    for (final g in groups) {
+      if (g.id == d.id) return g;
+    }
+    return null;
+  }
+
+  /// Whether they can be invited: null if they can, or why not.
+  String? whyNotInvite(String personId) {
+    final name = people[personId]?.name ?? 'They';
+    if (serverUser(personId) == null && directBoard(personId) == null) return '$name is out of reach';
+    if (_keyOf(personId) == null) return "$name's app or firmware can't take invitations";
+    return null;
+  }
+
+  /// Invite them to [g]: they're asked, and join without its passphrase.
+  /// Returns why not, or null once it's gone.
+  Future<String?> invite(String personId, DirectGroup g) async {
+    final why = whyNotInvite(personId);
+    if (why != null) return why;
+    final pair = await identity?.pairKey(_keyOf(personId)!);
+    if (pair == null) return "Couldn't make a key for them";
+    final sealed = await sealInvitation(pair, g.name, g.passphrase, g.channel, g.longRange);
+    if (sealed == null) return "That channel's name and passphrase are too long to send";
+    if (!_sendToOne(personId, OthersCommand.inviteTo(sealed))) return '${people[personId]?.name} is out of reach';
+    conversations.add(personConversation(personId),
+        ConversationEntry(from: '', mine: true, kind: ConversationEntry.text, body: 'Invited to the direct channel ${g.name}'));
+    return null;
+  }
+
+  Future<void> _onInvitation(KnownPerson who, Uint8List sealed) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _invitesSeen.removeWhere((_, at) => now - at > 30000);
+    final tag = base64Encode(sealed.sublist(0, sealed.length < 12 ? sealed.length : 12));
+    if (_invitesSeen.putIfAbsent(tag, () => now) != now) return;     // the other way's copy
+    final key = who.key;
+    final pair = key == null ? null : await identity?.pairKey(key);
+    if (pair == null) return;
+    final got = await openInvitation(pair, sealed);
+    if (got == null) {
+      debugPrint('invitation from ${who.name}: not one for us');
+      return;
+    }
+    final (name, passphrase, channel, longRange) = got;
+    final c = personConversation(who.id);
+    conversations.add(c, ConversationEntry(
+        from: who.name, who: who.id, mine: false, kind: ConversationEntry.text,
+        body: 'Invited you to the direct channel $name'));
+    _notifyText(c);
+    _invitations.add(Invitation(who.id, who.name, name, passphrase, channel, longRange));
   }
 
   void _onCallSignal(KnownPerson who, Uint8List data) {
@@ -1706,6 +1777,10 @@ class CommController extends ChangeNotifier {
         if (cmd.scope == OthersCommand.scopeOne) _onCallSignal(who, Uint8List.sublistView(cmd.body, at + 1));
         return;
       }
+      if (cmd.body.length > at && cmd.body[at] == OthersCommand.invite) {
+        if (cmd.scope == OthersCommand.scopeOne) _onInvitation(who, Uint8List.sublistView(cmd.body, at + 1));
+        return;
+      }
       if (!boardTakesCommands) return;
       board.send(commandFromServer(u.name, cmd.body));
     });
@@ -2031,6 +2106,10 @@ class CommController extends ChangeNotifier {
     if (who.muted) return;
     if (h.what == Heard.call) {
       if (h.scope == OthersCommand.scopeOne) _onCallSignal(who, h.data);
+      return;
+    }
+    if (h.what == Heard.invite) {
+      if (h.scope == OthersCommand.scopeOne) _onInvitation(who, h.data);
       return;
     }
     final c = switch (h.scope) {

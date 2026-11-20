@@ -124,8 +124,10 @@ The app keeps going with the screen off, so the phone can go in a pocket.  A not
 
 - **Create a channel**: give it a name, which others nearby can see, and a passphrase, which they'll need to join.  A few unrelated words make a good passphrase.
 - **Heard nearby**: channels about, with how many units are on each.  Tap one and type its passphrase to join.
-- **Your channels**: those made or joined on this phone, to switch between.
+- **Your channels**: those made or joined on this phone, to switch between.  The pink **invite** button by each sends someone an invitation to it.
 - **Open**: back to the open channel.
+
+**Invitations** save telling someone the passphrase.  Invite them from the *Your channels* list, or from their picture (**Invite to** the channel you're on), and their app asks *Join?*, showing the channel and its frequency; joining switches their unit to it and keeps it under their *Your channels*.  The invitation is sealed with a key only your two identities share, so nobody else, the server included, can read the passphrase in it.  They need to be within reach to get it: on the server, or on the same direct channel as you (the open channel will do), as units on different direct channels can't hear each other.  Both of you need this release of the app, and over direct mode, of the firmware.
 
 Each channel has its radio frequency and range setting; the details are in [Channels](../features/comms.md#channels) and [Frequencies and Long Range](../features/comms.md#frequencies-and-long-range).
 
