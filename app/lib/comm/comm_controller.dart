@@ -906,11 +906,16 @@ class CommController extends ChangeNotifier {
   /// the server or nearby. Null if they can, or why not.
   String? whyNotCall(String personId) {
     final name = people[personId]?.name ?? 'They';
-    if (_keyOf(personId) == null) return "$name can't take calls: their app needs updating";
     if (serverUser(personId) == null && directBoard(personId) == null) return '$name is out of reach';
+    if (isPlainMumble(personId)) return null;     // a whisper line
+    if (_keyOf(personId) == null) return "$name can't take calls: their unit's firmware needs updating";
     if (identity == null) return "Calls need this phone's identity, which couldn't be made";
     return null;
   }
+
+  /// Someone on the server with plain Mumble, not the app: no key of
+  /// theirs to sign for, so no ringing; a call with them is a whisper line.
+  bool isPlainMumble(String personId) => _keyOf(personId) == null && serverUser(personId) != null;
 
   /// Call someone: their app rings, and talking goes to them once they
   /// answer. Returns why not, or null.
@@ -924,6 +929,14 @@ class CommController extends ChangeNotifier {
     final why = whyNotCall(personId);
     if (why != null) return why;
     final now = DateTime.now().millisecondsSinceEpoch;
+    if (isPlainMumble(personId)) {
+      // Their Mumble can't ring: the line's open at once, whispered
+      calls[personId] = Call(personId, 0, CallState.connected, outgoing: true, nowMs: now, plain: true);
+      _clearMissed(personId);
+      _tone(_callTones.connected());
+      _goToCall(personId);
+      return null;
+    }
     final call = calls[personId] = Call(personId, Random().nextInt(0x7FFFFFFF), CallState.calling, outgoing: true, nowMs: now)
       ..lastSentMs = now;
     _clearMissed(personId);

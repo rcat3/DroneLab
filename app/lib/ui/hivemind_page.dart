@@ -314,15 +314,22 @@ class _PersonRow extends StatelessWidget {
       messenger.showSnackBar(SnackBar(content: Text(why)));
       return;
     }
+    final plain = comm.isPlainMumble(p.id);
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
-        title: Text('Call ${p.name}?'),
-        content: const Text('Their app rings. Once they answer, you hear only each other, and your talking goes to them.'),
+        title: Text(plain ? 'Talk to ${p.name} privately?' : 'Call ${p.name}?'),
+        content: Text(plain
+            ? "${p.name} uses Mumble, which doesn't ring. Your talking is whispered to them alone, and you hear "
+                'only what they whisper to you. To answer you alone, they set up a Whisper shortcut to your name '
+                "in Mumble's Settings, Shortcuts."
+            : 'Their app rings. Once they answer, you hear only each other, and your talking goes to them.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('Cancel')),
           FilledButton.icon(
-              onPressed: () => Navigator.pop(dialog, true), icon: const Icon(Icons.call), label: const Text('Call')),
+              onPressed: () => Navigator.pop(dialog, true),
+              icon: Icon(plain ? Icons.record_voice_over : Icons.call),
+              label: Text(plain ? 'Talk' : 'Call')),
         ],
       ),
     );
@@ -345,7 +352,9 @@ class _PersonRow extends StatelessWidget {
       CallState.ringing => 'CALLING YOU · TAP TO ANSWER',
       CallState.connected => toUs
           ? 'IN CALL · TALKING'
-          : call!.theyHold
+          : call!.plain
+              ? (selected ? 'IN CALL · MUMBLE WHISPER' : 'IN CALL · ON HOLD')
+          : call.theyHold
               ? 'IN CALL · STEPPED AWAY'
               : selected
                   ? 'IN CALL'

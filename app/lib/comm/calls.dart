@@ -33,6 +33,7 @@ class Call {
   final String personId;
   final int id;
   final bool outgoing;
+  final bool plain;         // with someone on plain Mumble: a whisper line, no signals
   CallState state;
   final int startedMs;
   int lastHeardMs;          // their last signal
@@ -40,7 +41,7 @@ class Call {
   int? theyHoldMs;          // they're away: when they last said so
   bool holding = false;     // we're away, and have said so
   int? lostMs;              // when they went out of reach
-  Call(this.personId, this.id, this.state, {required this.outgoing, required int nowMs})
+  Call(this.personId, this.id, this.state, {required this.outgoing, required int nowMs, this.plain = false})
       : startedMs = nowMs,
         lastHeardMs = nowMs;
 

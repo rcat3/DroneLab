@@ -33,6 +33,7 @@ void showIncomingCall(CommController comm, String personId) {
         final busyWith = comm.inCallWith;
         final other = busyWith == null || busyWith == personId ? null : comm.people[busyWith]?.name;
         return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           backgroundColor: Kc.panel,
           shape: RoundedRectangleBorder(
               side: const BorderSide(color: Kc.green), borderRadius: BorderRadius.circular(16)),
@@ -51,26 +52,26 @@ void showIncomingCall(CommController comm, String personId) {
             Row(children: [
               Expanded(
                 child: FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: Kc.red, foregroundColor: Colors.white),
+                  style: _button(Kc.red),
                   onPressed: () {
                     comm.endCall(personId);
                     Navigator.of(dialog).pop();
                   },
                   icon: const Icon(Icons.call_end),
-                  label: const Text('Decline'),
+                  label: const _OneLine('Decline'),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: Kc.darkGreen, foregroundColor: Colors.white),
+                  style: _button(Kc.darkGreen),
                   onPressed: () {
                     comm.answerCall(personId);
                     appTab.value = tabVoice;
                     Navigator.of(dialog).pop();
                   },
                   icon: const Icon(Icons.call),
-                  label: const Text('Answer'),
+                  label: const _OneLine('Answer'),
                 ),
               ),
             ]),
@@ -81,4 +82,20 @@ void showIncomingCall(CommController comm, String personId) {
   ).whenComplete(() {
     if (_showing == personId) _showing = null;
   });
+}
+
+/// Room for the words on a narrow phone: less padding than usual.
+ButtonStyle _button(Color c) => FilledButton.styleFrom(
+    backgroundColor: c,
+    foregroundColor: Colors.white,
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12));
+
+/// A button's word, on one line, made smaller rather than broken.
+class _OneLine extends StatelessWidget {
+  final String text;
+  const _OneLine(this.text);
+
+  @override
+  Widget build(BuildContext context) =>
+      FittedBox(fit: BoxFit.scaleDown, child: Text(text, maxLines: 1, softWrap: false));
 }

@@ -81,6 +81,8 @@ Calls ring in your headphones, as you'll nearly always have them on, with the ap
 
 Calls need both of you on this release of the app, and over direct mode, the unit's firmware from this release too.
 
+**Someone on plain Mumble** (a desktop or phone Mumble app, not DroneLab) can't ring.  Tapping them asks *Talk to them privately?* instead: say *Talk* and the line's open at once, *IN CALL · MUMBLE WHISPER*.  Your talking is whispered to them alone, which their Mumble shows as a whisper, and you hear only what they whisper to you.  For them to answer you alone, they set up a shortcut in Mumble's *Settings*, *Shortcuts*: *Whisper/Shout*, to you as a user; otherwise their answer goes to the channel, which you don't hear while on the line.  There are no hold beeps or missed calls with them, as their Mumble can't take those.
+
 ### Ways to talk
 
 Pick whichever suits you.  They all talk to whoever you've picked.
