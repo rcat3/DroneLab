@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../comm/app_profile.dart';
 import '../comm/board_link.dart';
 import '../comm/comm_controller.dart';
 import 'status_strip.dart';
@@ -162,6 +163,7 @@ class _AboutPageState extends State<AboutPage> {
                 _Fact('Version', _app?.version ?? '...', onTap: _versionTapped),
                 _Fact('OS', _os ?? '...'),
                 if ((_phone ?? '').isNotEmpty) _Fact('Device', _phone!),
+                if (AppProfile.name != null) _Fact('Profile', AppProfile.name!),
               ]),
               const SectionHeader('Display unit'),
               Panel(children: [

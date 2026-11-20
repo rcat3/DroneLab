@@ -12,10 +12,11 @@ G_DECLARE_FINAL_TYPE(MyApplication,
 /**
  * my_application_new:
  *
- * Creates a new Flutter-based application.
+ * Creates a new Flutter-based application, as the profile [profile]
+ * (null for the usual one).
  *
  * Returns: a new #MyApplication.
  */
-MyApplication* my_application_new();
+MyApplication* my_application_new(const char* profile);
 
 #endif  // FLUTTER_MY_APPLICATION_H_

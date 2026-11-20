@@ -10,8 +10,7 @@ library;
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:path_provider/path_provider.dart';
-
+import 'app_profile.dart';
 import 'audio_out.dart';
 import 'board_protocol.dart';
 import 'jitter.dart';
@@ -30,7 +29,7 @@ const _wavHeader = 44;
 
 /// Where recordings are kept: the app's own files, shared from there.
 Future<Directory> recordingsDir() async {
-  final dir = Directory('${(await getApplicationDocumentsDirectory()).path}/Recordings');
+  final dir = Directory('${(await AppProfile.files()).path}/Recordings');
   await dir.create(recursive: true);
   return dir;
 }

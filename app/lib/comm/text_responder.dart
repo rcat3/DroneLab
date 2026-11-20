@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'app_profile.dart';
 import 'board_link.dart';
 import 'comm_controller.dart';
 import 'conversations.dart';
@@ -282,6 +283,8 @@ class TextResponder {
 /// that only its user can reach, in their runtime folder:
 ///
 ///   echo /nearby | nc -U -q 5 $XDG_RUNTIME_DIR/dronelab-dev.sock
+///
+/// (dronelab-dev-NAME.sock for the profile NAME, app_profile.dart.)
 class DevRemote {
   static const _channel = MethodChannel('dronelab/dev');
 
@@ -299,7 +302,7 @@ class DevRemote {
   static Future<void> _listenOnSocket(CommController comm) async {
     final runtime = Platform.environment['XDG_RUNTIME_DIR'];
     if (runtime == null || runtime.isEmpty) return;   // nowhere private to put it
-    final path = '$runtime/dronelab-dev.sock';
+    final path = '$runtime/dronelab-dev${AppProfile.suffix}.sock';
     final address = InternetAddress(path, type: InternetAddressType.unix);
     try {
       if (await FileSystemEntity.type(path) == FileSystemEntityType.unixDomainSock) {

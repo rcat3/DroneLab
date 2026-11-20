@@ -4,6 +4,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'dart:io' show Platform;
 
+import 'comm/app_profile.dart';
 import 'comm/comm_controller.dart';
 import 'comm/linux_pairing.dart';
 import 'comm/release_check.dart';
@@ -29,7 +30,8 @@ final navigatorKey = GlobalKey<NavigatorState>();
 /// For saying what happened to a call, wherever the app is.
 final messengerKey = GlobalKey<ScaffoldMessengerState>();
 
-void main() {
+void main(List<String> args) {
+  AppProfile.init(args);
   WidgetsFlutterBinding.ensureInitialized();
   if (defaultTargetPlatform == TargetPlatform.android) FlutterForegroundTask.initCommunicationPort();
   final comm = CommController();

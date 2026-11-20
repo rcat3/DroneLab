@@ -50,10 +50,30 @@ Forgetting it while it's connected doesn't stick.
 - Your identity is kept in `~/.local/share/io.github.rcat3.dronelab/identity-seed`,
   readable only by you. Back it up from the app (Setup, Your identity) like on
   a phone.
+- Your settings, conversations, photos and recordings are kept beside it,
+  in the same folder.
 - With the developer options shown in the app, the developer commands come
   over a socket in place of adb:
 
       echo /nearby | nc -U -q 5 $XDG_RUNTIME_DIR/dronelab-dev.sock
+
+## Two at once
+
+Each copy of the app is a person, so a second one running beside the first
+needs a profile of its own, or the two are the same person, signed in
+twice, and get in each other's way:
+
+    DroneLab/dronelab --profile 2
+
+A profile (up to 32 letters, digits and `_`) has its own identity,
+settings, conversations and recordings, in
+`~/.local/share/io.github.rcat3.dronelab.profile_2`, and its window says
+*DroneLab (2)*. It's a new person the first time: set it up as you would a
+new phone, with a unit of its own (another real one, or *Start a virtual
+unit*, which picks the next free one): the first app's virtual unit is
+listed as in use, as a unit takes one app at a time. Its developer socket is
+`dronelab-dev-2.sock`. Without `--profile` (or with `--profile default`)
+it's the usual one.
 
 ## Virtual units
 

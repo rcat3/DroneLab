@@ -22,6 +22,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pointycastle/export.dart' as pc;
 
+import 'app_profile.dart';
+
 class Identity {
   static const seedLength = 32;
   static const keyLength = 32;
@@ -364,12 +366,14 @@ abstract class SeedStore {
   /// The phone's secure storage; on Linux, a file only its user can read
   /// ([FileSeedStore]), as a keyring isn't always there to keep it (a
   /// Raspberry Pi with no desktop), and keeping it one place one day and
-  /// another the next would make a second identity.
+  /// another the next would make a second identity. The folder's the
+  /// profile's own (app_profile.dart); only the usual one's seed was ever in
+  /// the keyring, so only it looks there.
   factory SeedStore.standard() {
     const secure = SecureSeedStore();
     if (!Platform.isLinux) return secure;
     return FileSeedStore(() async => File('${(await getApplicationSupportDirectory()).path}/identity-seed'),
-        moveFrom: secure);
+        moveFrom: AppProfile.name == null ? secure : null);
   }
 }
 
