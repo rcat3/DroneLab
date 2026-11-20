@@ -1,6 +1,6 @@
 # Installing the App
 
-The DroneLab app is for **Android** phones and tablets.  It isn't on the Play Store: you install it from a file on the project's [releases page](https://github.com/rcat3/DroneLab/releases/latest).  To build it yourself instead, see [`app/README.md`](../../app/README.md).
+The DroneLab app is for **Android** phones and tablets, and **Linux** computers (a desktop, a laptop, or a Raspberry Pi 4 or 5: see [On a Linux computer](#on-a-linux-computer)).  It isn't on the Play Store: you install it from a file on the project's [releases page](https://github.com/rcat3/DroneLab/releases/latest).  To build it yourself instead, see [`app/README.md`](../../app/README.md).
 
 **No Android phone?**  iPhones, and any phone without the app, can still run the unit from a web browser, through the unit's own [WiFi Hotspot Remote](../features/phone-remote.md).  That covers what's on the display, the settings, the Lovense toys, the voice effect, sounds and the Terminal; it doesn't cover talking to the hive ([Voice](voice.md)), [texting](text.md) others, or recording, which need the app.
 
@@ -30,6 +30,25 @@ Phones guard against apps from outside the Play Store, and a few of their protec
 - **Samsung Auto Blocker** (Samsung phones and tablets, *Settings* › *Security and privacy* › *Auto Blocker*) blocks every app that isn't from the Galaxy Store or the Play Store, without asking.  If tapping the file does nothing, or says it's blocked, switch Auto Blocker off, install the app, and switch it back on: the app keeps working with it on.
 - **Advanced Protection** (on some phones with Android 16 and later) blocks apps from outside the Play Store altogether.  It has to be off while you install.
 - **Work phones** and phones with parental controls may not allow it at all: that's up to whoever manages the phone.
+
+## On a Linux computer
+
+The same app, for a computer in place of a phone: a desktop or laptop on Ubuntu 22.04 or newer (or Debian 12 and the like), or a Raspberry Pi 4 or 5 on 64-bit Raspberry Pi OS.  It works with a real unit over the computer's Bluetooth, and it comes with a **virtual unit**, the unit's firmware running on the computer with its round screen in a window, for using DroneLab, or trying it out, without any hardware.
+
+1. From the [latest release](https://github.com/rcat3/DroneLab/releases/latest), download `DroneLab-linux-x64.tar.gz` for an ordinary PC, or `DroneLab-linux-arm64.tar.gz` for a Raspberry Pi.
+2. Unpack it anywhere, and start `dronelab` in the `DroneLab` folder:
+   ```
+   tar xzf DroneLab-linux-x64.tar.gz
+   DroneLab/dronelab
+   ```
+   It needs these, which a desktop usually has already: `sudo apt install libgtk-3-0 libopus0 libsecret-1-0 libx11-6 bluez`.
+3. Tap the status strip at the top, then *Find*.  Pick your unit, and type in the code it shows, as on a phone; or tap *Start a virtual unit*.
+
+The virtual unit hears through the computer's microphone and plays through its speakers: use headphones, or a voice effect played out loud feeds back.  Closing its window switches it off; the app starts it again next time.  Virtual units reach each other over the local network, but not real units over the radio: for real direct comms, connect a real unit.
+
+To run two at once, as two people, start the second with `DroneLab/dronelab --profile 2`: it's a separate person, with its own identity, settings and unit.  More in the [`README.md`](../../app/linux/README.md) in the `DroneLab` folder.
+
+To update, unpack the new release over the old folder: the settings and identity are kept elsewhere, in `~/.local/share/io.github.rcat3.dronelab`.
 
 ## Updating
 
