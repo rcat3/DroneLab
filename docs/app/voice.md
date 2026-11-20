@@ -38,7 +38,9 @@ The Voice tab is laid out as the [Text](text.md) tab is:
 
 Under each name it says how they're linked, or what they're doing:
 
-- **TALKING**, with their avatar lit up green: you're hearing them.  **TALKING TO YOU**: they're talking to you alone.
+- **TALKING**, with their avatar lit up green: they're talking.  You hear them only on the channel you've picked (see [Who you hear](#who-you-hear)).
+- **CALLING...**, **CALLING YOU · TAP TO ANSWER**, **IN CALL**: a [call](#calls) with them.  **IN CALL · ON HOLD**: you've stepped away to talk somewhere else; **IN CALL · STEPPED AWAY**: they have.
+- **Missed call** and the time, in red: they called and you didn't answer.  It goes once you call them back, or they call and you answer.
 - **Server**, **Direct**, or both: how they can be reached.  Units over direct mode have signal bars for how well they're heard.
 - **Muted**: they've muted themselves, on the server.
 - **Muted by you**: you've muted them.
@@ -53,12 +55,29 @@ Tap someone's picture for more: how they're linked, their signal and when they w
 
 ### Where your voice goes
 
-**Tap a channel or a person** to talk to them: the row turns pink, with a mic, and the line over the talk button says who, *Talking to Unit 7 alone, direct*.  The app keeps it for next time.
+**Tap a channel or a person** to talk to them: the row turns pink, with a mic, and the line over the talk button says who, *Talking to DroneLab Comms*.  Tapping any channel in the lists under *Channels* moves you there and talks to it, all at once.  The app keeps it for next time.
 
 - **A channel** goes its own way: your server channel over the server, your direct channel over direct.
-- **One person** hears you alone.  The app picks the way: direct if their unit's nearby, as it's quicker and needs no signal, else over the server.  Over direct, it's encrypted with a key only your two units have, which the apps work out from your two [identities](#setup-your-identity), so nobody needs to swap a passphrase, and others on the channel can't listen in.  It works with units on the same direct channel, running firmware from this release on; on the server, with anyone.
+- **One person** hears you alone, once you're in a [call](#calls) with them.  The app picks the way: direct if their unit's nearby, as it's quicker and needs no signal, else over the server.  Over direct, it's encrypted with a key only your two units have, which the apps work out from your two [identities](#setup-your-identity), so nobody needs to swap a passphrase, and others on the channel can't listen in.  It works with units on the same direct channel, running firmware from this release on; on the server, with anyone.
 
 **When nobody would hear you**, because the channel's empty or the one you picked is out of reach, they stay picked, and the talk button turns grey and says *NOBODY TO HEAR*.  Talking then doesn't go anywhere else: press to talk and you hear a **low buzz** in your headphones, as on a trunked radio, so you know without looking.  It's the same for the unit's own talk button.  Once they're back, the button lights up again.
+
+### Who you hear
+
+You hear only what you're talking to, so you always know who you're answering: your server channel's voices when that's picked, your direct channel's when that is, and in a call, only the one you're calling.  The others still show *TALKING* on their rows, so you can see something's going on elsewhere.
+
+### Calls
+
+Talking to one person alone is a call.  **Tap someone** and the app asks *Call them?*: their app rings, with their name and avatar and *Answer* and *Decline*, and the line over your talk button says *Calling...* while it rings at theirs.  Once they answer, you hear only each other, and your talking goes to them alone.  Nobody answering in 45 seconds gives up, and they see a missed call.
+
+The red **hang-up button** on their row ends the call, or stops calling, or declines one ringing.  Tap a channel while in a call and the call stays up, **on hold**: they hear two short beeps every few seconds until you come back, by tapping them again, or one of you hangs up.  A call ends by itself if they're out of reach for a minute.
+
+Calls ring on the phone with its ringtone, from the *Calls* notification, and in your headphones too, so you hear it under the mask.  In Setup:
+
+- **Calls**: *Ring in headphones* on or off, and the **Headphone ring**: *Classic*, *Chirp* or *Pulse*, with a play button to hear it.
+- **Notifications**: *Calls* and *Missed calls* on or off; the tune button by *Calls* is where to pick the phone's ringtone.
+
+Calls need both of you on this release of the app, and over direct mode, the unit's firmware from this release too.
 
 ### Ways to talk
 
@@ -113,7 +132,7 @@ The status strip's grey down arrow means someone's talking on *another* direct c
 In Setup, behind the gear, while the unit's connected:
 
 - **Talk with**: *PUSH TO TALK*, while a button's held, or *VOICE*, whenever the unit hears you speak (see [Ways to talk](#ways-to-talk)).
-- **HiveMind voice**: the voice effect the hive hears: *Same as speaker*, or any of the [voice effects](../features/voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.  A low-profile unit has no speaker, so its first choice is *As set on the unit*: the effect picked on its own Voice page.
+- **HiveMind voice**: the voice effect the hive hears: *Same as speaker*, or any of the [voice effects](../features/voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.  A low-profile unit has no speaker, so it has one effect, set here or on the unit's *HiveMind Voice Effect* page, which stay the same.
 - **Mute speaker on Tx**: the unit's speaker goes quiet while you're talking to the hive, so those around you don't hear what goes to it.  Not shown for a low-profile unit, which has no speaker.
 - **Talk tones**: two short notes up in your headphones as push to talk starts, and two down as it ends, so you know it took.  Not in voice mode, which starts at every word.  The low buzz for [nobody hearing you](#where-your-voice-goes) sounds either way.
 - **Show HiveMind on the board while**: the unit's display switches to its HiveMind screen by itself when you *TALK*, when you *HEAR* someone, or *BOTH*, and goes back to what it was showing after.  *NEVER* leaves the display alone.

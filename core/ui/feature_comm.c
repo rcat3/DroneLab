@@ -1092,7 +1092,10 @@ static bool build(ui_feature_t *feature)
     }
     add_status_page(feature);
     add_setup_page(feature);
-    add_voice_page(feature);
+    if (settings_speaker_fitted())
+    {
+        add_voice_page(feature);    // without a speaker, the Voice page's effect is HiveMind's
+    }
     if (direct_available())
     {
         add_direct_page(feature);

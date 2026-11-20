@@ -35,7 +35,7 @@ The *Seal Test* page, the last in the Voice feature, checks how well the housing
 
 The remote's API can start it too, with `POST /api/seal?start=1` (`start=0` stops it), and `/api/state` has its progress and result under `seal`.  The board's serial log prints each result in full.
 
-Playing the effect out loud needs the [speaker model](../build/speaker-housing.md).  On the low-profile model, which has no speaker (see [Model](settings.md#model)), only the *Voice Effect* page is there, for the effect [HiveMind](comms.md) sends your voice through.  The [other boards](../other-boards.md) the firmware runs on don't have them.
+Playing the effect out loud needs the [speaker model](../build/speaker-housing.md).  On the low-profile model, which has no speaker (see [Model](settings.md#model)), only the *Voice Effect* page is there, titled *HiveMind Voice Effect*: it's the effect [HiveMind](comms.md) sends your voice through, the same setting as *HiveMind voice* in the app, and HiveMind's own *HiveMind Voice* page isn't there.  On the speaker model the page is titled *Speaker Voice Effect*, as HiveMind has its own.  The [other boards](../other-boards.md) the firmware runs on don't have them.
 
 The presets are the same as the effects in `tools/voice_monitor.py`, so they can be tried and tuned on a computer first.  The pitch-following presets add about 15-20 ms of delay, the others less.
 

@@ -12,6 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class Notifier {
   static const textsChannel = 'texts';
   static const batteryChannel = 'battery';
+  static const callsChannel = 'calls';
+  static const missedChannel = 'missed_calls';
   static const _batteryId = 1;
   static const _native = MethodChannel('dronelab/notifications');
 
@@ -22,6 +24,13 @@ class Notifier {
   /// Texts from others, and the unit's battery running low.
   bool texts = true;
   bool battery = true;
+  bool calls = true;
+  bool missed = true;
+
+  /// A call's notification, tapped or answered from it: what (null for the
+  /// notification itself, 'answer' or 'decline') and who's calling.
+  final _callActions = StreamController<(String?, String)>.broadcast();
+  Stream<(String?, String)> get callActions => _callActions.stream;
 
   /// A conversation's key, as its notification is tapped.
   final _opens = StreamController<String>.broadcast();
@@ -34,12 +43,18 @@ class Notifier {
     _prefs = await SharedPreferences.getInstance();
     texts = _prefs!.getBool('notifyTexts') ?? true;
     battery = _prefs!.getBool('notifyBattery') ?? true;
+    calls = _prefs!.getBool('notifyCalls') ?? true;
+    missed = _prefs!.getBool('notifyMissed') ?? true;
     try {
       await _plugin.initialize(
         settings: const InitializationSettings(android: AndroidInitializationSettings('ic_notify')),
         onDidReceiveNotificationResponse: (r) {
           final key = r.payload;
-          if (key != null && key.isNotEmpty) _opens.add(key);
+          if (key != null && key.startsWith(_callPrefix)) {
+            _callActions.add((r.actionId, key.substring(_callPrefix.length)));
+          } else if (key != null && key.isNotEmpty) {
+            _opens.add(key);
+          }
         },
       );
       final launch = await _plugin.getNotificationAppLaunchDetails();
@@ -52,6 +67,15 @@ class Notifier {
           description: 'Texts from others in the hive', importance: Importance.high));
       await android?.createNotificationChannel(const AndroidNotificationChannel(batteryChannel, 'Unit battery low',
           description: "Your unit's battery is running low", importance: Importance.defaultImportance));
+      // Calls ring with the phone's ringtone, until they're answered or
+      // given up on; the sound's changed in Android's settings for it
+      await android?.createNotificationChannel(const AndroidNotificationChannel(callsChannel, 'Calls',
+          description: 'Someone in the hive calling you',
+          importance: Importance.max,
+          sound: UriAndroidNotificationSound('content://settings/system/ringtone'),
+          audioAttributesUsage: AudioAttributesUsage.notificationRingtone));
+      await android?.createNotificationChannel(const AndroidNotificationChannel(missedChannel, 'Missed calls',
+          description: "Calls you didn't answer", importance: Importance.high));
       _ready = true;
     } catch (e) {
       debugPrint('Notifications unavailable: $e');   // none, then
@@ -142,6 +166,74 @@ class Notifier {
   }
 
   Future<void> clearBattery() => _cancel(_batteryId);
+
+  static const _callPrefix = 'call:';
+  static int _callId(String personId) => 3000 + (personId.hashCode & 0xFFFFFF);
+  static int _missedId(String personId) => 0x2000000 + (personId.hashCode & 0xFFFFFF);
+
+  Future<void> setCalls(bool on) async {
+    calls = on;
+    await _prefs?.setBool('notifyCalls', on);
+  }
+
+  Future<void> setMissed(bool on) async {
+    missed = on;
+    await _prefs?.setBool('notifyMissed', on);
+  }
+
+  /// Someone's calling: rings until it's answered, turned down, or they
+  /// give up (insistent), with Answer and Decline.
+  Future<void> showCall(String personId, String name, Uint8List? avatar) async {
+    if (!_ready || !calls) return;
+    try {
+      await _plugin.show(
+        id: _callId(personId),
+        title: name,
+        body: 'Calling you',
+        payload: '$_callPrefix$personId',
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(callsChannel, 'Calls',
+              channelDescription: 'Someone in the hive calling you',
+              importance: Importance.max,
+              priority: Priority.max,
+              category: AndroidNotificationCategory.call,
+              ongoing: true,
+              autoCancel: false,
+              audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+              additionalFlags: Int32List.fromList([4]),     // FLAG_INSISTENT: rings till it's seen to
+              largeIcon: avatar == null ? null : ByteArrayAndroidBitmap(avatar),
+              actions: const [
+                AndroidNotificationAction('decline', 'Decline', showsUserInterface: true),
+                AndroidNotificationAction('answer', 'Answer', showsUserInterface: true),
+              ]),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> clearCall(String personId) => _cancel(_callId(personId));
+
+  /// A call that wasn't answered.
+  Future<void> showMissed(String personId, String name, int count, Uint8List? avatar) async {
+    if (!_ready || !missed) return;
+    try {
+      await _plugin.show(
+        id: _missedId(personId),
+        title: count == 1 ? 'Missed call' : '$count missed calls',
+        body: name,
+        payload: '$_callPrefix$personId',
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(missedChannel, 'Missed calls',
+              channelDescription: "Calls you didn't answer",
+              importance: Importance.high,
+              category: AndroidNotificationCategory.missedCall,
+              largeIcon: avatar == null ? null : ByteArrayAndroidBitmap(avatar)),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> clearMissed(String personId) => _cancel(_missedId(personId));
 
   Future<void> _cancel(int id) async {
     try {

@@ -110,7 +110,11 @@ class ChannelLists extends StatelessWidget {
         selected: here,
         open: kids.isEmpty ? null : open,
         onToggle: () => _toggle(key),
-        onTap: here ? null : () => comm.joinChannel(id),
+        // Move there, and talk to it
+        onTap: () {
+          if (!here) comm.joinChannel(id);
+          comm.setTalkTo(const TalkTarget.server());
+        },
         semantics: '${m.channels[id]}, $n here${here ? ', you are here' : ''}',
         trailing: n == 0 ? null : _Count(n),
       ));
@@ -152,7 +156,10 @@ class ChannelLists extends StatelessWidget {
         title: 'Open channel',
         locked: false,
         selected: !d.keyed,
-        onTap: d.keyed ? comm.joinOpenGroup : null,
+        onTap: () {
+          if (d.keyed) comm.joinOpenGroup();
+          comm.setTalkTo(const TalkTarget.direct());
+        },
         semantics: 'Open channel, anyone nearby can hear it${!d.keyed ? ', you are here' : ''}',
       ),
     ];
@@ -179,7 +186,10 @@ class ChannelLists extends StatelessWidget {
               title: g.name,
               locked: true,
               selected: currentId == g.id,
-              onTap: currentId == g.id ? null : () => joinSavedGroup(context, comm, g),
+              onTap: () {
+                if (currentId != g.id) joinSavedGroup(context, comm, g);
+                comm.setTalkTo(const TalkTarget.direct());
+              },
               semantics: '${g.name}${currentId == g.id ? ', you are here' : ''}',
               trailing: nearby(g.id),
             ),
@@ -191,7 +201,10 @@ class ChannelLists extends StatelessWidget {
               title: h.name,
               locked: true,
               selected: currentId == h.id,
-              onTap: currentId == h.id ? null : () => joinHeardGroup(context, comm, h),
+              onTap: () {
+                if (currentId != h.id) joinHeardGroup(context, comm, h);
+                comm.setTalkTo(const TalkTarget.direct());
+              },
               semantics: '${h.name}, ${h.boards} nearby, needs its passphrase',
               trailing: _Count(h.boards),
             ),

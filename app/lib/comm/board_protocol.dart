@@ -190,7 +190,7 @@ class DirectAvatarPiece {
 /// What someone sent the board, passed on as it came (commVersion 8): a
 /// text, or a command for its Terminal or Lovense devices, done or not.
 class Heard {
-  static const text = 0, terminal = 1, lovense = 2, textPart = 3;    // comm_heard_t
+  static const text = 0, terminal = 1, lovense = 2, textPart = 3, call = 4;    // comm_heard_t
   final bool direct;        // heard over direct comms, not the server
   final bool done;          // a command: taken, by the permission for its kind
   final int what;
@@ -474,6 +474,7 @@ class OthersCommand {
   static const clear = 0x11;
   static const text = 0x20;
   static const textPart = 0x21;
+  static const call = 0x30;
   static const allMotors = 0xFF;
 
   /// Who it's for, as the receivers see it: everyone who can hear us, the
@@ -566,6 +567,10 @@ class OthersCommand {
 
   /// Empty their Terminal.
   static OthersCommand clearTerminal() => _make([clear]);
+
+  /// A call's signal (calls.dart): what (CallOp) and the call's id.
+  static OthersCommand callSignal(int op, int id) =>
+      _make([call, op & 0xFF, id & 0xFF, (id >> 8) & 0xFF, (id >> 16) & 0xFF, (id >> 24) & 0xFF]);
 
   /// A text, for their app (over direct comms: the server has its own): in
   /// one command, or if it's too long for one, in parts, with [id] the same

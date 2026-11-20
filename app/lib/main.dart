@@ -4,6 +4,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'comm/comm_controller.dart';
 import 'comm/release_check.dart';
 import 'ui/firmware_ui.dart';
+import 'ui/call_ui.dart';
 import 'ui/hivemind_page.dart';
 import 'ui/people.dart';
 import 'ui/record_page.dart';
@@ -19,11 +20,32 @@ final releaseCheck = ReleaseCheck();
 /// For opening a conversation from its notification, wherever the app is.
 final navigatorKey = GlobalKey<NavigatorState>();
 
+/// For saying what happened to a call, wherever the app is.
+final messengerKey = GlobalKey<ScaffoldMessengerState>();
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterForegroundTask.initCommunicationPort();
   final comm = CommController();
   comm.notifier.opens.listen((key) => _openConversation(comm, key));
+  comm.incomingCalls.listen((call) => showIncomingCall(comm, call.personId));
+  comm.callNotices.listen((text) => messengerKey.currentState?.showSnackBar(SnackBar(content: Text(text))));
+  comm.notifier.callActions.listen((a) {
+    final (action, personId) = a;
+    if (action == 'decline') {
+      comm.endCall(personId);
+      return;
+    }
+    appTab.value = tabVoice;
+    navigatorKey.currentState?.popUntil((r) => r.isFirst);
+    if (action == 'answer') {
+      comm.answerCall(personId);
+    } else if (comm.calls[personId] != null) {
+      showIncomingCall(comm, personId);
+    } else {
+      comm.clearMissed(personId);     // a missed call's notification: seen
+    }
+  });
   comm.init().then((_) {
     // Started by tapping a text's notification: to it, once there's a screen
     final key = comm.notifier.launchedWith;
@@ -52,6 +74,7 @@ class DroneLabApp extends StatelessWidget {
     return MaterialApp(
       title: 'DroneLab',
       navigatorKey: navigatorKey,
+      scaffoldMessengerKey: messengerKey,
       theme: Kc.theme(),
       darkTheme: Kc.theme(),
       themeMode: ThemeMode.dark,

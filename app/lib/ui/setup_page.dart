@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
+import '../comm/calls.dart';
 import '../comm/comm_controller.dart';
 import '../comm/notifier.dart';
 import 'about_page.dart';
@@ -91,20 +92,22 @@ class SetupPage extends StatelessWidget {
                   ),
                   if (settings.voices.isNotEmpty)
                     Explained(
-                      help: 'The voice effect heard by the hive.',
+                      help: settings.hasSpeaker
+                          ? 'The voice effect heard by the hive.'
+                          : "The voice effect heard by the hive: the same as the unit's Voice Effect page, "
+                              'as there is no speaker.',
                       builder: (context, info) => PanelRow(
                         title: 'HiveMind voice',
                         trailing: [
                           info,
                           DropdownButton<int>(
-                            value: settings.voice,
+                            // Without a speaker it's the unit's one effect, never "the speaker's"
+                            value: settings.hasSpeaker || settings.voice >= 0 ? settings.voice : 0,
                             underline: const SizedBox.shrink(),
                             dropdownColor: Kc.raised,
                             onChanged: (v) => comm.setBoardSettings(voice: v),
                             items: [
-                              // Without a speaker, the unit's own Voice page sets it
-                              DropdownMenuItem(
-                                  value: -1, child: Text(settings.hasSpeaker ? 'Same as speaker' : 'As set on the unit')),
+                              if (settings.hasSpeaker) const DropdownMenuItem(value: -1, child: Text('Same as speaker')),
                               for (var i = 0; i < settings.voices.length; i++)
                                 DropdownMenuItem(value: i, child: Text(settings.voices[i])),
                             ],
@@ -147,6 +150,8 @@ class SetupPage extends StatelessWidget {
                     ]),
                   ),
                 ]),
+              const SectionHeader('Calls'),
+              _CallsPanel(comm: comm),
               const SectionHeader('Your identity'),
               _IdentityPanel(comm: comm),
               const SectionHeader('Notifications'),
@@ -311,7 +316,51 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
         );
     return Panel(children: [
       row('Text messages', 'Every text that comes in. Tap one to read it', Notifier.textsChannel, n.texts, n.setTexts),
+      row('Calls', 'Ring when someone calls. The ringtone is set here', Notifier.callsChannel, n.calls, n.setCalls),
+      row('Missed calls', "Calls you didn't answer", Notifier.missedChannel, n.missed, n.setMissed),
       row('Unit battery low', 'At 15%, unless it\'s charging', Notifier.batteryChannel, n.battery, n.setBattery),
+    ]);
+  }
+}
+
+/// Calls' ringing in the headphones: on or off, and which tone. The
+/// phone's own ring is the Calls notification's.
+class _CallsPanel extends StatelessWidget {
+  final CommController comm;
+  const _CallsPanel({required this.comm});
+
+  @override
+  Widget build(BuildContext context) {
+    return Panel(children: [
+      Explained(
+        help: "Someone calling rings in your headphones as well as on the phone, so you hear it under the mask. "
+            "The phone's ringtone is the Calls notification's, under Notifications.",
+        builder: (context, info) => PanelRow(
+          title: 'Ring in headphones',
+          trailing: [info, Switch(value: comm.ringInHeadphones, onChanged: (on) => comm.setRing(headphones: on))],
+        ),
+      ),
+      PanelRow(
+        title: 'Headphone ring',
+        trailing: [
+          IconButton(
+            tooltip: 'Play it',
+            icon: const Icon(Icons.play_arrow, color: Kc.muted),
+            onPressed: () => comm.previewRing(comm.ringTone),
+          ),
+          DropdownButton<String>(
+            value: comm.ringTone,
+            underline: const SizedBox.shrink(),
+            dropdownColor: Kc.raised,
+            onChanged: (t) {
+              if (t == null) return;
+              comm.setRing(tone: t);
+              comm.previewRing(t);
+            },
+            items: [for (final e in ringTones.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+          ),
+        ],
+      ),
     ]);
   }
 }

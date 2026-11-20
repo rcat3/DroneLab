@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
+import '../comm/calls.dart';
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
 import 'firmware_ui.dart';
@@ -157,6 +158,7 @@ class _TalkRow extends StatelessWidget {
   final Widget? titleExtra;
   final String subtitle;
   final bool subtitleLit;
+  final bool subtitleAlert;     // in red: a missed call
   final bool selected;
   final bool enabled;
   final String semantics;
@@ -168,6 +170,7 @@ class _TalkRow extends StatelessWidget {
       this.titleExtra,
       required this.subtitle,
       this.subtitleLit = false,
+      this.subtitleAlert = false,
       required this.selected,
       this.enabled = true,
       required this.semantics,
@@ -209,9 +212,11 @@ class _TalkRow extends StatelessWidget {
                           ?titleExtra,
                         ]),
                         Text(subtitle,
-                            style: subtitleLit
-                                ? Kc.term(14, color: Kc.green)
-                                : const TextStyle(color: Kc.muted, fontSize: 13)),
+                            style: subtitleAlert
+                                ? Kc.term(14, color: Kc.softRed)
+                                : subtitleLit
+                                    ? Kc.term(14, color: Kc.green)
+                                    : const TextStyle(color: Kc.muted, fontSize: 13)),
                       ],
                     ),
                   ),
@@ -293,6 +298,39 @@ class _PersonRow extends StatelessWidget {
   final bool selected;
   const _PersonRow({required this.comm, required this.person, required this.selected});
 
+  static String _time(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  /// Talk to them: a call, once they answer. One already going on, or
+  /// ringing here, is gone to (and answered); otherwise ask first.
+  Future<void> _tap(BuildContext context) async {
+    final p = person;
+    if (comm.calls[p.id] != null) {
+      comm.startCall(p.id);
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    final why = comm.whyNotCall(p.id);
+    if (why != null) {
+      messenger.showSnackBar(SnackBar(content: Text(why)));
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text('Call ${p.name}?'),
+        content: const Text('Their app rings. Once they answer, you hear only each other, and your talking goes to them.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('Cancel')),
+          FilledButton.icon(
+              onPressed: () => Navigator.pop(dialog, true), icon: const Icon(Icons.call), label: const Text('Call')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final failed = comm.startCall(p.id);
+    if (failed != null) messenger.showSnackBar(SnackBar(content: Text(failed)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = person;
@@ -300,15 +338,30 @@ class _PersonRow extends StatelessWidget {
     final sessions = [?p.user?.session, if (p.board != null) CommController.directSession(p.board!.id)];
     final toUs = talking && sessions.any(comm.talkingToUs.contains);
     final ways = [if (p.onServer) 'Server', if (p.board != null) 'Direct'].join(' · ');
+    final call = comm.calls[p.id];
+    final missed = comm.missedCalls[p.id];
+    final callStatus = switch (call?.state) {
+      CallState.calling => 'CALLING...',
+      CallState.ringing => 'CALLING YOU · TAP TO ANSWER',
+      CallState.connected => toUs
+          ? 'IN CALL · TALKING'
+          : call!.theyHold
+              ? 'IN CALL · STEPPED AWAY'
+              : selected
+                  ? 'IN CALL'
+                  : 'IN CALL · ON HOLD',
+      null => null,
+    };
     final status = p.mutedByMe
         ? 'Muted by you'
-        : toUs
-            ? 'TALKING TO YOU'
-            : talking
+        : callStatus ??
+            (talking
                 ? 'TALKING'
-                : p.user?.muted ?? false
-                    ? 'Muted · $ways'
-                    : ways;
+                : missed != null
+                    ? '${missed.$1 == 1 ? 'Missed call' : '${missed.$1} missed calls'} · ${_time(missed.$2)}'
+                    : p.user?.muted ?? false
+                        ? 'Muted · $ways'
+                        : ways);
     final canTalkTo = comm.boardTalksTo;
     return _TalkRow(
       leading: GestureDetector(
@@ -323,11 +376,28 @@ class _PersonRow extends StatelessWidget {
               child: Icon(Icons.warning_amber, size: 16, color: Kc.softRed, semanticLabel: 'Not the one known by that name'),
             ),
       subtitle: status,
-      subtitleLit: talking,
+      subtitleLit: talking || call != null,
+      subtitleAlert: callStatus == null && !talking && missed != null && !p.mutedByMe,
       selected: selected,
       semantics: '${p.name}, $status${selected ? ', talking to them' : ''}',
-      onTap: canTalkTo ? () => comm.setTalkTo(TalkTarget.person(p.id)) : () => showPerson(context, comm, id: p.id),
+      onTap: canTalkTo ? () => _tap(context) : () => showPerson(context, comm, id: p.id),
       trailing: [
+        if (call?.state == CallState.ringing)
+          IconButton(
+            tooltip: 'Answer ${p.name}',
+            icon: const Icon(Icons.call, color: Kc.green),
+            onPressed: () => comm.answerCall(p.id),
+          ),
+        if (call != null)
+          IconButton(
+            tooltip: switch (call.state) {
+              CallState.ringing => 'Decline',
+              CallState.calling => 'Stop calling',
+              CallState.connected => 'Hang up',
+            },
+            icon: const Icon(Icons.call_end, color: Kc.softRed),
+            onPressed: () => comm.endCall(p.id),
+          ),
         if (p.board != null) SignalBars(p.board!.rssi),
         IconButton(
           tooltip: p.mutedByMe ? 'Hear ${p.name}' : 'Mute ${p.name}, here only',
@@ -356,10 +426,18 @@ class _AwayRow extends StatelessWidget {
         child: const DroneAvatar(picture: null),
       ),
       title: name,
-      subtitle: 'Out of reach',
+      subtitle: comm.calls[id] == null ? 'Out of reach' : 'IN CALL · OUT OF REACH',
       selected: true,
       enabled: false,
       semantics: '$name, out of reach, talking to them',
+      trailing: [
+        if (comm.calls[id] != null)
+          IconButton(
+            tooltip: 'Hang up',
+            icon: const Icon(Icons.call_end, color: Kc.softRed),
+            onPressed: () => comm.endCall(id),
+          ),
+      ],
     );
   }
 }
@@ -379,11 +457,18 @@ class _Dock extends StatelessWidget {
     final String note;
     if (!boardUp) {
       note = 'Connect the unit to talk';
-    } else if (route == null) {
-      note = person ? "$name can't hear you just now" : 'Nobody to hear you on $name just now';
-    } else {
+    } else if (person) {
       final how = route == TalkRoute.direct ? 'direct' : 'over the server';
-      note = person ? 'Talking to $name alone, $how' : 'Talking to $name';
+      note = switch (comm.calls[to.personId!]?.state) {
+        CallState.calling => 'Calling $name...',
+        CallState.ringing => '$name is calling: answer to talk',
+        CallState.connected => route == null ? "$name can't hear you just now" : 'In a call with $name, $how',
+        null => 'Not in a call with $name: tap them to call',
+      };
+    } else if (route == null) {
+      note = 'Nobody to hear you on $name just now';
+    } else {
+      note = 'Talking to $name';
     }
     final mode = comm.board.status?.mode;
     return Container(

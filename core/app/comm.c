@@ -889,12 +889,27 @@ void comm_set_voice_effect(int preset)
     {
         preset = -1;
     }
+    if (!settings_speaker_fitted())
+    {
+        // Without a speaker there's one effect, the Voice page's, and it's
+        // HiveMind's: setting one sets that
+        if (preset >= 0)
+        {
+            voice_fx_set_preset((size_t)preset);
+            settings_set_voice_effect((uint8_t)preset);
+        }
+        preset = -1;
+    }
     voice_fx_set_comm_preset(preset);
     settings_set_comm_voice_effect(preset);
 }
 
 int comm_voice_effect(void)
 {
+    if (!settings_speaker_fitted())
+    {
+        return -1;      // the Voice page's, the only one (see comm_set_voice_effect)
+    }
     int v = settings_get()->comm_voice_effect;
     return v > 0 && v <= (int)voice_fx_preset_count() ? v - 1 : -1;
 }

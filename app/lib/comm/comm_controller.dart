@@ -19,6 +19,7 @@ import 'avatars.dart';
 import 'background.dart';
 import 'board_link.dart';
 import 'board_protocol.dart';
+import 'calls.dart';
 import 'conversations.dart';
 import 'notifier.dart';
 import 'firmware_update.dart';
@@ -267,6 +268,11 @@ class CommController extends ChangeNotifier {
     channel = p.getString('channel');
     _talkTo = TalkTarget.fromPref(p.getString('talkTo'));
     talkTones = p.getBool('talkTones') ?? true;
+    ringInHeadphones = p.getBool('ringInHeadphones') ?? true;
+    ringTone = p.getString('ringTone') ?? 'classic';
+    missedCalls.load(p.getString('missedCalls'));
+    // Talking to someone alone takes a call, which doesn't outlast the app
+    if (_talkTo.kind == TalkTo.person) _talkTo = const TalkTarget.server();
     groups.addAll([
       for (final g in jsonDecode(p.getString('directGroups') ?? '[]') as List<dynamic>)
         DirectGroup.fromJson(g as Map<String, dynamic>)
@@ -280,6 +286,7 @@ class CommController extends ChangeNotifier {
     _directAvatarSub = board.directAvatars.listen(_onDirectAvatar);
     _heardSub = board.heard.listen(_onHeard);
     _talkedSub = board.talked.listen(_onTalked);
+    _callTimer = Timer.periodic(const Duration(seconds: 1), (_) => _callTick());
     await conversations.load();
     conversations.onSeen = notifier.clearTexts;
     await notifier.init();
@@ -626,10 +633,13 @@ class CommController extends ChangeNotifier {
       counted = prev.$2 + delta;
     }
     _directSeq[d.sender] = (d.seq, counted);
+    final heard = _audible(directSession(d.sender), d.alone);
+    _logVoice(directSession(d.sender), d.alone, heard);
+    _heard(directSession(d.sender), d.last, alone: d.alone);
+    if (!heard) return;
     _audio.start();
     mixer.receive(directSession(d.sender), counted * 2, d.opus, d.last, now, extraMs: _directExtraMs);
     _logDirect(now);
-    _heard(directSession(d.sender), d.last, alone: d.alone);
   }
 
   /// A talker's name, whether they're on the server or heard directly.
@@ -677,6 +687,7 @@ class CommController extends ChangeNotifier {
         return _directOn && nearby.isNotEmpty ? TalkRoute.direct : null;
       case TalkTo.person:
         final id = talkTo.personId!;
+        if (!(calls[id]?.connected ?? false)) return null;     // not till they've answered
         final b = directBoard(id);
         if (b != null && b.key != null && boardTalksTo && _pairKeys.containsKey(Identity.idOf(b.key!))) {
           return TalkRoute.direct;
@@ -705,7 +716,10 @@ class CommController extends ChangeNotifier {
   /// go over UDP.
   void _sendTalkTo() {
     final t = talkTo;
-    final u = t.kind == TalkTo.person ? serverUser(t.personId!) : null;
+    // One person, once they've answered: till then, nobody, so the board
+    // refuses to talk
+    final inCall = t.kind == TalkTo.person && (calls[t.personId!]?.connected ?? false);
+    final u = inCall ? serverUser(t.personId!) : null;
     mumble?.whisperTo(u == null ? null : [u.session]);
     if (!boardTalksTo) {
       // Older firmware: the channel, as talking on the server or direct
@@ -717,7 +731,9 @@ class CommController extends ChangeNotifier {
       return;
     }
     final msg = talkToMessage(t.kind,
-        key: t.kind == TalkTo.person ? (people[t.personId!]?.key ?? Uint8List(Identity.keyLength)) : null,
+        key: t.kind == TalkTo.person
+            ? (inCall ? people[t.personId!]?.key : null) ?? Uint8List(Identity.keyLength)
+            : null,
         onServer: u != null,
         name: talkToName);
     if (_sentTalkTo == null || !listEquals(msg, _sentTalkTo)) {
@@ -796,6 +812,316 @@ class CommController extends ChangeNotifier {
     }
     _audio.start();
     mixer.playTone(tone);
+  }
+
+  // ----- Whose voice is heard -----
+
+  /// Only the one talked to is heard: the server's channel, the direct
+  /// channel, or the person we're in a call with, so it's clear who's to be
+  /// answered. [alone] is a voice for us alone (whispered, or sealed with
+  /// our pair's key).
+  bool _audible(int session, bool alone) {
+    final t = talkTo;
+    switch (t.kind) {
+      case TalkTo.server:
+        return !isDirectSession(session) && !alone;
+      case TalkTo.direct:
+        return isDirectSession(session) && !alone;
+      case TalkTo.person:
+        return alone && _personOfSession(session) == t.personId && (calls[t.personId!]?.connected ?? false);
+    }
+  }
+
+  /// Each transmission as it starts: who, whether to us alone, and whether
+  /// it's played, in `adb logcat -s flutter`.
+  void _logVoice(int session, bool alone, bool heard) {
+    if (_heardAt.containsKey(session)) return;
+    debugPrint('voice: ${talkerName(session)}${alone ? ' (alone)' : ''} '
+        '${heard ? 'played' : 'not played'}, talking to ${talkTo.pref}');
+  }
+
+  /// Who a talker is, by who they are, on the server or heard directly.
+  String? _personOfSession(int session) {
+    if (isDirectSession(session)) {
+      for (final b in nearby.values) {
+        if (directSession(b.id) == session) return personOfBoard(b).id;
+      }
+      return null;
+    }
+    final u = mumble?.users[session];
+    return u == null ? null : personOfUser(u).id;
+  }
+
+  // ----- Calls (calls.dart) -----
+
+  /// Calls, by who with: ringing, answered, or ours ringing at theirs.
+  final Map<String, Call> calls = {};
+
+  /// Calls not answered, by who from, shown by their name till seen to.
+  late final MissedCalls missedCalls = MissedCalls((json) => _prefs?.setString('missedCalls', json));
+
+  /// Ring in the headphones too, with this tone (calls.dart's ringTones).
+  /// Kept for next time.
+  bool ringInHeadphones = true;
+  String ringTone = 'classic';
+
+  /// Someone's started calling: for the app to show it, wherever it is.
+  final _incomingCalls = StreamController<Call>.broadcast();
+  Stream<Call> get incomingCalls => _incomingCalls.stream;
+
+  /// What happened to a call, to say: declined, no answer, ended.
+  final _callNotices = StreamController<String>.broadcast();
+  Stream<String> get callNotices => _callNotices.stream;
+
+  Timer? _callTimer;
+  late final CallTones _callTones = CallTones(mixer.sampleRate);
+
+  /// Talked to before a call, to go back to after it.
+  TalkTarget? _beforeCall;
+
+  /// The same signal comes over the server and directly: once.
+  final Map<String, int> _callSignalsSeen = {};
+
+  Future<void> setRing({bool? headphones, String? tone}) async {
+    if (headphones != null) {
+      ringInHeadphones = headphones;
+      await _prefs?.setBool('ringInHeadphones', headphones);
+    }
+    if (tone != null && ringTones.containsKey(tone)) {
+      ringTone = tone;
+      await _prefs?.setString('ringTone', tone);
+    }
+    notifyListeners();
+  }
+
+  /// Play the ring tone, to hear what it's like.
+  void previewRing(String tone) => _tone(_callTones.ring(tone));
+
+  void _tone(Int16List t) {
+    _audio.start();
+    mixer.playTone(t);
+  }
+
+  /// Whether someone can be called: they've a key to sign for, and are on
+  /// the server or nearby. Null if they can, or why not.
+  String? whyNotCall(String personId) {
+    final name = people[personId]?.name ?? 'They';
+    if (_keyOf(personId) == null) return "$name can't take calls: their app needs updating";
+    if (serverUser(personId) == null && directBoard(personId) == null) return '$name is out of reach';
+    if (identity == null) return "Calls need this phone's identity, which couldn't be made";
+    return null;
+  }
+
+  /// Call someone: their app rings, and talking goes to them once they
+  /// answer. Returns why not, or null.
+  String? startCall(String personId) {
+    final c = calls[personId];
+    if (c != null) {
+      if (c.state == CallState.ringing) answerCall(personId);
+      _goToCall(personId);
+      return null;
+    }
+    final why = whyNotCall(personId);
+    if (why != null) return why;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final call = calls[personId] = Call(personId, Random().nextInt(0x7FFFFFFF), CallState.calling, outgoing: true, nowMs: now)
+      ..lastSentMs = now;
+    _clearMissed(personId);
+    _sendCall(personId, CallOp.ring, call.id);
+    _tone(_callTones.ringBack());
+    _goToCall(personId);
+    return null;
+  }
+
+  /// Answer someone ringing.
+  void answerCall(String personId) {
+    final c = calls[personId];
+    if (c == null || c.state != CallState.ringing) return;
+    c
+      ..state = CallState.connected
+      ..lastHeardMs = DateTime.now().millisecondsSinceEpoch;
+    _sendCall(personId, CallOp.answer, c.id);
+    notifier.clearCall(personId);
+    mixer.stopTones();
+    _tone(_callTones.connected());
+    _clearMissed(personId);
+    _goToCall(personId);
+  }
+
+  /// Hang up, decline, or give up calling.
+  void endCall(String personId) {
+    final c = calls.remove(personId);
+    if (c == null) return;
+    _sendCall(personId, c.state == CallState.ringing ? CallOp.decline : CallOp.hangup, c.id);
+    notifier.clearCall(personId);
+    mixer.stopTones();
+    _callOver(personId, null);
+  }
+
+  /// Missed calls from someone, seen to.
+  void _clearMissed(String personId) {
+    if (missedCalls.clear(personId)) {
+      notifier.clearMissed(personId);
+      notifyListeners();
+    }
+  }
+
+  void clearMissed(String personId) => _clearMissed(personId);
+
+  /// Talk to them, from whatever was talked to before.
+  void _goToCall(String personId) {
+    if (talkTo.kind != TalkTo.person) _beforeCall = talkTo;
+    setTalkTo(TalkTarget.person(personId));
+  }
+
+  /// A call's over: back to the channel talked to before, if it was being
+  /// talked to, and say why if there's a [why].
+  void _callOver(String personId, String? why) {
+    if (talkTo.kind == TalkTo.person && talkTo.personId == personId) {
+      setTalkTo(_beforeCall ?? const TalkTarget.server());
+    }
+    if (why != null) _callNotices.add(why);
+    _updateBoardScreen();
+    notifyListeners();
+  }
+
+  /// A call's signal, signed for them alone, over both ways that reach them.
+  void _sendCall(String personId, int op, int id) {
+    final key = _keyOf(personId);
+    if (key == null) return;
+    final cmd = newCommand(OthersCommand.callSignal(op, id)).withScope(OthersCommand.scopeOne);
+    final u = serverUser(personId);
+    final b = directBoard(personId);
+    if (u != null) _toServer(mumble!, cmd, [u.session], theirKey: key);
+    if (b != null && b.key != null && boardTakesCommands) _toDirect(cmd, to: b);
+  }
+
+  void _onCallSignal(KnownPerson who, Uint8List data) {
+    if (data.length < 5) return;
+    final op = data[0];
+    final id = data[1] | (data[2] << 8) | (data[3] << 16) | (data[4] << 24);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _callSignalsSeen.removeWhere((_, at) => now - at > 2000);
+    if (_callSignalsSeen.putIfAbsent('${who.id}:$op:$id', () => now) != now) return;
+    final name = who.name;
+    var c = calls[who.id];
+    if (c != null && c.id == id) c.lastHeardMs = now;
+    switch (op) {
+      case CallOp.ring:
+        if (c != null && c.id == id) {
+          if (c.connected) _sendCall(who.id, CallOp.answer, id);    // our answer was lost
+          break;
+        }
+        if (c != null && c.outgoing && c.state == CallState.calling) {
+          // Both called at once: take theirs, answered
+          calls[who.id] = c = Call(who.id, id, CallState.connected, outgoing: false, nowMs: now);
+          _sendCall(who.id, CallOp.answer, id);
+          mixer.stopTones();
+          _tone(_callTones.connected());
+          _goToCall(who.id);
+          break;
+        }
+        calls[who.id] = c = Call(who.id, id, CallState.ringing, outgoing: false, nowMs: now);
+        notifier.showCall(who.id, name, avatarOf(who.id));
+        if (ringInHeadphones) _tone(_callTones.ring(ringTone));
+        _incomingCalls.add(c);
+      case CallOp.answer:
+        if (c != null && c.id == id && c.state == CallState.calling) {
+          c.state = CallState.connected;
+          mixer.stopTones();
+          _tone(_callTones.connected());
+        }
+      case CallOp.decline || CallOp.hangup:
+        if (c == null || c.id != id) break;
+        calls.remove(who.id);
+        notifier.clearCall(who.id);
+        mixer.stopTones();
+        if (!c.outgoing && c.state == CallState.ringing) {
+          _missed(c);
+          break;
+        }
+        if (c.connected || c.outgoing) _tone(_callTones.ended());
+        _callOver(who.id, c.connected ? 'Call with $name ended' : '$name declined the call');
+        return;
+      case CallOp.hold:
+        if (c != null && c.id == id && c.connected) {
+          c.theyHoldMs = now;
+          if (talkTo.kind == TalkTo.person && talkTo.personId == who.id) _tone(_callTones.hold());
+        }
+      case CallOp.resume:
+        if (c != null && c.id == id) c.theyHoldMs = null;
+    }
+    _updateBoardScreen();
+    notifyListeners();
+  }
+
+  /// Someone's call that wasn't answered.
+  void _missed(Call c) {
+    calls.remove(c.personId);
+    notifier.clearCall(c.personId);
+    missedCalls.add(c.personId);
+    final name = people[c.personId]?.name ?? '?';
+    notifier.showMissed(c.personId, name, missedCalls[c.personId]?.$1 ?? 1, avatarOf(c.personId));
+    _callOver(c.personId, 'Missed call from $name');
+  }
+
+  /// Every second: ring again, give up, say we're away, notice they've gone.
+  void _callTick() {
+    if (calls.isEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var changed = false;
+    for (final c in calls.values.toList()) {
+      final here = talkTo.kind == TalkTo.person && talkTo.personId == c.personId;
+      final name = people[c.personId]?.name ?? '?';
+      switch (c.state) {
+        case CallState.calling:
+          if (now - c.startedMs > CallTiming.giveUpMs) {
+            calls.remove(c.personId);
+            _sendCall(c.personId, CallOp.hangup, c.id);
+            _tone(_callTones.ended());
+            _callOver(c.personId, 'No answer from $name');
+            continue;
+          }
+          if (now - c.lastSentMs >= CallTiming.resendMs) {
+            c.lastSentMs = now;
+            _sendCall(c.personId, CallOp.ring, c.id);
+            if (here) _tone(_callTones.ringBack());
+          }
+        case CallState.ringing:
+          if (now - c.lastHeardMs > CallTiming.ringGoneMs) {
+            _missed(c);
+            continue;
+          }
+          if (ringInHeadphones && (now - c.startedMs) % CallTiming.resendMs < 1000) _tone(_callTones.ring(ringTone));
+        case CallState.connected:
+          // Away, talking somewhere else: say so every few seconds, for
+          // their hold beeps; and once back
+          if (!here && now - c.lastSentMs >= CallTiming.holdEveryMs) {
+            c
+              ..lastSentMs = now
+              ..holding = true;
+            _sendCall(c.personId, CallOp.hold, c.id);
+          } else if (here && c.holding) {
+            c.holding = false;
+            _sendCall(c.personId, CallOp.resume, c.id);
+          }
+          if (c.theyHoldMs != null && now - c.theyHoldMs! > CallTiming.holdGoneMs) {
+            c.theyHoldMs = null;
+            changed = true;
+          }
+          // Out of reach a while: it's over
+          final reachable = serverUser(c.personId) != null || directBoard(c.personId) != null;
+          if (reachable) {
+            c.lostMs = null;
+          } else if ((c.lostMs ??= now) < now - CallTiming.lostForMs) {
+            calls.remove(c.personId);
+            _tone(_callTones.ended());
+            _callOver(c.personId, 'Call with $name dropped: out of reach');
+            continue;
+          }
+      }
+    }
+    if (changed) notifyListeners();
   }
 
   // ----- Recording -----
@@ -1094,7 +1420,7 @@ class CommController extends ChangeNotifier {
                 : ServerLink.off;
     final connected = link == ServerLink.connected;
     final talkers = [
-      for (final s in talking)
+      for (final s in talking.where((s) => _audible(s, talkingToUs.contains(s))))
         if (isDirectSession(s))
           Talker(talkerName(s), _boardAvatars.slotFor(_textureOf(talkerName(s)), soon: true), true)
         else if (connected)
@@ -1287,7 +1613,7 @@ class CommController extends ChangeNotifier {
       _onAnnouncement(m, d);
       return;
     }
-    if (d.id != commandDataId || !boardTakesCommands) return;
+    if (d.id != commandDataId) return;
     final u = m.users[d.sender];
     final cmd = ReadCommand.parse(d.data);
     final me = identity;
@@ -1304,7 +1630,15 @@ class CommController extends ChangeNotifier {
         debugPrint('command: a bad signature from ${u.name}, dropped');
         return;
       }
-      if (people.byKey(cmd.key, u.name).muted || !boardTakesCommands) return;
+      final who = people.byKey(cmd.key, u.name);
+      if (who.muted) return;
+      // A call's signal is the app's own
+      const at = OthersCommand.headerLength;
+      if (cmd.body.length > at && cmd.body[at] == OthersCommand.call) {
+        if (cmd.scope == OthersCommand.scopeOne) _onCallSignal(who, Uint8List.sublistView(cmd.body, at + 1));
+        return;
+      }
+      if (!boardTakesCommands) return;
       board.send(commandFromServer(u.name, cmd.body));
     });
   }
@@ -1627,6 +1961,10 @@ class CommController extends ChangeNotifier {
     // Who, by the key they signed it with
     final who = people.byKey(h.key, h.from);
     if (who.muted) return;
+    if (h.what == Heard.call) {
+      if (h.scope == OthersCommand.scopeOne) _onCallSignal(who, h.data);
+      return;
+    }
     final c = switch (h.scope) {
       OthersCommand.scopeOne => personConversation(who.id),
       OthersCommand.scopeChannel => (h.direct ? directConversation : serverConversation) ?? everyoneConversation,
@@ -1686,8 +2024,11 @@ class CommController extends ChangeNotifier {
     _mumbleSubs.add(m.changes.listen((_) => _onMumbleChanged(m)));
     _mumbleSubs.add(m.voice.listen((v) {
       if (_sessionMuted(v.session)) return;
-      mixer.receive(v.session, v.seq, v.opus, v.last, DateTime.now().millisecondsSinceEpoch);
+      final heard = _audible(v.session, v.alone);
+      _logVoice(v.session, v.alone, heard);
       _heard(v.session, v.last, alone: v.alone);
+      if (!heard) return;
+      mixer.receive(v.session, v.seq, v.opus, v.last, DateTime.now().millisecondsSinceEpoch);
     }));
     _mumbleSubs.add(m.texts.listen(_onServerText));
     _mumbleSubs.add(m.pluginData.listen((d) => _onPluginData(m, d)));
@@ -1792,6 +2133,7 @@ class CommController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _callTimer?.cancel();
     _soundSub?.cancel();
     _directSoundSub?.cancel();
     _directPeerSub?.cancel();
