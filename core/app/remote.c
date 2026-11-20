@@ -42,6 +42,7 @@
  *     POST /api/vis?v=<style>[&show=1]  the Visualizer's style, and bring
  *                                     it on screen
  *     GET  /api/tracks    the sound player's tracks, which don't change
+ *     GET  /api/chime     whether a sound for something's playing (POST /api/sound?chime=)
  *     GET  /api/about     the board: firmware, build, MAC addresses, housing,
  *                                     uptime and battery, for the app's About page
  *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>]   the voice
@@ -566,6 +567,13 @@ static void write_mac(json_t *j, const char *name, bool (*read)(uint8_t[6]))
         jprintf(j, ",\"%s\":\"%02X:%02X:%02X:%02X:%02X:%02X\"", name, mac[0], mac[1], mac[2], mac[3], mac[4],
                 mac[5]);
     }
+}
+
+/* Whether a chime's playing (audio_player_chime): small, for the app to
+ * ask often while it plays one. */
+static void write_chime(json_t *j)
+{
+    jprintf(j, "{\"chime\":%d}", audio_player_chiming() ? 1 : 0);
 }
 
 /* The board, for the app's About page. */
@@ -1280,6 +1288,10 @@ int remote_api(const char *method, const char *target, const char *body, size_t 
     else if (strcmp(path, "/api/about") == 0)
     {
         write = write_about;
+    }
+    else if (strcmp(path, "/api/chime") == 0)
+    {
+        write = write_chime;
     }
     else if (strcmp(path, "/api/comm") == 0)
     {

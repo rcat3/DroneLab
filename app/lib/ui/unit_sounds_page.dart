@@ -30,9 +30,12 @@ class _UnitSoundsPageState extends State<UnitSoundsPage> {
     await comm.chimeOnUnit(track);
     // Watch for its end, asking the unit one answer at a time, till it's
     // done, stopped, or another's played
+    // (an answer that didn't come isn't taken for "done"; nor is it kept at
+    // for more than a couple of minutes)
     await Future<void>.delayed(const Duration(milliseconds: 600));
-    while (mounted && play == _plays && _playing == e) {
-      if (!await comm.unitChiming()) break;
+    final until = DateTime.now().add(const Duration(minutes: 2));
+    while (mounted && play == _plays && _playing == e && DateTime.now().isBefore(until)) {
+      if (await comm.unitChiming() == false) break;
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
     if (mounted && play == _plays) setState(() => _playing = null);

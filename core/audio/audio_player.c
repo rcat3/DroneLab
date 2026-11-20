@@ -108,7 +108,7 @@ static uint64_t file_bytes;     // for estimating an MP3's length, if it doesn't
 
 // A chime (audio_player_chime) playing over what was there, which comes
 // back once it's done, where it was, playing or not
-static bool chiming;
+static volatile bool chiming;   // read by the UI too (audio_player_chiming)
 static uint16_t saved_track;
 static bool saved_active;
 static bool saved_open;         // the track was open, part way through

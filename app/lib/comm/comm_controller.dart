@@ -962,15 +962,15 @@ class CommController extends ChangeNotifier {
     if (unitCanPlay) await board.request('POST', '/api/sound?chimestop=1');
   }
 
-  /// Whether the unit's playing one of those sounds just now.
-  Future<bool> unitChiming() async {
+  /// Whether the unit's playing one of those sounds just now; null if it
+  /// couldn't be asked.
+  Future<bool?> unitChiming() async {
     try {
-      final a = await board.request('GET', '/api/state');
-      if (a.status != 200) return false;
-      final s = (jsonDecode(a.body) as Map<String, dynamic>)['sound'] as Map<String, dynamic>?;
-      return s?['chime'] == 1;
+      final a = await board.request('GET', '/api/chime');
+      if (a.status != 200) return null;
+      return (jsonDecode(a.body) as Map<String, dynamic>)['chime'] == 1;
     } catch (_) {
-      return false;
+      return null;
     }
   }
 
