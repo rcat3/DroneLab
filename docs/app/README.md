@@ -3,7 +3,7 @@
 The DroneLab app is the phone's half of your unit.  It links your unit to the rest of the hive, so you can talk and listen to other drones, text them and send them commands, records your voice for videos, runs the unit's display from your hand, and keeps the unit's firmware up to date.  It's for Android phones and tablets.
 
 <p align="center">
-<img src="../images/app_hivemind.png" width="260" alt="The Voice tab: the channels, the people about with their avatars, who you're talking to, and the talk button">
+<img src="../images/app_hivemind.png" width="260" alt="The HiveMind Voice tab: the Cloud Server and Direct channels, the one talked to, the others under it to move to, and the talk button">
 &nbsp;
 <img src="../images/app_remote.png" width="260" alt="The Remote tab: running the unit's display from the phone">
 </p>
@@ -12,8 +12,8 @@ The DroneLab app is the phone's half of your unit.  It links your unit to the re
 
 ## What it does
 
-- **[Voice](voice.md)**: talk to other drones and hear them, like a radio, over the internet through a shared server, or unit to unit with no signal at all.  Your voice goes out through your voice effect; theirs comes to your headphones, through the phone.
-- **[Text](text.md)**: text one drone, a channel, or everyone who can hear you, in a conversation for each; and from any of them, put words on their displays, if they've allowed you.
+- **[Voice](voice.md)**: talk to other drones and hear them, like a radio, over the internet through a shared server, or unit to unit with no signal at all.  Your voice goes out through your voice effect; theirs comes to your headphones, through the phone.  [Call](voice.md#calls) one drone to talk alone.
+- **[Text](text.md)**: text one drone, a channel, or everyone who can hear you, in a conversation for each, with photos over the server and emoji reactions; and from any of them, put words on their displays, if they've allowed you.
 - **[Control](control.md)**: run other drones' [Lovense](../features/lovense.md) toys, if they've allowed you, from a conversation.
 - **[Record](record.md)**: record your voice effect to the phone as WAV files, for videos, with a beep to line it up with the camera.
 - **[Remote](remote.md)**: everything on the unit's display, from the phone, so nobody has to reach the display in the mask.
@@ -31,12 +31,12 @@ Four tabs along the bottom, and the status strip along the top of every one:
 
 | Tab | What it's for |
 |---|---|
-| **Voice** | Who's in the hive, and talking to them.  The gear opens *Setup*. |
+| **Voice** | The channels and who's in the hive, and talking to them, or calling one alone.  The gear opens *Setup*. |
 | **Text** | Conversations, with Broadcast, each channel and each person, and from them, others' displays and toys.  A number on the tab counts the messages you haven't seen. |
 | **Record** | Recording your voice, and your recordings. |
 | **Remote** | The unit's own controls, as on its display. |
 
-**Setup**, behind the gear on the Voice tab, has what's set once: [connecting](connecting.md) the unit and the server, your avatar, how you [talk](voice.md#setup-talking), [direct mode](voice.md#direct-channels), [notifications](text.md#notifications), and the [unit's firmware](firmware-updates.md).  The (i) buttons throughout the app explain each setting.
+**Setup**, behind the gear on the Voice tab, has what's set once: [connecting](connecting.md) the unit and the server, your avatar, how you [talk](voice.md#setup-talking), the [unit's sounds](voice.md#setup-unit-sounds), the headphones' ring and text tones, [notifications](text.md#notifications), and the [unit's firmware](firmware-updates.md).  Its (i), top right, opens **About**: the app's and phone's versions, and the unit's connection, signal, firmware, MAC addresses, enclosure, uptime and battery.  The (i) buttons throughout the app explain each setting.
 
 ### The status strip
 

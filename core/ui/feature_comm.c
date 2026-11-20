@@ -464,7 +464,7 @@ static void show_status(void)
     {
         lv_obj_set_hidden(transport_icon, !show_icon);
         // Narrower with the icon, to keep inside the round screen
-        lv_obj_set_style_max_width(name_label, show_icon ? ui_px(112) : ui_px(140), 0);
+        lv_obj_set_style_max_width(name_label, show_icon ? ui_px(150) : ui_px(170), 0);
     }
     // The icon's color, as the line's: white-hot for TX, phosphor for RX
     static int icon_tx = -1;
@@ -618,9 +618,11 @@ static void add_status_page(ui_feature_t *feature)
     name_label = lv_label_create(row);
     lv_obj_set_style_text_font(name_label, &name_font, 0);
     // As wide as its text, up to what fits, and cut short with dots beyond
-    lv_label_set_long_mode(name_label, LV_LABEL_LONG_MODE_DOTS);
+    lv_label_set_long_mode(name_label, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
     lv_obj_set_width(name_label, LV_SIZE_CONTENT);
-    lv_obj_set_style_max_width(name_label, ui_px(140), 0);
+    // One line, clear of the page dots under it: a long name scrolls across
+    lv_obj_set_height(name_label, lv_font_get_line_height(&name_font));
+    lv_obj_set_style_max_width(name_label, ui_px(170), 0);
     lv_label_set_text(name_label, "");
 
     show_status();

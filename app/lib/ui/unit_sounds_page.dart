@@ -179,7 +179,7 @@ class _EventRow extends StatelessWidget {
                 )
               : IconButton(
                   tooltip: 'Play it on the unit',
-                  icon: const Icon(Icons.play_arrow, color: Kc.muted),
+                  icon: Icon(Icons.play_arrow, color: picked == null || missing ? Kc.off : Kc.muted),
                   onPressed: picked == null || missing ? null : () => onPlay(picked),
                 ),
         ]),

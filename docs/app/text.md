@@ -3,7 +3,7 @@
 The Text tab is HiveMind by text, as [Voice](voice.md) is HiveMind by voice.  You text other drones in conversations, as in a chat app: one for everyone who can hear you, one for each channel you're on, and one for each person.  From any conversation you can also put words on their unit's display, or run their [Lovense](../features/lovense.md) toys.
 
 <p align="center">
-<img src="../images/app/text.png" width="260" alt="The Text tab: Broadcast, the server and direct channels, and the people about, with the last message in each and a count of unread ones">
+<img src="../images/app/text.png" width="260" alt="The HiveMind Text tab: Broadcast, then the Cloud Server and Direct channels, the one you're on first and the others under it">
 &nbsp;
 <img src="../images/app/conversation.png" width="260" alt="A conversation with one drone: texts each way, and the commands they sent, one of them not done">
 </p>
@@ -35,6 +35,7 @@ A text that comes in while you're not looking at its conversation shows as a not
 In *Setup*, under *Notifications*:
 
 - **Text messages** turns them on or off, for every conversation.
+- **Calls** rings the phone too for a [call](voice.md#calls), with its ringtone (off at first: calls ring in the headphones), and **Missed calls** tells you of one you didn't answer.
 - **Unit battery low** tells you when your unit's battery is down to 15%, unless it's charging.
 
 The button by each (sliders) opens Android's own settings for it: its sound, whether it pops up on screen, shows on the lock screen and in the status bar, and so on.

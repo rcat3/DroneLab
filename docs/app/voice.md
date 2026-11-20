@@ -2,7 +2,7 @@
 
 HiveMind links every drone in the hive into one mind.  The Voice tab is HiveMind by voice: you talk, and the others hear you, like a radio.  (Its other half, by text, is the [Text](text.md) tab.)  Your unit picks up your voice, puts it through your [voice effect](../features/voice-effects.md), and sends it; the others' voices come back to your headphones, through the app.
 
-<img src="../images/app_hivemind.png" width="300" alt="The Voice tab: the channels, the people about, who you're talking to, and Hold to talk">
+<img src="../images/app_hivemind.png" width="300" alt="The HiveMind Voice tab: the Cloud Server and Direct channels, the one talked to, the others under it to move to, and Hold to talk">
 
 Back to [the app](README.md).  The unit's side, with its own HiveMind screens, is in [HiveMind (Comms)](../features/comms.md).
 
@@ -135,7 +135,7 @@ The status strip's grey down arrow means someone's talking on *another* direct c
 
 ## Setup: talking
 
-<img src="../images/app/setup_talking.png" width="300" alt="Setup's Talking section">
+<img src="../images/app/setup_talking.png" width="300" alt="Setup's Talking section, then Unit sounds and the Headphones' text tone">
 
 In Setup, behind the gear, while the unit's connected:
 
