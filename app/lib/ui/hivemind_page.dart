@@ -26,7 +26,7 @@ class HiveMindPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: comm,
+      listenable: Listenable.merge([comm, collapsedChannels]),
       builder: (context, _) {
         final boardUp = comm.board.state == BoardState.connected && comm.board.status != null;
         final m = comm.mumble;
@@ -71,21 +71,25 @@ class HiveMindPage extends StatelessWidget {
                       const SizedBox(height: 4),
                     ],
                     if (serverUp || directOn) ...[
-                      SectionHeader('Channels', trailing: OtherFirmwareIcon(comm: comm)),
-                      ChannelLists(
-                        comm: comm,
-                        serverCurrent:
-                            serverUp ? _ServerChannelRow(comm: comm, m: m!, selected: to.kind == TalkTo.server) : null,
-                        directCurrent:
-                            directOn ? _DirectChannelRow(comm: comm, d: direct!, selected: to.kind == TalkTo.direct) : null,
-                      ),
+                      FoldingHeader('Channels', 'section:channels', trailing: OtherFirmwareIcon(comm: comm)),
+                      if (!isFolded('section:channels'))
+                        ChannelLists(
+                          comm: comm,
+                          serverCurrent:
+                              serverUp ? _ServerChannelRow(comm: comm, m: m!, selected: to.kind == TalkTo.server) : null,
+                          directCurrent: directOn
+                              ? _DirectChannelRow(comm: comm, d: direct!, selected: to.kind == TalkTo.direct)
+                              : null,
+                        ),
                       if (m?.denied case final why?)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(why, style: const TextStyle(color: Kc.softRed, fontSize: 13)),
                         ),
-                      const SectionHeader('People'),
-                      if (people.isEmpty && away == null)
+                      const FoldingHeader('People', 'section:people'),
+                      if (isFolded('section:people'))
+                        const SizedBox.shrink()
+                      else if (people.isEmpty && away == null)
                         const Panel(children: [PanelRow(title: 'Nobody else yet')])
                       else
                         Panel(children: [

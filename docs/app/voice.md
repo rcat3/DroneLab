@@ -31,7 +31,7 @@ flowchart LR
 
 ## Who's there
 
-The Voice tab is laid out as the [Text](text.md) tab is:
+The Voice tab is laid out as the [Text](text.md) tab is, each heading folding its list away when tapped, on both tabs at once:
 
 - **Channels**: your channel on the server, and your direct channel, while you're on them, with how many are there and who's talking, and every other channel under each, to move to (see [Channels](#channels)).
 - **People**: everyone on the server, in any channel, and every unit heard nearby, each once, by name.  Someone in another server channel shows it, *Server · Alternate Comms*: you can still [call](#calls) them, as calls reach anyone on the server.  Someone who's on the server and nearby both is one row, with both.

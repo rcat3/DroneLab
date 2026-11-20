@@ -13,6 +13,37 @@ import 'widgets.dart';
 /// and Text tabs, for as long as the app runs. Everything starts open.
 final collapsedChannels = ValueNotifier<Set<String>>({});
 
+/// Whether a list's folded away.
+bool isFolded(String key) => collapsedChannels.value.contains(key);
+
+/// "> CHANNELS" and the like, which folds its list away when tapped, the
+/// same on the Voice and Text tabs.
+class FoldingHeader extends StatelessWidget {
+  final String text;
+  final String foldKey;
+  final Widget? trailing;
+  const FoldingHeader(this.text, this.foldKey, {super.key, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: collapsedChannels,
+      builder: (context, folded, _) {
+        final open = !folded.contains(foldKey);
+        return InkWell(
+          onTap: () => _toggle(foldKey),
+          child: SectionHeader(text,
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                ?trailing,
+                Icon(open ? Icons.expand_less : Icons.expand_more, color: Kc.green,
+                    semanticLabel: open ? 'Shown: tap to hide' : 'Hidden: tap to show'),
+              ])),
+        );
+      },
+    );
+  }
+}
+
 void _toggle(String key) {
   final s = {...collapsedChannels.value};
   if (!s.remove(key)) s.add(key);

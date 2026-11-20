@@ -25,7 +25,7 @@ class TextPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([comm, comm.conversations]),
+      listenable: Listenable.merge([comm, comm.conversations, collapsedChannels]),
       builder: (context, _) {
         final convs = comm.conversations;
         // The channels we're on, as conversations (made as they're needed)
@@ -67,8 +67,10 @@ class TextPage extends StatelessWidget {
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              const SectionHeader('Channels'),
-              if (channels.isEmpty)
+              const FoldingHeader('Channels', 'section:channels'),
+              if (isFolded('section:channels'))
+                const SizedBox.shrink()
+              else if (channels.isEmpty)
                 const Panel(children: [
                   PanelRow(title: 'Not linked to the hive', subtitle: 'Connect to the server, or switch on Direct'),
                 ])
@@ -84,8 +86,10 @@ class TextPage extends StatelessWidget {
                   directCurrent: comm.directConversation == null ? null : _Row(comm: comm, c: comm.directConversation!),
                 ),
               ],
-              const SectionHeader('People'),
-              if (ids.isEmpty)
+              const FoldingHeader('People', 'section:people'),
+              if (isFolded('section:people'))
+                const SizedBox.shrink()
+              else if (ids.isEmpty)
                 const Panel(children: [PanelRow(title: 'Nobody about')])
               else
                 Panel(children: [
