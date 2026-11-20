@@ -6,6 +6,7 @@ import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
 import 'control_page.dart';
+import 'channel_details.dart';
 import 'channel_lists.dart';
 import 'people.dart';
 import 'person_sheet.dart';
@@ -246,11 +247,17 @@ class _ConversationPageState extends State<ConversationPage> {
         return Scaffold(
           appBar: AppBar(
             // Smaller to fit beside the buttons, as a long name needs
-            title: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(c.title, style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(fontSize: 20)),
-            ),
+            // and for a channel, how many are in it, to tap for its details
+            title: Row(children: [
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(c.title, style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(fontSize: 20)),
+                ),
+              ),
+              if (group) PeopleCount(comm: comm, c: c),
+            ]),
             titleSpacing: 0,
             actions: [
               IconButton(
@@ -267,11 +274,13 @@ class _ConversationPageState extends State<ConversationPage> {
                     : null,
               ),
               PopupMenuButton<String>(
-                onSelected: (v) => v == 'details'
-                    ? showPerson(context, comm, id: CommController.personOf(c), inConversation: true)
-                    : deleteConversation(context, comm, c, leave: true),
+                onSelected: (v) => v != 'details'
+                    ? deleteConversation(context, comm, c, leave: true)
+                    : group
+                        ? showChannelDetails(context, comm, c)
+                        : showPerson(context, comm, id: CommController.personOf(c), inConversation: true),
                 itemBuilder: (_) => [
-                  if (c.kind == ConversationKind.person) const PopupMenuItem(value: 'details', child: Text('Details')),
+                  const PopupMenuItem(value: 'details', child: Text('Details')),
                   const PopupMenuItem(value: 'delete', child: Text('Delete conversation')),
                 ],
               ),
