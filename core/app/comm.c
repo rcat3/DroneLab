@@ -137,6 +137,9 @@
 #define TALKED_ALONE        0x04
 #define MSG_PAIRS           0x14    // from the phone: the pairs' keys, for talking to one alone over direct comms
 #define PAIRS_FIRST         0x01
+#define MSG_DIRECT_VOICE    0x16    // from the phone: voice for the board to send over direct comms
+#define PHONE_VOICE_QUEUE   32      // of them, waiting for the encoder task: big enough to go in PSRAM
+#define PHONE_VOICE_MAX     160     // the longest Opus packet direct comms sends
 #define PAIR_ENTRY          (OTHERS_KEY_LEN + DIRECT_KEY_LEN)
 #define REFUSED_SHOWN_MS    1500    // the screen says nobody would hear, for this long
 // The beep comes out of the speaker about this long after the speaker's
@@ -245,6 +248,18 @@ static volatile comm_mode_t mode;
 static volatile bool screen_talk;
 static volatile bool phone_talk;
 static volatile bool sending;
+
+// Voice from the phone for direct comms (0x16), from the UI loop to the
+// encoder task, which sends it as its own while the wearer isn't talking
+typedef struct
+{
+    uint8_t flags;
+    uint8_t len;
+    uint8_t opus[PHONE_VOICE_MAX];
+} phone_voice_t;
+static phone_voice_t *phone_voice;          // PHONE_VOICE_QUEUE of them
+static volatile uint32_t phone_voice_write; // only the UI loop moves it
+static volatile uint32_t phone_voice_read;  // only the encoder task moves it
 
 // Written by the microphone's task
 static int16_t *ring;
@@ -668,6 +683,18 @@ static void encoder_task(void *arg)
             releasing = false;
         }
 
+        // The phone's voice for direct comms, as a transmission of the
+        // board's own, numbered with its own; not while the wearer talks
+        while (phone_voice_read != __atomic_load_n(&phone_voice_write, __ATOMIC_ACQUIRE))
+        {
+            const phone_voice_t *v = &phone_voice[phone_voice_read % PHONE_VOICE_QUEUE];
+            if (direct && !sending)
+            {
+                direct_send_voice(seq++, v->flags & (FLAG_FIRST | FLAG_LAST), v->opus, v->len, NULL);
+            }
+            __atomic_store_n(&phone_voice_read, phone_voice_read + 1, __ATOMIC_RELEASE);
+        }
+
         // Status, when it changes and every few seconds
         status_ms += TASK_BUSY_MS;
         uint16_t now_status = (uint16_t)((uint8_t)mode << 8) | status_flags();
@@ -752,10 +779,13 @@ void comm_init(void)
     request = malloc(REQUEST_MAX + 1 + ANSWER_MAX);     // big enough to go in PSRAM
     answer = request != NULL ? request + REQUEST_MAX + 1 : NULL;
     ring = calloc(RING, sizeof(ring[0]));
-    if (ring == NULL || request == NULL || !rcat_hal_task_start("comm", encoder_task, NULL, TASK_STACK))
+    phone_voice = malloc(PHONE_VOICE_QUEUE * sizeof(phone_voice_t));
+    if (ring == NULL || request == NULL || phone_voice == NULL || !rcat_hal_task_start("comm", encoder_task, NULL, TASK_STACK))
     {
         free(ring);
         ring = NULL;
+        free(phone_voice);
+        phone_voice = NULL;
         free(request);
         request = answer = NULL;
         return;
@@ -1723,6 +1753,24 @@ static void receive_talk_to(const uint8_t *msg, size_t len)
     }
 }
 
+/* Voice from the phone to send over direct comms (0x16): queued for the
+ * encoder task, or dropped if it's full. */
+static void receive_direct_voice(const uint8_t *msg, size_t len)
+{
+    size_t n = len - HEADER_BYTES;
+    uint32_t w = phone_voice_write;
+    if (phone_voice == NULL || n > PHONE_VOICE_MAX
+        || w - __atomic_load_n(&phone_voice_read, __ATOMIC_ACQUIRE) >= PHONE_VOICE_QUEUE)
+    {
+        return;
+    }
+    phone_voice_t *v = &phone_voice[w % PHONE_VOICE_QUEUE];
+    v->flags = msg[3];
+    v->len = (uint8_t)n;
+    memcpy(v->opus, msg + HEADER_BYTES, n);
+    __atomic_store_n(&phone_voice_write, w + 1, __ATOMIC_RELEASE);
+}
+
 /* The pairs' keys, for talking to one alone over direct comms (0x14). */
 static void receive_pairs(const uint8_t *msg, size_t len)
 {
@@ -1872,6 +1920,10 @@ void comm_poll(uint32_t now_ms)
         else if (msg[0] == MSG_PAIRS && len >= 2)
         {
             receive_pairs(msg, len);
+        }
+        else if (msg[0] == MSG_DIRECT_VOICE && len >= HEADER_BYTES)
+        {
+            receive_direct_voice(msg, len);
         }
         else if (msg[0] == MSG_RECORD && len >= 3)
         {

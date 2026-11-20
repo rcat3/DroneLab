@@ -68,6 +68,7 @@ const commVersionMuted = 9;      // who's muted here, whose commands the board i
 const commVersionKeys = 10;     // commands signed by their sender's key; the wearer's key (0x11)
 const commVersionTalkTo = 11;   // who talking goes to (0x13), pairs' keys (0x14), and transmissions told (0x13)
 const commVersionCopies = 12;   // each copy of a command heard over direct comms, and how it came (0x15)
+const commVersionDirectVoice = 13;  // voice from the phone for the board to send over direct comms (0x16)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -94,6 +95,7 @@ const _msgTalkTo = 0x13;      // to the board: who talking goes to
 const _msgTalked = 0x13;      // from it: a transmission started, ended or was refused
 const _msgPairs = 0x14;
 const _msgCopy = 0x15;        // from the board: a copy of a command heard over direct comms
+const _msgDirectVoice = 0x16; // to it: voice for it to send over direct comms
 const _msgDirectAvatar = 0x0D;
 const _msgUpdate = 0x0E;
 
@@ -338,6 +340,32 @@ List<Uint8List> requestMessages(int id, Uint8List request, [int maxWrite = board
 }
 
 Uint8List talkMessage(bool talk) => Uint8List.fromList([_msgTalk, talk ? 1 : 0]);
+
+/// A packet of voice for the board to send over direct comms as its own
+/// (commVersion 13), paced by us: for the developer options' voice auto
+/// responder. At most [directVoiceMax] bytes of Opus.
+Uint8List directVoiceMessage(Uint8List opus, {bool first = false, bool last = false}) =>
+    Uint8List.fromList([_msgDirectVoice, 0, 0, (first ? 1 : 0) | (last ? 2 : 0), ...opus]);
+const directVoiceMax = 160;
+
+/// How long an Opus packet plays, in ms, from its first bytes (RFC 6716,
+/// 3.1), or 20 if it can't be told.
+int opusPacketMs(Uint8List p) {
+  if (p.isEmpty) return 0;
+  final config = p[0] >> 3;
+  final frame10 = config < 12
+      ? const [10, 20, 40, 60][config % 4] * 10      // SILK, in tenths of a ms
+      : config < 16
+          ? const [10, 20][config % 2] * 10           // hybrid
+          : const [25, 50, 100, 200][config % 4];     // CELT
+  final frames = switch (p[0] & 3) {
+    0 => 1,
+    1 || 2 => 2,
+    _ => p.length > 1 ? p[1] & 0x3F : 1,
+  };
+  final ms = frame10 * frames ~/ 10;
+  return ms > 0 ? ms : 20;
+}
 
 /// Who talking goes to (commVersion 11), as comm_to_t.
 enum TalkTo { server, direct, person }

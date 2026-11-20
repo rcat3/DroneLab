@@ -8,6 +8,7 @@ import '../comm/calls.dart';
 import '../comm/comm_controller.dart';
 import '../comm/notifier.dart';
 import 'about_page.dart';
+import 'developer_page.dart';
 import 'unit_sounds_page.dart';
 import 'firmware_ui.dart';
 import 'server_page.dart';
@@ -185,6 +186,19 @@ class SetupPage extends StatelessWidget {
                       subtitle: p.identified ? null : 'Known by name only',
                       trailing: [OutlinedButton(onPressed: () => comm.setMuted(p.id, false), child: const Text('Unmute'))],
                     ),
+                ]),
+              ],
+              if (comm.developerOptions) ...[
+                const SectionHeader('Developer'),
+                Panel(children: [
+                  PanelRow(
+                    leading: const Icon(Icons.developer_mode, color: Kc.muted),
+                    title: 'Developer options',
+                    subtitle: 'Auto responders, for testing range and relays',
+                    trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
+                    onTap: () =>
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => DeveloperPage(comm: comm))),
+                  ),
                 ]),
               ],
               const SectionHeader('About'),

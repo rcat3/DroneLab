@@ -100,6 +100,13 @@
  *                  alone over direct comms (direct_add_pair). Each time it
  *                  connects and when there's a new one, in pieces if it's
  *                  long (from COMM_VERSION 11).
+ *     0x16 direct voice: 16, seq (2, not used), flags (bit 0 first, bit 1
+ *                  last), then an Opus packet (at most 160 bytes, as direct
+ *                  comms sends): voice for the board to send to its direct
+ *                  comms group as a transmission of its own, numbered as
+ *                  its own, paced by the phone, 20 ms a packet. Dropped
+ *                  while the wearer talks. For the app's developer options:
+ *                  its voice auto responder (from COMM_VERSION 13).
  *     0x0E update: 0E, flags (bit 0 the start, bit 1 the end, bit 2 asks
  *                  for an ack), then for the start: the firmware's length
  *                  (4, little endian), the board it's for
@@ -253,8 +260,10 @@
  *      the wearer alone (0x07's bit 2); and transmissions started, ended
  *      and refused (0x13 to the phone)
  *  12  each copy of a command heard over direct comms, and how it came
- *      (0x15), for the app's details of a text */
-#define COMM_VERSION            12
+ *      (0x15), for the app's details of a text
+ *  13  voice from the phone for direct comms (0x16), for the app's voice
+ *      auto responder */
+#define COMM_VERSION            13
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

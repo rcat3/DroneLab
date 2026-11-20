@@ -345,4 +345,14 @@ void main() {
     expect(back.routes[1].host, 'example:64738');
     expect(directFrameBytes(40 + 30 + 64, targets: 1), 15 + 2 + 4 + 134 + 8);
   });
+
+  test("an Opus packet's length, from its first bytes", () {
+    expect(opusPacketMs(Uint8List.fromList([0x48])), 20);     // SILK wideband, 20 ms
+    expect(opusPacketMs(Uint8List.fromList([0x40])), 10);     // SILK wideband, 10 ms
+    expect(opusPacketMs(Uint8List.fromList([0xF8])), 20);     // CELT fullband, 20 ms
+    expect(opusPacketMs(Uint8List.fromList([0xF0])), 10);     // CELT fullband, 10 ms
+    expect(opusPacketMs(Uint8List.fromList([0xF9])), 40);     // two 20 ms frames
+    expect(opusPacketMs(Uint8List.fromList([0xF3, 0x03])), 30);   // three 10 ms frames
+    expect(directVoiceMessage(Uint8List.fromList([1, 2]), first: true), [0x16, 0, 0, 1, 1, 2]);
+  });
 }

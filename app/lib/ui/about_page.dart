@@ -127,7 +127,7 @@ class _AboutPageState extends State<AboutPage> {
               _Logo(onTap: _openSite),
               const SectionHeader('App'),
               Panel(children: [
-                _Fact('Version', _app?.version ?? '...'),
+                _Fact('Version', _app?.version ?? '...', onTap: _versionTapped),
                 _Fact('OS', _os ?? '...'),
                 if ((_phone ?? '').isNotEmpty) _Fact('Device', _phone!),
               ]),
@@ -172,6 +172,33 @@ class _AboutPageState extends State<AboutPage> {
         );
       },
     );
+  }
+
+  /// Ten taps on the version, as Android's build number, show the
+  /// developer options in Setup; the last few count down.
+  int _taps = 0;
+  static const _tapsToReveal = 10;
+
+  void _versionTapped() {
+    final comm = widget.comm;
+    final messenger = ScaffoldMessenger.of(context);
+    void say(String text) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 1)));
+    }
+    if (comm.developerOptions) {
+      say('Developer options are already on, in Setup');
+      return;
+    }
+    _taps++;
+    final left = _tapsToReveal - _taps;
+    if (left <= 0) {
+      _taps = 0;
+      comm.setDeveloperOptions(true);
+      say('Developer options are on, in Setup');
+    } else if (left <= 4) {
+      say('$left tap${left == 1 ? '' : 's'} from developer options');
+    }
   }
 
   void _openSite() => launchUrl(Uri.parse(projectUrl), mode: LaunchMode.externalApplication);
@@ -239,20 +266,25 @@ class _Fact extends StatelessWidget {
   final String name;
   final String value;
   final Color? color;
-  const _Fact(this.name, this.value, {this.color});
+  final VoidCallback? onTap;    // in place of selecting its value
+  const _Fact(this.name, this.value, {this.color, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final style = Kc.term(15, color: color ?? Kc.text);
+    final row = Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(children: [
         Text(name, style: const TextStyle(color: Kc.muted)),
         const SizedBox(width: 16),
         Expanded(
-          child: SelectableText(value, textAlign: TextAlign.end, style: Kc.term(15, color: color ?? Kc.text)),
+          child: onTap == null
+              ? SelectableText(value, textAlign: TextAlign.end, style: style)
+              : Text(value, textAlign: TextAlign.end, style: style),
         ),
       ]),
     );
+    return onTap == null ? row : InkWell(onTap: onTap, child: row);
   }
 }
 

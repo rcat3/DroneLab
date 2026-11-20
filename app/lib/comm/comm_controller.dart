@@ -16,6 +16,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'audio_out.dart';
+import 'auto_responder.dart';
 import 'avatars.dart';
 import 'background.dart';
 import 'board_link.dart';
@@ -273,6 +274,8 @@ class CommController extends ChangeNotifier {
     channel = p.getString('channel');
     _talkTo = TalkTarget.fromPref(p.getString('talkTo'));
     talkTones = p.getBool('talkTones') ?? true;
+    developerOptions = p.getBool('developerOptions') ?? false;
+    voiceResponder.on = developerOptions && (p.getBool('voiceResponder') ?? false);
     ringInHeadphones = p.getBool('ringInHeadphones') ?? true;
     textTone = p.getBool('textTone') ?? true;
     try {
@@ -692,6 +695,7 @@ class CommController extends ChangeNotifier {
     _logVoice(directSession(d.sender), d.alone, heard);
     _heard(directSession(d.sender), d.last, alone: d.alone);
     if (!heard) return;
+    if (talkTo.kind == TalkTo.direct) voiceResponder.heard(directSession(d.sender), direct: true, opus: d.opus, last: d.last);
     _audio.start();
     mixer.receive(directSession(d.sender), counted * 2, d.opus, d.last, now, extraMs: _directExtraMs);
     _logDirect(now);
@@ -873,6 +877,46 @@ class CommController extends ChangeNotifier {
   }
 
   static const _pairsMax = 12;    // DIRECT_PAIRS_MAX
+
+  // ----- Developer options (hidden till the app's version is tapped) -----
+
+  /// Whether Setup shows them. Kept for next time.
+  bool developerOptions = false;
+
+  Future<void> setDeveloperOptions(bool on) async {
+    developerOptions = on;
+    await _prefs?.setBool('developerOptions', on);
+    if (!on) await setVoiceResponder(false);
+    notifyListeners();
+  }
+
+  /// Each transmission heard on the channel talked to, sent back a second
+  /// after it ends (auto_responder.dart). Not in a call.
+  late final voiceResponder = VoiceResponder(_responderSend)..onChange = notifyListeners;
+
+  Future<void> setVoiceResponder(bool on) async {
+    voiceResponder.on = on;
+    await _prefs?.setBool('voiceResponder', on);
+    notifyListeners();
+  }
+
+  /// Whether the voice responder can send back over direct comms: the
+  /// board's firmware takes our voice for it.
+  bool get boardTakesDirectVoice => _directOn && (board.status?.version ?? 0) >= commVersionDirectVoice;
+
+  /// A packet of the voice responder's: to the server as ours, or to the
+  /// board to send over direct comms. Not while we're talking ourselves.
+  Future<bool> _responderSend(bool direct, Uint8List opus, {required bool first, required bool last}) async {
+    if (direct) {
+      if (!boardTakesDirectVoice) return false;
+      return board.sendFast(directVoiceMessage(opus, first: first, last: last), tries: 3, wait: const Duration(milliseconds: 5));
+    }
+    final m = mumble;
+    if (m == null || m.state != MumbleState.connected || _sendingToServer) return false;
+    m.sendVoice(_seq, opus, last: last);
+    _seq += max(1, opusPacketMs(opus) ~/ 10);
+    return true;
+  }
 
   // ----- Tones for talking -----
 
@@ -2561,6 +2605,7 @@ class CommController extends ChangeNotifier {
       _logVoice(v.session, v.alone, heard);
       _heard(v.session, v.last, alone: v.alone);
       if (!heard) return;
+      if (talkTo.kind == TalkTo.server) voiceResponder.heard(v.session, direct: false, opus: v.opus, last: v.last);
       mixer.receive(v.session, v.seq, v.opus, v.last, DateTime.now().millisecondsSinceEpoch);
     }));
     _mumbleSubs.add(m.texts.listen(_onServerText));
