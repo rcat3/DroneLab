@@ -146,7 +146,8 @@ class Conversations extends ChangeNotifier {
       photosPath = '$docs/photos';
       _file = File('$docs/conversations.json');
       if (!await _file!.exists()) return;
-      final list = jsonDecode(await _file!.readAsString()) as List<dynamic>;
+      // Read off the UI's isolate: with texts' details it can be a few MB
+      final list = await compute(_decode, await _file!.readAsString());
       for (final j in list) {
         final c = Conversation.fromJson(j as Map<String, dynamic>);
         if (c != null) all[c.key] = c;
@@ -157,12 +158,26 @@ class Conversations extends ChangeNotifier {
     }
   }
 
+  /// Saves, one at a time, in order.
+  Future<void> _saving = Future.value();
+
   void _saveSoon() {
     _save?.cancel();
-    _save = Timer(const Duration(seconds: 2), () async {
-      try {
-        await _file?.writeAsString(jsonEncode([for (final c in all.values) c.toJson()]));
-      } catch (_) {}
+    _save = Timer(const Duration(seconds: 2), () {
+      final file = _file;
+      if (file == null) return;
+      // What's to be saved as it is now; made into JSON off the UI's
+      // isolate, then written beside the file and put in its place, so a
+      // save cut short leaves the last one whole
+      final json = [for (final c in all.values) c.toJson()];
+      _saving = _saving.then((_) async {
+        try {
+          final text = await compute(jsonEncode, json);
+          final tmp = File('${file.path}.tmp');
+          await tmp.writeAsString(text, flush: true);
+          await tmp.rename(file.path);
+        } catch (_) {}
+      });
     });
   }
 
@@ -276,6 +291,8 @@ class Conversations extends ChangeNotifier {
 
   int get unread => all.values.fold(0, (n, c) => n + c.unread);
 }
+
+List<dynamic> _decode(String text) => jsonDecode(text) as List<dynamic>;
 
 /// A message's id, the same on every phone: the first 8 bytes of SHA-256
 /// of who wrote it (their identity's id, or 'name:' and their name for

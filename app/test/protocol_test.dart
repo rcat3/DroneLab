@@ -355,4 +355,23 @@ void main() {
     expect(opusPacketMs(Uint8List.fromList([0xF3, 0x03])), 30);   // three 10 ms frames
     expect(directVoiceMessage(Uint8List.fromList([1, 2]), first: true), [0x16, 0, 0, 1, 1, 2]);
   });
+
+  test("a text's details as first kept, a map for each copy, still read", () {
+    final old = {
+      'v': 'direct', 't': 1000, 's': 3,
+      'p': [
+        {'p': 0, 'c': 42, 'n': 186, 'x': [{'b': 7, 'r': -70, 'h': 0, 'n': 186, 't': 1000}, {'b': 7, 'r': -80, 'h': 1, 'n': 186, 't': 1010}]}
+      ],
+    };
+    final r = MessageRoute.fromJson(old);
+    expect(r.packets.first.copies.length, 2);
+    expect(r.packets.first.copies[1].rssi, -80);
+    expect(r.lastCopyMs, 1010);
+    // And kept the new way, smaller, the same when read back
+    final again = MessageRoute.fromJson(jsonDecode(jsonEncode(r.toJson())) as Map<String, dynamic>);
+    expect(again.packets.first.copies[1].broadcast, 7);
+    expect(again.packets.first.copies[1].atMs, 1010);
+    expect(again.packets.first.copies[1].bytes, 186);
+    expect(jsonEncode(r.toJson()).length, lessThan(jsonEncode(old).length));
+  });
 }
