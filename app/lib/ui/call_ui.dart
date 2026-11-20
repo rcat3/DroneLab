@@ -30,17 +30,21 @@ void showIncomingCall(CommController comm, String personId) {
           });
         }
         final name = comm.people[personId]?.name ?? '?';
+        final busyWith = comm.inCallWith;
+        final other = busyWith == null || busyWith == personId ? null : comm.people[busyWith]?.name;
         return AlertDialog(
           backgroundColor: Kc.panel,
           shape: RoundedRectangleBorder(
               side: const BorderSide(color: Kc.green), borderRadius: BorderRadius.circular(16)),
-          title: Text('> INCOMING CALL', style: Kc.term(16, color: Kc.green, shadows: Kc.glow(Kc.green))),
+          title: Text(other == null ? '> INCOMING CALL' : '> CALL WAITING',
+              style: Kc.term(16, color: Kc.green, shadows: Kc.glow(Kc.green))),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             DroneAvatar(picture: comm.avatarOf(personId), size: 96, talking: true),
             const SizedBox(height: 16),
             Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            const Text('Calling you, alone', style: TextStyle(color: Kc.muted)),
+            Text(other == null ? 'Calling you, alone' : "Calling you. Answering puts your call with $other on hold",
+                textAlign: TextAlign.center, style: const TextStyle(color: Kc.muted)),
           ]),
           actionsAlignment: MainAxisAlignment.spaceEvenly,
           actions: [

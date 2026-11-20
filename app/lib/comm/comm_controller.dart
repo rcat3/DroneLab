@@ -958,6 +958,13 @@ class CommController extends ChangeNotifier {
     _callOver(personId, null);
   }
 
+  /// Who we're talking to in a call just now, if we are: a call coming in
+  /// meanwhile is call waiting.
+  String? get inCallWith {
+    final t = talkTo;
+    return t.kind == TalkTo.person && (calls[t.personId!]?.connected ?? false) ? t.personId : null;
+  }
+
   /// Missed calls from someone, seen to.
   void _clearMissed(String personId) {
     if (missedCalls.clear(personId)) {
@@ -1022,8 +1029,14 @@ class CommController extends ChangeNotifier {
           break;
         }
         calls[who.id] = c = Call(who.id, id, CallState.ringing, outgoing: false, nowMs: now);
-        notifier.showCall(who.id, name, avatarOf(who.id));
-        if (ringInHeadphones) _tone(_callTones.ring(ringTone));
+        final busyWith = inCallWith;
+        notifier.showCall(who.id, name, avatarOf(who.id),
+            inCallWith: busyWith == null ? null : people[busyWith]?.name ?? '?');
+        if (busyWith != null) {
+          _tone(_callTones.waiting());
+        } else if (ringInHeadphones) {
+          _tone(_callTones.ring(ringTone));
+        }
         _incomingCalls.add(c);
       case CallOp.answer:
         if (c != null && c.id == id && c.state == CallState.calling) {
@@ -1092,7 +1105,12 @@ class CommController extends ChangeNotifier {
             _missed(c);
             continue;
           }
-          if (ringInHeadphones && (now - c.startedMs) % CallTiming.resendMs < 1000) _tone(_callTones.ring(ringTone));
+          // Call waiting while we're talking in another call; else the ring
+          if (inCallWith != null) {
+            if ((now - c.startedMs) % CallTiming.waitingEveryMs < 1000) _tone(_callTones.waiting());
+          } else if (ringInHeadphones && (now - c.startedMs) % CallTiming.resendMs < 1000) {
+            _tone(_callTones.ring(ringTone));
+          }
         case CallState.connected:
           // Away, talking somewhere else: say so every few seconds, for
           // their hold beeps; and once back

@@ -14,6 +14,7 @@ class Notifier {
   static const batteryChannel = 'battery';
   static const callsChannel = 'calls';
   static const missedChannel = 'missed_calls';
+  static const waitingChannel = 'call_waiting';
   static const _batteryId = 1;
   static const _native = MethodChannel('dronelab/notifications');
 
@@ -74,6 +75,13 @@ class Notifier {
           importance: Importance.max,
           sound: UriAndroidNotificationSound('content://settings/system/ringtone'),
           audioAttributesUsage: AudioAttributesUsage.notificationRingtone));
+      // Someone else calling during a call: shown, but silent, as the
+      // call-waiting beeps are in the headphones
+      await android?.createNotificationChannel(const AndroidNotificationChannel(waitingChannel, 'Call waiting',
+          description: 'Someone calling while you are in a call',
+          importance: Importance.high,
+          playSound: false,
+          enableVibration: false));
       await android?.createNotificationChannel(const AndroidNotificationChannel(missedChannel, 'Missed calls',
           description: "Calls you didn't answer", importance: Importance.high));
       _ready = true;
@@ -183,24 +191,28 @@ class Notifier {
 
   /// Someone's calling: rings until it's answered, turned down, or they
   /// give up (insistent), with Answer and Decline.
-  Future<void> showCall(String personId, String name, Uint8List? avatar) async {
+  /// [inCallWith] names who we're talking to in a call already: then it's
+  /// call waiting, shown without the ringtone.
+  Future<void> showCall(String personId, String name, Uint8List? avatar, {String? inCallWith}) async {
     if (!_ready || !calls) return;
+    final waiting = inCallWith != null;
     try {
       await _plugin.show(
         id: _callId(personId),
         title: name,
-        body: 'Calling you',
+        body: waiting ? "Calling you · you're in a call with $inCallWith" : 'Calling you',
         payload: '$_callPrefix$personId',
         notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(callsChannel, 'Calls',
-              channelDescription: 'Someone in the hive calling you',
-              importance: Importance.max,
-              priority: Priority.max,
+          android: AndroidNotificationDetails(waiting ? waitingChannel : callsChannel, waiting ? 'Call waiting' : 'Calls',
+              channelDescription: waiting ? 'Someone calling while you are in a call' : 'Someone in the hive calling you',
+              importance: waiting ? Importance.high : Importance.max,
+              priority: waiting ? Priority.high : Priority.max,
               category: AndroidNotificationCategory.call,
               ongoing: true,
               autoCancel: false,
               audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
-              additionalFlags: Int32List.fromList([4]),     // FLAG_INSISTENT: rings till it's seen to
+              // FLAG_INSISTENT: rings till it's seen to
+              additionalFlags: waiting ? null : Int32List.fromList([4]),
               largeIcon: avatar == null ? null : ByteArrayAndroidBitmap(avatar),
               actions: const [
                 AndroidNotificationAction('decline', 'Decline', showsUserInterface: true),

@@ -51,6 +51,7 @@ class Call {
 /// How long things take.
 abstract final class CallTiming {
   static const resendMs = 3000;       // ring again, every
+  static const waitingEveryMs = 6000; // the call-waiting beeps, every
   static const giveUpMs = 45000;      // no answer
   static const ringGoneMs = 9000;     // no ring heard for this long: they gave up
   static const holdEveryMs = 4000;
@@ -139,6 +140,10 @@ class CallTones {
           ], 0.13),
         _ => _notes([([440.0, 480.0], 400), ([], 200), ([440.0, 480.0], 400)], 0.14),
       };
+
+  /// Someone else calling while we're talking in a call: two soft, low
+  /// beeps, under the conversation rather than over it.
+  Int16List waiting() => _notes([([440.0], 150), ([], 150), ([440.0], 150)], 0.08);
 
   /// It's ringing at theirs.
   Int16List ringBack() => _notes([([440.0, 480.0], 500)], 0.07);
