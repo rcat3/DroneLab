@@ -5,7 +5,7 @@ import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
 import 'firmware_ui.dart';
-import 'groups_page.dart';
+import 'channel_lists.dart';
 import 'people.dart';
 import 'person_sheet.dart';
 import 'setup_page.dart';
@@ -71,10 +71,13 @@ class HiveMindPage extends StatelessWidget {
                     ],
                     if (serverUp || directOn) ...[
                       SectionHeader('Channels', trailing: OtherFirmwareIcon(comm: comm)),
-                      Panel(children: [
-                        if (serverUp) _ServerChannelRow(comm: comm, m: m!, selected: to.kind == TalkTo.server),
-                        if (directOn) _DirectChannelRow(comm: comm, d: direct!, selected: to.kind == TalkTo.direct),
-                      ]),
+                      ChannelLists(
+                        comm: comm,
+                        serverCurrent:
+                            serverUp ? _ServerChannelRow(comm: comm, m: m!, selected: to.kind == TalkTo.server) : null,
+                        directCurrent:
+                            directOn ? _DirectChannelRow(comm: comm, d: direct!, selected: to.kind == TalkTo.direct) : null,
+                      ),
                       if (m?.denied case final why?)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
@@ -234,7 +237,7 @@ String? _talkersIn(CommController comm, Iterable<int> sessions) {
   return names.isEmpty ? null : '${names.join(', ')} TALKING';
 }
 
-/// Our channel on the server, and a way to move to another.
+/// Our channel on the server: tap to talk to it.
 class _ServerChannelRow extends StatelessWidget {
   final CommController comm;
   final MumbleClient m;
@@ -255,49 +258,11 @@ class _ServerChannelRow extends StatelessWidget {
       selected: selected,
       semantics: '$name, on the server, $status${selected ? ', talking to it' : ''}',
       onTap: () => comm.setTalkTo(const TalkTarget.server()),
-      trailing: [
-        if (m.channels.length > 1)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: OutlinedButton(onPressed: () => _pickChannel(context), child: const Text('Change')),
-          ),
-      ],
     );
-  }
-
-  Future<void> _pickChannel(BuildContext context) async {
-    final ids = m.channels.keys.toList()..sort((a, b) => m.channelPath(a).compareTo(m.channelPath(b)));
-    final counts = m.channelCounts;
-    final picked = await showModalBottomSheet<int>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          children: [
-            const SectionHeader('Server channels'),
-            const Text('Only those in the same channel hear each other',
-                style: TextStyle(color: Kc.muted, fontSize: 13)),
-            const SizedBox(height: 8),
-            Panel(color: Kc.bg, children: [
-              for (final id in ids)
-                PanelRow(
-                  leading: Icon(id == m.myChannel ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                      color: id == m.myChannel ? Kc.pink : Kc.muted),
-                  title: m.channelPath(id),
-                  trailing: [Text('${counts[id] ?? 0}', style: Kc.term(16, color: Kc.muted)), const SizedBox(width: 8)],
-                  onTap: () => Navigator.pop(context, id),
-                ),
-            ]),
-          ],
-        ),
-      ),
-    );
-    if (picked != null && picked != m.myChannel) await comm.joinChannel(picked);
   }
 }
 
-/// Our direct channel, and a way to move to another.
+/// Our direct channel: tap to talk to it.
 class _DirectChannelRow extends StatelessWidget {
   final CommController comm;
   final DirectSettings d;
@@ -318,15 +283,6 @@ class _DirectChannelRow extends StatelessWidget {
       selected: selected,
       semantics: '$name, direct, $status${selected ? ', talking to it' : ''}',
       onTap: () => comm.setTalkTo(const TalkTarget.direct()),
-      trailing: [
-        Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: OutlinedButton(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupsPage(comm: comm))),
-            child: const Text('Change'),
-          ),
-        ),
-      ],
     );
   }
 }

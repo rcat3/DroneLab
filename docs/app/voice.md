@@ -33,7 +33,7 @@ flowchart LR
 
 The Voice tab is laid out as the [Text](text.md) tab is:
 
-- **Channels**: your channel on the server, and your direct channel, while you're on them, with how many are there and who's talking.  *Change* on each moves to another (see [Channels](#channels)).
+- **Channels**: your channel on the server, and your direct channel, while you're on them, with how many are there and who's talking, and every other channel under each, to move to (see [Channels](#channels)).
 - **People**: everyone in your server channel and every unit heard nearby, each once, by name.  Someone who's on the server and nearby both is one row, with both.
 
 Under each name it says how they're linked, or what they're doing:
@@ -89,11 +89,13 @@ The app keeps going with the screen off, so the phone can go in a pocket.  A not
 
 ## Channels
 
-**On the server**, the hive's channels are made on the server itself.  *Change*, by the channel's name, picks another from the server's list, with how many are in each; only those in the same channel hear each other.  The app goes back to it each time it connects.
+*Channels* has a part for each link: **Cloud Server** and **Direct**, each saying how many channels there are to pick from.  The first row is the channel you're on; under it, indented, is every channel there is, with a pink dot by yours and how many are in each.  Tap one to move to it.  The arrows fold a list away, or a channel's subchannels; the lists start open.
+
+**On the server**, the hive's channels are made on the server itself, and nest as they do there.  Only those in the same channel hear each other.  The app goes back to it each time it connects.
 
 ### Direct channels
 
-**Over direct mode**, units start on the *open channel*, which any unit in range can hear.  To keep it to your hive, use a channel with a passphrase: everything on it is encrypted, so units outside it can neither hear it nor send to it.  On the Text tab, tap **Direct channel** by *Channels* (or *Change* on the Voice tab while talking direct):
+**Over direct mode**, units start on the *open channel*, which any unit in range can hear.  To keep it to your hive, use a channel with a passphrase: everything on it is encrypted, so units outside it can neither hear it nor send to it.  Under *Direct*, the list has the open channel, *Your channels* (made or joined on this phone) and *Heard nearby* (joining one takes its passphrase).  **Manage**, by the *Direct* label, opens the Direct Channels page:
 
 - **Create a channel**: give it a name, which others nearby can see, and a passphrase, which they'll need to join.  A few unrelated words make a good passphrase.
 - **Heard nearby**: channels about, with how many units are on each.  Tap one and type its passphrase to join.

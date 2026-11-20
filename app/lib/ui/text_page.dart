@@ -6,7 +6,7 @@ import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
 import 'control_page.dart';
-import 'groups_page.dart';
+import 'channel_lists.dart';
 import 'people.dart';
 import 'person_sheet.dart';
 import 'remote_page.dart';
@@ -52,7 +52,6 @@ class TextPage extends StatelessWidget {
         ]..sort((a, b) => (b.last ?? DateTime(0)).compareTo(a.last ?? DateTime(0)));
         String nameOf(String id) => (people[id]?.name ?? comm.people[id]?.name ?? '').toLowerCase();
         final ids = people.keys.toList()..sort((a, b) => nameOf(a).compareTo(nameOf(b)));
-        final direct = comm.boardSettings?.direct;
         return Scaffold(
           appBar: AppBar(
             title: const Text('Text'),
@@ -68,23 +67,21 @@ class TextPage extends StatelessWidget {
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              SectionHeader(
-                'Channels',
-                // Which direct channel to be on, as from Voice's Change
-                trailing: direct == null
-                    ? null
-                    : OutlinedButton(
-                        onPressed: () =>
-                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupsPage(comm: comm))),
-                        child: const Text('Direct channel'),
-                      ),
-              ),
+              const SectionHeader('Channels'),
               if (channels.isEmpty)
                 const Panel(children: [
                   PanelRow(title: 'Not linked to the hive', subtitle: 'Connect to the server, or switch on Direct'),
                 ])
-              else
-                Panel(children: [for (final c in channels) _Row(comm: comm, c: c)]),
+              else ...[
+                // Everyone who can hear us, by any means
+                if (comm.isOnline(comm.everyoneConversation))
+                  Panel(children: [_Row(comm: comm, c: comm.everyoneConversation)]),
+                ChannelLists(
+                  comm: comm,
+                  serverCurrent: comm.serverConversation == null ? null : _Row(comm: comm, c: comm.serverConversation!),
+                  directCurrent: comm.directConversation == null ? null : _Row(comm: comm, c: comm.directConversation!),
+                ),
+              ],
               const SectionHeader('People'),
               if (ids.isEmpty)
                 const Panel(children: [PanelRow(title: 'Nobody about')])

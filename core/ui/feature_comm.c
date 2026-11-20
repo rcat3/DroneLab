@@ -661,7 +661,10 @@ static void show_setup(void)
     const settings_t *s = settings_get();
     ui_check_choice(mode_buttons, comm_mode());    // the phone can change it too
     ui_check_choice(show_buttons, s->comm_auto_show);
-    lv_obj_set_state(mute_switch, LV_STATE_CHECKED, s->comm_mute_speaker);
+    if (mute_switch != NULL)
+    {
+        lv_obj_set_state(mute_switch, LV_STATE_CHECKED, s->comm_mute_speaker);
+    }
 }
 
 static void mode_event_cb(lv_event_t *e)
@@ -681,7 +684,9 @@ static void options_event_cb(lv_event_t *e)
     {
         show = settings_get()->comm_auto_show;
     }
-    settings_set_comm_options(lv_obj_has_state(mute_switch, LV_STATE_CHECKED), (uint8_t)show);
+    bool mute = mute_switch != NULL ? lv_obj_has_state(mute_switch, LV_STATE_CHECKED)
+                                    : settings_get()->comm_mute_speaker;
+    settings_set_comm_options(mute, (uint8_t)show);
 }
 
 static void add_setup_page(ui_feature_t *feature)
@@ -695,24 +700,31 @@ static void add_setup_page(ui_feature_t *feature)
 
     // Push to talk, or talk whenever it hears you
     static const char *const modes[] = { "Push to talk", "Voice", "" };
-    mode_buttons = ui_add_choices(setup_page, modes, ui_px(190), ui_px(36), ui_px(-46));
+    // Without a speaker (the low-profile housing) there's none to silence,
+    // and the rest close up
+    bool speaker = settings_speaker_fitted();
+    mode_buttons = ui_add_choices(setup_page, modes, ui_px(190), ui_px(36), ui_px(speaker ? -46 : -30));
     lv_obj_add_event_cb(mode_buttons, mode_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    lv_obj_t *mute_label = lv_label_create(setup_page);
-    lv_label_set_text(mute_label, "Speaker off\nwhile talking");
-    lv_obj_align(mute_label, LV_ALIGN_CENTER, ui_px(-30), ui_px(2));
-    mute_switch = lv_switch_create(setup_page);
-    lv_obj_set_size(mute_switch, ui_px(56), ui_px(28));
-    lv_obj_align(mute_switch, LV_ALIGN_CENTER, ui_px(64), ui_px(2));
-    lv_obj_add_event_cb(mute_switch, options_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    mute_switch = NULL;
+    if (speaker)
+    {
+        lv_obj_t *mute_label = lv_label_create(setup_page);
+        lv_label_set_text(mute_label, "Speaker off\nwhile talking");
+        lv_obj_align(mute_label, LV_ALIGN_CENTER, ui_px(-30), ui_px(2));
+        mute_switch = lv_switch_create(setup_page);
+        lv_obj_set_size(mute_switch, ui_px(56), ui_px(28));
+        lv_obj_align(mute_switch, LV_ALIGN_CENTER, ui_px(64), ui_px(2));
+        lv_obj_add_event_cb(mute_switch, options_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    }
 
     lv_obj_t *show_label = lv_label_create(setup_page);
     lv_label_set_text(show_label, "Show HiveMind while");
     lv_obj_set_style_text_color(show_label, COLOR_MUTED, 0);
-    lv_obj_align(show_label, LV_ALIGN_CENTER, 0, ui_px(36));
+    lv_obj_align(show_label, LV_ALIGN_CENTER, 0, ui_px(speaker ? 36 : 20));
 
     static const char *const shows[] = { "Off", "Talk", "Hear", "Both", "" };
-    show_buttons = ui_add_choices(setup_page, shows, ui_px(176), ui_px(32), ui_px(64));
+    show_buttons = ui_add_choices(setup_page, shows, ui_px(176), ui_px(32), ui_px(speaker ? 64 : 48));
     lv_obj_add_event_cb(show_buttons, options_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     show_setup();
@@ -753,7 +765,8 @@ static void add_voice_page(ui_feature_t *feature)
         len += strlen(voice_fx_preset_name(i)) + 1;
     }
     char *options = lv_malloc(len);
-    snprintf(options, len, "Same as speaker");
+    // The first is the effect on the Voice page: the speaker's, where there's one
+    snprintf(options, len, settings_speaker_fitted() ? "Same as speaker" : "As Voice page");
     for (size_t i = 0; i < voice_fx_preset_count(); i++)
     {
         strcat(options, "\n");

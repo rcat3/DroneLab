@@ -125,13 +125,13 @@ class _AboutPageState extends State<AboutPage> {
             padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom),
             children: [
               _Logo(onTap: _openSite),
-              const SectionHeader('The app'),
+              const SectionHeader('App'),
               Panel(children: [
                 _Fact('Version', _app?.version ?? '...'),
                 _Fact('OS', _os ?? '...'),
                 if ((_phone ?? '').isNotEmpty) _Fact('Device', _phone!),
               ]),
-              const SectionHeader('The unit'),
+              const SectionHeader('Display unit'),
               Panel(children: [
                 PanelRow(
                   leading: _LinkDot(up),
