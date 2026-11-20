@@ -85,8 +85,8 @@ def gif_for_lvgl(img, size, comment=None):
     sheet = Image.new("RGB", (w, h * len(frames)))
     for i, frame in enumerate(frames):
         sheet.paste(frame, (0, i * h))
-    palette = sheet.quantize(colors=256, method=Image.Quantize.MEDIANCUT)
-    frames = [frame.quantize(palette=palette, dither=Image.Dither.NONE) for frame in frames]
+    palette = sheet.quantize(colors=256, method=Image.MEDIANCUT)    # the enums are Pillow 9.1 on; Ubuntu 22.04 has 9.0
+    frames = [frame.quantize(palette=palette, dither=Image.NONE) for frame in frames]
 
     # Pillow still only stores the changed area of each frame, but with
     # optimize off it doesn't use transparent pixels to do it.
