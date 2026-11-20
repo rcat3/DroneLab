@@ -46,27 +46,34 @@ void showIncomingCall(CommController comm, String personId) {
             Text(other == null ? 'Calling you, alone' : "Calling you. Answering puts your call with $other on hold",
                 textAlign: TextAlign.center, style: const TextStyle(color: Kc.muted)),
           ]),
-          actionsAlignment: MainAxisAlignment.spaceEvenly,
+          // Side by side, each half the width, however narrow the screen
           actions: [
-            FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: Kc.red, foregroundColor: Colors.white),
-              onPressed: () {
-                comm.endCall(personId);
-                Navigator.of(dialog).pop();
-              },
-              icon: const Icon(Icons.call_end),
-              label: const Text('Decline'),
-            ),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: Kc.darkGreen, foregroundColor: Colors.white),
-              onPressed: () {
-                comm.answerCall(personId);
-                appTab.value = tabVoice;
-                Navigator.of(dialog).pop();
-              },
-              icon: const Icon(Icons.call),
-              label: const Text('Answer'),
-            ),
+            Row(children: [
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(backgroundColor: Kc.red, foregroundColor: Colors.white),
+                  onPressed: () {
+                    comm.endCall(personId);
+                    Navigator.of(dialog).pop();
+                  },
+                  icon: const Icon(Icons.call_end),
+                  label: const Text('Decline'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(backgroundColor: Kc.darkGreen, foregroundColor: Colors.white),
+                  onPressed: () {
+                    comm.answerCall(personId);
+                    appTab.value = tabVoice;
+                    Navigator.of(dialog).pop();
+                  },
+                  icon: const Icon(Icons.call),
+                  label: const Text('Answer'),
+                ),
+              ),
+            ]),
           ],
         );
       },

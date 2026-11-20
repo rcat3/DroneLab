@@ -269,7 +269,7 @@ class CommController extends ChangeNotifier {
     _talkTo = TalkTarget.fromPref(p.getString('talkTo'));
     talkTones = p.getBool('talkTones') ?? true;
     ringInHeadphones = p.getBool('ringInHeadphones') ?? true;
-    ringTone = p.getString('ringTone') ?? 'classic';
+    ringTone = p.getString('ringTone') ?? 'chirp';
     missedCalls.load(p.getString('missedCalls'));
     // Talking to someone alone takes a call, which doesn't outlast the app
     if (_talkTo.kind == TalkTo.person) _talkTo = const TalkTarget.server();
@@ -863,7 +863,7 @@ class CommController extends ChangeNotifier {
   /// Ring in the headphones too, with this tone (calls.dart's ringTones).
   /// Kept for next time.
   bool ringInHeadphones = true;
-  String ringTone = 'classic';
+  String ringTone = 'chirp';
 
   /// Someone's started calling: for the app to show it, wherever it is.
   final _incomingCalls = StreamController<Call>.broadcast();

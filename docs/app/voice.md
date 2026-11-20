@@ -72,12 +72,12 @@ Talking to one person alone is a call.  **Tap someone** and the app asks *Call t
 
 The red **hang-up button** on their row ends the call, or stops calling, or declines one ringing.  Tap a channel while in a call and the call stays up, **on hold**: they hear two short beeps every few seconds until you come back, by tapping them again, or one of you hangs up.  A call ends by itself if they're out of reach for a minute.
 
-Calls ring on the phone with its ringtone, from the *Calls* notification, and in your headphones too, so you hear it under the mask.  While you're calling, you hear a soft ringing tone every few seconds until they answer.
+Calls ring in your headphones, as you'll nearly always have them on, with the app showing who's calling.  To have the phone ring too, with its ringtone, switch on the *Calls* notification.  While you're calling, you hear a soft ringing tone every few seconds until they answer.
 
 **Call waiting**: someone calling while you're talking in a call doesn't ring.  You hear two soft low beeps every few seconds instead, the notification comes silently, and the app shows *CALL WAITING*.  Answering puts the call you're in on hold; declining, or letting it go, leaves you where you were, and they see a missed call.  You can have several calls going: you talk to the one you've picked, and the others are on hold, each hearing the hold beeps.  In Setup:
 
-- **Calls**: *Ring in headphones* on or off, and the **Headphone ring**: *Classic*, *Chirp* or *Pulse*, with a play button to hear it.
-- **Notifications**: *Calls* and *Missed calls* on or off; the tune button by *Calls* is where to pick the phone's ringtone.
+- **Calls**: *Ring in headphones* on or off, and the **Headphone ring**: *Chirp* (the first choice), *Classic* or *Pulse*, with a play button to hear it.
+- **Notifications**: *Calls* (off at first) rings the phone as well, and the tune button by it is where to pick its ringtone; *Missed calls* on or off.
 
 Calls need both of you on this release of the app, and over direct mode, the unit's firmware from this release too.
 

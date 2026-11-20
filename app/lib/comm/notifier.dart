@@ -25,7 +25,7 @@ class Notifier {
   /// Texts from others, and the unit's battery running low.
   bool texts = true;
   bool battery = true;
-  bool calls = true;
+  bool calls = false;     // off at first: calls ring in the headphones, worn nearly all the time
   bool missed = true;
 
   /// A call's notification, tapped or answered from it: what (null for the
@@ -44,7 +44,7 @@ class Notifier {
     _prefs = await SharedPreferences.getInstance();
     texts = _prefs!.getBool('notifyTexts') ?? true;
     battery = _prefs!.getBool('notifyBattery') ?? true;
-    calls = _prefs!.getBool('notifyCalls') ?? true;
+    calls = _prefs!.getBool('notifyCalls') ?? false;
     missed = _prefs!.getBool('notifyMissed') ?? true;
     try {
       await _plugin.initialize(

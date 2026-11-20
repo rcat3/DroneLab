@@ -316,7 +316,7 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
         );
     return Panel(children: [
       row('Text messages', 'Every text that comes in. Tap one to read it', Notifier.textsChannel, n.texts, n.setTexts),
-      row('Calls', 'Ring when someone calls. The ringtone is set here', Notifier.callsChannel, n.calls, n.setCalls),
+      row('Calls', "Ring on the phone too, with its ringtone. Off, calls ring in the headphones only", Notifier.callsChannel, n.calls, n.setCalls),
       row('Missed calls', "Calls you didn't answer", Notifier.missedChannel, n.missed, n.setMissed),
       row('Unit battery low', 'At 15%, unless it\'s charging', Notifier.batteryChannel, n.battery, n.setBattery),
     ]);
@@ -333,8 +333,8 @@ class _CallsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Panel(children: [
       Explained(
-        help: "Someone calling rings in your headphones as well as on the phone, so you hear it under the mask. "
-            "The phone's ringtone is the Calls notification's, under Notifications.",
+        help: "Someone calling rings in your headphones, so you hear it under the mask. To have the phone ring "
+            "as well, switch on the Calls notification, under Notifications; its ringtone is set there.",
         builder: (context, info) => PanelRow(
           title: 'Ring in headphones',
           trailing: [info, Switch(value: comm.ringInHeadphones, onChanged: (on) => comm.setRing(headphones: on))],
