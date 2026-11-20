@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
+import '../comm/text_responder.dart';
+import 'theme.dart';
 import 'widgets.dart';
 
 /// Developer options: shown in Setup once the app's version on the About
@@ -49,7 +51,41 @@ class DeveloperPage extends StatelessWidget {
                     ],
                   ),
                 ),
+                Explained(
+                  help: 'Each text received is echoed back to the conversation it came in, on every channel, '
+                      'the ways a text there goes, a second after it comes. A text sent to you privately that '
+                      'starts with / is a command instead, answered privately; /help lists them. A text typed on '
+                      'this phone in the last minute isn\'t echoed, nor the same text twice within 5 seconds, so '
+                      'two responders don\'t echo each other for ever. Over adb too: see text_responder.dart.',
+                  builder: (context, info) => PanelRow(
+                    title: 'Text responder',
+                    subtitle: !comm.textResponder.on
+                        ? 'Off'
+                        : comm.textResponder.echo
+                            ? 'Echoing texts, taking commands'
+                            : 'Taking commands, not echoing',
+                    trailing: [
+                      info,
+                      Switch(value: comm.textResponder.on, onChanged: comm.setTextResponder),
+                    ],
+                  ),
+                ),
+                if (comm.textResponder.on)
+                  PanelRow(
+                    title: 'Echo texts',
+                    subtitle: 'Off leaves only the commands',
+                    trailing: [Switch(value: comm.textResponder.echo, onChanged: comm.setTextEcho)],
+                  ),
               ]),
+              if (comm.textResponder.on) ...[
+                const SectionHeader('Commands'),
+                Panel(children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: SelectableText(TextResponder.help, style: Kc.term(14)),
+                  ),
+                ]),
+              ],
               const SectionHeader('Hide'),
               Panel(children: [
                 PanelRow(

@@ -1,6 +1,9 @@
 package io.github.rcat3.dronelab
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
@@ -20,6 +23,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var session: MediaSession? = null
     private var channel: MethodChannel? = null
+    private var dev: BroadcastReceiver? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -50,6 +54,35 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+        // The developer options over adb (text_responder.dart's DevRemote):
+        // only the shell can send it, as it needs DUMP, which apps can't have
+        val devChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/dev")
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                val pending = goAsync()
+                devChannel.invokeMethod("command", intent.getStringExtra("c") ?: "", object : MethodChannel.Result {
+                    override fun success(result: Any?) {
+                        pending.resultData = result as? String
+                        pending.finish()
+                    }
+                    override fun error(code: String, message: String?, details: Any?) {
+                        pending.resultData = "error: $message"
+                        pending.finish()
+                    }
+                    override fun notImplemented() {
+                        pending.resultData = "not ready"
+                        pending.finish()
+                    }
+                })
+            }
+        }
+        val filter = IntentFilter("io.github.rcat3.dronelab.DEV")
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(receiver, filter, android.Manifest.permission.DUMP, null, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(receiver, filter, android.Manifest.permission.DUMP, null)
+        }
+        dev = receiver
         // The phone, for the About page
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/device").setMethodCallHandler { call, result ->
             if (call.method == "info") {
@@ -116,6 +149,8 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         stopSession()
+        dev?.let { unregisterReceiver(it) }
+        dev = null
         super.onDestroy()
     }
 }

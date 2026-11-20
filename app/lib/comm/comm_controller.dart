@@ -34,6 +34,7 @@ import 'jitter.dart';
 import 'media_buttons.dart';
 import 'message_details.dart';
 import 'recorder.dart';
+import 'text_responder.dart';
 import 'mumble_client.dart';
 
 /// Who talking goes to: our server channel, our direct channel, or one
@@ -276,6 +277,9 @@ class CommController extends ChangeNotifier {
     talkTones = p.getBool('talkTones') ?? true;
     developerOptions = p.getBool('developerOptions') ?? false;
     voiceResponder.on = developerOptions && (p.getBool('voiceResponder') ?? false);
+    textResponder.on = developerOptions && (p.getBool('textResponder') ?? false);
+    textResponder.echo = p.getBool('textEcho') ?? true;
+    DevRemote.listen(this);
     ringInHeadphones = p.getBool('ringInHeadphones') ?? true;
     textTone = p.getBool('textTone') ?? true;
     try {
@@ -886,8 +890,38 @@ class CommController extends ChangeNotifier {
   Future<void> setDeveloperOptions(bool on) async {
     developerOptions = on;
     await _prefs?.setBool('developerOptions', on);
-    if (!on) await setVoiceResponder(false);
+    if (!on) {
+      await setVoiceResponder(false);
+      await setTextResponder(false);
+    }
     notifyListeners();
+  }
+
+  /// Texts echoed back where they came, and commands taken in private ones
+  /// (text_responder.dart).
+  late final textResponder = TextResponder(this);
+
+  Future<void> setTextResponder(bool on) async {
+    textResponder.on = on;
+    await _prefs?.setBool('textResponder', on);
+    notifyListeners();
+  }
+
+  Future<void> setTextEcho(bool on) async {
+    textResponder.echo = on;
+    await _prefs?.setBool('textEcho', on);
+    notifyListeners();
+  }
+
+  /// Texts typed here lately (not the responder's), so a responder doesn't
+  /// echo another's echo of ours.
+  final Map<String, int> _sentTexts = {};
+  static const _sentTextsFor = 60000;   // ms
+
+  bool sentLately(String text) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _sentTexts.removeWhere((_, at) => now - at > _sentTextsFor);
+    return _sentTexts.containsKey(text);
   }
 
   /// Each transmission heard on the channel talked to, sent back a second
@@ -2081,7 +2115,7 @@ class CommController extends ChangeNotifier {
   /// Text a conversation: over the server as a Mumble text message (to the
   /// channel, or to one person), and over direct comms as one of ours.
   /// Returns false if it couldn't go anywhere.
-  bool sendText(Conversation c, String text) {
+  bool sendText(Conversation c, String text, {bool typed = true}) {
     text = text.trim();
     if (text.isEmpty) return false;
     final m = mumble;
@@ -2140,6 +2174,7 @@ class CommController extends ChangeNotifier {
         if (b != null && b.key != null) toDirectRoute(to: b);
     }
     if (sent) {
+      if (typed) _sentTexts[text] = now;
       conversations.add(c, ConversationEntry(
           from: '', mine: true, kind: ConversationEntry.text, body: text, ref: _myRef('$msgId'),
           details: MessageDetails(_scopeOf(c), routes)));
@@ -2444,9 +2479,11 @@ class CommController extends ChangeNotifier {
             ? everyoneConversation
             : (serverConversation ?? everyoneConversation);
     if (text.isNotEmpty) {
-      conversations.add(c, ConversationEntry(
+      final e = ConversationEntry(
           from: t.from, who: who.id, mine: false, kind: ConversationEntry.text, body: text, ref: refOf('', 'text:$text'),
-          details: MessageDetails(scope, [route])));
+          details: MessageDetails(scope, [route]));
+      conversations.add(c, e);
+      textResponder.received(c, e);
     }
     // Each photo kept as a file, in order after the words
     for (final (i, (ext, bytes)) in photos.indexed) {
@@ -2570,6 +2607,7 @@ class CommController extends ChangeNotifier {
     }
     conversations.add(c, e);
     if (h.what == Heard.text) _notifyText(c);
+    textResponder.received(c, e);
     if (e.done && h.what == Heard.lovense) playUnitSound(UnitSoundEvent.lovense);
     if (e.done && h.what == Heard.terminal) playUnitSound(UnitSoundEvent.terminal);
   }
