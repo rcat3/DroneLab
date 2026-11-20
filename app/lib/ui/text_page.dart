@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../comm/board_protocol.dart';
@@ -220,6 +220,37 @@ class _ConversationPageState extends State<ConversationPage> {
   int _shown = -1;
   bool _sendingPhoto = false;
 
+  /// A line held: copy its words, or delete it here.
+  Future<void> _entryMenu(Conversation c, ConversationEntry e) async {
+    final what = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (e.kind == ConversationEntry.text)
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy text'),
+              onTap: () => Navigator.pop(sheet, 'copy'),
+            ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline, color: Kc.softRed),
+            title: const Text('Delete for me'),
+            subtitle: Text(e.kind == ConversationEntry.photo
+                ? 'Gone from this phone, photo and all. Others keep theirs'
+                : 'Gone from this phone. Others keep theirs'),
+            onTap: () => Navigator.pop(sheet, 'delete'),
+          ),
+        ]),
+      ),
+    );
+    if (!mounted) return;
+    if (what == 'copy') {
+      await Clipboard.setData(ClipboardData(text: e.body));
+    } else if (what == 'delete') {
+      comm.conversations.deleteEntry(c, e);
+    }
+  }
+
   /// Take or pick a photo, and send it, over the server.
   Future<void> _photo(Conversation c) async {
     final source = await showModalBottomSheet<ImageSource>(
@@ -342,10 +373,14 @@ class _ConversationPageState extends State<ConversationPage> {
                       controller: _scroll,
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                       itemCount: c.entries.length,
-                      itemBuilder: (context, i) => _Entry(c.entries[i], _time(c.entries[i].time),
-                          from: comm.fromLabel(c.entries[i]),
-                          named: group,
-                          photo: comm.conversations.photoFile(c.entries[i])),
+                      // Hold one for what can be done with it
+                      itemBuilder: (context, i) => GestureDetector(
+                        onLongPress: () => _entryMenu(c, c.entries[i]),
+                        child: _Entry(c.entries[i], _time(c.entries[i].time),
+                            from: comm.fromLabel(c.entries[i]),
+                            named: group,
+                            photo: comm.conversations.photoFile(c.entries[i])),
+                      ),
                     ),
             ),
             Container(

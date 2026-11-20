@@ -9,6 +9,7 @@ import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import 'people.dart';
+import 'theme.dart';
 
 /// The phone remote: the board's own remote page (core/app/remote_page.html),
 /// with its requests going to the board over Bluetooth instead of the
@@ -178,7 +179,11 @@ class _RemotePageState extends State<RemotePage> {
     final web = _web;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Remote'),
+        title: const Row(children: [
+          Icon(Icons.phone_android, color: Kc.green, size: 22),
+          SizedBox(width: 10),
+          Text('Remote'),
+        ]),
         actions: const [Padding(padding: EdgeInsets.only(right: 16), child: Text('over Bluetooth'))],
       ),
       body: _wasConnected && _tooOld

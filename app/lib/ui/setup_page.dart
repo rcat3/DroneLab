@@ -150,7 +150,7 @@ class SetupPage extends StatelessWidget {
                     ]),
                   ),
                 ]),
-              const SectionHeader('Calls'),
+              const SectionHeader('Headphones'),
               _CallsPanel(comm: comm),
               const SectionHeader('Your identity'),
               _IdentityPanel(comm: comm),
@@ -323,8 +323,8 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
   }
 }
 
-/// Calls' ringing in the headphones: on or off, and which tone. The
-/// phone's own ring is the Calls notification's.
+/// Sounds in the headphones: calls' ringing, on or off, and which tone (the
+/// phone's own ring is the Calls notification's); and a tone for texts.
 class _CallsPanel extends StatelessWidget {
   final CommController comm;
   const _CallsPanel({required this.comm});
@@ -332,6 +332,23 @@ class _CallsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Panel(children: [
+      Explained(
+        help: 'Two quick high blips in your headphones as a text or photo comes in, unlike any other sound '
+            "the app makes, so you know without looking. It's in the headphones only: the phone stays quiet "
+            'unless the Text messages notification makes a sound.',
+        builder: (context, info) => PanelRow(
+          title: 'Text tone',
+          trailing: [
+            info,
+            IconButton(
+              tooltip: 'Play it',
+              icon: const Icon(Icons.play_arrow, color: Kc.muted),
+              onPressed: comm.previewTextTone,
+            ),
+            Switch(value: comm.textTone, onChanged: comm.setTextTone),
+          ],
+        ),
+      ),
       Explained(
         help: "Someone calling rings in your headphones, so you hear it under the mask. To have the phone ring "
             "as well, switch on the Calls notification, under Notifications; its ringtone is set there.",

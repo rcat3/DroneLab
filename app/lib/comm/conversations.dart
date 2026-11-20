@@ -217,6 +217,14 @@ class Conversations extends ChangeNotifier {
     if (any) _saveSoon();
   }
 
+  /// One line gone from a conversation, here only; a photo's file with it.
+  void deleteEntry(Conversation c, ConversationEntry e) {
+    if (!c.entries.remove(e)) return;
+    photoFile(e)?.delete().catchError((_) => File(''));
+    notifyListeners();
+    _saveSoon();
+  }
+
   void markRead(Conversation c) {
     onSeen?.call(c.key);
     if (c.unread == 0) return;

@@ -146,6 +146,9 @@ class CallTones {
   /// beeps, under the conversation rather than over it.
   Int16List waiting() => _notes([([440.0], 150), ([], 150), ([440.0], 150)], 0.08);
 
+  /// A text's come in: two quick high blips, unlike any of the others.
+  Int16List text() => _notes([([1568.0], 45), ([], 35), ([2093.0], 70)], 0.09);
+
   /// It's ringing at theirs.
   Int16List ringBack() => _notes([([440.0, 480.0], 500)], 0.07);
 

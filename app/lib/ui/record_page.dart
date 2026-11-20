@@ -51,7 +51,14 @@ class _RecordPageState extends State<RecordPage> {
         final rec = comm.recording;
         final fg = rec ? Colors.white : connected ? Kc.softRed : Kc.off;
         return Scaffold(
-          appBar: AppBar(title: const Text('Record')),
+          appBar: AppBar(
+            // The tab's own icon, as on the others
+            title: const Row(children: [
+              Icon(Icons.fiber_manual_record_outlined, color: Kc.green, size: 22),
+              SizedBox(width: 10),
+              Text('Record'),
+            ]),
+          ),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [

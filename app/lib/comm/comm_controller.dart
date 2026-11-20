@@ -271,6 +271,7 @@ class CommController extends ChangeNotifier {
     _talkTo = TalkTarget.fromPref(p.getString('talkTo'));
     talkTones = p.getBool('talkTones') ?? true;
     ringInHeadphones = p.getBool('ringInHeadphones') ?? true;
+    textTone = p.getBool('textTone') ?? true;
     ringTone = p.getString('ringTone') ?? 'chirp';
     missedCalls.load(p.getString('missedCalls'));
     // Talking to someone alone takes a call, which doesn't outlast the app
@@ -951,6 +952,18 @@ class CommController extends ChangeNotifier {
 
   /// The same signal comes over the server and directly: once.
   final Map<String, int> _callSignalsSeen = {};
+
+  /// A tone in the headphones as a text comes in. Kept for next time.
+  bool textTone = true;
+
+  Future<void> setTextTone(bool on) async {
+    textTone = on;
+    await _prefs?.setBool('textTone', on);
+    notifyListeners();
+  }
+
+  /// Play the text tone, to hear what it's like.
+  void previewTextTone() => _tone(_callTones.text());
 
   Future<void> setRing({bool? headphones, String? tone}) async {
     if (headphones != null) {
@@ -2063,6 +2076,8 @@ class CommController extends ChangeNotifier {
 
   /// A text's come in: a notification, unless its conversation's on screen.
   void _notifyText(Conversation c) {
+    // In the headphones, whether it's on screen or not
+    if (textTone) _tone(_callTones.text());
     final visible = WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     if (visible && conversations.open == c.key) return;
     final unread = c.entries.length < c.unread ? c.entries : c.entries.sublist(c.entries.length - c.unread);
