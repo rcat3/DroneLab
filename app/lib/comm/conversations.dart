@@ -283,6 +283,16 @@ String messageRef(String author, String id) =>
 /// The quick reactions to pick from.
 const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
+/// All the reactions, in groups, behind the quick ones' +.
+const reactionGroups = <(String, List<String>)>[
+  ('Smiles and laughs', ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '😊', '😇', '😉', '😍', '🥰', '😘', '😋', '😜', '🤪', '😏', '😎', '😮']),
+  ('Cats', ['😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾']),
+  ('Hearts', ['❤️', '🩷', '🧡', '💛', '💚', '🩵', '💙', '💜', '🤎', '🖤', '🩶', '🤍', '💔', '❤️‍🔥']),
+  ('Hands', ['👍', '👎', '👏', '🙌', '👌', '✌️', '🤘', '☝️', '👆', '🖕', '🙏', '💪']),
+  ('Sad', ['🙁', '☹️', '😞', '😔', '😟', '😕', '😥', '😢', '😭', '😓', '🥺', '😩']),
+  ('More', ['🤖', '👽', '👾', '🔥', '💯', '⚡', '🎉', '👀', '🤔', '😱', '😈', '💀']),
+];
+
 /// What a command did, in words, for a conversation: [op] is the command
 /// from what to do on, as the board passes it on. [mine] for ones we sent
 /// ("their"), else for ones sent us ("your").

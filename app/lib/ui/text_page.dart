@@ -227,24 +227,17 @@ class _ConversationPageState extends State<ConversationPage> {
       context: context,
       builder: (sheet) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // A reaction: tap the one you've given to take it back
+          // A reaction: tap the one you've given to take it back; + for them all
           if (canReact)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-                for (final r in quickReactions)
-                  InkWell(
-                    borderRadius: BorderRadius.circular(24),
-                    onTap: () => Navigator.pop(sheet, 'react:$r'),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: e.reactions[''] == r ? Kc.pink.withValues(alpha: 0.25) : null,
-                      ),
-                      child: Text(r, style: const TextStyle(fontSize: 28)),
-                    ),
-                  ),
+                for (final r in quickReactions) _emojiButton(sheet, r, e.reactions[''] == r),
+                IconButton(
+                  tooltip: 'All of them',
+                  icon: const Icon(Icons.add_reaction_outlined, color: Kc.muted, size: 28),
+                  onPressed: () => Navigator.pop(sheet, 'more'),
+                ),
               ]),
             ),
           if (e.kind == ConversationEntry.text)
@@ -265,6 +258,11 @@ class _ConversationPageState extends State<ConversationPage> {
       ),
     );
     if (!mounted) return;
+    if (what == 'more') {
+      final r = await _allReactions(e);
+      if (r != null && mounted) comm.react(c, e, r);
+      return;
+    }
     if (what != null && what.startsWith('react:')) {
       comm.react(c, e, what.substring(6));
     } else if (what == 'copy') {
@@ -273,6 +271,50 @@ class _ConversationPageState extends State<ConversationPage> {
       comm.conversations.deleteEntry(c, e);
     }
   }
+
+  Widget _emojiButton(BuildContext sheet, String r, bool mine) => InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: () => Navigator.pop(sheet, 'react:$r'),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: mine ? Kc.pink.withValues(alpha: 0.25) : null),
+          child: Text(r, style: const TextStyle(fontSize: 28)),
+        ),
+      );
+
+  /// Every reaction, in its groups, to pick one.
+  Future<String?> _allReactions(ConversationEntry e) => showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        builder: (sheet) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.6,
+          maxChildSize: 0.9,
+          builder: (sheet, scroll) => ListView(
+            controller: scroll,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            children: [
+              for (final (group, emojis) in reactionGroups) ...[
+                SectionHeader(group),
+                Wrap(spacing: 2, runSpacing: 2, children: [
+                  for (final r in emojis)
+                    InkWell(
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: () => Navigator.pop(sheet, r),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: e.reactions[''] == r ? Kc.pink.withValues(alpha: 0.25) : null),
+                        child: Text(r, style: const TextStyle(fontSize: 30)),
+                      ),
+                    ),
+                ]),
+              ],
+            ],
+          ),
+        ),
+      );
 
   /// Take or pick a photo, and send it, over the server.
   Future<void> _photo(Conversation c) async {
