@@ -333,9 +333,13 @@ Future<void> pickBoard(BuildContext context, CommController comm) async {
                   Panel(color: Kc.bg, children: [
                     for (final f in boards)
                       PanelRow(
-                        leading: const Icon(Icons.bluetooth, color: Kc.muted),
+                        leading: Icon(f.local ? Icons.computer : Icons.bluetooth, color: Kc.muted),
                         title: f.name,
-                        subtitle: f.id == comm.lastBoardId ? 'Yours, last time' : 'Signal ${f.rssi} dBm',
+                        subtitle: f.id == comm.lastBoardId
+                            ? 'Yours, last time'
+                            : f.local
+                                ? 'On this computer'
+                                : 'Signal ${f.rssi} dBm',
                         onTap: () => Navigator.pop(context, f),
                       ),
                   ]),
