@@ -30,7 +30,7 @@ mkdir -p "$STL"
 
 # Render everything once: the housings and tests, then the travel cases
 OUT="$STL" "$BOARD_DIR/render.sh" speaker low_profile tests
-OUT="$STL" "$BOARD_DIR/travel_case/render.sh" speaker low_profile
+OUT="$STL" "$BOARD_DIR/travel_case/render.sh" speaker low_profile tests
 
 # pack <zip name> <folder name> <readme> <housing parts> -- <case parts> -- <tests>
 pack() {
@@ -81,14 +81,14 @@ travel_case/     A hinged case to carry it in. PLA, no supports. Its hinge
                  pins are lengths of 1.75 mm filament
 
 tests/           Quick test prints for tuning your own printer's fit:
-                 lens_fit, plunger_test and pod_test. Print services can
-                 skip these. To change a setting, render the parts yourself
-                 from the .scad files (see the build guide)
+                 lens_fit, plunger_test, pod_test and clasp_test. Print
+                 services can skip these. To change a setting, render the
+                 parts yourself from the .scad files (see the build guide)
 
 $LICENSE_NOTE" \
     body chin back collar washer gasket plungers usb_plug \
     -- speaker_case_bottom speaker_case_lid speaker_case_clasp \
-    -- lens_fit plunger_test pod_test
+    -- lens_fit plunger_test pod_test clasp_test
 
 pack DroneLab-low-profile-model-stl.zip DroneLab-low-profile-model "DroneLab Low-Profile Model: printable parts
 KatCorp Drone Systems, DroneLab $VERSION
@@ -109,12 +109,12 @@ travel_case/     A hinged case to carry it in. PLA, no supports. Its hinge
                  test-printed
 
 tests/           Quick test prints for tuning your own printer's fit and the
-                 thread's angle in your mask: lp_lens_fit, lp_phase_test and
-                 plunger_test. Print services can skip these. To change a
-                 setting, render the parts yourself from the .scad files
-                 (see the build guide)
+                 thread's angle in your mask: lp_lens_fit, lp_phase_test,
+                 plunger_test and clasp_test. Print services can skip these.
+                 To change a setting, render the parts yourself from the
+                 .scad files (see the build guide)
 
 $LICENSE_NOTE" \
     lp_body lp_back plungers usb_plug \
     -- lp_case_bottom lp_case_lid lp_case_clasp \
-    -- lp_lens_fit lp_phase_test plunger_test
+    -- lp_lens_fit lp_phase_test plunger_test clasp_test

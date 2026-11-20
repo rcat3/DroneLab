@@ -9,12 +9,15 @@
 include <../msa_speaker_housing.scad>
 
 part = "speaker_case_closed";   // "speaker_case_closed", "speaker_case_bottom",
-                                // "speaker_case_lid" or "speaker_case_clasp".
+                                // "speaker_case_lid", "speaker_case_clasp" or "clasp_test",
+                                // which fits both cases.
                                 // Set after the housing's design, whose own part setting it replaces
 
 /* [Fit] */
 case_clear = 0.5;           // around the housing
 lid_depth = 6;              // how much of the front of the housing the lid covers
+plunger_room = 1.5;         // past the plungers' ends, so the case can't press a button,
+                            // even with the housing pushed against that side, or a longer test plunger
 
 // The thread's outside, at its widest
 thread_out_r = 26 * thread_scale;
@@ -26,10 +29,12 @@ case_split = z_front - lid_depth;
 case_x = 0;
 hinge_len = 28;
 
-// The plungers stand out of the side
+// The plungers stand out of the side. Their notches go plunger_room past
+// their ends: the housing can shift case_clear in the pocket, and the
+// buttons only need a few tenths of a millimeter to click.
 module plungers_2d()
 {
-    for (a = button_angles) rotate(a + board_rot) translate([body_r - 1, -plunger_d / 2]) square([plunger_proud + 1, plunger_d]);
+    for (a = button_angles) rotate(a + board_rot) translate([body_r - 1, -plunger_d / 2]) square([plunger_proud + plunger_room + 1, plunger_d]);
 }
 
 module case_outline_2d()
@@ -80,3 +85,4 @@ if (part == "speaker_case_closed")
 else if (part == "speaker_case_bottom") case_bottom_print();
 else if (part == "speaker_case_lid") case_lid_print();
 else if (part == "speaker_case_clasp") case_clasp_print();
+else if (part == "clasp_test") clasp_test_print();

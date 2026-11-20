@@ -11,9 +11,9 @@
 // opposite side by a clasp: a lever that turns on a second filament pin in
 // ears on the lid, with a C-shaped end that snaps round a bar on the bottom.
 // To open it, pull the lever's grip outwards. Nothing in the case bends to
-// open or close it but the C's jaws, a fraction of a millimeter, and the
-// clasp is a separate part, printed on its side so its layers run round the
-// C, and quick to reprint if it wears.
+// open or close it but the C's upper jaw, which is a spring, free of the
+// lever behind a slot, and the clasp is a separate part, printed on its side
+// so its layers run round the C, and quick to reprint if it wears.
 //
 // The including file defines:
 //   case_pocket()      the space the housing takes up, as a 3D shape, grown by
@@ -36,7 +36,8 @@
 //
 // The parts are rendered by case_bottom_print(), case_lid_print() and
 // case_clasp_print(), turned the right way up to print with no supports, and
-// case_closed() shows them together.
+// case_closed() shows them together. clasp_test_print() is a test print of
+// clasps that snap on more and less firmly, which fit the same bar.
 
 /* [Case] */
 case_wall = 2.4;            // around the pocket, thick enough for the lip and the lid's skirt over it
@@ -65,11 +66,17 @@ clasp_t = 3.0;              // the lever's thickness
 clasp_pivot = 4.0;          // the pin's height above the split
 clasp_reach = 12;           // from the pin down to the bar
 barrel_r = 3.0;             // the lever's end round the pin, and the lid's ears
-clasp_hole = 2.3;           // the lever turns on the pin. It prints standing, so its hole comes out round
+clasp_hole = 2.1;           // the lever turns on the pin. It prints standing, so its hole comes out round
 bar_d = 4.2;                // the bar on the bottom the C snaps round
 ring_t = 1.5;               // the C's wall
 ring_fit = 0.15;            // inside the C, round the bar
-snap = 0.3;                 // how much narrower the C's mouth is than the bar: how hard it snaps
+snap = 0.45;                // how much narrower the C's mouth is than the bar: how hard it snaps.
+                            // The upper jaw bends by about this much to let the bar through
+jaw_slot = 0.8;             // between the C's upper jaw and the lever, so the jaw can bend
+jaw_root = -10;             // where the upper jaw joins the rest of the clasp, in degrees round
+                            // the C from straight out: the jaw is free from here to its tip
+knee_t = 1.5;               // the lever round the outside of the slot, down to the jaw's root
+clasp_test_snaps = [0.35, 0.45, 0.55];  // the clasp test's clasps, marked with one, two and three notches
 clasp_grip = 4;             // below the C, flared outwards, to pull it open with
 ear_w = 4;                  // the ears either side of the lever: the lid's hold the pin, the bottom's the bar
 clasp_gap = 0.4;            // between the lever and the ears, and the lever's end and the lid's wall
@@ -85,7 +92,7 @@ pivot_z = case_split + clasp_pivot;             // the clasp's pin, in z
 bar_z = pivot_z - clasp_reach;                  // the bar, in z
 ring_ri = bar_d / 2 + ring_fit;
 ring_ro = ring_ri + ring_t;
-mouth = asin((bar_d / 2 - snap / 2) / ring_ri); // half the angle the C's mouth spans
+function mouth_for(s) = asin((bar_d / 2 - s / 2) / ring_ri);   // half the angle the C's mouth spans
 clasp_span = clasp_w + 2 * (clasp_gap + ear_w); // the ears and the lever together, along x
 
 assert(case_wall - lip_w - lip_play >= 1, "the lid's skirt outside the lip is too thin; thicken case_wall");
@@ -234,33 +241,61 @@ module clasp_ears()
 // which wraps round the bar with its mouth towards the wall, and a grip below
 // the C, flared outwards. Swung in round the pin, the C's mouth meets the bar
 // head on, and its jaws spread to snap over it.
-module clasp_2d()
+//
+// The C's lower half carries the lid's pull, so it's joined solidly to the
+// lever and the grip. Its upper jaw is a spring: a slot jaw_slot wide
+// separates it from the lever, from its tip round to jaw_root, just below
+// straight out, and the lever comes down round the outside of the slot, a
+// knee knee_t thick, to join the C there. Without it, the jaws were short
+// and stiff, and the snap rested on a few tenths of a millimeter of the
+// print's accuracy, and on its wear.
+//
+// s is the snap, and marks the number of small notches on the grip, which
+// tell the clasp test's clasps apart.
+module clasp_2d(s = snap, marks = 0)
 {
+    m = mouth_for(s);
+    slot_ro = ring_ro + jaw_slot;
+    knee = slot_ro + knee_t;
+    grip_top = [clasp_y + knee, bar_z - 1.5];
+    grip_end = [clasp_y + knee + 0.5, bar_z - ring_ro - clasp_grip];
     difference()
     {
         union()
         {
             translate([clasp_y, pivot_z]) circle(r = barrel_r, $fn = 48);
             translate([clasp_y, bar_z]) square([clasp_t, clasp_reach]);
+            // The knee: round the outside of the slot, and down the C's outer side
+            translate([clasp_y, bar_z - 1.5]) square([knee, knee + 1.5]);
             translate([clasp_y, bar_z]) circle(r = ring_ro, $fn = 64);
             polygon([
-                [clasp_y + 0.5, bar_z - ring_ro + 0.3], [clasp_y + ring_ro, bar_z],
-                [clasp_y + ring_ro + 1.5, bar_z - ring_ro - clasp_grip], [clasp_y + 1.5, bar_z - ring_ro - clasp_grip]
+                [clasp_y + 0.5, grip_top[1]], grip_top,
+                grip_end, [clasp_y + 1.5, bar_z - ring_ro - clasp_grip]
             ]);
         }
         translate([clasp_y, bar_z])
         {
             circle(r = ring_ri, $fn = 64);
             // The mouth, towards the wall
-            polygon([[0, 0], 2 * ring_ro * [-cos(mouth), sin(mouth)], [-2 * ring_ro, 0], 2 * ring_ro * [-cos(mouth), -sin(mouth)]]);
+            polygon([[0, 0], 2 * ring_ro * [-cos(m), sin(m)], [-2 * ring_ro, 0], 2 * ring_ro * [-cos(m), -sin(m)]]);
+            // The slot over the upper jaw
+            difference()
+            {
+                circle(r = slot_ro, $fn = 64);
+                circle(r = ring_ro, $fn = 64);
+                rotate(jaw_root) translate([-2 * knee, -4 * knee]) square(4 * knee);
+            }
         }
         translate([clasp_y, pivot_z]) circle(d = clasp_hole, $fn = 24);
+        // The marks: notches in the grip's outer edge
+        for (i = [1 : 1 : marks])
+            translate(grip_top + (grip_end - grip_top) * (0.35 + 0.18 * i)) circle(d = 1.0, $fn = 16);
     }
 }
 
-module clasp()
+module clasp(s = snap, marks = 0)
 {
-    along_x(case_x - clasp_w / 2, clasp_w) clasp_2d();
+    along_x(case_x - clasp_w / 2, clasp_w) clasp_2d(s, marks);
 }
 
 module clasp_pin_hole()
@@ -345,4 +380,11 @@ module case_closed()
 module case_bottom_print() translate([0, 0, -case_bottom_z]) case_bottom();
 module case_lid_print() rotate([180, 0, 0]) translate([0, 0, -case_top_z]) case_lid();
 // The clasp lies on its side, the C's profile on the bed
-module case_clasp_print() translate([0, 0, clasp_w / 2]) rotate([0, -90, 0]) translate([-case_x, -clasp_y, -pivot_z]) clasp();
+module case_clasp_print(s = snap, marks = 0) translate([0, 0, clasp_w / 2]) rotate([0, -90, 0]) translate([-case_x, -clasp_y, -pivot_z]) clasp(s, marks);
+// The clasp test: a clasp for each of clasp_test_snaps, side by side, the
+// first with one notch in its grip, the next two, and so on
+module clasp_test_print()
+{
+    for (i = [0 : len(clasp_test_snaps) - 1])
+        translate([0, i * 16, 0]) case_clasp_print(clasp_test_snaps[i], i + 1);
+}
