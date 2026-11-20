@@ -46,6 +46,7 @@ typedef enum
     CMD_PAUSE,
     CMD_RESUME,
     CMD_SEEK,
+    CMD_CHIME,
 } command_t;
 
 typedef enum
@@ -103,6 +104,15 @@ static decoder_t *decoder;      // too big for the stack, and for internal RAM
 static int16_t *scratch;
 static uint32_t frames_this_track;
 static uint64_t file_bytes;     // for estimating an MP3's length, if it doesn't say
+
+// A chime (audio_player_chime) playing over what was there, which comes
+// back once it's done, where it was, playing or not
+static bool chiming;
+static uint16_t saved_track;
+static bool saved_active;
+static bool saved_open;         // the track was open, part way through
+static uint32_t saved_frame;
+static uint32_t saved_progress, saved_length, saved_rate;
 
 /* ----- Decoding ----- */
 
@@ -335,8 +345,37 @@ static size_t decoder_read(int16_t *out, size_t max_frames)
 
 static void publish(void)
 {
-    current = track;
-    playing = active;
+    // A chime's not shown: what it plays over is
+    current = chiming ? saved_track : track;
+    playing = chiming ? saved_active : active;
+}
+
+/* A chime's done, or couldn't play: back to what was there, where it was. */
+static void end_chime(void)
+{
+    decoder_close();
+    chiming = false;
+    track = saved_track;
+    active = saved_active;
+    if (saved_open && decoder_open(track))
+    {
+        if (saved_frame > 0 && decoder_seek(saved_frame))
+        {
+            frames_this_track = saved_frame;
+            progress_frames = saved_frame;
+        }
+        else
+        {
+            frames_this_track = 0;
+        }
+    }
+    else
+    {
+        progress_frames = saved_progress;
+        length_frames = saved_length;
+        progress_rate = saved_rate;
+    }
+    publish();
 }
 
 static void stop(void)
@@ -355,8 +394,29 @@ static void handle_commands(void)
     }
     seen_seq = seq;
 
+    // Anything else asked for ends a chime first, back to what was there
+    if (chiming && cmd != CMD_CHIME)
+    {
+        end_chime();
+    }
     switch (cmd)
     {
+        case CMD_CHIME:
+            if (!chiming)
+            {
+                saved_track = track;
+                saved_active = active;
+                saved_open = decoder->kind != DECODER_NONE;
+                saved_frame = frames_this_track;
+                saved_progress = progress_frames;
+                saved_length = length_frames;
+                saved_rate = progress_rate;
+            }
+            decoder_close();
+            track = (cmd_track < track_count) ? cmd_track : 0;
+            active = true;
+            chiming = true;
+            break;
         case CMD_PLAY:
             decoder_close();
             track = (cmd_track < track_count) ? cmd_track : 0;
@@ -426,6 +486,11 @@ size_t audio_player_fill(int16_t *frames, size_t max_frames, uint32_t *sample_ra
         {
             if (!decoder_open(track))
             {
+                if (chiming)
+                {
+                    end_chime();
+                    continue;
+                }
                 // Skip files that can't be played, unless they all fail.
                 if (repeat != AUDIO_REPEAT_ALL || ++failures >= track_count)
                 {
@@ -460,6 +525,10 @@ size_t audio_player_fill(int16_t *frames, size_t max_frames, uint32_t *sample_ra
             // it's only updated once a second, with the time played, rather
             // than flickering in between.
             uint32_t second = decoder->sample_rate;
+            if (chiming)
+            {
+                continue;       // the player shows what it's playing over
+            }
             if (decoder->kind == DECODER_MP3 && decoder_length() == 0
                 && (length_frames == 0 || frames_this_track / second != progress_frames / second))
             {
@@ -469,8 +538,14 @@ size_t audio_player_fill(int16_t *frames, size_t max_frames, uint32_t *sample_ra
             continue;
         }
 
-        // The end of the track. Stop if tracks keep ending without playing
-        // anything, rather than opening them over and over.
+        // The end of the track. A chime's: back to what was there.
+        if (chiming)
+        {
+            end_chime();
+            continue;
+        }
+        // Stop if tracks keep ending without playing anything, rather than
+        // opening them over and over.
         decoder_close();
         if (frames_this_track == 0 && ++failures > track_count)
         {
@@ -597,6 +672,15 @@ void audio_player_cue(size_t index)
     post(CMD_CUE, current);
 }
 
+void audio_player_chime(size_t index)
+{
+    if (track_count == 0 || index >= track_count)
+    {
+        return;
+    }
+    post(CMD_CHIME, index);
+}
+
 void audio_player_seek(uint32_t position_ms)
 {
     if (track_count == 0)
@@ -657,6 +741,7 @@ size_t audio_player_fill(int16_t *frames, size_t max_frames, uint32_t *sample_ra
 
 void audio_player_play(size_t index) {}
 void audio_player_cue(size_t index) {}
+void audio_player_chime(size_t index) {}
 void audio_player_pause(void) {}
 void audio_player_seek(uint32_t position_ms) {}
 void audio_player_resume(void) {}

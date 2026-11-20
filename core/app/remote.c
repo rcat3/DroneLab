@@ -46,7 +46,7 @@
  *                                     uptime and battery, for the app's About page
  *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>]   the voice
  *                                     effect, Play on speaker and Effect Volume
- *     POST /api/sound?[play=<1 or 0>][&skip=<1 or -1>][&t=<track>][&seek=<ms>]
+ *     POST /api/sound?[play=<1 or 0>][&skip=<1 or -1>][&t=<track>][&seek=<ms>][&chime=<track>]
  *                     [&v=<percent>][&r=<audio_repeat_t>][&auto=<1 or 0>]   the
  *                                     sound player: play or pause, the next or
  *                                     last track, play a track, move in it,
@@ -1154,6 +1154,12 @@ static bool run_command(const char *name, const char *query, const char *body, s
         size_t count = audio_player_track_count();
         int track = query_int(query, "t", -1);
         int skip = query_int(query, "skip", 0);
+        // A short sound for something that happened, over what's playing
+        int chime = query_int(query, "chime", -1);
+        if (chime >= 0)
+        {
+            audio_player_chime((size_t)chime);
+        }
         if (track >= 0 && (size_t)track < count)
         {
             audio_player_play((size_t)track);

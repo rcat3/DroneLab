@@ -30,6 +30,12 @@ const char *audio_player_track_name(size_t index);
 /* Play a track from the start. */
 void audio_player_play(size_t index);
 
+/* Play a track once, over whatever's playing or paused, which comes back
+ * afterwards where it was: for a short sound when something happens. The
+ * player shows what it plays over meanwhile. Anything else asked of the
+ * player ends it. */
+void audio_player_chime(size_t index);
+
 /* Choose a track without playing it. Resuming plays it from the start. */
 void audio_player_cue(size_t index);
 

@@ -25,6 +25,7 @@ import 'invites.dart';
 import 'conversations.dart';
 import 'notifier.dart';
 import 'photos.dart';
+import 'unit_sounds.dart';
 import 'firmware_update.dart';
 import 'identity.dart';
 import 'known_people.dart';
@@ -273,6 +274,12 @@ class CommController extends ChangeNotifier {
     talkTones = p.getBool('talkTones') ?? true;
     ringInHeadphones = p.getBool('ringInHeadphones') ?? true;
     textTone = p.getBool('textTone') ?? true;
+    try {
+      final saved = jsonDecode(p.getString('unitSounds') ?? '{}') as Map<String, dynamic>;
+      for (final e in UnitSoundEvent.values) {
+        if (saved[e.name] case final String name) unitSounds[e] = name;
+      }
+    } catch (_) {}
     ringTone = p.getString('ringTone') ?? 'chirp';
     missedCalls.load(p.getString('missedCalls'));
     // Talking to someone alone takes a call, which doesn't outlast the app
@@ -374,6 +381,8 @@ class CommController extends ChangeNotifier {
 
   void _onBoardChanged() {
     if (recording && board.state != BoardState.connected) stopRecording();    // the board's gone
+    _checkDirectSince();
+    if (board.state != BoardState.connected) _unitTracks = null;
     _checkBattery();
     _updateHeadset();
     _updateBoardScreen();
@@ -422,6 +431,7 @@ class CommController extends ChangeNotifier {
           (v['talk'] as num?)?.toInt() ?? 0,
           v['housing'] as String?);
       _checkJoined();
+      _checkDirectSince();
       notifyListeners();
       _nameBoard();
     } catch (_) {}
@@ -639,6 +649,12 @@ class CommController extends ChangeNotifier {
   void _onDirectPeer(DirectPeer p) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final b = nearby[p.id];
+    // New about, or back after a long while: its sound
+    final last = _lastHeardUnit[p.id];
+    _lastHeardUnit[p.id] = now;
+    if (b == null && (last == null || now - last > nearbyAgainMs) && now - _directSinceMs > nearbySettleMs) {
+      playUnitSound(UnitSoundEvent.nearby);
+    }
     if (b == null) {
       nearby[p.id] = NearbyBoard(p.id, p.name, p.rssi, p.talking, now, p.firmware, p.app, p.key);
     } else {
@@ -884,6 +900,72 @@ class CommController extends ChangeNotifier {
     }
     _audio.start();
     mixer.playTone(tone);
+  }
+
+  // ----- Sounds on the unit (unit_sounds.dart) -----
+
+  /// The sound file picked for each event, by its name on the SD card.
+  /// Kept for next time.
+  final Map<UnitSoundEvent, String> unitSounds = {};
+  final Map<UnitSoundEvent, int> _unitSoundAt = {};
+  final Map<int, int> _lastHeardUnit = {};      // boards heard over direct, by id: when last
+  int _directSinceMs = 0;
+  bool _directWasOn = false;
+
+  /// The unit's sound files, by name, as it lists them; null till asked.
+  List<String>? _unitTracks;
+
+  /// A board newly there, or direct newly on, hears everyone about at once:
+  /// none of them counts as new for a little while.
+  void _checkDirectSince() {
+    final on = board.state == BoardState.connected && (boardSettings?.direct?.on ?? false);
+    if (on && !_directWasOn) _directSinceMs = DateTime.now().millisecondsSinceEpoch;
+    _directWasOn = on;
+  }
+
+  /// Whether the unit can play them: it has a speaker and the sound player.
+  bool get unitCanPlay =>
+      board.state == BoardState.connected && board.status != null && (boardSettings?.hasSpeaker ?? false);
+
+  /// The unit's sound files, asked for again if [fresh].
+  Future<List<String>> unitTracks({bool fresh = false}) async {
+    if (!fresh && _unitTracks != null) return _unitTracks!;
+    try {
+      final a = await board.request('GET', '/api/tracks');
+      if (a.status == 200) {
+        final v = jsonDecode(a.body) as Map<String, dynamic>;
+        _unitTracks = [for (final t in v['tracks'] as List<dynamic>? ?? const []) t as String];
+      }
+    } catch (_) {}
+    return _unitTracks ?? const [];
+  }
+
+  Future<void> setUnitSound(UnitSoundEvent e, String? track) async {
+    if (track == null) {
+      unitSounds.remove(e);
+    } else {
+      unitSounds[e] = track;
+    }
+    await _prefs?.setString('unitSounds', jsonEncode({for (final s in unitSounds.entries) s.key.name: s.value}));
+    notifyListeners();
+  }
+
+  /// Play a sound file on the unit, once, by name.
+  Future<void> chimeOnUnit(String track) async {
+    if (!unitCanPlay) return;
+    final i = (await unitTracks()).indexOf(track);
+    if (i >= 0) await board.request('POST', '/api/sound?chime=$i');
+  }
+
+  /// Something happened: its sound on the unit, if one's picked, and not
+  /// just played for the same.
+  void playUnitSound(UnitSoundEvent e) {
+    final track = unitSounds[e];
+    if (track == null || !unitCanPlay) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - (_unitSoundAt[e] ?? 0) < unitSoundGapMs) return;
+    _unitSoundAt[e] = now;
+    chimeOnUnit(track).catchError((_) {});
   }
 
   // ----- Whose voice is heard -----
@@ -1205,6 +1287,7 @@ class CommController extends ChangeNotifier {
           _tone(_callTones.ring(ringTone));
         }
         _incomingCalls.add(c);
+        playUnitSound(UnitSoundEvent.call);
       case CallOp.answer:
         if (c != null && c.id == id && c.state == CallState.calling) {
           c.state = CallState.connected;
@@ -2129,8 +2212,9 @@ class CommController extends ChangeNotifier {
 
   /// A text's come in: a notification, unless its conversation's on screen.
   void _notifyText(Conversation c) {
-    // In the headphones, whether it's on screen or not
+    // In the headphones, whether it's on screen or not; and on the unit
     if (textTone) _tone(_callTones.text());
+    playUnitSound(UnitSoundEvent.text);
     final visible = WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     if (visible && conversations.open == c.key) return;
     final unread = c.entries.length < c.unread ? c.entries : c.entries.sublist(c.entries.length - c.unread);
@@ -2312,6 +2396,8 @@ class CommController extends ChangeNotifier {
     }
     conversations.add(c, e);
     if (h.what == Heard.text) _notifyText(c);
+    if (e.done && h.what == Heard.lovense) playUnitSound(UnitSoundEvent.lovense);
+    if (e.done && h.what == Heard.terminal) playUnitSound(UnitSoundEvent.terminal);
   }
 
   // ----- The server -----

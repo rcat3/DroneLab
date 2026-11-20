@@ -147,6 +147,18 @@ In Setup, behind the gear, while the unit's connected:
 
 These are the unit's own settings, so they also show on its display, in the HiveMind feature.  Direct mode is switched on and off from the status strip at the top: tap it for the links.  It costs some battery, as the unit's radio listens the whole time.
 
+## Setup: unit sounds
+
+On a unit with a speaker, Setup's **Unit sounds** picks a sound file from the unit's SD card (its `sounds` folder, the Sound player's) for each of these, or none:
+
+- **Incoming call**: someone calling you.
+- **Text message**: a text or photo coming in.
+- **Toy command**: someone's command for your toys, when it's taken.
+- **Display message**: someone's words for your display, when they're taken.
+- **Unit nearby**: a unit heard over direct mode that hasn't been heard in the last 10 minutes, so one at the edge of range, coming and going, doesn't keep sounding; and not those already about when the unit connects or direct comes on.
+
+The unit plays it once, over whatever its Sound player is doing, which carries on afterwards where it was.  Short files suit it best, but any will do.  The same event again within three seconds plays nothing, so a slider dragged, or a burst of texts, is one sound.  Picking a file plays it, and the play button by each plays it again.  The app tells the unit, so it has to be connected; the low-profile unit has no speaker, so the page isn't there.
+
 ## Setup: your identity
 
 The app makes you an identity the first time it runs: a key pair kept in the phone's secure storage.  Others know you by it, not your name, on the server and directly both: it signs your commands, and gives the server the same certificate each time you connect.  So nobody else can pass as you by taking your name, and when someone new turns up with a name you already know, the app marks them ⚠ and says it isn't the person you knew.

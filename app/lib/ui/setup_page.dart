@@ -8,6 +8,7 @@ import '../comm/calls.dart';
 import '../comm/comm_controller.dart';
 import '../comm/notifier.dart';
 import 'about_page.dart';
+import 'unit_sounds_page.dart';
 import 'firmware_ui.dart';
 import 'server_page.dart';
 import 'status_strip.dart';
@@ -150,6 +151,20 @@ class SetupPage extends StatelessWidget {
                     ]),
                   ),
                 ]),
+              // Speaker units only: the low-profile one has none to play them on
+              if (boardUp && (settings?.hasSpeaker ?? false)) ...[
+                const SectionHeader('Unit'),
+                Panel(children: [
+                  PanelRow(
+                    leading: const Icon(Icons.music_note_outlined, color: Kc.muted),
+                    title: 'Unit sounds',
+                    subtitle: 'Sounds the unit plays for calls, texts, commands and units nearby',
+                    trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
+                    onTap: () =>
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => UnitSoundsPage(comm: comm))),
+                  ),
+                ]),
+              ],
               const SectionHeader('Headphones'),
               _CallsPanel(comm: comm),
               const SectionHeader('Your identity'),
