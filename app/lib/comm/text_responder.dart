@@ -79,15 +79,17 @@ class TextResponder {
     }
   }
 
-  static const help = '''Commands, in a private text:
+  static const help = '''Commands, in a private text. Texts are echoed on every channel; the channel commands are for voice:
 /help  these
 /ping  how your ping came
 /status  this phone and unit
 /nearby  units heard direct, with RSSI
 /details [N]  the last N texts' details (5), not their words
-/talk server|direct  the voice channel talked to
-/channels  the server's channels
-/join <name>  move to a server channel
+/talk server|direct  the voice channel talked to and answered
+/channels  the server's voice channels
+/join <name>  move to a server voice channel
+/direct  the direct channels kept on this phone
+/direct <name>  move to one (Open for the open channel)
 /voice on|off  the voice responder
 /echo on|off  echoing texts''';
 
@@ -133,6 +135,8 @@ class TextResponder {
         if (found.length != 1) return found.isEmpty ? 'No channel "$arg"' : '"$arg" is more than one channel';
         m.joinChannel(found.first);
         return 'Joining ${m.channelPath(found.first)}';
+      case '/direct':
+        return _moveDirect(arg);
       case '/voice':
         final v = onOff();
         if (v == null) return 'Voice responder ${comm.voiceResponder.on ? 'on' : 'off'}: /voice on or off';
@@ -146,6 +150,35 @@ class TextResponder {
       default:
         return 'Not a command: $name. /help lists them';
     }
+  }
+
+  /// The direct channels kept here, or a move to one. The units on the old
+  /// one lose this one's voice till they move too.
+  Future<String> _moveDirect(String arg) async {
+    final d = comm.boardSettings?.direct;
+    if (d == null) return 'The unit is not linked';
+    final groups = comm.groups;
+    if (arg.isEmpty) {
+      return [
+        '${d.keyed ? '' : '* '}Open, frequency 6, Long Range',
+        for (final g in groups)
+          '${d.keyed && d.id == g.id ? '* ' : ''}${g.name}, frequency ${g.channel}${g.longRange ? ', Long Range' : ''}',
+        if (!d.on) 'Direct is off on the unit',
+      ].join('\n');
+    }
+    final want = arg.toLowerCase();
+    if (want == 'open') {
+      await comm.joinOpenGroup();
+      return 'Moving to the open channel, frequency 6';
+    }
+    final found = groups.where((g) => g.name.toLowerCase() == want).toList();
+    if (found.isEmpty) found.addAll(groups.where((g) => g.name.toLowerCase().contains(want)));
+    if (found.length != 1) {
+      return found.isEmpty ? 'No direct channel "$arg" kept here: /direct lists them' : '"$arg" is more than one channel';
+    }
+    final g = found.first;
+    final why = await comm.joinGroup(g.name, g.passphrase, channel: g.channel, longRange: g.longRange);
+    return why ?? 'Moving to ${g.name}, frequency ${g.channel}${g.longRange ? ', Long Range' : ''}';
   }
 
   String _status() {
