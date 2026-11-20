@@ -38,7 +38,14 @@ set(CONFIG_LV_USE_THORVG OFF CACHE BOOL "" FORCE)
 set(CONFIG_LV_USE_THORVG_INTERNAL OFF CACHE BOOL "" FORCE)
 set(LV_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(${THIRD_PARTY}/lvgl lvgl EXCLUDE_FROM_ALL)
-find_package(JPEG REQUIRED)     # LV_USE_LIBJPEG_TURBO
+# LV_USE_LIBJPEG_TURBO. Linked in where it can be, as distributions differ in
+# which one they have (libjpeg.so.8 on Ubuntu, .so.62 on Debian and Raspberry
+# Pi OS), so the app's tarball carries a unit that runs on either.
+find_library(RCAT_JPEG_STATIC libjpeg.a)
+if(RCAT_JPEG_STATIC)
+    set(JPEG_LIBRARY_RELEASE ${RCAT_JPEG_STATIC} CACHE FILEPATH "" FORCE)
+endif()
+find_package(JPEG REQUIRED)
 target_link_libraries(lvgl PUBLIC JPEG::JPEG m)
 
 # Mbed TLS, as ESP-IDF has it, for direct comms' encryption: its crypto

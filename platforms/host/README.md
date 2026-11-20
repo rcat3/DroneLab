@@ -33,7 +33,9 @@ LVGL, Mbed TLS, Opus, miniaudio and dr_libs come from the submodules
   screenshot (what PWR and BOOT do on the board), and **T** shows or hides
   the virtual toys.
 - **The app** finds it in its list of units, as *Virtual unit*, *On this
-  computer*. It listens on `$XDG_RUNTIME_DIR/dronelab-unit.sock` (see
+  computer*, and starts it itself when it isn't running (*Start a virtual
+  unit*): the Linux app carries it, and a build of the app picks up
+  `build-host/dronelab-unit` if it's there. It listens on `$XDG_RUNTIME_DIR/dronelab-unit.sock` (see
   "Virtual units" in `app/linux/README.md`); there's no pairing, as only
   the computer's user can reach it. The comm channel is on from the start.
 - **Several units** can run at once, each with its own `--unit` number,

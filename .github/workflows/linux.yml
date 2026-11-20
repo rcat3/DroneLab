@@ -1,6 +1,7 @@
 # Build the app for Linux: x64, and arm64 for a Raspberry Pi 4 or 5 on 64-bit
 # Raspberry Pi OS. Built on Ubuntu 22.04, so it runs there and on anything
-# newer (Raspberry Pi OS Bookworm, Debian 12, Ubuntu 24.04).
+# newer (Raspberry Pi OS Bookworm, Debian 12, Ubuntu 24.04). The virtual unit
+# (platforms/host) is built first, and goes in beside the app, for it to start.
 #
 # For each release, firmware.yml calls it with the release's tag: the app
 # carries the release's firmware (bundled by firmware.yml), and the two
@@ -20,7 +21,9 @@ on:
   pull_request:
     paths:
       - 'app/**'
-      - 'third_party/miniaudio'
+      - 'third_party/**'
+      - 'core/**'
+      - 'platforms/host/**'
       - '.github/workflows/linux.yml'
 
 permissions:
@@ -42,8 +45,10 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      - name: miniaudio
-        run: git submodule update --init --depth 1 third_party/miniaudio
+      - name: Submodules
+        run: |
+          git submodule update --init --depth 1 third_party/miniaudio third_party/lvgl \
+              third_party/dr_libs third_party/mbedtls third_party/opus
       - name: The firmware the app carries
         if: inputs.release
         uses: actions/download-artifact@v4
@@ -53,7 +58,12 @@ jobs:
       - name: Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev \
+              python3-pil libx11-dev libjpeg-dev
+      - name: The virtual unit
+        run: |
+          cmake -S platforms/host -B build-host -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-host -j
       - name: Flutter
         run: |
           git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$HOME/flutter"
@@ -63,6 +73,7 @@ jobs:
         run: |
           flutter config --no-analytics --enable-linux-desktop
           flutter build linux --release
+          test -x build/linux/${{ matrix.arch }}/release/bundle/dronelab-unit
           cp linux/README.md build/linux/${{ matrix.arch }}/release/bundle/
           tar -C build/linux/${{ matrix.arch }}/release -czf ../DroneLab-linux-${{ matrix.arch }}.tar.gz \
               --transform 's,^bundle,DroneLab,' bundle

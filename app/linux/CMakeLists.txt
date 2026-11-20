@@ -109,6 +109,12 @@ target_link_libraries(dronelab_audio PRIVATE dl pthread m)
 install(TARGETS dronelab_audio LIBRARY DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# The virtual unit (platforms/host), beside the app, for it to start: built
+# first, into build-host at the top of the repository, as the release
+# workflow does. Left out when it hasn't been, and the app can't start one.
+install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/../../build-host/dronelab-unit"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}" OPTIONAL COMPONENT Runtime)
+
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

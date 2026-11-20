@@ -7,11 +7,15 @@
  *
  * Only the computer's user can reach the runtime folder, so there's no
  * pairing: an app that's connected is as good as a phone that's paired and
- * has turned notifications on. One app at a time; another is turned away.
+ * has turned notifications on. One app at a time; another is turned away,
+ * with an empty message first to say the unit's in use. While an app's
+ * connected, an empty file beside the socket (dronelab-unit.sock.inuse)
+ * says so to other apps looking for units, without their connecting.
  */
 
 #define _GNU_SOURCE
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -37,6 +41,7 @@ static atomic_bool wanted;              // between start and stop
 static int listen_fd = -1;              // the thread's own
 static atomic_int client_fd = -1;
 static char path[sizeof(((struct sockaddr_un *)0)->sun_path)];
+static char inuse_path[sizeof(path) + 8];
 
 // From the app: whole messages, the oldest dropped when it's full
 static uint8_t in_msgs[RCAT_HAL_BLE_PEER_MSGS][RCAT_HAL_BLE_PEER_MSG_MAX];
@@ -71,6 +76,27 @@ static bool socket_path(char *out, size_t len)
     int n = host_options.unit == 1 ? snprintf(out, len, "%s/dronelab-unit.sock", runtime)
                                    : snprintf(out, len, "%s/dronelab-unit-%d.sock", runtime, host_options.unit);
     return n > 0 && (size_t)n < len;
+}
+
+/* Say whether an app's connected, for other apps' lists of units. */
+static void mark_in_use(bool in_use)
+{
+    if (inuse_path[0] == '\0')
+    {
+        return;
+    }
+    if (in_use)
+    {
+        int f = open(inuse_path, O_WRONLY | O_CREAT | O_CLOEXEC, 0600);
+        if (f >= 0)
+        {
+            close(f);
+        }
+    }
+    else
+    {
+        unlink(inuse_path);
+    }
 }
 
 /* Listen on the socket, unless another unit already is. */
@@ -108,6 +134,7 @@ static int listen_on(const char *p)
         close(fd);
         return -1;
     }
+    mark_in_use(false);     // left by a unit that stopped
     printf("Waiting for the app on %s\n", p);
     return fd;
 }
@@ -123,6 +150,7 @@ static void drop_client(const char *why)
     if (fd >= 0)
     {
         close(fd);
+        mark_in_use(false);
         printf("App disconnected%s%s\n", why != NULL ? ": " : "", why != NULL ? why : "");
     }
 }
@@ -241,7 +269,13 @@ static void *peer_thread(void *arg)
             {
                 if (client_fd >= 0)
                 {
-                    close(c);       // one app at a time
+                    // One app at a time: an empty message says it's in use
+                    static const uint8_t in_use[2] = { 0, 0 };
+                    if (send(c, in_use, sizeof(in_use), MSG_NOSIGNAL) < 0)
+                    {
+                        // it's gone already
+                    }
+                    close(c);
                 }
                 else
                 {
@@ -251,6 +285,7 @@ static void *peer_thread(void *arg)
                     in_count = 0;
                     client_fd = c;
                     pthread_mutex_unlock(&lock);
+                    mark_in_use(true);
                     printf("App connected\n");
                 }
             }
@@ -287,6 +322,7 @@ bool rcat_hal_ble_peer_start(const char *name)
         {
             return false;
         }
+        snprintf(inuse_path, sizeof(inuse_path), "%s.inuse", path);
         wake_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
         if (wake_fd < 0 || pthread_create(&thread, NULL, peer_thread, NULL) != 0)
         {
@@ -317,6 +353,7 @@ void host_peer_close(void)
     if (path[0] != '\0')
     {
         unlink(path);
+        unlink(inuse_path);
     }
 }
 

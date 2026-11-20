@@ -8,6 +8,7 @@ import '../comm/board_protocol.dart';
 import '../comm/calls.dart';
 import '../comm/comm_controller.dart';
 import '../comm/notifier.dart';
+import '../comm/virtual_unit.dart';
 import 'about_page.dart';
 import 'developer_page.dart';
 import 'unit_sounds_page.dart';
@@ -51,7 +52,9 @@ class SetupPage extends StatelessWidget {
                   leading: _Step(1, boardUp),
                   title: 'Pair the board',
                   subtitle: paired ? '${b.name ?? comm.lastBoardName ?? 'Board'} · ${boardStatusText(comm)}'
-                      : "Switch on the board's Phone App first",
+                      : VirtualUnits.available
+                          ? "Switch on the board's Phone App first, or start a virtual unit"
+                          : "Switch on the board's Phone App first",
                   trailing: [
                     b.state == BoardState.off || b.state == BoardState.scanning
                         ? FilledButton(onPressed: () => pickBoard(context, comm), child: const Text('Find'))

@@ -139,6 +139,7 @@ class BoardLink extends ChangeNotifier {
       found[f.id] = f;
     } else {
       b.rssi = f.rssi;
+      b.inUse = f.inUse;
     }
     notifyListeners();
   }
@@ -167,8 +168,11 @@ class BoardLink extends ChangeNotifier {
       _transport = t;
     }
     _wanted = true;
+    _retry?.cancel();
     deviceId = id;
     name = boardName;
+    // Asked for: a virtual unit that isn't running is started
+    _socket.startIfStopped = t == _socket;
     await _connect();
   }
 
@@ -207,6 +211,12 @@ class BoardLink extends ChangeNotifier {
       notifyListeners();
     } on TransportFailure catch (e) {
       if (overtaken()) return;
+      if (e.inUse) {
+        await disconnect();
+        error = e.message;
+        notifyListeners();
+        return;
+      }
       if (e.notFound && await t.findAgain(id) && !overtaken()) {
         _connect();
         return;

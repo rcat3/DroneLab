@@ -12,6 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:universal_ble/universal_ble.dart';
 
 import 'board_protocol.dart';
+import 'virtual_unit.dart';
 
 class FoundBoard {
   final String id;
@@ -20,7 +21,10 @@ class FoundBoard {
 
   /// On this computer (a virtual unit), not over Bluetooth.
   final bool local;
-  FoundBoard(this.id, this.name, this.rssi, {this.local = false});
+
+  /// A virtual unit another app's connected to (perhaps this one).
+  bool inUse;
+  FoundBoard(this.id, this.name, this.rssi, {this.local = false, this.inUse = false});
 }
 
 /// Why a link couldn't be opened, in words for the wearer.
@@ -29,7 +33,10 @@ class TransportFailure implements Exception {
 
   /// The unit wasn't found: worth looking for it again (findAgain) first.
   final bool notFound;
-  TransportFailure(this.message, {this.notFound = false});
+
+  /// Another app has the (virtual) unit: not worth trying again and again.
+  final bool inUse;
+  TransportFailure(this.message, {this.notFound = false, this.inUse = false});
   @override
   String toString() => message;
 }
@@ -263,7 +270,9 @@ const socketIdPrefix = 'unix:';
 /// a time; while it's connected, it's as if the phone were connected, paired
 /// and had notifications on. Each message goes as its length (2 bytes,
 /// little-endian) and then itself, up to [socketMessageMax] bytes, the same
-/// messages as over Bluetooth.
+/// messages as over Bluetooth. Another app's turned away with an empty
+/// message; while one's connected, there's an empty file beside the socket,
+/// its name and `.inuse`.
 const socketMessageMax = 244;
 
 /// Where to look for virtual units: null where there's no runtime directory.
@@ -313,6 +322,11 @@ Uint8List frameMessage(Uint8List msg) {
 }
 
 class SocketTransport implements BoardTransport {
+  /// Start the unit if it isn't running, at the next [open] only: set when
+  /// it's asked for (connecting, or the app starting), not for the tries
+  /// after it's stopped, as closing its window is switching it off.
+  bool startIfStopped = false;
+
   Socket? _socket;
   StreamSubscription<Uint8List>? _sub;
   Timer? _scanTimer;
@@ -346,7 +360,8 @@ class SocketTransport implements BoardTransport {
   Future<void> startScan(void Function(FoundBoard) onFound) async {
     Future<void> look() async {
       for (final path in await listening()) {
-        onFound(FoundBoard('$socketIdPrefix$path', socketUnitName(path), 0, local: true));
+        onFound(FoundBoard('$socketIdPrefix$path', socketUnitName(path), 0,
+            local: true, inUse: await File('$path.inuse').exists()));
       }
     }
 
@@ -371,23 +386,54 @@ class SocketTransport implements BoardTransport {
       required bool Function() overtaken}) async {
     await close();
     final path = id.substring(socketIdPrefix.length);
-    final Socket s;
+    final start = startIfStopped;
+    startIfStopped = false;
+    Future<Socket> connect() => Socket.connect(InternetAddress(path, type: InternetAddressType.unix), 0,
+        timeout: const Duration(seconds: 5));
+    Socket s;
     try {
-      s = await Socket.connect(InternetAddress(path, type: InternetAddressType.unix), 0,
-          timeout: const Duration(seconds: 5));
+      s = await connect();
     } catch (e) {
-      debugPrint('board: failed $e');
-      throw TransportFailure("The virtual unit isn't running");
+      if (!start || !VirtualUnits.available) {
+        debugPrint('board: failed $e');
+        throw TransportFailure("The virtual unit isn't running");
+      }
+      if (!await VirtualUnits.start(path)) throw TransportFailure("Couldn't start the virtual unit");
+      // Give it a while to open its window and listen
+      final until = DateTime.now().add(const Duration(seconds: 15));
+      while (true) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        if (overtaken()) return;
+        try {
+          s = await connect();
+          break;
+        } catch (e) {
+          if (DateTime.now().isAfter(until)) {
+            debugPrint('board: failed $e');
+            throw TransportFailure("The virtual unit didn't start");
+          }
+        }
+      }
     }
     if (overtaken()) {
       s.destroy();
       return;
     }
     _socket = s;
-    final reader = FrameReader(onMessage);
+    // The first message says whether another app has it: an empty one
+    final first = Completer<bool>();
+    var refused = false;
+    final reader = FrameReader((m) {
+      if (!first.isCompleted) {
+        first.complete(m.isEmpty);
+        refused = m.isEmpty;
+      }
+      if (m.isNotEmpty) onMessage(m);
+    });
     var dropped = false;
     void drop(String? why) {
-      if (dropped || _socket != s) return;
+      if (!first.isCompleted) first.complete(false);
+      if (refused || dropped || _socket != s) return;
       dropped = true;
       onDropped(why);
     }
@@ -401,6 +447,11 @@ class SocketTransport implements BoardTransport {
         drop("The virtual unit sent something it shouldn't");
       }
     }, onError: (_) => drop('The virtual unit stopped'), onDone: () => drop('The virtual unit stopped'));
+    // It's said at once; a unit that's free can be a moment saying anything
+    if (await first.future.timeout(const Duration(milliseconds: 500), onTimeout: () => false)) {
+      await close();
+      throw TransportFailure('${socketUnitName(path)} is in use by another DroneLab app', inUse: true);
+    }
   }
 
   @override

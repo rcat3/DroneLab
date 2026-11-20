@@ -13,7 +13,24 @@ Unpack it anywhere and start `dronelab` in the `DroneLab` folder:
 `x64` is for an ordinary PC, `arm64` for a Raspberry Pi. It needs Bluetooth
 switched on, and these, which a desktop usually has already:
 
-    sudo apt install libgtk-3-0 libopus0 libsecret-1-0 bluez
+    sudo apt install libgtk-3-0 libopus0 libsecret-1-0 libx11-6 bluez
+
+## Without a unit
+
+The app comes with a virtual one: the unit's firmware, running on the
+computer, with its round screen in a window of its own. In the app, tap the
+status strip at the top, then *Find*, and *Start a virtual unit*. It's
+connected to as a real one is, without pairing, and the app starts it again
+next time, when it's the unit you were using. Closing its window switches it
+off (*Start* in the app's Links brings it back); closing the app leaves it
+running, as a unit stays on when the phone's app is closed.
+
+Its settings are kept in `~/.local/share/io.github.rcat3.dronelab/unit`. It
+hears through the computer's microphone and plays through its speakers: use
+headphones, or a voice effect played out loud feeds back. It's
+`DroneLab/dronelab-unit`, and can be started by hand too (`--help` says
+how). Virtual units reach each other over the local network, not real units
+over the radio: for that, use a real unit.
 
 ## Pairing with your unit
 
@@ -50,7 +67,15 @@ The socket carries the same messages as the unit's Bluetooth service, the
 app's writes one way and the unit's notifications the other, each as its
 length (2 bytes, little-endian) and then the message, up to 244 bytes. The
 app connects once the unit's listening; while it's connected, it's as if the
-phone were connected, paired and had notifications on. One app at a time.
+phone were connected, paired and had notifications on. One app at a time:
+another is sent an empty message and turned away, and while one's
+connected there's an empty file beside the socket (`dronelab-unit.sock.inuse`),
+so other apps can list the unit as in use without connecting to it.
 
 `platforms/host` builds one: the firmware itself, running on the computer
-(see its README).
+(see its README). The app carries it as `dronelab-unit`, beside its own
+program, and starts it (`--unit N`, detached) when one it's connecting to
+isn't listening: when it's picked, or the app starts and it's the unit from
+last time, but not when it stops while connected, as closing its window is
+switching it off. A build of the app picks it up from `build-host` at the
+top of the repository, once it's been built there.
