@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dronelab/comm/avatars.dart';
 import 'package:dronelab/comm/board_protocol.dart';
 import 'package:dronelab/comm/identity.dart';
+import 'package:dronelab/comm/message_details.dart';
 import 'package:dronelab/comm/recorder.dart';
 import 'package:image/image.dart' as img;
 import 'package:dronelab/comm/protobuf.dart';
@@ -303,5 +304,45 @@ void main() {
     expect(v.session, 7);
     expect(v.alone, isTrue);
     expect(encodeVoice(seq: 1, opus: Uint8List(1), target: 1)[0] & 0x1F, 1);
+  });
+
+  test('a copy of a command heard over direct comms, and a text\'s details kept', () {
+    final msg = Uint8List.fromList([
+      0x15, 1, 2, 3, 4, 5, 6, 7, 8,     // the sender's key's first 8 bytes
+      0x10, 0x20, 0x30, 0x40, 0x50, 0x60,   // the command's counter
+      0x01, 0x02, 0x00, 0x00,           // the broadcast's
+      0xBA, 1, 186,                     // -70 dBm, relayed once, 186 bytes
+    ]);
+    final c = parseBoardMessage(msg) as HeardCopy;
+    expect(c.keyId, '0102030405060708');
+    expect(c.counter, 0x605040302010);
+    expect(c.broadcast, 0x0201);
+    expect(c.rssi, -70);
+    expect(c.hops, 1);
+    expect(c.bytes, 186);
+
+    final d = MessageDetails(OthersCommand.scopeChannel, [
+      MessageRoute(MessageRoute.direct, 1000,
+          channel: 'Hive',
+          bytes: 12,
+          radio: const DirectChannelInfo('Hive', 'a1b2c3d4', true, 11, true, 'Unit 1'),
+          sends: 3,
+          packets: [
+            RadioPacket(0, 42, 186, [const RadioCopy(7, -70, 0, 186, 1000), const RadioCopy(7, -80, 1, 186, 1010)]),
+            RadioPacket(1, null, 0),
+          ]),
+      MessageRoute(MessageRoute.server, 1500, channel: 'Root', bytes: 40, host: 'example:64738'),
+    ]);
+    final back = MessageDetails.fromJson(jsonDecode(jsonEncode(d.toJson())) as Map<String, dynamic>);
+    expect(back.scope, OthersCommand.scopeChannel);
+    expect(back.routes.length, 2);
+    final r = back.routes.first;
+    expect(r.radio!.frequency, 11);
+    expect(r.packets.first.copies.length, 2);
+    expect(r.packets.first.sendsHeard, 1);    // one send, and a relay of it
+    expect(r.packets[1].counter, isNull);
+    expect(r.lastCopyMs, 1010);
+    expect(back.routes[1].host, 'example:64738');
+    expect(directFrameBytes(40 + 30 + 64, targets: 1), 15 + 2 + 4 + 134 + 8);
   });
 }

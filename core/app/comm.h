@@ -153,6 +153,17 @@
  *                  what to do on (others.h): a text or a command someone
  *                  sent this board, done or not, for the app's
  *                  conversations (from COMM_VERSION 8).
+ *     0x15 copy:   15, the sender's key's first 8 bytes, the command's
+ *                  counter (6, little endian, as 0x0F's), the broadcast it
+ *                  came in (4, little endian: the sending board's counter
+ *                  for it, the same in a copy another board passed on), how
+ *                  strong it was heard (dBm, signed, from the last board it
+ *                  came from), how many times it was passed on (relay
+ *                  hops), and its length on the air (bytes): each copy of
+ *                  a command heard over direct comms, the first included,
+ *                  before its 0x0F, and those after it that are only
+ *                  dropped, for the app's details of a text (from
+ *                  COMM_VERSION 12).
  *     0x0D direct avatar: 0D, a board's id (32, as 0x08's), its avatar's
  *                  size (1, pixels square), the piece (1), how many pieces
  *                  (1), then up to 100 of its pixels, RGB565, little endian,
@@ -240,8 +251,10 @@
  *      direct comms picked in the settings (/api/comm's "talk"); the pairs'
  *      keys for talking to one alone over direct comms (0x14); voice for
  *      the wearer alone (0x07's bit 2); and transmissions started, ended
- *      and refused (0x13 to the phone) */
-#define COMM_VERSION            11
+ *      and refused (0x13 to the phone)
+ *  12  each copy of a command heard over direct comms, and how it came
+ *      (0x15), for the app's details of a text */
+#define COMM_VERSION            12
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4
@@ -351,6 +364,13 @@ typedef enum
  * do on. From the UI loop. */
 void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, uint64_t counter,
                          comm_heard_t what, uint8_t scope, bool done, const uint8_t *data, size_t len);
+
+/* Tell the app about a copy of a command heard over direct comms (each one
+ * heard, the first included, before the command's passed on): the sender's
+ * key (its first OTHERS_ID_LEN bytes are sent), the command's counter, and
+ * how it came (others_radio_t). From the UI loop. */
+void comm_copy_to_phone(const uint8_t *key, uint64_t counter, uint32_t broadcast, int8_t rssi, uint8_t hops,
+                        uint8_t len);
 
 /* True while it's sending the voice to the phone. */
 bool comm_sending(void);

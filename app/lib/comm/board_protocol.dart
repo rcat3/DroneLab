@@ -67,6 +67,7 @@ const commVersionHeard = 8;      // what others send the board, passed on as it 
 const commVersionMuted = 9;      // who's muted here, whose commands the board ignores (0x10)
 const commVersionKeys = 10;     // commands signed by their sender's key; the wearer's key (0x11)
 const commVersionTalkTo = 11;   // who talking goes to (0x13), pairs' keys (0x14), and transmissions told (0x13)
+const commVersionCopies = 12;   // each copy of a command heard over direct comms, and how it came (0x15)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -92,6 +93,7 @@ const _msgBinding = 0x12;
 const _msgTalkTo = 0x13;      // to the board: who talking goes to
 const _msgTalked = 0x13;      // from it: a transmission started, ended or was refused
 const _msgPairs = 0x14;
+const _msgCopy = 0x15;        // from the board: a copy of a command heard over direct comms
 const _msgDirectAvatar = 0x0D;
 const _msgUpdate = 0x0E;
 
@@ -199,9 +201,25 @@ class Heard {
   final Uint8List key;      // who it's from: their public key
   final Uint8List data;     // the text, or the command from what to do on
   final int? counter;       // the sender's counter for it: its id, as reactions name it
-  Heard(this.direct, this.done, this.what, this.scope, this.from, this.key, this.data, [this.counter]);
+  /// A text put back together from parts: each part's counter, in order,
+  /// null for one that never came.
+  final List<int?>? parts;
+  Heard(this.direct, this.done, this.what, this.scope, this.from, this.key, this.data, [this.counter, this.parts]);
 
   String get textOf => utf8.decode(data, allowMalformed: true);
+}
+
+/// A copy of a command heard over direct comms, the first included, and how
+/// it came (commVersion 12): for a text's details. The sender boards send
+/// each a few times, and another board may pass one on (relay).
+class HeardCopy {
+  final String keyId;       // the sender's key's first 8 bytes, as Identity.idOf
+  final int counter;        // the command's, as Heard's
+  final int broadcast;      // the sending board's counter for the broadcast: the same when relayed
+  final int rssi;           // dBm, from the last board it came from
+  final int hops;           // times it was passed on
+  final int bytes;          // its length on the air
+  HeardCopy(this.keyId, this.counter, this.broadcast, this.rssi, this.hops, this.bytes);
 }
 
 class DirectGroupHeard {
@@ -277,6 +295,14 @@ Object? parseBoardMessage(Uint8List data) {
     return Heard(data[1] & 1 != 0, data[1] & 2 != 0, data[2], data[3],
         utf8.decode(data.sublist(5, at), allowMalformed: true), Uint8List.fromList(data.sublist(at, at + 32)),
         Uint8List.sublistView(data, at + 32 + (counted ? 6 : 0)), counted ? counter : null);
+  }
+  if (data[0] == _msgCopy && data.length >= 22) {
+    var counter = 0;
+    for (var i = 5; i >= 0; i--) {
+      counter = (counter << 8) | data[9 + i];
+    }
+    return HeardCopy(data.sublist(1, 9).map((b) => b.toRadixString(16).padLeft(2, '0')).join(), counter, le32(15),
+        data[19].toSigned(8), data[20], data[21]);
   }
   if (data[0] == _msgDirectGroup && data.length >= 9) {
     final id = data.sublist(1, 5).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
@@ -731,6 +757,7 @@ class PartialText {
   final int count;
   int? firstCounter;      // the first part's counter: the text's id
   final Map<int, Uint8List> parts = {};
+  final Map<int, int?> counters = {};     // each part's counter, for its details
   Object? timer;      // the controller's, to show it if the rest don't come
   PartialText(this.first, this.count);
 
@@ -750,6 +777,6 @@ class PartialText {
     }
     final h = first;
     return Heard(h.direct, true, Heard.text, h.scope, h.from, h.key, Uint8List.fromList(utf8.encode(out.toString())),
-        firstCounter);
+        firstCounter, [for (var i = 0; i < count; i++) parts.containsKey(i) ? counters[i] : null]);
   }
 }

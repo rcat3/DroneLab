@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'board_protocol.dart';
+import 'message_details.dart';
 
 /// What a conversation is with: everyone who can hear us, a channel (on the
 /// server or over direct comms), or one person.
@@ -28,6 +29,7 @@ class ConversationEntry {
   DateTime updated;         // a Lovense entry's last level, for running them together
   final String ref;         // a text's or photo's id, as reactions name it (messageRef); '' for none
   final Map<String, String> reactions;    // who reacted (KnownPerson.id, '' for us) and with what
+  MessageDetails? details;  // a text's: how it came or went, for its Details; null for one from before them
 
   ConversationEntry(
       {required this.from,
@@ -38,6 +40,7 @@ class ConversationEntry {
       this.done = true,
       this.ref = '',
       Map<String, String>? reactions,
+      this.details,
       DateTime? time})
       : time = time ?? DateTime.now(),
         updated = time ?? DateTime.now(),
@@ -45,7 +48,7 @@ class ConversationEntry {
 
   Map<String, dynamic> toJson() =>
       {'t': time.millisecondsSinceEpoch, 'f': from, if (who.isNotEmpty) 'w': who, 'm': mine, 'k': kind, 'b': body, 'd': done,
-        if (ref.isNotEmpty) 'r': ref, if (reactions.isNotEmpty) 'x': reactions};
+        if (ref.isNotEmpty) 'r': ref, if (reactions.isNotEmpty) 'x': reactions, if (details != null) 'i': details!.toJson()};
 
   static ConversationEntry fromJson(Map<String, dynamic> j) => ConversationEntry(
         time: DateTime.fromMillisecondsSinceEpoch((j['t'] as num).toInt()),
@@ -57,6 +60,7 @@ class ConversationEntry {
         done: j['d'] != false,
         ref: j['r'] as String? ?? '',
         reactions: {for (final e in (j['x'] as Map<String, dynamic>? ?? const {}).entries) e.key: e.value as String},
+        details: j['i'] == null ? null : MessageDetails.fromJson(j['i'] as Map<String, dynamic>),
       );
 }
 

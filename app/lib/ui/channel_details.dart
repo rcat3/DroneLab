@@ -89,33 +89,33 @@ class ChannelDetailsPage extends StatelessWidget {
             children: [
               const SectionHeader('Channel'),
               Panel(children: [
-                _Fact('Name', c.title),
-                _Fact('Type', switch (c.kind) {
+                Fact('Name', c.title),
+                Fact('Type', switch (c.kind) {
                   ConversationKind.server => 'Cloud server',
                   ConversationKind.direct => 'Direct, board to board',
                   ConversationKind.everyone => 'Broadcast: server channel and direct',
                   ConversationKind.person => 'One person',
                 }),
-                if (!online) const _Fact('Status', 'Not on it just now', color: Kc.softRed),
+                if (!online) const Fact('Status', 'Not on it just now', color: Kc.softRed),
                 // The server's: where, how the voice goes, who we are there
                 if (online && c.kind == ConversationKind.server && m != null) ...[
-                  _Fact('Server', '${m.host}:${comm.server.port}'),
-                  _Fact('Path', m.channelPath(m.myChannel)),
-                  _Fact('Voice', m.udpActive ? 'UDP, encrypted' : 'TCP tunnel, encrypted'),
-                  _Fact('You are', comm.server.username),
+                  Fact('Server', '${m.host}:${comm.server.port}'),
+                  Fact('Path', m.channelPath(m.myChannel)),
+                  Fact('Voice', m.udpActive ? 'UDP, encrypted' : 'TCP tunnel, encrypted'),
+                  Fact('You are', comm.server.username),
                 ],
                 // Direct's: the radio, who can hear it, who we are on it
                 if (online && c.kind == ConversationKind.direct && d != null) ...[
-                  _Fact('Frequency', '${d.channel}'),
-                  _Fact('Long Range', d.longRange ? 'On' : 'Off'),
-                  _Fact('Access', d.keyed ? 'Passphrase: encrypted' : 'Open: anyone nearby can hear it'),
-                  if (d.keyed) _Fact('Channel id', d.id),
-                  if (d.keyed && g != null) _Fact('Kept here', g.mine ? 'Made on this phone' : 'Joined'),
-                  _Fact('You are', d.name),
+                  Fact('Frequency', '${d.channel}'),
+                  Fact('Long Range', d.longRange ? 'On' : 'Off'),
+                  Fact('Access', d.keyed ? 'Passphrase: encrypted' : 'Open: anyone nearby can hear it'),
+                  if (d.keyed) Fact('Channel id', d.id),
+                  if (d.keyed && g != null) Fact('Kept here', g.mine ? 'Made on this phone' : 'Joined'),
+                  Fact('You are', d.name),
                 ],
                 if (c.kind == ConversationKind.everyone)
-                  const _Fact('Reaches', 'Your server channel, and every unit heard nearby'),
-                _Fact('Messages', texts == 0 ? 'None yet' : '$texts${first == null ? '' : ' since ${_date(first)}'}'),
+                  const Fact('Reaches', 'Your server channel, and every unit heard nearby'),
+                Fact('Messages', texts == 0 ? 'None yet' : '$texts${first == null ? '' : ' since ${_date(first)}'}'),
               ]),
               if (online && c.kind == ConversationKind.direct && g != null) ...[
                 const SizedBox(height: 12),
@@ -163,11 +163,13 @@ class ChannelDetailsPage extends StatelessWidget {
   }
 }
 
-class _Fact extends StatelessWidget {
+/// A name and its value, in a panel.
+class Fact extends StatelessWidget {
   final String name;
   final String value;
   final Color? color;
-  const _Fact(this.name, this.value, {this.color});
+  final Widget? trailing;     // after the value: an (i) for more, say
+  const Fact(this.name, this.value, {super.key, this.color, this.trailing});
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -176,6 +178,7 @@ class _Fact extends StatelessWidget {
           Text(name, style: const TextStyle(color: Kc.muted)),
           const SizedBox(width: 16),
           Expanded(child: SelectableText(value, textAlign: TextAlign.end, style: Kc.term(15, color: color ?? Kc.text))),
+          ?trailing,
         ]),
       );
 }

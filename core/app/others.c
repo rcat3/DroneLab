@@ -71,6 +71,7 @@ typedef struct
     char from[COMM_NAME_MAX];
     uint8_t len;
     uint8_t cmd[OTHERS_CMD_MAX];
+    others_radio_t radio;
 } queued_t;
 
 typedef struct
@@ -823,7 +824,7 @@ static void checker_task(void *arg)
     }
 }
 
-void others_queue(const char *from, const uint8_t *cmd, size_t len)
+void others_queue(const char *from, const uint8_t *cmd, size_t len, const others_radio_t *radio)
 {
     uint32_t w = queue_write;
     if (queue == NULL || !checker_running || w - __atomic_load_n(&queue_read, __ATOMIC_ACQUIRE) >= QUEUE_LEN
@@ -835,6 +836,7 @@ void others_queue(const char *from, const uint8_t *cmd, size_t len)
     snprintf(q->from, sizeof(q->from), "%s", from);
     q->len = (uint8_t)len;
     memcpy(q->cmd, cmd, len);
+    q->radio = *radio;
     __atomic_store_n(&queue_write, w + 1, __ATOMIC_RELEASE);
 }
 
@@ -973,6 +975,17 @@ void others_poll(uint32_t now_ms)
     while (checked_read != __atomic_load_n(&checked_write, __ATOMIC_ACQUIRE))
     {
         queued_t *q = &checked[checked_read % QUEUE_LEN];
+        if (q->len >= OTHERS_HEADER_LEN)
+        {
+            // Each copy, for the app's details of a text, before it's done
+            uint64_t counter = 0;
+            for (int i = 5; i >= 0; i--)
+            {
+                counter = (counter << 8) | q->cmd[COUNTER_AT + i];
+            }
+            comm_copy_to_phone(q->cmd + KEY_AT, counter, q->radio.broadcast, q->radio.rssi, q->radio.hops,
+                               q->radio.len);
+        }
         receive(COMM_TALK_DIRECT, q->from, q->cmd, q->len);
         __atomic_store_n(&checked_read, checked_read + 1, __ATOMIC_RELEASE);
     }

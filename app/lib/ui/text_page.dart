@@ -8,6 +8,7 @@ import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
 import 'control_page.dart';
+import 'message_details.dart';
 import 'channel_details.dart';
 import 'channel_lists.dart';
 import 'people.dart';
@@ -220,7 +221,8 @@ class _ConversationPageState extends State<ConversationPage> {
   int _shown = -1;
   bool _sendingPhoto = false;
 
-  /// A line held: copy its words, or delete it here.
+  /// A line held: react, see its details, copy its words, or delete it
+  /// here.
   Future<void> _entryMenu(Conversation c, ConversationEntry e) async {
     final canReact = e.ref.isNotEmpty && comm.isOnline(c);
     final what = await showModalBottomSheet<String>(
@@ -240,6 +242,12 @@ class _ConversationPageState extends State<ConversationPage> {
                 ),
               ]),
             ),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('Details'),
+            subtitle: e.details == null ? null : const Text('How it came: server or direct, signal, relays'),
+            onTap: () => Navigator.pop(sheet, 'details'),
+          ),
           if (e.kind == ConversationEntry.text)
             ListTile(
               leading: const Icon(Icons.copy),
@@ -265,6 +273,8 @@ class _ConversationPageState extends State<ConversationPage> {
     }
     if (what != null && what.startsWith('react:')) {
       comm.react(c, e, what.substring(6));
+    } else if (what == 'details') {
+      showMessageDetails(context, comm, c, e);
     } else if (what == 'copy') {
       await Clipboard.setData(ClipboardData(text: e.body));
     } else if (what == 'delete') {

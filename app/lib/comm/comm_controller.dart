@@ -31,6 +31,7 @@ import 'identity.dart';
 import 'known_people.dart';
 import 'jitter.dart';
 import 'media_buttons.dart';
+import 'message_details.dart';
 import 'recorder.dart';
 import 'mumble_client.dart';
 
@@ -296,6 +297,7 @@ class CommController extends ChangeNotifier {
     _directPeerSub = board.directPeers.listen(_onDirectPeer);
     _directAvatarSub = board.directAvatars.listen(_onDirectAvatar);
     _heardSub = board.heard.listen(_onHeard);
+    _copySub = board.copies.listen(_onCopy);
     _talkedSub = board.talked.listen(_onTalked);
     _callTimer = Timer.periodic(const Duration(seconds: 1), (_) => _callTick());
     await conversations.load();
@@ -478,6 +480,7 @@ class CommController extends ChangeNotifier {
   StreamSubscription<DirectPeer>? _directPeerSub;
   StreamSubscription<Heard>? _heardSub;
   StreamSubscription<Talked>? _talkedSub;
+  StreamSubscription<HeardCopy>? _copySub;
   StreamSubscription<DirectAvatarPiece>? _directAvatarSub;
 
   /// The avatars of boards heard over direct comms, as PNGs, by board id.
@@ -2050,42 +2053,52 @@ class CommController extends ChangeNotifier {
       }
     }
     final idMark = _idMark(msgId);
+    // How it went, for its details
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final routes = <MessageRoute>[];
+    void toServer(String html, {int? session}) {
+      if (session == null) {
+        m!.sendText(html);
+      } else {
+        m!.sendTextTo(session, html);
+      }
+      routes.add(_serverRoute(m, now, utf8.encode(html).length, alone: session != null));
+      sent = true;
+    }
+    void toDirectRoute({NearbyBoard? to}) {
+      toDirect(to: to);
+      routes.add(MessageRoute(MessageRoute.direct, now,
+          channel: _directInfo?.name ?? '',
+          bytes: utf8.encode(text).length,
+          radio: _directInfo,
+          sends: directCommandSends,
+          packets: [
+            for (final (i, p) in parts.indexed)
+              RadioPacket(i, p.counter,
+                  directFrameBytes(OthersCommand.headerLength + p.what.length + OthersCommand.signatureLength,
+                      targets: to == null ? 0 : 1))
+          ]));
+      sent = true;
+    }
     switch (c.kind) {
       case ConversationKind.everyone:
-        if (_serverUp) {
-          m!.sendText(_html(text) + _everyoneMark + idMark);
-          sent = true;
-        }
-        if (_directUp) {
-          toDirect();
-          sent = true;
-        }
+        if (_serverUp) toServer(_html(text) + _everyoneMark + idMark);
+        if (_directUp) toDirectRoute();
       case ConversationKind.server:
-        if (serverConversation?.key == c.key) {
-          m!.sendText(_html(text) + idMark);
-          sent = true;
-        }
+        if (serverConversation?.key == c.key) toServer(_html(text) + idMark);
       case ConversationKind.direct:
-        if (directConversation?.key == c.key) {
-          toDirect();
-          sent = true;
-        }
+        if (directConversation?.key == c.key) toDirectRoute();
       case ConversationKind.person:
         // Both ways they can be reached: they keep the first that comes
         final u = serverUser(personOf(c));
         final b = directBoard(personOf(c));
-        if (u != null) {
-          m!.sendTextTo(u.session, _html(text) + idMark);
-          sent = true;
-        }
-        if (b != null && b.key != null) {
-          toDirect(to: b);
-          sent = true;
-        }
+        if (u != null) toServer(_html(text) + idMark, session: u.session);
+        if (b != null && b.key != null) toDirectRoute(to: b);
     }
     if (sent) {
       conversations.add(c, ConversationEntry(
-          from: '', mine: true, kind: ConversationEntry.text, body: text, ref: _myRef('$msgId')));
+          from: '', mine: true, kind: ConversationEntry.text, body: text, ref: _myRef('$msgId'),
+          details: MessageDetails(_scopeOf(c), routes)));
     }
     return sent;
   }
@@ -2216,6 +2229,82 @@ class CommController extends ChangeNotifier {
       ? ConversationEntry.terminal
       : ConversationEntry.lovense;
 
+  // ----- Texts' details: how each came or went (message_details.dart) -----
+
+  /// How many times the board sends each command over direct comms
+  /// (direct.c's COMMAND_SENDS), as nothing says it came.
+  static const directCommandSends = 3;
+
+  /// Copies of commands heard over direct comms, by the sender's key's id
+  /// and the command's counter, with when the first came: kept a while for
+  /// the details of the texts they carry, whose packets share the list, so
+  /// copies that come after it's shown are in it too.
+  final Map<String, (int, List<RadioCopy>)> _copies = {};
+  final Set<String> _copiesShown = {};      // those in a text's details
+  static const _copiesFor = 120000;    // ms
+
+  void _onCopy(HeardCopy c) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _copies.removeWhere((k, v) {
+      final old = now - v.$1 > _copiesFor;
+      if (old) _copiesShown.remove(k);
+      return old;
+    });
+    final k = '${c.keyId}:${c.counter}';
+    _copies.putIfAbsent(k, () => (now, <RadioCopy>[])).$2.add(RadioCopy(c.broadcast, c.rssi, c.hops, c.bytes, now));
+    if (_copiesShown.contains(k)) conversations.changed();
+  }
+
+  /// The direct channel the board's on, as it is now.
+  DirectChannelInfo? get _directInfo {
+    final d = boardSettings?.direct;
+    return d == null ? null : DirectChannelInfo(d.keyed ? d.group : 'Open channel', d.id, d.keyed, d.channel, d.longRange, d.name);
+  }
+
+  /// How a text came over the server, or went.
+  MessageRoute _serverRoute(MumbleClient m, int atMs, int bytes, {required bool alone}) => MessageRoute(
+      MessageRoute.server, atMs,
+      channel: alone ? '' : m.channelPath(m.myChannel), bytes: bytes, host: '${m.host}:${server.port}');
+
+  /// How a text came over direct comms: each of its packets, with the copies
+  /// of it heard.
+  MessageRoute _directRoute(Heard h) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final keyId = Identity.idOf(h.key);
+    final counters = h.parts ?? (h.counter == null ? const <int?>[] : [h.counter]);
+    final packets = <RadioPacket>[];
+    int? first;
+    for (final (i, counter) in counters.indexed) {
+      if (counter == null) {
+        packets.add(RadioPacket(i, null, 0));
+        continue;
+      }
+      final k = '$keyId:$counter';
+      final copies = _copies.putIfAbsent(k, () => (now, <RadioCopy>[])).$2;
+      _copiesShown.add(k);
+      for (final c in copies) {
+        if (first == null || c.atMs < first) first = c.atMs;
+      }
+      packets.add(RadioPacket(i, counter, copies.isEmpty ? 0 : copies.first.bytes, copies));
+    }
+    return MessageRoute(MessageRoute.direct, first ?? now,
+        channel: _directInfo?.name ?? '',
+        bytes: h.data.length,
+        radio: _directInfo,
+        sends: directCommandSends,
+        packets: packets);
+  }
+
+  /// A text that came again, the other way: its way added to the one shown.
+  void _addRoute(String ref, MessageRoute route) {
+    final found = conversations.byRef(ref);
+    if (found == null) return;
+    final e = found.$2;
+    if (e.details == null) return;
+    e.details!.routes.add(route);
+    conversations.changed();
+  }
+
   /// Texts lately, by who and what, so one sent to everyone who can hear
   /// them, which comes both over the server and directly, shows once.
   final Map<String, int> _recentTexts = {};
@@ -2293,7 +2382,18 @@ class CommController extends ChangeNotifier {
     final text = plainText(rest.replaceAll(_idOf, ''));
     String refOf(String part, String plain) =>
         mark != null ? messageRef(mark.group(1)!, '${mark.group(2)}$part') : messageRef('name:${t.from}', plain);
-    if (photos.isEmpty && _seenText(who.id, text)) return;
+    final m = mumble;
+    if (m == null) return;
+    final route = _serverRoute(m, DateTime.now().millisecondsSinceEpoch, utf8.encode(t.message).length, alone: t.private);
+    final scope = t.private
+        ? OthersCommand.scopeOne
+        : t.message.contains(_everyoneMark)
+            ? OthersCommand.scopeEveryone
+            : OthersCommand.scopeChannel;
+    if (photos.isEmpty && _seenText(who.id, text)) {
+      _addRoute(refOf('', 'text:$text'), route);
+      return;
+    }
     final c = t.private
         ? personConversation(who.id)
         : t.message.contains(_everyoneMark)
@@ -2301,7 +2401,8 @@ class CommController extends ChangeNotifier {
             : (serverConversation ?? everyoneConversation);
     if (text.isNotEmpty) {
       conversations.add(c, ConversationEntry(
-          from: t.from, who: who.id, mine: false, kind: ConversationEntry.text, body: text, ref: refOf('', 'text:$text')));
+          from: t.from, who: who.id, mine: false, kind: ConversationEntry.text, body: text, ref: refOf('', 'text:$text'),
+          details: MessageDetails(scope, [route])));
     }
     // Each photo kept as a file, in order after the words
     for (final (i, (ext, bytes)) in photos.indexed) {
@@ -2309,7 +2410,8 @@ class CommController extends ChangeNotifier {
       conversations.savePhoto(bytes, ext).then((name) {
         if (name == null) return;
         conversations.add(c, ConversationEntry(
-            from: t.from, who: who.id, mine: false, kind: ConversationEntry.photo, body: name, ref: ref));
+            from: t.from, who: who.id, mine: false, kind: ConversationEntry.photo, body: name, ref: ref,
+            details: MessageDetails(scope, [route])));
         _notifyText(c);
       });
     }
@@ -2339,6 +2441,7 @@ class CommController extends ChangeNotifier {
       return p;
     });
     got.parts[d[2]] = Uint8List.sublistView(d, 4);
+    got.counters[d[2]] = h.counter;
     if (d[2] == 0) got.firstCounter = h.counter;     // the text's id
     if (got.parts.length < got.count) return null;
     (got.timer as Timer?)?.cancel();
@@ -2382,7 +2485,16 @@ class CommController extends ChangeNotifier {
       OthersCommand.scopeChannel => (h.direct ? directConversation : serverConversation) ?? everyoneConversation,
       _ => everyoneConversation,
     };
-    if (h.what == Heard.text && _seenText(who.id, h.textOf)) return;
+    final ref = h.counter == null ? '' : messageRef(Identity.idOf(h.key), '${h.counter}');
+    final route = h.what != Heard.text
+        ? null
+        : h.direct
+            ? _directRoute(h)
+            : MessageRoute(MessageRoute.server, DateTime.now().millisecondsSinceEpoch, bytes: h.data.length);
+    if (h.what == Heard.text && _seenText(who.id, h.textOf)) {
+      _addRoute(ref, route!);
+      return;
+    }
     final e = h.what == Heard.text
         ? ConversationEntry(
             from: h.from,
@@ -2390,7 +2502,8 @@ class CommController extends ChangeNotifier {
             mine: false,
             kind: ConversationEntry.text,
             body: h.textOf,
-            ref: h.counter == null ? '' : messageRef(Identity.idOf(h.key), '${h.counter}'))
+            ref: ref,
+            details: MessageDetails(h.scope, [route!]))
         : ConversationEntry(
             from: h.from,
             who: who.id,
@@ -2558,6 +2671,7 @@ class CommController extends ChangeNotifier {
     _directSoundSub?.cancel();
     _directPeerSub?.cancel();
     _heardSub?.cancel();
+    _copySub?.cancel();
     _talkedSub?.cancel();
     _directAvatarSub?.cancel();
     _directGroupSub?.cancel();

@@ -78,6 +78,7 @@
 #define RELAY_WAIT_MIN_MS   3           // and wait between these first, for another
 #define RELAY_WAIT_MAX_MS   15          // board to do it instead
 #define RELAYS              8           // waiting at once
+#define RADIO_COPY_WINDOW   64          // a command's broadcast heard again, as late as this many broadcasts behind
 
 // Scanning the other channels for groups
 #define SCAN_DWELL_MS       (HELLO_EVERY_MS + 300)
@@ -593,8 +594,9 @@ static void send_command(const command_t *l)
     send_sealed(plain, at + l->len);
 }
 
-/* A command heard: passed on, with who it's from, if it's for us. */
-static void heard_command(const peer_t *p, const uint8_t *plain, size_t len)
+/* A command heard: passed on, with who it's from and how it came over the
+ * air, if it's for us. */
+static void heard_command(const peer_t *p, const uint8_t *plain, size_t len, const others_radio_t *radio)
 {
     if (len < 2 || 2 + 4 * (size_t)plain[1] > len)
     {
@@ -610,7 +612,7 @@ static void heard_command(const peer_t *p, const uint8_t *plain, size_t len)
     if (ours)
     {
         size_t at = 2 + 4 * (size_t)plain[1];
-        others_queue(p->name, plain + at, len - at);
+        others_queue(p->name, plain + at, len - at, radio);
     }
 }
 
@@ -1057,6 +1059,8 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
 
     __atomic_add_fetch(&peers_seq, 1, __ATOMIC_SEQ_CST);
     peer_t *p = find_peer(id, now);
+    others_radio_t radio = { .broadcast = c, .rssi = rssi, .hops = msg[14] < HOPS ? HOPS - msg[14] : 0,
+                             .len = len < 255 ? (uint8_t)len : 255 };
     bool fresh = p->counter == 0 || (int32_t)(c - p->counter) > 0;
     if (!fresh)
     {
@@ -1110,8 +1114,14 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
         }
         else if (plain[0] == TYPE_COMMAND)
         {
-            heard_command(p, plain, plain_len);
+            heard_command(p, plain, plain_len, &radio);
         }
+    }
+    else if (plain[0] == TYPE_COMMAND && p->counter - c < RADIO_COPY_WINDOW)
+    {
+        // A broadcast heard already, passed on by another board: a copy of a
+        // command, for the app's details of a text; others does it only once
+        heard_command(p, plain, plain_len, &radio);
     }
     __atomic_add_fetch(&peers_seq, 1, __ATOMIC_SEQ_CST);
 

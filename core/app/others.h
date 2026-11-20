@@ -150,10 +150,24 @@ void others_init(void);
  * the UI loop. */
 void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, size_t len);
 
+/* How a command came over direct comms: the broadcast it came in (the
+ * sending board's counter for it, the same in a copy another board passed
+ * on), how strong (dBm, from the last board it came from), how many times
+ * it was passed on, and its length on the air. Every copy heard is told to
+ * the app (comm_copy_to_phone), for a text's details, though it's only done
+ * once. */
+typedef struct
+{
+    uint32_t broadcast;
+    int8_t rssi;
+    uint8_t hops;
+    uint8_t len;
+} others_radio_t;
+
 /* One heard over direct comms, signed, from its own task: it's queued, to
  * be checked on a task of its own, and done on the UI loop's next
  * others_poll() if it's good. Nothing else may call it. */
-void others_queue(const char *from, const uint8_t *cmd, size_t len);
+void others_queue(const char *from, const uint8_t *cmd, size_t len, const others_radio_t *radio);
 
 /* The wearer's own public key, from their app: commands to this board
  * alone are signed for it. Remembered. */

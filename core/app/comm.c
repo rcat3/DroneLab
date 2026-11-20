@@ -125,6 +125,7 @@
 #define HEARD_DIRECT        0x01
 #define HEARD_DONE          0x02
 #define HEARD_COUNTER       0x04    // the command's counter follows the key
+#define MSG_COPY            0x15    // to the phone: a copy of a command heard over direct comms, how it came
 #define MSG_TALK_TO         0x13    // from the phone: who talking goes to
 #define TALK_TO_ON_SERVER   0x01
 #define MSG_TALKED          0x13    // to the phone: a transmission started, ended or was refused
@@ -959,6 +960,32 @@ void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *
     len = len < sizeof(msg) - at ? len : sizeof(msg) - at;
     memcpy(msg + at, data, len);
     send_retrying(msg, at + len);
+}
+
+void comm_copy_to_phone(const uint8_t *key, uint64_t counter, uint32_t broadcast, int8_t rssi, uint8_t hops,
+                        uint8_t len)
+{
+    if (!comm_phone_connected())
+    {
+        return;
+    }
+    uint8_t msg[1 + OTHERS_ID_LEN + 6 + 4 + 3];
+    size_t at = 0;
+    msg[at++] = MSG_COPY;
+    memcpy(msg + at, key, OTHERS_ID_LEN);
+    at += OTHERS_ID_LEN;
+    for (int i = 0; i < 6; i++)
+    {
+        msg[at++] = (uint8_t)(counter >> (8 * i));
+    }
+    for (int i = 0; i < 4; i++)
+    {
+        msg[at++] = (uint8_t)(broadcast >> (8 * i));
+    }
+    msg[at++] = (uint8_t)rssi;
+    msg[at++] = hops;
+    msg[at++] = len;
+    send_retrying(msg, at);
 }
 
 bool comm_sending(void)
@@ -1970,6 +1997,11 @@ bool comm_phone_connected(void)
 
 void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, uint64_t counter,
                          comm_heard_t what, uint8_t scope, bool done, const uint8_t *data, size_t len)
+{
+}
+
+void comm_copy_to_phone(const uint8_t *key, uint64_t counter, uint32_t broadcast, int8_t rssi, uint8_t hops,
+                        uint8_t len)
 {
 }
 
