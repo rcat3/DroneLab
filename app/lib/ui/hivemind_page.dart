@@ -44,7 +44,8 @@ class HiveMindPage extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(
             title: Row(children: [
-              const Icon(Icons.settings_input_antenna, color: Kc.green, size: 22),
+              // The tab's own icon, as on the Text tab
+              const Icon(Icons.mic_none, color: Kc.green, size: 22),
               const SizedBox(width: 10),
               const Text('HiveMind Voice'),
               const Spacer(),

@@ -15,6 +15,7 @@ enum ConversationKind { everyone, server, direct, person }
 /// devices, ours or someone else's.
 class ConversationEntry {
   static const text = 'text', terminal = 'terminal', lovense = 'lovense';
+  static const photo = 'photo';     // body: the picture's file, in Conversations.photosPath
 
   final DateTime time;
   final String from;        // who sent it ('' for ours): their name, then
@@ -106,9 +107,31 @@ class Conversations extends ChangeNotifier {
   Timer? _save;
   File? _file;
 
+  /// Where photos sent and received are kept, a file each.
+  String? photosPath;
+
+  /// Keep a photo, returning its file's name for an entry's body.
+  Future<String?> savePhoto(Uint8List bytes, String ext) async {
+    final dir = photosPath;
+    if (dir == null) return null;
+    try {
+      await Directory(dir).create(recursive: true);
+      final name = '${DateTime.now().microsecondsSinceEpoch}.$ext';
+      await File('$dir/$name').writeAsBytes(bytes);
+      return name;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  File? photoFile(ConversationEntry e) =>
+      e.kind == ConversationEntry.photo && photosPath != null ? File('$photosPath/${e.body}') : null;
+
   Future<void> load() async {
     try {
-      _file = File('${(await getApplicationDocumentsDirectory()).path}/conversations.json');
+      final docs = (await getApplicationDocumentsDirectory()).path;
+      photosPath = '$docs/photos';
+      _file = File('$docs/conversations.json');
       if (!await _file!.exists()) return;
       final list = jsonDecode(await _file!.readAsString()) as List<dynamic>;
       for (final j in list) {
@@ -152,7 +175,7 @@ class Conversations extends ChangeNotifier {
         ..updated = e.time;
     } else {
       c.entries.add(e);
-      if (c.entries.length > _keep) c.entries.removeAt(0);
+      if (c.entries.length > _keep) photoFile(c.entries.removeAt(0))?.delete().catchError((_) => File(''));
       if (!e.mine && open != c.key) c.unread++;
     }
     notifyListeners();
@@ -204,6 +227,10 @@ class Conversations extends ChangeNotifier {
 
   void delete(Conversation c) {
     onSeen?.call(c.key);
+    // Its photos go with it
+    for (final e in c.entries) {
+      photoFile(e)?.delete().catchError((_) => File(''));
+    }
     all.remove(c.key);
     notifyListeners();
     _saveSoon();

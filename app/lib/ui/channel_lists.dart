@@ -309,13 +309,19 @@ class _SubLabel extends StatelessWidget {
                     child: Text('$count ${count == 1 ? 'channel' : 'channels'} available',
                         overflow: TextOverflow.ellipsis, style: const TextStyle(color: Kc.dim, fontSize: 12)),
                   ),
-                  Icon(open ? Icons.expand_less : Icons.expand_more, size: 20, color: Kc.dim),
                 ]),
               ),
             ),
           ),
         ),
         ?action,
+        // At the far right, clear of the button, as the headings' are
+        IconButton(
+          tooltip: open ? 'Hide the list' : 'Show the list',
+          visualDensity: VisualDensity.compact,
+          onPressed: onToggle,
+          icon: Icon(open ? Icons.expand_less : Icons.expand_more, size: 22, color: Kc.dim),
+        ),
       ]),
     );
   }

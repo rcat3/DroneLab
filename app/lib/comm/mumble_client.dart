@@ -34,6 +34,7 @@ const _permissionDenied = 12;
 const _cryptSetup = 15;
 const _voiceTarget = 19;
 const _requestBlob = 23;
+const _serverConfig = 24;
 const _pluginData = 26;
 
 // UserState's avatar ("texture"): the picture, or its hash when it's too big
@@ -126,6 +127,12 @@ class MumbleClient {
   final Map<int, MumbleUser> users = {};
   final Map<int, String> channels = {};
   final Map<int, int> channelParents = {};
+
+  /// The longest text message with a picture in it that the server takes,
+  /// in characters (its imagemessagelength; 0 for no limit), and whether it
+  /// takes HTML at all, as its ServerConfig says.
+  int imageMessageLength = 131072;
+  bool allowHtml = true;
 
   /// Why the server last said no, as when joining a channel.
   String? denied;
@@ -507,6 +514,11 @@ class MumbleClient {
         final m = ProtoMessage.parse(payload);
         final reason = m.string(2);
         _shutdown(reason == null || reason.isEmpty ? 'The server turned us away' : reason);
+      case _serverConfig:
+        final m = ProtoMessage.parse(payload);
+        if (m.has(3)) allowHtml = m.int_(3) != 0;
+        if (m.has(5)) imageMessageLength = m.int_(5)!;
+        _changes.add(null);
       case _channelState:
         final m = ProtoMessage.parse(payload);
         final id = m.int_(1);

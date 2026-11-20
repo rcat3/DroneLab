@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
@@ -55,7 +57,11 @@ class TextPage extends StatelessWidget {
         final ids = people.keys.toList()..sort((a, b) => nameOf(a).compareTo(nameOf(b)));
         return Scaffold(
           appBar: AppBar(
-            title: const Text('HiveMind Text'),
+            title: const Row(children: [
+              Icon(Icons.chat_bubble_outline, color: Kc.green, size: 22),
+              SizedBox(width: 10),
+              Text('HiveMind Text'),
+            ]),
             actions: [
               IconButton(
                 tooltip: 'Setup',
@@ -139,8 +145,9 @@ class _Row extends StatelessWidget {
     final last = c.entries.isEmpty ? null : c.entries.last;
     final preview = last == null
         ? null
-        : last.kind == ConversationEntry.text
-            ? '${last.mine ? 'You: ' : c.kind == ConversationKind.person ? '' : '${comm.fromLabel(last)}: '}${last.body}'
+        : last.kind == ConversationEntry.text || last.kind == ConversationEntry.photo
+            ? '${last.mine ? 'You: ' : c.kind == ConversationKind.person ? '' : '${comm.fromLabel(last)}: '}'
+                '${last.kind == ConversationEntry.photo ? '📷 Photo' : last.body}'
             : '${last.mine ? 'You' : comm.fromLabel(last)} ${last.body}';
     return InkWell(
       onTap: () => openConversation(context, comm, c),
@@ -211,6 +218,39 @@ class _ConversationPageState extends State<ConversationPage> {
   final _text = TextEditingController();
   final _scroll = ScrollController();
   int _shown = -1;
+  bool _sendingPhoto = false;
+
+  /// Take or pick a photo, and send it, over the server.
+  Future<void> _photo(Conversation c) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.pop(sheet, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose a photo'),
+            onTap: () => Navigator.pop(sheet, ImageSource.gallery),
+          ),
+        ]),
+      ),
+    );
+    if (source == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final file = await ImagePicker().pickImage(source: source);
+    if (file == null) return;
+    setState(() => _sendingPhoto = true);
+    try {
+      final why = await comm.sendPhoto(c, await file.readAsBytes());
+      if (why != null) messenger.showSnackBar(SnackBar(content: Text(why)));
+    } finally {
+      if (mounted) setState(() => _sendingPhoto = false);
+    }
+  }
 
   @override
   void initState() {
@@ -303,7 +343,9 @@ class _ConversationPageState extends State<ConversationPage> {
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                       itemCount: c.entries.length,
                       itemBuilder: (context, i) => _Entry(c.entries[i], _time(c.entries[i].time),
-                          from: comm.fromLabel(c.entries[i]), named: group),
+                          from: comm.fromLabel(c.entries[i]),
+                          named: group,
+                          photo: comm.conversations.photoFile(c.entries[i])),
                     ),
             ),
             Container(
@@ -311,6 +353,17 @@ class _ConversationPageState extends State<ConversationPage> {
               padding: EdgeInsets.fromLTRB(12, 8, 8, 8 + MediaQuery.paddingOf(context).bottom),
               child: online
                   ? Row(children: [
+                      // A photo: over the server only
+                      if (comm.canSendPhoto(c))
+                        _sendingPhoto
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                            : IconButton(
+                                tooltip: 'Send a photo',
+                                icon: const Icon(Icons.add_photo_alternate_outlined, color: Kc.muted),
+                                onPressed: () => _photo(c),
+                              ),
                       Expanded(
                         child: TextField(
                           controller: _text,
@@ -354,10 +407,12 @@ class _Entry extends StatelessWidget {
   final String time;
   final String from;    // who it's from, as shown: with a warning for someone using another's name
   final bool named;     // show who it's from: in a channel, not with one person
-  const _Entry(this.e, this.time, {required this.from, required this.named});
+  final File? photo;    // a photo's file
+  const _Entry(this.e, this.time, {required this.from, required this.named, this.photo});
 
   @override
   Widget build(BuildContext context) {
+    if (e.kind == ConversationEntry.photo) return _photoBubble(context);
     if (e.kind != ConversationEntry.text) {
       // A command: what it did, in the middle
       final what = '${e.mine ? 'You' : from} ${e.body}';
@@ -421,6 +476,61 @@ class _Entry extends StatelessWidget {
     );
   }
 }
+
+extension on _Entry {
+  /// A photo, in a bubble as a text's: tap it to see it whole.
+  Widget _photoBubble(BuildContext context) {
+    final color = e.mine ? Kc.pink : Kc.green;
+    final f = photo;
+    return Align(
+      alignment: e.mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(6),
+        constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.7),
+        decoration: BoxDecoration(
+          color: Kc.panel,
+          border: Border.all(color: color.withValues(alpha: 0.6)),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          if (named && !e.mine)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
+              child: Text(from, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+            ),
+          GestureDetector(
+            onTap: f == null ? null : () => _viewPhoto(context, f),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: f == null
+                  ? const SizedBox(width: 160, height: 120, child: Icon(Icons.broken_image_outlined, color: Kc.dim))
+                  : Image.file(f,
+                      fit: BoxFit.cover,
+                      height: 220,
+                      cacheHeight: 440,
+                      semanticLabel: e.mine ? 'Your photo' : 'Photo from $from',
+                      errorBuilder: (_, _, _) =>
+                          const SizedBox(width: 160, height: 120, child: Icon(Icons.broken_image_outlined, color: Kc.dim))),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 4, 6, 0),
+            child: Text(time, style: const TextStyle(color: Kc.dim, fontSize: 11)),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// A photo whole, to zoom and pan, on black.
+void _viewPhoto(BuildContext context, File f) => Navigator.of(context).push(MaterialPageRoute(
+    builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(backgroundColor: Colors.black),
+          body: InteractiveViewer(maxScale: 6, child: Center(child: Image.file(f))),
+        )));
 
 /// Words for their displays' Terminals, as our own Terminal takes them: a
 /// letter size, added on a line or in place of what's there, brought on

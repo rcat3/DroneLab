@@ -23,6 +23,7 @@ import 'calls.dart';
 import 'invites.dart';
 import 'conversations.dart';
 import 'notifier.dart';
+import 'photos.dart';
 import 'firmware_update.dart';
 import 'identity.dart';
 import 'known_people.dart';
@@ -1964,6 +1965,45 @@ class CommController extends ChangeNotifier {
     return sent;
   }
 
+  /// Whether a photo can go to a conversation now: over the server only,
+  /// to its channel, or to someone on it.
+  bool canSendPhoto(Conversation c) {
+    final m = mumble;
+    if (!_serverUp || !m!.allowHtml) return false;
+    return switch (c.kind) {
+      ConversationKind.everyone => true,
+      ConversationKind.server => serverConversation?.key == c.key,
+      ConversationKind.person => serverUser(personOf(c)) != null,
+      ConversationKind.direct => false,
+    };
+  }
+
+  /// Send a photo (any picture) to a conversation, over the server, made
+  /// small enough for it. Returns why not, or null once it's gone.
+  Future<String?> sendPhoto(Conversation c, Uint8List picture) async {
+    if (!canSendPhoto(c)) return 'Photos go over the server: not on it just now';
+    final m = mumble!;
+    final jpeg = await compute(shrinkPhoto, (picture, m.imageMessageLength));
+    if (jpeg == null) return "That photo couldn't be made small enough for the server";
+    if (!canSendPhoto(c)) return 'The server went meanwhile';
+    final html = photoMessage(jpeg);
+    switch (c.kind) {
+      case ConversationKind.everyone:
+        m.sendText(html + _everyoneMark);
+      case ConversationKind.server:
+        m.sendText(html);
+      case ConversationKind.person:
+        m.sendTextTo(serverUser(personOf(c))!.session, html);
+      case ConversationKind.direct:
+        return 'Photos go over the server only';
+    }
+    final name = await conversations.savePhoto(jpeg, 'jpeg');
+    if (name != null) {
+      conversations.add(c, ConversationEntry(from: '', mine: true, kind: ConversationEntry.photo, body: name));
+    }
+    return null;
+  }
+
   /// Send a command (for their Terminals or Lovense devices) to a
   /// conversation: everyone in it, whichever ways reach them. Returns false
   /// if it couldn't go anywhere.
@@ -2028,11 +2068,12 @@ class CommController extends ChangeNotifier {
     final unread = c.entries.length < c.unread ? c.entries : c.entries.sublist(c.entries.length - c.unread);
     final texts = [
       for (final e in unread)
-        if (e.kind == ConversationEntry.text && !e.mine) e
+        if ((e.kind == ConversationEntry.text || e.kind == ConversationEntry.photo) && !e.mine) e
     ];
     final last = texts.length > 6 ? texts.sublist(texts.length - 6) : texts;
     final group = c.kind != ConversationKind.person;
-    notifier.showTexts(c.key, c.title, [for (final e in last) (fromLabel(e), e.body, e.time, _avatarByName(e.from))],
+    notifier.showTexts(c.key, c.title,
+        [for (final e in last) (fromLabel(e), e.kind == ConversationEntry.photo ? '📷 Photo' : e.body, e.time, _avatarByName(e.from))],
         group: group);
   }
 
@@ -2076,15 +2117,27 @@ class CommController extends ChangeNotifier {
     final u = t.session == null ? null : mumble?.users[t.session];
     final who = u == null ? people.named(t.from) : personOfUser(u);
     if (who.muted) return;
-    final text = plainText(t.message);
-    if (_seenText(who.id, text)) return;
+    final (photos, rest) = photosIn(t.message);
+    final text = plainText(rest);
+    if (photos.isEmpty && _seenText(who.id, text)) return;
     final c = t.private
         ? personConversation(who.id)
         : t.message.contains(_everyoneMark)
             ? everyoneConversation
             : (serverConversation ?? everyoneConversation);
-    conversations.add(c, ConversationEntry(from: t.from, who: who.id, mine: false, kind: ConversationEntry.text, body: text));
-    _notifyText(c);
+    if (text.isNotEmpty) {
+      conversations.add(c, ConversationEntry(from: t.from, who: who.id, mine: false, kind: ConversationEntry.text, body: text));
+    }
+    // Each photo kept as a file, in order after the words
+    for (final (ext, bytes) in photos) {
+      conversations.savePhoto(bytes, ext).then((name) {
+        if (name == null) return;
+        conversations.add(
+            c, ConversationEntry(from: t.from, who: who.id, mine: false, kind: ConversationEntry.photo, body: name));
+        _notifyText(c);
+      });
+    }
+    if (text.isNotEmpty) _notifyText(c);
   }
 
   /// What someone sent our board, as it passes it on: into the conversation
