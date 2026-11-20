@@ -56,6 +56,16 @@ class _AboutPageState extends State<AboutPage> {
 
   Future<void> _readPhone() async {
     String os, phone = '';
+    if (Platform.isLinux) {
+      (os, phone) = await _linuxInfo();
+      if (mounted) {
+        setState(() {
+          _os = os;
+          _phone = phone;
+        });
+      }
+      return;
+    }
     try {
       final m = await _device.invokeMapMethod<String, dynamic>('info');
       os = 'Android ${m?['release'] ?? ''} (API ${m?['sdk'] ?? '?'})';
@@ -71,6 +81,28 @@ class _AboutPageState extends State<AboutPage> {
         _phone = phone;
       });
     }
+  }
+
+  /// The distribution (os-release), and the computer's model: a Raspberry
+  /// Pi's device tree says, a PC's firmware (DMI) usually does.
+  static Future<(String, String)> _linuxInfo() async {
+    Future<String> read(String path) async {
+      try {
+        return (await File(path).readAsString()).replaceAll('\x00', '').trim();
+      } catch (_) {
+        return '';
+      }
+    }
+
+    final release = await read('/etc/os-release');
+    final name = RegExp(r'^PRETTY_NAME="?([^"\n]*)"?', multiLine: true).firstMatch(release)?.group(1);
+    var model = await read('/proc/device-tree/model');
+    if (model.isEmpty) {
+      model = [await read('/sys/devices/virtual/dmi/id/sys_vendor'), await read('/sys/devices/virtual/dmi/id/product_name')]
+          .where((s) => s.isNotEmpty)
+          .join(' ');
+    }
+    return (name ?? 'Linux', model);
   }
 
   Future<void> _read() async {

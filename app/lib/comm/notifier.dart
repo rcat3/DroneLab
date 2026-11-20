@@ -60,10 +60,14 @@ class Notifier {
           }
         },
       );
-      final launch = await _plugin.getNotificationAppLaunchDetails();
-      if (launch?.didNotificationLaunchApp ?? false) {
-        final key = launch!.notificationResponse?.payload;
-        if (key != null && key.isNotEmpty) launchedWith = key;
+      try {
+        final launch = await _plugin.getNotificationAppLaunchDetails();
+        if (launch?.didNotificationLaunchApp ?? false) {
+          final key = launch!.notificationResponse?.payload;
+          if (key != null && key.isNotEmpty) launchedWith = key;
+        }
+      } on UnimplementedError {
+        // Linux: a notification can't start the app
       }
       final android = _android;
       await android?.createNotificationChannel(const AndroidNotificationChannel(textsChannel, 'Text messages',

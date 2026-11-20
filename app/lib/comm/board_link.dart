@@ -224,10 +224,44 @@ class BoardLink extends ChangeNotifier {
       if (overtaken()) return;
       state = BoardState.connected;
       notifyListeners();
+    } on UniversalBleException catch (e) {
+      debugPrint('board: failed $e');
+      if (overtaken()) return;
+      // Linux only connects to a board it's seen lately: after it's been
+      // forgotten (or the computer's started again), look for it first
+      if (e.code == UniversalBleErrorCode.deviceNotFound && await _findAgain(id) && !overtaken()) {
+        _connect();
+        return;
+      }
+      if (overtaken()) return;
+      _lost(e.code == UniversalBleErrorCode.deviceNotFound
+          ? 'The board is out of range, or its Phone App is off'
+          : "Couldn't connect to the board");
     } catch (e) {
       debugPrint('board: failed $e');
       if (overtaken()) return;
       _lost("Couldn't connect to the board");
+    }
+  }
+
+  /// Scan for the board at [id] for a while: true once it's seen. Not while
+  /// the wearer's scanning themselves.
+  Future<bool> _findAgain(String id) async {
+    if (_scanSub != null) return false;
+    final seen = Completer<bool>();
+    final sub = UniversalBle.scanStream.listen((d) {
+      if (d.deviceId.toUpperCase() == id.toUpperCase() && !seen.isCompleted) seen.complete(true);
+    });
+    try {
+      await UniversalBle.startScan(scanFilter: ScanFilter(withServices: [serviceUuid]));
+      return await seen.future.timeout(const Duration(seconds: 10), onTimeout: () => false);
+    } catch (_) {
+      return false;
+    } finally {
+      await sub.cancel();
+      try {
+        await UniversalBle.stopScan();
+      } catch (_) {}
     }
   }
 

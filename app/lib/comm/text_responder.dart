@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -276,10 +277,16 @@ class TextResponder {
 /// they are. Each is in `adb logcat -s flutter` too. Nothing's taken while
 /// the developer options are hidden: they're only shown from the app, by
 /// tapping its version on About ten times.
+///
+/// On Linux, the same commands come one to a connection on a Unix socket
+/// that only its user can reach, in their runtime folder:
+///
+///   echo /nearby | nc -U -q 5 $XDG_RUNTIME_DIR/dronelab-dev.sock
 class DevRemote {
   static const _channel = MethodChannel('dronelab/dev');
 
   static void listen(CommController comm) {
+    if (Platform.isLinux) _listenOnSocket(comm);
     _channel.setMethodCallHandler((call) async {
       if (call.method != 'command') return null;
       final line = (call.arguments as String? ?? '').trim();
@@ -287,6 +294,39 @@ class DevRemote {
       debugPrint('dev: ${line.isEmpty ? '(state)' : line}\n$answer');
       return answer;
     });
+  }
+
+  static Future<void> _listenOnSocket(CommController comm) async {
+    final runtime = Platform.environment['XDG_RUNTIME_DIR'];
+    if (runtime == null || runtime.isEmpty) return;   // nowhere private to put it
+    final path = '$runtime/dronelab-dev.sock';
+    final address = InternetAddress(path, type: InternetAddressType.unix);
+    try {
+      if (await FileSystemEntity.type(path) == FileSystemEntityType.unixDomainSock) {
+        // Another DroneLab running has it; else it's left from one that's gone
+        try {
+          (await Socket.connect(address, 0)).destroy();
+          return;
+        } on SocketException {
+          await File(path).delete();
+        }
+      }
+      final server = await ServerSocket.bind(address, 0);
+      server.listen((client) async {
+        try {
+          final line = (await utf8.decoder.bind(client).transform(const LineSplitter()).first).trim();
+          final answer = await _run(comm, line);
+          debugPrint('dev: ${line.isEmpty ? '(state)' : line}\n$answer');
+          client.write('$answer\n');
+          await client.flush();
+        } catch (_) {
+        } finally {
+          await client.close();
+        }
+      });
+    } catch (e) {
+      debugPrint('dev: no socket: $e');
+    }
   }
 
   static Future<String> _run(CommController comm, String line) async {

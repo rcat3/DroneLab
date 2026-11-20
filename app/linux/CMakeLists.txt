@@ -100,6 +100,15 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# Sound out (native/audio_out.c, through miniaudio), for lib/comm/audio_out.dart
+enable_language(C)
+add_library(dronelab_audio SHARED "../native/audio_out.c")
+target_include_directories(dronelab_audio PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/miniaudio")
+target_compile_options(dronelab_audio PRIVATE -O2 -fvisibility=hidden)
+target_link_libraries(dronelab_audio PRIVATE dl pthread m)
+install(TARGETS dronelab_audio LIBRARY DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

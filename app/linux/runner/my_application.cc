@@ -52,7 +52,25 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "DroneLab");
   }
 
-  gtk_window_set_default_size(window, 1280, 720);
+  // Phone-shaped, as the app's laid out for a phone, but no bigger than the
+  // screen it opens on (a Raspberry Pi's touchscreen is 800x480): there it
+  // fills the screen.
+  int width = 480, height = 900;
+  GdkDisplay* display = gdk_display_get_default();
+  GdkMonitor* monitor = display == nullptr ? nullptr : gdk_display_get_primary_monitor(display);
+  if (monitor == nullptr && display != nullptr) monitor = gdk_display_get_monitor(display, 0);
+  if (monitor != nullptr) {
+    GdkRectangle area;
+    gdk_monitor_get_workarea(monitor, &area);
+    if (area.height - 60 < height) height = area.height - 60;
+    if (area.width < width) width = area.width;
+    if (area.height < 600) {
+      width = area.width;
+      height = area.height;
+      gtk_window_maximize(window);
+    }
+  }
+  gtk_window_set_default_size(window, width, height);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(

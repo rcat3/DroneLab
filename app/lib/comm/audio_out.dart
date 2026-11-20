@@ -4,9 +4,11 @@
 library;
 
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:ffi/ffi.dart';
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 import 'package:opus_codec/opus_flutter.dart' as opus_flutter;
 import 'package:opus_codec_dart/opus_dart.dart';
@@ -98,7 +100,7 @@ class AudioOut {
   }
 
   Future<void> _start() async {
-    if (Platform.isLinux) return _startPipe();
+    if (Platform.isLinux) return _startNative();
     await FlutterPcmSound.setLogLevel(LogLevel.error);
     await FlutterPcmSound.setup(
         sampleRate: outputRate,
@@ -124,37 +126,29 @@ class AudioOut {
     FlutterPcmSound.feed(PcmArrayInt16(bytes: out.buffer.asByteData()));
   }
 
-  // On Linux (for now): the mixer piped to pacat, which plays it through
-  // PulseAudio or PipeWire, kept _queuedMs ahead by the wall clock.
-  Process? _pipe;
-  Timer? _pipeTimer;
+  // On a computer: the mixer into native/audio_out.c's ring, kept _queuedMs
+  // ahead by how much the ring holds, so the sound card's clock sets the pace.
+  _NativeAudio? _native;
+  Timer? _nativeTimer;
+  Int16List _pcm = Int16List(0);
 
-  Future<void> _startPipe() async {
-    final p = await Process.start('pacat', [
-      '--playback', '--raw', '--format=s16le', '--rate=$outputRate', '--channels=1',
-      '--latency-msec=$_thresholdMs', '--client-name=DroneLab', '--stream-name=HiveMind',
-    ]);
-    p.stdout.drain<void>();
-    p.stderr.drain<void>();
-    _pipe = p;
+  Future<void> _startNative() async {
+    final n = _native ??= _NativeAudio.open();
+    final failed = n.start(outputRate, outputRate, _blockMs);
+    if (failed != 0) throw StateError('No sound out ($failed)');
     _running = true;
-    final started = DateTime.now().microsecondsSinceEpoch;
-    var written = 0;
-    _pipeTimer = Timer.periodic(const Duration(milliseconds: _blockMs), (_) {
+    final target = outputRate * _queuedMs ~/ 1000;
+    _nativeTimer = Timer.periodic(const Duration(milliseconds: _blockMs ~/ 2), (_) {
       if (!_running) return;
-      final played = (DateTime.now().microsecondsSinceEpoch - started) * outputRate ~/ 1000000;
-      // Fallen behind (the app was held up): start again from now
-      if (written < played) written = played;
-      final want = played + outputRate * _queuedMs ~/ 1000 - written;
-      final blocks = want <= 0 ? 0 : (want + _block - 1) ~/ _block;
-      if (blocks == 0) return;
-      final out = Int16List(blocks * _block);
+      final want = target - n.queued();
+      if (want <= 0) return;
+      final blocks = (want + _block - 1) ~/ _block;
+      if (_pcm.length < blocks * _block) _pcm = n.buffer(blocks * _block);
       for (var b = 0; b < blocks; b++) {
         _clockMs = DateTime.now().millisecondsSinceEpoch;
-        out.setRange(b * _block, (b + 1) * _block, mixer.pull(_block, _clockMs));
+        _pcm.setRange(b * _block, (b + 1) * _block, mixer.pull(_block, _clockMs));
       }
-      written += out.length;
-      p.stdin.add(out.buffer.asUint8List());
+      n.write(blocks * _block);
     });
   }
 
@@ -162,15 +156,43 @@ class AudioOut {
     await _starting;
     if (!_running) return;
     _running = false;
-    if (_pipe != null) {
-      _pipeTimer?.cancel();
-      _pipeTimer = null;
-      await _pipe!.stdin.close().catchError((_) {});
-      _pipe!.kill();
-      _pipe = null;
+    if (_native != null) {
+      _nativeTimer?.cancel();
+      _nativeTimer = null;
+      _native!.stop();
       return;
     }
     FlutterPcmSound.setFeedCallback(null);
     await FlutterPcmSound.release();
   }
+}
+
+/// native/audio_out.c, in the app's lib folder.
+class _NativeAudio {
+  final int Function(int, int, int) start;
+  final int Function() queued;
+  final int Function(Pointer<Int16>, int) _write;
+  final void Function() stop;
+  Pointer<Int16> _buffer = nullptr;
+
+  _NativeAudio._(DynamicLibrary lib)
+      : start = lib.lookupFunction<Int32 Function(Int32, Int32, Int32), int Function(int, int, int)>('dl_audio_start'),
+        queued = lib.lookupFunction<Int32 Function(), int Function()>('dl_audio_queued'),
+        _write = lib.lookupFunction<Int32 Function(Pointer<Int16>, Int32), int Function(Pointer<Int16>, int)>(
+            'dl_audio_write'),
+        stop = lib.lookupFunction<Void Function(), void Function()>('dl_audio_stop');
+
+  factory _NativeAudio.open() {
+    final dir = File(Platform.resolvedExecutable).parent.path;
+    return _NativeAudio._(DynamicLibrary.open('$dir/lib/libdronelab_audio.so'));
+  }
+
+  /// A native buffer of [frames], seen from Dart: what [write] sends.
+  Int16List buffer(int frames) {
+    if (_buffer != nullptr) malloc.free(_buffer);
+    _buffer = malloc<Int16>(frames);
+    return _buffer.asTypedList(frames);
+  }
+
+  void write(int frames) => _write(_buffer, frames);
 }

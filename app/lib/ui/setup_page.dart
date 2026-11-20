@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -328,11 +329,13 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
           title: title,
           subtitle: subtitle,
           trailing: [
-            IconButton(
-              tooltip: 'Sound, pop-up and more',
-              icon: const Icon(Icons.tune, color: Kc.muted),
-              onPressed: () => n.openChannelSettings(channel),
-            ),
+            // Android's own settings for the channel; none elsewhere
+            if (defaultTargetPlatform == TargetPlatform.android)
+              IconButton(
+                tooltip: 'Sound, pop-up and more',
+                icon: const Icon(Icons.tune, color: Kc.muted),
+                onPressed: () => n.openChannelSettings(channel),
+              ),
             Switch(
               value: on,
               onChanged: (v) async {
