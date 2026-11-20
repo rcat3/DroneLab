@@ -33,11 +33,14 @@ class Person {
   String get id => who.id;
 }
 
-/// Everyone about: those in our server channel, then the boards heard over
-/// direct comms, if it's on.
+/// Everyone about: everyone on the server, in any channel (one in another
+/// can still be called, or whispered to), then the boards heard over direct
+/// comms, if it's on.
 List<Person> hivePeople(CommController comm) {
   final m = comm.mumble;
-  final users = m != null && m.state == MumbleState.connected ? m.channelUsers : const <MumbleUser>[];
+  final users = m != null && m.state == MumbleState.connected
+      ? [for (final u in m.users.values) if (u.session != m.mySession) u]
+      : const <MumbleUser>[];
   final directOn = comm.board.state == BoardState.connected && (comm.boardSettings?.direct?.on ?? false);
   final boards = directOn ? (comm.nearby.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi))) : <NearbyBoard>[];
   return [
@@ -50,6 +53,13 @@ List<Person> hivePeople(CommController comm) {
         Person('d${b.id}', who, b.name,
             board: b, talking: b.talking, mutedByMe: who.muted, picture: comm.directAvatars[b.id]),
   ];
+}
+
+/// Where on the server someone is, if it's not our channel: its name.
+String? otherChannel(CommController comm, Person p) {
+  final m = comm.mumble, u = p.user;
+  if (m == null || u == null || u.channel == m.myChannel) return null;
+  return m.channels[u.channel] ?? '?';
 }
 
 /// Everyone about, each once: someone on the server and heard directly is

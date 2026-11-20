@@ -38,7 +38,7 @@ Future<void> showPerson(BuildContext context, CommController comm,
           final m = comm.mumble;
           final direct = comm.boardSettings?.direct;
           final link = p.onServer
-              ? 'Server · ${m == null ? '' : m.channelPath(m.myChannel)}'
+              ? 'Server · ${m == null ? '' : m.channelPath(p.user!.channel)}'
               : 'Direct · ${direct == null ? '' : directChannelName(direct)}';
           final ago = b == null ? null : (DateTime.now().millisecondsSinceEpoch - b.seenMs) ~/ 1000;
           Widget kv(String k, Widget v) => Padding(
@@ -251,5 +251,48 @@ Widget _away(BuildContext context, BuildContext sheet, CommController comm, Know
             ),
           ],
         ]),
+      ),
+    );
+
+
+/// Everyone in a channel, [inIt] picking them from everyone about; tap one
+/// for their card. Kept up to date while it shows.
+Future<void> showChannelPeople(
+        BuildContext context, CommController comm, String title, bool Function(Person p) inIt) =>
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheet) => ListenableBuilder(
+        listenable: comm,
+        builder: (sheet, _) {
+          final people = peopleOnce(comm).where(inIt).toList()
+            ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+          return SafeArea(
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              children: [
+                SectionHeader(title),
+                if (people.isEmpty)
+                  const Panel(children: [PanelRow(title: 'Nobody else here')])
+                else
+                  Panel(color: Kc.bg, children: [
+                    for (final p in people)
+                      PanelRow(
+                        leading: DroneAvatar(picture: p.picture, size: 36, talking: p.talking && !p.mutedByMe),
+                        title: p.name,
+                        subtitle: p.mutedByMe
+                            ? 'Muted by you'
+                            : p.talking
+                                ? 'TALKING'
+                                : [if (p.onServer) 'Server', if (p.board != null) 'Direct'].join(' · '),
+                        trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
+                        onTap: () => showPerson(context, comm, id: p.id),
+                      ),
+                  ]),
+              ],
+            ),
+          );
+        },
       ),
     );

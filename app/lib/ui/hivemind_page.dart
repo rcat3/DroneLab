@@ -346,7 +346,11 @@ class _PersonRow extends StatelessWidget {
     final talking = p.talking && !p.mutedByMe;
     final sessions = [?p.user?.session, if (p.board != null) CommController.directSession(p.board!.id)];
     final toUs = talking && sessions.any(comm.talkingToUs.contains);
-    final ways = [if (p.onServer) 'Server', if (p.board != null) 'Direct'].join(' · ');
+    final elsewhere = otherChannel(comm, p);
+    final ways = [
+      if (p.onServer) elsewhere == null ? 'Server' : 'Server · $elsewhere',
+      if (p.board != null) 'Direct',
+    ].join(' · ');
     final call = comm.calls[p.id];
     final missed = comm.missedCalls[p.id];
     final callStatus = switch (call?.state) {

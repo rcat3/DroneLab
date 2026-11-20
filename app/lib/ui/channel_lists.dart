@@ -5,6 +5,7 @@ import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
 import 'groups_page.dart';
+import 'person_sheet.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -55,7 +56,7 @@ class ChannelLists extends StatelessWidget {
               if (!collapsed.contains('server'))
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(children: _serverTree(comm, m, collapsed, onPicked)),
+                  child: Column(children: _serverTree(context, comm, m, collapsed, onPicked)),
                 ),
             ]),
           ],
@@ -91,7 +92,7 @@ class ChannelLists extends StatelessWidget {
   }
 
   /// The server's channels as they nest, from its root.
-  static List<Widget> _serverTree(CommController comm, MumbleClient m, Set<String> collapsed,
+  static List<Widget> _serverTree(BuildContext context, CommController comm, MumbleClient m, Set<String> collapsed,
       void Function(TalkTo, int?)? onPicked) {
     final children = <int, List<int>>{};
     for (final id in m.channels.keys) {
@@ -123,7 +124,12 @@ class ChannelLists extends StatelessWidget {
           onPicked?.call(TalkTo.server, id);
         },
         semantics: '${m.channels[id]}, $n here${here ? ', you are here' : ''}',
-        trailing: n == 0 ? null : _Count(n),
+        // Who's in it: their cards
+        trailing: n == 0
+            ? null
+            : _Count(n,
+                onTap: () => showChannelPeople(
+                    context, comm, m.channels[id] ?? 'Channel', (p) => p.user != null && p.user!.channel == id)),
       ));
       if (open) {
         for (final k in kids) {
@@ -162,7 +168,14 @@ class ChannelLists extends StatelessWidget {
     final savedIds = {for (final g in saved) g.id};
     final heard = comm.heardGroups.values.where((h) => !savedIds.contains(h.id)).toList()
       ..sort((a, b) => b.rssi.compareTo(a.rssi));
+    // The channel the board's on: those heard on it, to list
+    Widget? here() => comm.nearby.isEmpty
+        ? null
+        : _Count(comm.nearby.length,
+            onTap: () => showChannelPeople(
+                context, comm, d.keyed ? d.group : 'Open channel', (p) => p.board != null));
     Widget? nearby(String id) {
+      if (d.keyed && d.id == id && joining == null) return here();
       final h = comm.heardGroups[id];
       return h == null ? null : _Count(h.boards);
     }
@@ -179,6 +192,7 @@ class ChannelLists extends StatelessWidget {
           picked();
         },
         semantics: 'Open channel, anyone nearby can hear it${openPicked ? ', you are here' : ''}',
+        trailing: !d.keyed && joining == null ? here() : null,
       ),
     ];
     void group(String key, String title, int n, List<Widget> Function() items) {
@@ -365,15 +379,36 @@ class _TreeRow extends StatelessWidget {
   }
 }
 
-/// How many are in a channel, or how many boards are on it nearby.
+/// How many are in a channel, or how many boards are on it nearby: a
+/// button listing them, where they can be listed.
 class _Count extends StatelessWidget {
   final int n;
-  const _Count(this.n);
+  final VoidCallback? onTap;
+  const _Count(this.n, {this.onTap});
 
   @override
-  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.person_outline, size: 14, color: Kc.muted),
-        const SizedBox(width: 2),
-        Text('$n', style: Kc.term(13, color: Kc.muted)),
-      ]);
+  Widget build(BuildContext context) {
+    final color = onTap == null ? Kc.muted : Kc.pink;
+    final count = Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(onTap == null ? Icons.person_outline : Icons.people_outline, size: 16, color: color),
+      const SizedBox(width: 3),
+      Text('$n', style: Kc.term(13, color: color)),
+    ]);
+    if (onTap == null) return count;
+    return Semantics(
+      button: true,
+      label: '$n here: list them',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+              border: Border.all(color: Kc.pink.withValues(alpha: 0.4)), borderRadius: BorderRadius.circular(12)),
+          child: count,
+        ),
+      ),
+    );
+  }
 }

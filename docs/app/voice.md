@@ -34,7 +34,7 @@ flowchart LR
 The Voice tab is laid out as the [Text](text.md) tab is:
 
 - **Channels**: your channel on the server, and your direct channel, while you're on them, with how many are there and who's talking, and every other channel under each, to move to (see [Channels](#channels)).
-- **People**: everyone in your server channel and every unit heard nearby, each once, by name.  Someone who's on the server and nearby both is one row, with both.
+- **People**: everyone on the server, in any channel, and every unit heard nearby, each once, by name.  Someone in another server channel shows it, *Server · Alternate Comms*: you can still [call](#calls) them, as calls reach anyone on the server.  Someone who's on the server and nearby both is one row, with both.
 
 Under each name it says how they're linked, or what they're doing:
 
@@ -114,7 +114,7 @@ The app keeps going with the screen off, so the phone can go in a pocket.  A not
 
 ## Channels
 
-*Channels* has a part for each link: **Cloud Server** and **Direct**, each saying how many channels there are to pick from.  The first row is the channel you're on; under it, indented, is every channel there is, with a pink dot by yours and how many are in each.  Tap one to move to it: it's picked at once, and a direct channel shows a spinner by it, and *Switching channel...*, while the unit moves over.  The arrows fold a list away, or a channel's subchannels; the lists start open.
+*Channels* has a part for each link: **Cloud Server** and **Direct**, each saying how many channels there are to pick from.  The first row is the channel you're on; under it, indented, is every channel there is, with a pink dot by yours and how many are in each.  The pink head-count by a channel lists who's in it (for direct, the channel you're on), and tapping someone there opens their card.  Tap a channel to move to it: it's picked at once, and a direct channel shows a spinner by it, and *Switching channel...*, while the unit moves over.  The arrows fold a list away, or a channel's subchannels; the lists start open.
 
 **On the server**, the hive's channels are made on the server itself, and nest as they do there.  Only those in the same channel hear each other.  The app goes back to it each time it connects.
 
