@@ -34,7 +34,9 @@ class _GroupsPageState extends State<GroupsPage> {
         final direct = comm.board.state == BoardState.connected ? comm.boardSettings?.direct : null;
         final usable = direct != null;
         final on = direct?.on ?? false;
-        final currentId = direct != null && direct.keyed ? direct.id : null;
+        // The one being switched to shows picked at once
+        final joining = comm.joiningDirect;
+        final currentId = joining != null ? (joining.isEmpty ? null : joining) : direct != null && direct.keyed ? direct.id : null;
         final saved = comm.groups.toList()..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
         final savedIds = {for (final g in saved) g.id};
         final heard = comm.heardGroups.values.where((h) => !savedIds.contains(h.id)).toList()
@@ -67,7 +69,7 @@ class _GroupsPageState extends State<GroupsPage> {
                 Panel(children: [
                   PanelRow(
                     leading: Icon(direct.keyed ? Icons.lock : Icons.lock_open, color: Kc.green),
-                    title: direct.keyed ? direct.group : 'Open channel',
+                    title: joining != null ? 'Switching channel...' : direct.keyed ? direct.group : 'Open channel',
                     subtitle: '${_radio(direct.channel, direct.longRange)}'
                         '${direct.keyed ? nearby(direct.id) : ' · anyone nearby can hear it'}',
                   ),
@@ -213,11 +215,12 @@ class _Choice extends StatelessWidget {
   }
 }
 
-/// Join a channel heard nearby, asking for its passphrase.
-Future<void> joinHeardGroup(BuildContext context, CommController comm, HeardGroup h) async {
+/// Join a channel heard nearby, asking for its passphrase. False if it
+/// wasn't given, or was wrong.
+Future<bool> joinHeardGroup(BuildContext context, CommController comm, HeardGroup h) async {
   final got = await _ask(context, title: 'Join ${h.name}', askName: false, action: 'Join');
-  if (got == null || !context.mounted) return;
-  await _busy(context,
+  if (got == null || !context.mounted) return false;
+  return _busy(context,
       comm.joinGroup(h.name, got.passphrase, expectId: h.id, channel: h.channel, longRange: h.longRange));
 }
 
@@ -229,17 +232,16 @@ Future<void> createGroup(BuildContext context, CommController comm) async {
 }
 
 /// Join one of the channels kept here.
-Future<void> joinSavedGroup(BuildContext context, CommController comm, DirectGroup g) =>
+Future<bool> joinSavedGroup(BuildContext context, CommController comm, DirectGroup g) =>
     _busy(context, comm.joinGroup(g.name, g.passphrase, mine: g.mine, channel: g.channel, longRange: g.longRange));
 
 /// Wait for a join, which takes a moment to make the key, and say if it
 /// didn't work.
-Future<void> _busy(BuildContext context, Future<String?> work) async {
+Future<bool> _busy(BuildContext context, Future<String?> work) async {
   final messenger = ScaffoldMessenger.of(context);
-  messenger.showSnackBar(const SnackBar(content: Text('Joining...'), duration: Duration(seconds: 10)));
   final why = await work;
-  messenger.hideCurrentSnackBar();
   if (why != null) messenger.showSnackBar(SnackBar(content: Text(why)));
+  return why == null;
 }
 
 /// What's typed in to make or join a channel.

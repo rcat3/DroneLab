@@ -54,7 +54,7 @@ class TextPage extends StatelessWidget {
         final ids = people.keys.toList()..sort((a, b) => nameOf(a).compareTo(nameOf(b)));
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Text'),
+            title: const Text('HiveMind Text'),
             actions: [
               IconButton(
                 tooltip: 'Setup',
@@ -78,6 +78,8 @@ class TextPage extends StatelessWidget {
                   Panel(children: [_Row(comm: comm, c: comm.everyoneConversation)]),
                 ChannelLists(
                   comm: comm,
+                  // Picked from a list: its conversation, once it's moved there
+                  onPicked: (kind, id) => _openWhenThere(context, comm, kind, id),
                   serverCurrent: comm.serverConversation == null ? null : _Row(comm: comm, c: comm.serverConversation!),
                   directCurrent: comm.directConversation == null ? null : _Row(comm: comm, c: comm.directConversation!),
                 ),
@@ -106,6 +108,18 @@ class TextPage extends StatelessWidget {
       },
     );
   }
+}
+
+/// A channel's been picked: once we're on it (the server's said we've
+/// moved, or the board's switched), its conversation.
+Future<void> _openWhenThere(BuildContext context, CommController comm, TalkTo kind, int? serverChannel) async {
+  for (var i = 0; i < 200; i++) {
+    final there = kind == TalkTo.server ? comm.mumble?.myChannel == serverChannel : comm.joiningDirect == null;
+    if (there) break;
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+  }
+  final c = kind == TalkTo.server ? comm.serverConversation : comm.directConversation;
+  if (c != null && context.mounted) openConversation(context, comm, c);
 }
 
 class _Row extends StatelessWidget {

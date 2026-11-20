@@ -46,7 +46,7 @@ class HiveMindPage extends StatelessWidget {
             title: Row(children: [
               const Icon(Icons.settings_input_antenna, color: Kc.green, size: 22),
               const SizedBox(width: 10),
-              const Text('Voice'),
+              const Text('HiveMind Voice'),
               const Spacer(),
               if (sending) Text('TX', style: Kc.term(16, color: Kc.pink, shadows: Kc.glow(Kc.pink))),
             ]),
@@ -279,7 +279,9 @@ class _DirectChannelRow extends StatelessWidget {
     final name = directChannelName(d);
     final n = comm.nearby.length;
     final talking = _talkersIn(comm, [for (final b in comm.nearby.values) CommController.directSession(b.id)]);
-    final status = talking ?? (n == 0 ? 'Direct · nobody nearby' : 'Direct · $n nearby');
+    final status = comm.joiningDirect != null
+        ? 'Switching channel...'
+        : talking ?? (n == 0 ? 'Direct · nobody nearby' : 'Direct · $n nearby');
     return _TalkRow(
       leading: const Icon(Icons.settings_input_antenna, color: Kc.green),
       title: name,

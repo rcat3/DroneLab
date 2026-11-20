@@ -418,6 +418,7 @@ class CommController extends ChangeNotifier {
           [for (final n in (v['voices'] as List<dynamic>? ?? const [])) n as String],
           (v['talk'] as num?)?.toInt() ?? 0,
           v['housing'] as String?);
+      _checkJoined();
       notifyListeners();
       _nameBoard();
     } catch (_) {}
@@ -529,7 +530,30 @@ class CommController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> joinOpenGroup() => _setBoardGroup('', '', 6, true);
+  Future<void> joinOpenGroup() {
+    _markJoining('');
+    return _setBoardGroup('', '', 6, true);
+  }
+
+  /// The direct channel being switched to, by its id ('' for the open
+  /// channel), from the tap till the board says it's on it: for the lists
+  /// to show it picked at once, and that it's on its way.
+  String? joiningDirect;
+  Timer? _joiningTimer;
+
+  void _markJoining(String? id) {
+    joiningDirect = id;
+    _joiningTimer?.cancel();
+    if (id != null) _joiningTimer = Timer(const Duration(seconds: 20), () => _markJoining(null));
+    notifyListeners();
+  }
+
+  /// Whether the board's on the channel being switched to yet.
+  void _checkJoined() {
+    final want = joiningDirect, d = boardSettings?.direct;
+    if (want == null || d == null) return;
+    if (want.isEmpty ? !d.keyed : (d.keyed && d.id == want)) _markJoining(null);
+  }
 
   /// Listen to the other channels for a few seconds, for the groups there.
   Future<void> scanDirect() async {
@@ -549,9 +573,16 @@ class CommController extends ChangeNotifier {
     if (name.isEmpty) return 'It needs a name';
     if (utf8.encode(name).length > 15) return 'That name is too long';
     if (passphrase.isEmpty) return 'It needs a passphrase';
-    final key = await compute(directKey, (name, passphrase));
-    final g = DirectGroup(name, passphrase, key, mine, channel, longRange);
-    if (expectId != null && g.id != expectId) return "That's not the passphrase";
+    if (expectId != null) _markJoining(expectId);
+    // One kept here has its key already: making it again is slow on purpose
+    final kept = groups.where((o) => o.name == name && o.passphrase == passphrase).firstOrNull;
+    final String key = kept != null ? kept.key : await compute(directKey, (name, passphrase));
+    final g = DirectGroup(name, passphrase, key, mine || (kept?.mine ?? false), channel, longRange);
+    if (expectId != null && g.id != expectId) {
+      _markJoining(null);
+      return "That's not the passphrase";
+    }
+    _markJoining(g.id);
     groups.removeWhere((o) => o.id == g.id);
     groups.add(g);
     await _saveGroups();

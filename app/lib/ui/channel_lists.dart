@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../comm/board_link.dart';
+import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
 import 'groups_page.dart';
@@ -26,7 +27,11 @@ class ChannelLists extends StatelessWidget {
   final CommController comm;
   final Widget? serverCurrent;    // null while not on the server
   final Widget? directCurrent;    // null while direct is off
-  const ChannelLists({super.key, required this.comm, this.serverCurrent, this.directCurrent});
+
+  /// A channel's been picked from a list: which kind, and the server's
+  /// channel's id. The Text tab opens its conversation.
+  final void Function(TalkTo kind, int? serverChannel)? onPicked;
+  const ChannelLists({super.key, required this.comm, this.serverCurrent, this.directCurrent, this.onPicked});
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +41,7 @@ class ChannelLists extends StatelessWidget {
     return ValueListenableBuilder<Set<String>>(
       valueListenable: collapsedChannels,
       builder: (context, collapsed, _) {
-        final directItems = direct == null ? null : _directItems(context, comm, direct, collapsed);
+        final directItems = direct == null ? null : _directItems(context, comm, direct, collapsed, onPicked);
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           if (serverUp) ...[
             _SubLabel(
@@ -50,7 +55,7 @@ class ChannelLists extends StatelessWidget {
               if (!collapsed.contains('server'))
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(children: _serverTree(comm, m, collapsed)),
+                  child: Column(children: _serverTree(comm, m, collapsed, onPicked)),
                 ),
             ]),
           ],
@@ -86,7 +91,8 @@ class ChannelLists extends StatelessWidget {
   }
 
   /// The server's channels as they nest, from its root.
-  static List<Widget> _serverTree(CommController comm, MumbleClient m, Set<String> collapsed) {
+  static List<Widget> _serverTree(CommController comm, MumbleClient m, Set<String> collapsed,
+      void Function(TalkTo, int?)? onPicked) {
     final children = <int, List<int>>{};
     for (final id in m.channels.keys) {
       if (id == 0) continue;
@@ -114,6 +120,7 @@ class ChannelLists extends StatelessWidget {
         onTap: () {
           if (!here) comm.joinChannel(id);
           comm.setTalkTo(const TalkTarget.server());
+          onPicked?.call(TalkTo.server, id);
         },
         semantics: '${m.channels[id]}, $n here${here ? ', you are here' : ''}',
         trailing: n == 0 ? null : _Count(n),
@@ -139,8 +146,18 @@ class ChannelLists extends StatelessWidget {
   /// Direct's channels: the open channel, those made or joined here, and
   /// those heard nearby.
   static ({List<Widget> rows, int count}) _directItems(
-      BuildContext context, CommController comm, DirectSettings d, Set<String> collapsed) {
-    final currentId = d.keyed ? d.id : null;
+      BuildContext context, CommController comm, DirectSettings d, Set<String> collapsed,
+      void Function(TalkTo, int?)? onPicked) {
+    // The one being switched to shows picked at once, with a spinner till
+    // the board's on it
+    final joining = comm.joiningDirect;
+    final currentId = joining != null ? (joining.isEmpty ? null : joining) : d.keyed ? d.id : null;
+    final openPicked = joining != null ? joining.isEmpty : !d.keyed;
+    void picked() {
+      comm.setTalkTo(const TalkTarget.direct());
+      onPicked?.call(TalkTo.direct, null);
+    }
+
     final saved = comm.groups.toList()..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     final savedIds = {for (final g in saved) g.id};
     final heard = comm.heardGroups.values.where((h) => !savedIds.contains(h.id)).toList()
@@ -155,12 +172,13 @@ class ChannelLists extends StatelessWidget {
         depth: 0,
         title: 'Open channel',
         locked: false,
-        selected: !d.keyed,
+        selected: openPicked,
+        busy: joining != null && joining.isEmpty,
         onTap: () {
-          if (d.keyed) comm.joinOpenGroup();
-          comm.setTalkTo(const TalkTarget.direct());
+          if (!openPicked) comm.joinOpenGroup();
+          picked();
         },
-        semantics: 'Open channel, anyone nearby can hear it${!d.keyed ? ', you are here' : ''}',
+        semantics: 'Open channel, anyone nearby can hear it${openPicked ? ', you are here' : ''}',
       ),
     ];
     void group(String key, String title, int n, List<Widget> Function() items) {
@@ -186,9 +204,10 @@ class ChannelLists extends StatelessWidget {
               title: g.name,
               locked: true,
               selected: currentId == g.id,
+              busy: joining == g.id,
               onTap: () {
                 if (currentId != g.id) joinSavedGroup(context, comm, g);
-                comm.setTalkTo(const TalkTarget.direct());
+                picked();
               },
               semantics: '${g.name}${currentId == g.id ? ', you are here' : ''}',
               trailing: nearby(g.id),
@@ -201,9 +220,11 @@ class ChannelLists extends StatelessWidget {
               title: h.name,
               locked: true,
               selected: currentId == h.id,
-              onTap: () {
-                if (currentId != h.id) joinHeardGroup(context, comm, h);
-                comm.setTalkTo(const TalkTarget.direct());
+              busy: joining == h.id,
+              onTap: () async {
+                // Its passphrase first; then on, if it was right
+                if (currentId != h.id && !await joinHeardGroup(context, comm, h)) return;
+                picked();
               },
               semantics: '${h.name}, ${h.boards} nearby, needs its passphrase',
               trailing: _Count(h.boards),
@@ -262,6 +283,7 @@ class _TreeRow extends StatelessWidget {
   final int depth;
   final String title;
   final bool selected;
+  final bool busy;            // being switched to
   final bool heading;         // a group of channels, not one to pick
   final bool? locked;         // a direct channel: whether it takes a passphrase
   final bool? open;
@@ -273,6 +295,7 @@ class _TreeRow extends StatelessWidget {
       {required this.depth,
       required this.title,
       this.selected = false,
+      this.busy = false,
       this.heading = false,
       this.locked,
       this.open,
@@ -309,8 +332,15 @@ class _TreeRow extends StatelessWidget {
                       ),
               ),
               if (!heading) ...[
-                Icon(selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                    size: 18, color: selected ? Kc.pink : Kc.dim),
+                busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: Padding(
+                            padding: EdgeInsets.all(2),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Kc.pink)))
+                    : Icon(selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                        size: 18, color: selected ? Kc.pink : Kc.dim),
                 const SizedBox(width: 10),
               ],
               Expanded(

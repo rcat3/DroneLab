@@ -12,7 +12,7 @@ Back to [the app](README.md).
 
 ## Picking a conversation
 
-The tab lists every conversation you can use now, with its last message, and a pink number for any you haven't read.  The number on the tab itself counts them all.  The gear at the top opens *Setup*, as on the Voice tab.  *Channels* lists the server's and Direct's channels as the Voice tab does (see [Channels](voice.md#channels)): the one you're on first, which opens its conversation, and the rest under it to move to.
+The tab lists every conversation you can use now, with its last message, and a pink number for any you haven't read.  The number on the tab itself counts them all.  The gear at the top opens *Setup*, as on the Voice tab.  *Channels* lists the server's and Direct's channels as the Voice tab does (see [Channels](voice.md#channels)): the one you're on first, which opens its conversation, and the rest under it: tap one to move there, and its conversation opens once you're on it.
 
 - **Channels**:
   - **Broadcast**: everyone who can hear you, by any link: your server channel and your direct channel together.

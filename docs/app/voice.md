@@ -114,7 +114,7 @@ The app keeps going with the screen off, so the phone can go in a pocket.  A not
 
 ## Channels
 
-*Channels* has a part for each link: **Cloud Server** and **Direct**, each saying how many channels there are to pick from.  The first row is the channel you're on; under it, indented, is every channel there is, with a pink dot by yours and how many are in each.  Tap one to move to it.  The arrows fold a list away, or a channel's subchannels; the lists start open.
+*Channels* has a part for each link: **Cloud Server** and **Direct**, each saying how many channels there are to pick from.  The first row is the channel you're on; under it, indented, is every channel there is, with a pink dot by yours and how many are in each.  Tap one to move to it: it's picked at once, and a direct channel shows a spinner by it, and *Switching channel...*, while the unit moves over.  The arrows fold a list away, or a channel's subchannels; the lists start open.
 
 **On the server**, the hive's channels are made on the server itself, and nest as they do there.  Only those in the same channel hear each other.  The app goes back to it each time it connects.
 
