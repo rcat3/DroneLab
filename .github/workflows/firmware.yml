@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: write     # to attach the firmware to the release
+  actions: read       # for linux.yml, which asks for it
   pages: write
   id-token: write
 

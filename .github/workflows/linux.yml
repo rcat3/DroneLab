@@ -7,7 +7,10 @@
 # carries the release's firmware (bundled by firmware.yml), and the two
 # tarballs are attached to the release. On a pull request that touches the
 # app, or run by hand, it's built without the firmware, and the tarballs are
-# the run's artifacts.
+# the run's artifacts. Run by hand with a release and its Firmware run, it's
+# built from the branch it's run on, with the firmware that run built for the
+# app, and attached to that release: for a release whose own Linux build
+# failed.
 
 name: Linux app
 
@@ -18,6 +21,15 @@ on:
         type: string
         default: ''
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'A release to attach the tarballs to (a tag), or none'
+        type: string
+        default: ''
+      firmware_run:
+        description: "That release's Firmware run (its id), for the firmware it built for the app"
+        type: string
+        default: ''
   pull_request:
     paths:
       - 'app/**'
@@ -28,6 +40,7 @@ on:
 
 permissions:
   contents: write     # to attach the tarballs to the release
+  actions: read       # for the firmware from a release's Firmware run
 
 env:
   FLUTTER_VERSION: 3.47.9
@@ -50,11 +63,19 @@ jobs:
           git submodule update --init --depth 1 third_party/miniaudio third_party/lvgl \
               third_party/dr_libs third_party/mbedtls third_party/opus
       - name: The firmware the app carries
-        if: inputs.release
+        if: inputs.release && !inputs.firmware_run
         uses: actions/download-artifact@v4
         with:
           name: app-firmware
           path: app/assets/firmware
+      - name: The firmware the app carries, from the release's Firmware run
+        if: inputs.release && inputs.firmware_run
+        uses: actions/download-artifact@v4
+        with:
+          name: app-firmware
+          path: app/assets/firmware
+          run-id: ${{ inputs.firmware_run }}
+          github-token: ${{ github.token }}
       - name: Tools
         run: |
           sudo apt-get update
