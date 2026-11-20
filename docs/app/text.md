@@ -14,7 +14,7 @@ Back to [the app](README.md).
 
 The tab lists every conversation you can use now, with its last message, and a pink number for any you haven't read.  The number on the tab itself counts them all.  The gear at the top opens *Setup*, as on the Voice tab.
 
-**Hold a message** to react to it, to copy its text, or to delete it from this phone (a photo's file with it); others keep theirs.  A **reaction** is one of a row of emoji, or any from the **+** beside them (smiles and laughs, cats, hearts of every colour, hands, sad faces, a robot and more): it shows under the message for everyone the conversation reaches who has the app, over the server and directly, with how many gave each.  You have one reaction a message: pick another to change it, or tap yours again, or its chip under the message, to take it back.  Hold a chip to see who gave it.  People on plain Mumble don't see reactions, though you can react to what they send.  As a text or photo comes in you hear two quick high blips in your headphones; *Text tone*, in Setup under *Headphones*, turns them off.
+**Hold a message** to react to it, to see its [details](#message-details), to copy its text, or to delete it from this phone (a photo's file with it); others keep theirs.  A **reaction** is one of a row of emoji, or any from the **+** beside them (smiles and laughs, cats, hearts of every colour, hands, sad faces, a robot and more): it shows under the message for everyone the conversation reaches who has the app, over the server and directly, with how many gave each.  You have one reaction a message: pick another to change it, or tap yours again, or its chip under the message, to take it back.  Hold a chip to see who gave it.  People on plain Mumble don't see reactions, though you can react to what they send.  As a text or photo comes in you hear two quick high blips in your headphones; *Text tone*, in Setup under *Headphones*, turns them off.
 
 **Photos** go over the server: in your server channel's conversation, in *Broadcast*, and to someone on the server.  The picture button by the text box takes one with the camera or picks one from the phone, and sends it made small enough for the server (most take one of up to about 100 KB, which the app sizes to fit).  Photos show in the conversation, yours and theirs; tap one to see it whole and zoom.  Mumble's own apps see them too, and send them that the app shows.  Over direct mode a message is far too small for a photo, so the button isn't there in a direct channel's conversation.  Deleting a conversation deletes its photos from the phone.
   In a channel's conversation, the pink count by its name says how many are in it, you included; tap it, or *Details* in the ⋮ menu, for the channel's details: its name and type, for the server its address, path and how the voice goes, for direct its frequency, Long Range, whether it takes a passphrase and its id, how many messages there are, and everyone in it, each to tap for their card.  For a direct channel with a passphrase, *Invite someone* is there too.  *Channels* lists the server's and Direct's channels as the Voice tab does (see [Channels](voice.md#channels)): the one you're on first, which opens its conversation, and the rest under it: tap one to move there, and its conversation opens once you're on it.
@@ -45,11 +45,23 @@ The button by each (sliders) opens Android's own settings for it: its sound, whe
 Type in the box at the foot of a conversation and tap send.  Anyone can text you, and you anyone: texts don't need anyone's permission, as they only go to the app, never to the display.
 
 - **Over the server**, texts are Mumble's own text messages: those in a channel's conversation go to the channel, and those to one person go to them alone.  So people in Mumble's own apps, on a computer, see them too, and can text you back.
-- **Over direct mode**, your unit carries them to the others nearby, up to 120 letters.
+- **Over direct mode**, your unit carries them to the others nearby: a long one goes in up to six parts, about 600 letters in all.
 - **To one person**, a text goes both ways they can be reached, over the server and directly, and they see it once.  Words for their display and commands for their toys go both ways too: their unit does each once, by whichever way it allows, so allowing them for either is enough.
 - **Broadcast** goes both ways at once.  Someone who hears you both ways sees it once, under their Broadcast.  (One from a Mumble app to the channel shows in the channel's conversation.)
 
 You need a link to send: someone who can't be reached just now says so in place of the box.
+
+## Message details
+
+**Hold a message** and pick **Details** to see how it came, or went: for testing how far direct mode reaches, and whether relaying helps.
+
+- **The message**: who sent it, who it was for (you alone, everyone in a channel, or everyone who can hear them), when it came or went to the millisecond, and its size in bytes and characters.
+- **Each way it came**, the first first: one to one person usually comes both ways, so the second says how much later it came.
+  - **Server**: the server, the channel (or private), and its size as sent.
+  - **Direct**: the channel, with an (i) for its frequency, Long Range, access and id as they were then; how many packets went on the air, their size, and that each is sent three times.  Then how many of those sends your unit heard (green all, amber half or more, red fewer), how many copies were relayed by another unit, the signal's range in dBm, and how long the copies were spread over.
+- **Each packet**: every copy heard, with its signal, whether it came directly or relayed, and how long after the first.  A part that never came is marked *Never came*.
+
+For your own messages it shows how they went: other units don't say which copies they heard.  Copies that come while Details is open are added as they come.  Messages from before the app kept details say so, as do commands, which keep none.  Signal strength on a relayed copy is from the unit that relayed it.
 
 ## Their display
 

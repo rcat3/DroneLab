@@ -36,7 +36,7 @@ Four tabs along the bottom, and the status strip along the top of every one:
 | **Record** | Recording your voice, and your recordings. |
 | **Remote** | The unit's own controls, as on its display. |
 
-**Setup**, behind the gear on the Voice tab, has what's set once: [connecting](connecting.md) the unit and the server, your avatar, how you [talk](voice.md#setup-talking), the [unit's sounds](voice.md#setup-unit-sounds), the headphones' ring and text tones, [notifications](text.md#notifications), and the [unit's firmware](firmware-updates.md).  Its (i), top right, opens **About**: the app's and phone's versions, and the unit's connection, signal, firmware, MAC addresses, enclosure, uptime and battery.  The (i) buttons throughout the app explain each setting.
+**Setup**, behind the gear on the Voice tab, has what's set once: [connecting](connecting.md) the unit and the server, your avatar, how you [talk](voice.md#setup-talking), the [unit's sounds](voice.md#setup-unit-sounds), the headphones' ring and text tones, [notifications](text.md#notifications), and the [unit's firmware](firmware-updates.md).  Its (i), top right, opens **About**: the app's and phone's versions, and the unit's connection, signal, firmware, MAC addresses, enclosure, uptime and battery.  The (i) buttons throughout the app explain each setting.  Tapping the version on *About* ten times shows [developer options](developer-options.md) in Setup, for testing range and relays alone.
 
 ### The status strip
 
