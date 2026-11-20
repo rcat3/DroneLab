@@ -222,10 +222,31 @@ class _ConversationPageState extends State<ConversationPage> {
 
   /// A line held: copy its words, or delete it here.
   Future<void> _entryMenu(Conversation c, ConversationEntry e) async {
+    final canReact = e.ref.isNotEmpty && comm.isOnline(c);
     final what = await showModalBottomSheet<String>(
       context: context,
       builder: (sheet) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // A reaction: tap the one you've given to take it back
+          if (canReact)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                for (final r in quickReactions)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(24),
+                    onTap: () => Navigator.pop(sheet, 'react:$r'),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: e.reactions[''] == r ? Kc.pink.withValues(alpha: 0.25) : null,
+                      ),
+                      child: Text(r, style: const TextStyle(fontSize: 28)),
+                    ),
+                  ),
+              ]),
+            ),
           if (e.kind == ConversationEntry.text)
             ListTile(
               leading: const Icon(Icons.copy),
@@ -244,7 +265,9 @@ class _ConversationPageState extends State<ConversationPage> {
       ),
     );
     if (!mounted) return;
-    if (what == 'copy') {
+    if (what != null && what.startsWith('react:')) {
+      comm.react(c, e, what.substring(6));
+    } else if (what == 'copy') {
       await Clipboard.setData(ClipboardData(text: e.body));
     } else if (what == 'delete') {
       comm.conversations.deleteEntry(c, e);
@@ -376,10 +399,18 @@ class _ConversationPageState extends State<ConversationPage> {
                       // Hold one for what can be done with it
                       itemBuilder: (context, i) => GestureDetector(
                         onLongPress: () => _entryMenu(c, c.entries[i]),
-                        child: _Entry(c.entries[i], _time(c.entries[i].time),
-                            from: comm.fromLabel(c.entries[i]),
-                            named: group,
-                            photo: comm.conversations.photoFile(c.entries[i])),
+                        child: Column(
+                          crossAxisAlignment: c.entries[i].mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                          children: [
+                            _Entry(c.entries[i], _time(c.entries[i].time),
+                                from: comm.fromLabel(c.entries[i]),
+                                named: group,
+                                photo: comm.conversations.photoFile(c.entries[i])),
+                            if (c.entries[i].reactions.isNotEmpty)
+                              _Reactions(comm, c.entries[i],
+                                  onTap: comm.isOnline(c) ? (r) => comm.react(c, c.entries[i], r) : null),
+                          ],
+                        ),
                       ),
                     ),
             ),
@@ -555,6 +586,47 @@ extension on _Entry {
           ),
         ]),
       ),
+    );
+  }
+}
+
+/// A message's reactions, under it: each emoji once, with how many gave
+/// it, ours lit. Tap one to give it, or take ours back; hold for who.
+class _Reactions extends StatelessWidget {
+  final CommController comm;
+  final ConversationEntry e;
+  final void Function(String emoji)? onTap;
+  const _Reactions(this.comm, this.e, {this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final byEmoji = <String, List<String>>{};
+    for (final r in e.reactions.entries) {
+      byEmoji.putIfAbsent(r.value, () => []).add(r.key);
+    }
+    String name(String who) => who.isEmpty ? 'You' : comm.people[who]?.name ?? '?';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Wrap(spacing: 4, runSpacing: 4, children: [
+        for (final MapEntry(key: emoji, value: who) in byEmoji.entries)
+          Tooltip(
+            message: who.map(name).join(', '),
+            triggerMode: TooltipTriggerMode.longPress,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: onTap == null ? null : () => onTap!(emoji),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Kc.raised,
+                  border: Border.all(color: who.contains('') ? Kc.pink : Kc.line),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(who.length == 1 ? emoji : '$emoji ${who.length}', style: const TextStyle(fontSize: 14)),
+              ),
+            ),
+          ),
+      ]),
     );
   }
 }

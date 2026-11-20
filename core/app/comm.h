@@ -146,7 +146,9 @@
  *                  taken, by the permission for its kind), what it is
  *                  (comm_heard_t), who it was for (OTHERS_SCOPE_*), the
  *                  sender's name's length (1) and the name, their public
- *                  key (32, from COMM_VERSION 10), then for a text,
+ *                  key (32, from COMM_VERSION 10), with flags bit 2 its
+ *                  counter (6, little endian: the sender's id for it, as
+ *                  messages' reactions name it), then for a text,
  *                  the text, in UTF-8, or for a command, the command from
  *                  what to do on (others.h): a text or a command someone
  *                  sent this board, done or not, for the app's
@@ -336,14 +338,15 @@ typedef enum
     COMM_HEARD_TEXT_PART,   // a part of a long text, for the app to put together
     COMM_HEARD_CALL,        // a call's signal (OTHERS_CALL), for the app
     COMM_HEARD_INVITE,      // an invitation to a direct channel (OTHERS_INVITE), for the app
+    COMM_HEARD_REACTION,    // a reaction to a message (OTHERS_REACTION), for the app
 } comm_heard_t;
 
 /* Pass on to the app what someone sent: a text, or a command and whether it
  * was done (others.h), with who sent it (their name and 32-byte key) and who
  * it was for (OTHERS_SCOPE_*); data is the text, or the command from what to
  * do on. From the UI loop. */
-void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, comm_heard_t what,
-                         uint8_t scope, bool done, const uint8_t *data, size_t len);
+void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, uint64_t counter,
+                         comm_heard_t what, uint8_t scope, bool done, const uint8_t *data, size_t len);
 
 /* True while it's sending the voice to the phone. */
 bool comm_sending(void);

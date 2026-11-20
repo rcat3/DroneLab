@@ -190,7 +190,7 @@ class DirectAvatarPiece {
 /// What someone sent the board, passed on as it came (commVersion 8): a
 /// text, or a command for its Terminal or Lovense devices, done or not.
 class Heard {
-  static const text = 0, terminal = 1, lovense = 2, textPart = 3, call = 4, invite = 5;    // comm_heard_t
+  static const text = 0, terminal = 1, lovense = 2, textPart = 3, call = 4, invite = 5, reaction = 6;    // comm_heard_t
   final bool direct;        // heard over direct comms, not the server
   final bool done;          // a command: taken, by the permission for its kind
   final int what;
@@ -198,7 +198,8 @@ class Heard {
   final String from;
   final Uint8List key;      // who it's from: their public key
   final Uint8List data;     // the text, or the command from what to do on
-  Heard(this.direct, this.done, this.what, this.scope, this.from, this.key, this.data);
+  final int? counter;       // the sender's counter for it: its id, as reactions name it
+  Heard(this.direct, this.done, this.what, this.scope, this.from, this.key, this.data, [this.counter]);
 
   String get textOf => utf8.decode(data, allowMalformed: true);
 }
@@ -267,9 +268,15 @@ Object? parseBoardMessage(Uint8List data) {
   }
   if (data[0] == _msgHeard && data.length >= 5 && data.length >= 5 + data[4] + 32) {
     final at = 5 + data[4];
+    // Its counter, after the key, from firmware that sends it (flag 4)
+    final counted = data[1] & 4 != 0 && data.length >= at + 32 + 6;
+    var counter = 0;
+    for (var i = 5; counted && i >= 0; i--) {
+      counter = (counter << 8) | data[at + 32 + i];
+    }
     return Heard(data[1] & 1 != 0, data[1] & 2 != 0, data[2], data[3],
         utf8.decode(data.sublist(5, at), allowMalformed: true), Uint8List.fromList(data.sublist(at, at + 32)),
-        Uint8List.sublistView(data, at + 32));
+        Uint8List.sublistView(data, at + 32 + (counted ? 6 : 0)), counted ? counter : null);
   }
   if (data[0] == _msgDirectGroup && data.length >= 9) {
     final id = data.sublist(1, 5).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
@@ -476,6 +483,7 @@ class OthersCommand {
   static const textPart = 0x21;
   static const call = 0x30;
   static const invite = 0x31;
+  static const reaction = 0x32;
   static const allMotors = 0xFF;
 
   /// Who it's for, as the receivers see it: everyone who can hear us, the
@@ -568,6 +576,10 @@ class OthersCommand {
 
   /// Empty their Terminal.
   static OthersCommand clearTerminal() => _make([clear]);
+
+  /// A reaction to a message, by its id (8 bytes, messageRef): an emoji,
+  /// or none to take ours back.
+  static OthersCommand reactTo(List<int> ref, String emoji) => _make([reaction, ...ref, ..._cut(utf8.encode(emoji), 32)]);
 
   /// An invitation to a direct channel, sealed for them (invites.dart).
   static OthersCommand inviteTo(Uint8List sealed) => _make([invite, ...sealed]);
@@ -717,6 +729,7 @@ class PartialText {
 
   final Heard first;
   final int count;
+  int? firstCounter;      // the first part's counter: the text's id
   final Map<int, Uint8List> parts = {};
   Object? timer;      // the controller's, to show it if the rest don't come
   PartialText(this.first, this.count);
@@ -736,6 +749,7 @@ class PartialText {
       }
     }
     final h = first;
-    return Heard(h.direct, true, Heard.text, h.scope, h.from, h.key, Uint8List.fromList(utf8.encode(out.toString())));
+    return Heard(h.direct, true, Heard.text, h.scope, h.from, h.key, Uint8List.fromList(utf8.encode(out.toString())),
+        firstCounter);
   }
 }

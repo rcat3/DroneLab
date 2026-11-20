@@ -124,6 +124,7 @@
 #define PEER_AVATAR_BURST   6       // pieces each comm_poll
 #define HEARD_DIRECT        0x01
 #define HEARD_DONE          0x02
+#define HEARD_COUNTER       0x04    // the command's counter follows the key
 #define MSG_TALK_TO         0x13    // from the phone: who talking goes to
 #define TALK_TO_ON_SERVER   0x01
 #define MSG_TALKED          0x13    // to the phone: a transmission started, ended or was refused
@@ -919,8 +920,8 @@ bool comm_phone_connected(void)
     return running && rcat_hal_ble_peer_connected();
 }
 
-void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, comm_heard_t what,
-                         uint8_t scope, bool done, const uint8_t *data, size_t len)
+void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, uint64_t counter,
+                         comm_heard_t what, uint8_t scope, bool done, const uint8_t *data, size_t len)
 {
     if (!comm_phone_connected())
     {
@@ -930,7 +931,7 @@ void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *
     size_t n = strlen(from);
     n = n < COMM_NAME_MAX ? n : COMM_NAME_MAX;
     msg[0] = MSG_HEARD;
-    msg[1] = (via == COMM_TALK_DIRECT ? HEARD_DIRECT : 0) | (done ? HEARD_DONE : 0);
+    msg[1] = (via == COMM_TALK_DIRECT ? HEARD_DIRECT : 0) | (done ? HEARD_DONE : 0) | HEARD_COUNTER;
     msg[2] = (uint8_t)what;
     msg[3] = scope;
     msg[4] = (uint8_t)n;
@@ -938,6 +939,10 @@ void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *
     size_t at = 5 + n;
     memcpy(msg + at, key, OTHERS_KEY_LEN);
     at += OTHERS_KEY_LEN;
+    for (int i = 0; i < 6; i++)
+    {
+        msg[at++] = (uint8_t)(counter >> (8 * i));
+    }
     len = len < sizeof(msg) - at ? len : sizeof(msg) - at;
     memcpy(msg + at, data, len);
     send_retrying(msg, at + len);
@@ -1945,8 +1950,8 @@ bool comm_phone_connected(void)
     return false;
 }
 
-void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, comm_heard_t what,
-                         uint8_t scope, bool done, const uint8_t *data, size_t len)
+void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, uint64_t counter,
+                         comm_heard_t what, uint8_t scope, bool done, const uint8_t *data, size_t len)
 {
 }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -25,6 +26,8 @@ class ConversationEntry {
   final String body;        // the text, or what the command did, in words
   final bool done;          // a command: taken by the board it went to
   DateTime updated;         // a Lovense entry's last level, for running them together
+  final String ref;         // a text's or photo's id, as reactions name it (messageRef); '' for none
+  final Map<String, String> reactions;    // who reacted (KnownPerson.id, '' for us) and with what
 
   ConversationEntry(
       {required this.from,
@@ -33,12 +36,16 @@ class ConversationEntry {
       required this.kind,
       required this.body,
       this.done = true,
+      this.ref = '',
+      Map<String, String>? reactions,
       DateTime? time})
       : time = time ?? DateTime.now(),
-        updated = time ?? DateTime.now();
+        updated = time ?? DateTime.now(),
+        reactions = reactions ?? {};
 
   Map<String, dynamic> toJson() =>
-      {'t': time.millisecondsSinceEpoch, 'f': from, if (who.isNotEmpty) 'w': who, 'm': mine, 'k': kind, 'b': body, 'd': done};
+      {'t': time.millisecondsSinceEpoch, 'f': from, if (who.isNotEmpty) 'w': who, 'm': mine, 'k': kind, 'b': body, 'd': done,
+        if (ref.isNotEmpty) 'r': ref, if (reactions.isNotEmpty) 'x': reactions};
 
   static ConversationEntry fromJson(Map<String, dynamic> j) => ConversationEntry(
         time: DateTime.fromMillisecondsSinceEpoch((j['t'] as num).toInt()),
@@ -48,6 +55,8 @@ class ConversationEntry {
         kind: j['k'] as String? ?? text,
         body: j['b'] as String? ?? '',
         done: j['d'] != false,
+        ref: j['r'] as String? ?? '',
+        reactions: {for (final e in (j['x'] as Map<String, dynamic>? ?? const {}).entries) e.key: e.value as String},
       );
 }
 
@@ -217,6 +226,23 @@ class Conversations extends ChangeNotifier {
     if (any) _saveSoon();
   }
 
+  /// A line's reactions changed: shown, and kept.
+  void changed() {
+    notifyListeners();
+    _saveSoon();
+  }
+
+  /// The text or photo with this id, and its conversation.
+  (Conversation, ConversationEntry)? byRef(String ref) {
+    if (ref.isEmpty) return null;
+    for (final c in all.values) {
+      for (final e in c.entries.reversed) {
+        if (e.ref == ref) return (c, e);
+      }
+    }
+    return null;
+  }
+
   /// One line gone from a conversation, here only; a photo's file with it.
   void deleteEntry(Conversation c, ConversationEntry e) {
     if (!c.entries.remove(e)) return;
@@ -246,6 +272,16 @@ class Conversations extends ChangeNotifier {
 
   int get unread => all.values.fold(0, (n, c) => n + c.unread);
 }
+
+/// A message's id, the same on every phone: the first 8 bytes of SHA-256
+/// of who wrote it (their identity's id, or 'name:' and their name for
+/// someone on plain Mumble) and its own id (the sender's counter for it, or
+/// for plain Mumble, 'text:' and the text), as 16 hex digits.
+String messageRef(String author, String id) =>
+    sha256.convert(utf8.encode('dronelab-msg\n$author\n$id')).toString().substring(0, 16);
+
+/// The quick reactions to pick from.
+const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
 /// What a command did, in words, for a conversation: [op] is the command
 /// from what to do on, as the board passes it on. [mine] for ones we sent

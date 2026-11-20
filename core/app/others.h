@@ -117,6 +117,7 @@
 #define OTHERS_TEXT_PART        0x21
 #define OTHERS_CALL             0x30    // a call's signal, for the app: op, call id (4)
 #define OTHERS_INVITE           0x31    // an invitation to a direct channel, sealed for the app
+#define OTHERS_REACTION         0x32    // a reaction to a message, for the app: its id (8), an emoji
 #define OTHERS_MESSAGE_APPEND   0x01    // a message's flags: on a line of its own after what's there
 #define OTHERS_MESSAGE_SHOW     0x02    // and bring the Terminal on screen
 

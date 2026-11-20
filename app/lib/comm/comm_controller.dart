@@ -9,6 +9,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import 'package:package_info_plus/package_info_plus.dart';
@@ -1822,6 +1823,10 @@ class CommController extends ChangeNotifier {
         if (cmd.scope == OthersCommand.scopeOne) _onCallSignal(who, Uint8List.sublistView(cmd.body, at + 1));
         return;
       }
+      if (cmd.body.length > at && cmd.body[at] == OthersCommand.reaction) {
+        _onReaction(who, Uint8List.sublistView(cmd.body, at + 1));
+        return;
+      }
       if (cmd.body.length > at && cmd.body[at] == OthersCommand.invite) {
         if (cmd.scope == OthersCommand.scopeOne) _onInvitation(who, Uint8List.sublistView(cmd.body, at + 1));
         return;
@@ -1934,17 +1939,21 @@ class CommController extends ChangeNotifier {
     if (text.isEmpty) return false;
     final m = mumble;
     var sent = false;
-    // Over direct comms: in one command, or in parts if it's long
+    // Over direct comms: in one command, or in parts if it's long, numbered
+    // now, so the first's counter is the text's id, the same over the server
     final textId = Random().nextInt(0x10000);
+    final parts = [for (final part in OthersCommand.sendText(text, id: textId)) newCommand(part).withScope(_scopeOf(c))];
+    final msgId = parts.first.counter;
     void toDirect({NearbyBoard? to}) {
-      for (final part in OthersCommand.sendText(text, id: textId)) {
-        _toDirect(newCommand(part).withScope(_scopeOf(c)), to: to);
+      for (final part in parts) {
+        _toDirect(part, to: to);
       }
     }
+    final idMark = _idMark(msgId);
     switch (c.kind) {
       case ConversationKind.everyone:
         if (_serverUp) {
-          m!.sendText(_html(text) + _everyoneMark);
+          m!.sendText(_html(text) + _everyoneMark + idMark);
           sent = true;
         }
         if (_directUp) {
@@ -1953,7 +1962,7 @@ class CommController extends ChangeNotifier {
         }
       case ConversationKind.server:
         if (serverConversation?.key == c.key) {
-          m!.sendText(_html(text));
+          m!.sendText(_html(text) + idMark);
           sent = true;
         }
       case ConversationKind.direct:
@@ -1966,7 +1975,7 @@ class CommController extends ChangeNotifier {
         final u = serverUser(personOf(c));
         final b = directBoard(personOf(c));
         if (u != null) {
-          m!.sendTextTo(u.session, _html(text));
+          m!.sendTextTo(u.session, _html(text) + idMark);
           sent = true;
         }
         if (b != null && b.key != null) {
@@ -1974,7 +1983,10 @@ class CommController extends ChangeNotifier {
           sent = true;
         }
     }
-    if (sent) conversations.add(c, ConversationEntry(from: '', mine: true, kind: ConversationEntry.text, body: text));
+    if (sent) {
+      conversations.add(c, ConversationEntry(
+          from: '', mine: true, kind: ConversationEntry.text, body: text, ref: _myRef('$msgId')));
+    }
     return sent;
   }
 
@@ -1999,7 +2011,8 @@ class CommController extends ChangeNotifier {
     final jpeg = await compute(shrinkPhoto, (picture, m.imageMessageLength));
     if (jpeg == null) return "That photo couldn't be made small enough for the server";
     if (!canSendPhoto(c)) return 'The server went meanwhile';
-    final html = photoMessage(jpeg);
+    final msgId = newCommand(OthersCommand.stopAll()).counter;    // a number of ours, for its id
+    final html = photoMessage(jpeg) + _idMark(msgId);
     switch (c.kind) {
       case ConversationKind.everyone:
         m.sendText(html + _everyoneMark);
@@ -2012,9 +2025,49 @@ class CommController extends ChangeNotifier {
     }
     final name = await conversations.savePhoto(jpeg, 'jpeg');
     if (name != null) {
-      conversations.add(c, ConversationEntry(from: '', mine: true, kind: ConversationEntry.photo, body: name));
+      conversations.add(c, ConversationEntry(
+          from: '', mine: true, kind: ConversationEntry.photo, body: name, ref: _myRef('$msgId:p0')));
     }
     return null;
+  }
+
+  /// A hidden mark on a server text, for the app's id for it: who wrote it
+  /// and their number for it. Mumble's own apps don't show it.
+  String _idMark(int msgId) => identity == null ? '' : '<!-- dl-id:${identity!.id}:$msgId -->';
+  static final _idOf = RegExp(r'<!-- dl-id:([0-9a-f]{16}):(\d+) -->');
+
+  /// Our own text's or photo's id.
+  String _myRef(String id) => identity == null ? '' : messageRef(identity!.id, id);
+
+  /// React to a text or photo, with an emoji, or none to take ours back:
+  /// shown here at once, and sent to whoever the conversation reaches.
+  void react(Conversation c, ConversationEntry e, String? emoji) {
+    if (e.ref.isEmpty) return;
+    if (emoji == null || e.reactions[''] == emoji) {
+      e.reactions.remove('');
+      emoji = null;
+    } else {
+      e.reactions[''] = emoji;
+    }
+    conversations.changed();
+    final ref = _unhex(e.ref);
+    sendCommandTo(c, newCommand(OthersCommand.reactTo(ref, emoji ?? '')), log: false);
+  }
+
+  /// Someone reacted to a text or photo, wherever it is.
+  void _onReaction(KnownPerson who, Uint8List data) {
+    if (data.length < 8) return;
+    final ref = data.sublist(0, 8).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final found = conversations.byRef(ref);
+    if (found == null) return;
+    final emoji = utf8.decode(data.sublist(8), allowMalformed: true);
+    final e = found.$2;
+    if (emoji.isEmpty) {
+      e.reactions.remove(who.id);
+    } else {
+      e.reactions[who.id] = emoji;
+    }
+    conversations.changed();
   }
 
   /// Send a command (for their Terminals or Lovense devices) to a
@@ -2133,7 +2186,12 @@ class CommController extends ChangeNotifier {
     final who = u == null ? people.named(t.from) : personOfUser(u);
     if (who.muted) return;
     final (photos, rest) = photosIn(t.message);
-    final text = plainText(rest);
+    // Its id: from the app, by who wrote it and their number for it;
+    // from plain Mumble, by their name and what it says
+    final mark = _idOf.firstMatch(rest);
+    final text = plainText(rest.replaceAll(_idOf, ''));
+    String refOf(String part, String plain) =>
+        mark != null ? messageRef(mark.group(1)!, '${mark.group(2)}$part') : messageRef('name:${t.from}', plain);
     if (photos.isEmpty && _seenText(who.id, text)) return;
     final c = t.private
         ? personConversation(who.id)
@@ -2141,14 +2199,16 @@ class CommController extends ChangeNotifier {
             ? everyoneConversation
             : (serverConversation ?? everyoneConversation);
     if (text.isNotEmpty) {
-      conversations.add(c, ConversationEntry(from: t.from, who: who.id, mine: false, kind: ConversationEntry.text, body: text));
+      conversations.add(c, ConversationEntry(
+          from: t.from, who: who.id, mine: false, kind: ConversationEntry.text, body: text, ref: refOf('', 'text:$text')));
     }
     // Each photo kept as a file, in order after the words
-    for (final (ext, bytes) in photos) {
+    for (final (i, (ext, bytes)) in photos.indexed) {
+      final ref = refOf(':p$i', 'photo:${sha256.convert(bytes).toString().substring(0, 16)}');
       conversations.savePhoto(bytes, ext).then((name) {
         if (name == null) return;
-        conversations.add(
-            c, ConversationEntry(from: t.from, who: who.id, mine: false, kind: ConversationEntry.photo, body: name));
+        conversations.add(c, ConversationEntry(
+            from: t.from, who: who.id, mine: false, kind: ConversationEntry.photo, body: name, ref: ref));
         _notifyText(c);
       });
     }
@@ -2178,6 +2238,7 @@ class CommController extends ChangeNotifier {
       return p;
     });
     got.parts[d[2]] = Uint8List.sublistView(d, 4);
+    if (d[2] == 0) got.firstCounter = h.counter;     // the text's id
     if (got.parts.length < got.count) return null;
     (got.timer as Timer?)?.cancel();
     _textParts.remove(key);
@@ -2211,6 +2272,10 @@ class CommController extends ChangeNotifier {
       if (h.scope == OthersCommand.scopeOne) _onInvitation(who, h.data);
       return;
     }
+    if (h.what == Heard.reaction) {
+      _onReaction(who, h.data);
+      return;
+    }
     final c = switch (h.scope) {
       OthersCommand.scopeOne => personConversation(who.id),
       OthersCommand.scopeChannel => (h.direct ? directConversation : serverConversation) ?? everyoneConversation,
@@ -2218,7 +2283,13 @@ class CommController extends ChangeNotifier {
     };
     if (h.what == Heard.text && _seenText(who.id, h.textOf)) return;
     final e = h.what == Heard.text
-        ? ConversationEntry(from: h.from, who: who.id, mine: false, kind: ConversationEntry.text, body: h.textOf)
+        ? ConversationEntry(
+            from: h.from,
+            who: who.id,
+            mine: false,
+            kind: ConversationEntry.text,
+            body: h.textOf,
+            ref: h.counter == null ? '' : messageRef(Identity.idOf(h.key), '${h.counter}'))
         : ConversationEntry(
             from: h.from,
             who: who.id,
