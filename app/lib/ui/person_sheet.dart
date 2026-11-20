@@ -255,10 +255,12 @@ Widget _away(BuildContext context, BuildContext sheet, CommController comm, Know
     );
 
 
-/// Everyone in a channel, [inIt] picking them from everyone about; tap one
-/// for their card. Kept up to date while it shows.
+/// Everyone in a channel, [inIt] picking them from everyone about, and
+/// us first if we're in it ([withYou]), as its count has us; tap one for
+/// their card. Kept up to date while it shows.
 Future<void> showChannelPeople(
-        BuildContext context, CommController comm, String title, bool Function(Person p) inIt) =>
+        BuildContext context, CommController comm, String title, bool Function(Person p) inIt,
+        {bool withYou = false, String? youAre}) =>
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -273,10 +275,11 @@ Future<void> showChannelPeople(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               children: [
                 SectionHeader(title),
-                if (people.isEmpty)
-                  const Panel(children: [PanelRow(title: 'Nobody else here')])
+                if (people.isEmpty && !withYou)
+                  const Panel(children: [PanelRow(title: 'Nobody here')])
                 else
                   Panel(color: Kc.bg, children: [
+                    if (withYou) PanelRow(leading: DroneAvatar(picture: comm.avatar, size: 36), title: 'You', subtitle: youAre),
                     for (final p in people)
                       PanelRow(
                         leading: DroneAvatar(picture: p.picture, size: 36, talking: p.talking && !p.mutedByMe),

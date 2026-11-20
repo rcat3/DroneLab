@@ -33,10 +33,11 @@ class PeopleCount extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final n = conversationPeople(comm, c).length;
+    // Us too, as the channel lists count
+    final n = comm.isOnline(c) ? conversationPeople(comm, c).length + 1 : 0;
     return Semantics(
       button: true,
-      label: '$n others here: the channel\'s details',
+      label: '$n here, you with them: the channel\'s details',
       excludeSemantics: true,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),

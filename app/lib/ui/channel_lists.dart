@@ -160,7 +160,8 @@ class ChannelLists extends StatelessWidget {
             ? null
             : _Count(n,
                 onTap: () => showChannelPeople(
-                    context, comm, m.channels[id] ?? 'Channel', (p) => p.user != null && p.user!.channel == id)),
+                    context, comm, m.channels[id] ?? 'Channel', (p) => p.user != null && p.user!.channel == id,
+                    withYou: here, youAre: comm.server.username)),
       ));
       if (open) {
         for (final k in kids) {
@@ -199,12 +200,10 @@ class ChannelLists extends StatelessWidget {
     final savedIds = {for (final g in saved) g.id};
     final heard = comm.heardGroups.values.where((h) => !savedIds.contains(h.id)).toList()
       ..sort((a, b) => b.rssi.compareTo(a.rssi));
-    // The channel the board's on: those heard on it, to list
-    Widget? here() => comm.nearby.isEmpty
-        ? null
-        : _Count(comm.nearby.length,
-            onTap: () => showChannelPeople(
-                context, comm, d.keyed ? d.group : 'Open channel', (p) => p.board != null));
+    // The channel the board's on: us and those heard on it, to list
+    Widget? here() => _Count(comm.nearby.length + 1,
+        onTap: () => showChannelPeople(context, comm, d.keyed ? d.group : 'Open channel', (p) => p.board != null,
+            withYou: true, youAre: d.name));
     Widget? nearby(String id) {
       if (d.keyed && d.id == id && joining == null) return here();
       final h = comm.heardGroups[id];

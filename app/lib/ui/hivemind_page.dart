@@ -258,7 +258,8 @@ class _ServerChannelRow extends StatelessWidget {
     final name = m.channelPath(m.myChannel);
     final n = m.channelUsers.length;
     final talking = _talkersIn(comm, [for (final u in m.channelUsers) u.session]);
-    final status = talking ?? (n == 0 ? 'Server · nobody else here' : 'Server · $n here');
+    // Us with them, as the channel lists count
+    final status = talking ?? (n == 0 ? 'Server · nobody else here' : 'Server · ${n + 1} here');
     return _TalkRow(
       leading: const Icon(Icons.cloud_outlined, color: Kc.green),
       title: name,
