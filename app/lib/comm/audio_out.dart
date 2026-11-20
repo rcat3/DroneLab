@@ -6,6 +6,7 @@ library;
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
@@ -21,6 +22,9 @@ const _block = outputRate * _blockMs ~/ 1000;
 // Keep this much queued in the phone. The phone's own buffer comes on top.
 const _queuedMs = 40;
 const _thresholdMs = 20;
+// On a computer, kept on top of the most its sound card takes at once
+const _marginMs = 30;
+const _mostAheadMs = 200;
 
 bool _opusLoaded = false;
 
@@ -126,20 +130,51 @@ class AudioOut {
     FlutterPcmSound.feed(PcmArrayInt16(bytes: out.buffer.asByteData()));
   }
 
-  // On a computer: the mixer into native/audio_out.c's ring, kept _queuedMs
-  // ahead by how much the ring holds, so the sound card's clock sets the pace.
+  // On a computer: the mixer into native/audio_out.c's ring, kept ahead by
+  // how much the ring holds, so the sound card's clock sets the pace. Ahead
+  // by _queuedMs, or by the most the card's taken at once and _marginMs on
+  // top, where a card takes big gulps: else each would empty the ring. It's
+  // fed between the UI's frames, so the UI kept busy holds it up (the splash
+  // left animating, once, made it choppy; a debug build's slow frames still
+  // can): so it's also kept ahead by the longest it's been held up lately,
+  // and _marginMs, up to _mostAheadMs, coming down by 1 ms a second after.
+  // Tones don't wait on any of it: they go to the native side whole.
   _NativeAudio? _native;
   Timer? _nativeTimer;
   Int16List _pcm = Int16List(0);
+  int _lastTickMs = 0;
+
+  /// How it's kept up, on a computer: times the sound card ran dry, and the
+  /// longest the timer that feeds it was held up, in ms (each 5 ms at best).
+  int get underruns => _native?.underruns() ?? 0;
+
+  /// The most the sound card's taken at once, in ms.
+  int get burstMs => (_native?.burst() ?? 0) * 1000 ~/ outputRate;
+  int longestTickMs = 0;
+  double _heldUpMs = 0;     // lately, coming down slowly
+
+  /// How far ahead it's kept just now, in ms.
+  int aheadMs = _queuedMs;
 
   Future<void> _startNative() async {
     final n = _native ??= _NativeAudio.open();
     final failed = n.start(outputRate, outputRate, _blockMs);
     if (failed != 0) throw StateError('No sound out ($failed)');
     _running = true;
-    final target = outputRate * _queuedMs ~/ 1000;
+    mixer.toneSink = n.tone;
+    mixer.stopToneSink = n.stopTones;
     _nativeTimer = Timer.periodic(const Duration(milliseconds: _blockMs ~/ 2), (_) {
       if (!_running) return;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (_lastTickMs != 0) {
+        final gap = now - _lastTickMs;
+        if (gap > longestTickMs) longestTickMs = gap;
+        _heldUpMs = math.max(_heldUpMs - gap / 1000, (gap - _blockMs ~/ 2).toDouble());
+      }
+      _lastTickMs = now;
+      final burstMs = n.burst() * 1000 ~/ outputRate;
+      aheadMs = math.min(_mostAheadMs, math.max(_queuedMs, math.max(burstMs, _heldUpMs.round()) + _marginMs));
+      final target = outputRate * aheadMs ~/ 1000;
       final want = target - n.queued();
       if (want <= 0) return;
       final blocks = (want + _block - 1) ~/ _block;
@@ -157,6 +192,8 @@ class AudioOut {
     if (!_running) return;
     _running = false;
     if (_native != null) {
+      mixer.toneSink = null;
+      mixer.stopToneSink = null;
       _nativeTimer?.cancel();
       _nativeTimer = null;
       _native!.stop();
@@ -173,6 +210,10 @@ class _NativeAudio {
   final int Function() queued;
   final int Function(Pointer<Int16>, int) _write;
   final void Function() stop;
+  final int Function() underruns;
+  final int Function() burst;
+  final int Function(Pointer<Int16>, int) _tone;
+  final void Function() stopTones;
   Pointer<Int16> _buffer = nullptr;
 
   _NativeAudio._(DynamicLibrary lib)
@@ -180,7 +221,12 @@ class _NativeAudio {
         queued = lib.lookupFunction<Int32 Function(), int Function()>('dl_audio_queued'),
         _write = lib.lookupFunction<Int32 Function(Pointer<Int16>, Int32), int Function(Pointer<Int16>, int)>(
             'dl_audio_write'),
-        stop = lib.lookupFunction<Void Function(), void Function()>('dl_audio_stop');
+        stop = lib.lookupFunction<Void Function(), void Function()>('dl_audio_stop'),
+        underruns = lib.lookupFunction<Int32 Function(), int Function()>('dl_audio_underruns'),
+        burst = lib.lookupFunction<Int32 Function(), int Function()>('dl_audio_burst'),
+        _tone = lib.lookupFunction<Int32 Function(Pointer<Int16>, Int32), int Function(Pointer<Int16>, int)>(
+            'dl_audio_tone'),
+        stopTones = lib.lookupFunction<Void Function(), void Function()>('dl_audio_tones_stop');
 
   factory _NativeAudio.open() {
     final dir = File(Platform.resolvedExecutable).parent.path;
@@ -195,4 +241,17 @@ class _NativeAudio {
   }
 
   void write(int frames) => _write(_buffer, frames);
+
+  /// Play [samples] as a tone, mixed in by the native side: false if it
+  /// didn't take it.
+  bool tone(Int16List samples) {
+    if (samples.isEmpty) return true;
+    final p = malloc<Int16>(samples.length);
+    try {
+      p.asTypedList(samples.length).setAll(0, samples);
+      return _tone(p, samples.length) != 0;
+    } finally {
+      malloc.free(p);
+    }
+  }
 }

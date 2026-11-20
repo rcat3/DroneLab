@@ -206,6 +206,7 @@ class TextResponder {
                   '${comm.nearby.length} unit${comm.nearby.length == 1 ? '' : 's'} heard'
               : 'Direct: off',
       'Responders: voice ${comm.voiceResponder.on ? 'on' : 'off'}, text ${on ? 'on' : 'off'} (echo ${echo ? 'on' : 'off'})',
+      if (Platform.isLinux) comm.audioOutHealth,
     ].join('\n');
   }
 
@@ -355,8 +356,44 @@ class DevRemote {
       case 'echo' when on != null:
         await comm.setTextEcho(on);
         return 'Echo ${on ? 'on' : 'off'}';
+      case 'tone' when words.length > 1:
+        // Play one of the call tones, as for hearing how it's played out
+        if (!comm.playCallTone(words[1])) return 'No tone ${words[1]}: ringback, ring, connected, ended, text';
+        return 'Playing ${words[1]}. ${comm.audioOutHealth}';
+      case 'sound':
+        return comm.audioOutHealth;
+      case 'call' || 'answer' || 'hangup':
+        // A call, as the call screen's buttons would: to whoever's named
+        // (part of their name), or, answering and hanging up, the one call
+        final want = line.trim().split(RegExp(r'\s+')).skip(1).join(' ').toLowerCase();
+        final ids = words.first == 'call'
+            ? [for (final p in comm.people.all) if (want.isNotEmpty && p.name.toLowerCase().contains(want)) p.id]
+            : [for (final id in comm.calls.keys) if (want.isEmpty || (comm.people[id]?.name.toLowerCase().contains(want) ?? false)) id];
+        // Someone called just that, before those whose names have it in
+        var exact = [for (final id in ids) if (comm.people[id]?.name.toLowerCase() == want) id];
+        // and the one known by their key before one known by name alone
+        if (exact.length > 1) exact = [for (final id in exact) if (id.startsWith('k:')) id];
+        if (exact.length == 1) {
+          ids
+            ..clear()
+            ..add(exact.first);
+        }
+        if (ids.length != 1) return ids.isEmpty ? 'Nobody to ${words.first}' : 'More than one: say whose';
+        final id = ids.first, name = comm.people[id]?.name ?? id;
+        switch (words.first) {
+          case 'call':
+            final why = comm.startCall(id);
+            return why ?? 'Calling $name';
+          case 'answer':
+            comm.answerCall(id);
+            return 'Answered $name';
+          default:
+            comm.endCall(id);
+            return 'Hung up on $name';
+        }
       default:
-        return 'c is a /command, voice|text|echo on|off, or dev off; none says how they are\n${TextResponder.help}';
+        return 'c is a /command, voice|text|echo on|off, tone NAME, sound, call NAME, answer, hangup, or dev off; none says how they are\n'
+            '${TextResponder.help}';
     }
   }
 }

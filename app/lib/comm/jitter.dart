@@ -190,12 +190,26 @@ class Mixer {
   final List<Int16List> _tones = [];
   int _toneAt = 0;
 
-  void playTone(Int16List samples) => _tones.add(samples);
+  /// Where tones go instead, if it takes them (true): a computer's sound
+  /// out, which mixes them in itself, so they don't wait on the app to be
+  /// fed through. Given them at [volume].
+  bool Function(Int16List)? toneSink;
+  void Function()? stopToneSink;
+
+  void playTone(Int16List samples) {
+    final sink = toneSink;
+    if (sink != null) {
+      final v = volume;
+      if (sink(v == 1.0 ? samples : Int16List.fromList([for (final x in samples) (x * v).round()]))) return;
+    }
+    _tones.add(samples);
+  }
 
   /// Stop what [playTone] is playing, and drop the rest.
   void stopTones() {
     _tones.clear();
     _toneAt = 0;
+    stopToneSink?.call();
   }
 
   /// Two short notes, rising or falling, faded at their ends so they don't
