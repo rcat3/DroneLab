@@ -1,7 +1,8 @@
 /*
  * The virtual unit's screen: a window on the X11 desktop (XWayland will do),
  * showing the 1.75" board's round 466x466 screen, with the mouse for touch
- * and a couple of keys for the board's buttons
+ * and a couple of keys for the board's buttons, and beside it, while T's
+ * pressed or --toy says, the virtual Lovense toys' panel (toys_panel.c)
  */
 
 #include <math.h>
@@ -16,6 +17,7 @@
 #include "hal.h"
 #include "host.h"
 #include "lvgl.h"
+#include "toys_panel.h"
 
 #define LCD_RES         466
 #define BEZEL           0x161616    // outside the round screen
@@ -36,7 +38,8 @@ static uint8_t brightness = 100;
 static int16_t round_from[LCD_RES]; // in each row, where the round screen starts; it ends as far from the right
 
 static lv_point_t pointer;
-static bool pressed;
+static bool pressed;                // a finger's down on the screen
+static bool panel_shown;
 
 static void make_palette(void)
 {
@@ -59,6 +62,22 @@ static void make_round(void)
         float half = dy * dy < radius * radius ? sqrtf(radius * radius - dy * dy) : 0;
         round_from[y] = (int16_t)(radius - half + 0.5f);
     }
+}
+
+static int window_width(void)
+{
+    return LCD_RES * scale + (panel_shown ? TOYS_PANEL_WIDTH : 0);
+}
+
+/* The window's one size: the screen, and the panel if it's shown */
+static void fix_size(void)
+{
+    XSizeHints *hints = XAllocSizeHints();
+    hints->flags = PMinSize | PMaxSize;
+    hints->min_width = hints->max_width = window_width();
+    hints->min_height = hints->max_height = LCD_RES * scale;
+    XSetWMNormalHints(x, window, hints);
+    XFree(hints);
 }
 
 int rcat_hal_init(void)
@@ -84,22 +103,17 @@ int rcat_hal_init(void)
     char title[64];
     if (host_options.unit == 1)
     {
-        snprintf(title, sizeof(title), "Virtual unit");
+        snprintf(title, sizeof(title), "DroneLab: Virtual Display Unit");
     }
     else
     {
-        snprintf(title, sizeof(title), "Virtual unit %d", host_options.unit);
+        snprintf(title, sizeof(title), "DroneLab: Virtual Display Unit %d", host_options.unit);
     }
     XStoreName(x, window, title);
     XClassHint class_hint = { .res_name = "dronelab-unit", .res_class = "DroneLab" };
     XSetClassHint(x, window, &class_hint);
-    // The screen's one size
-    XSizeHints *hints = XAllocSizeHints();
-    hints->flags = PMinSize | PMaxSize;
-    hints->min_width = hints->max_width = size;
-    hints->min_height = hints->max_height = size;
-    XSetWMNormalHints(x, window, hints);
-    XFree(hints);
+    panel_shown = host_options.show_toys;
+    fix_size();
     wm_delete = XInternAtom(x, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(x, window, &wm_delete, 1);
     XSelectInput(x, window, ExposureMask | ButtonPressMask | ButtonReleaseMask | PointerMotionMask | KeyPressMask);
@@ -117,6 +131,11 @@ int rcat_hal_init(void)
     }
     make_palette();
     make_round();
+    toys_panel_init(x, window, size, size);
+    if (panel_shown)
+    {
+        XResizeWindow(x, window, (unsigned)window_width(), (unsigned)size);
+    }
     XMapWindow(x, window);
     XFlush(x);
     return 0;
@@ -185,14 +204,27 @@ static void poll_events(void)
                 if (e.xexpose.count == 0)
                 {
                     show(0, 0, LCD_RES, LCD_RES);
+                    if (panel_shown)
+                    {
+                        toys_panel_redraw();
+                    }
                 }
                 break;
             case ButtonPress:
             case ButtonRelease:
-                if (e.xbutton.button == Button1)
+                if (e.xbutton.button != Button1)
                 {
-                    pressed = e.type == ButtonPress;
+                    break;
                 }
+                if (e.type == ButtonPress && e.xbutton.x >= LCD_RES * scale)
+                {
+                    if (panel_shown)
+                    {
+                        toys_panel_click(e.xbutton.x - LCD_RES * scale, e.xbutton.y);
+                    }
+                    break;
+                }
+                pressed = e.type == ButtonPress;
                 pointer.x = LV_CLAMP(0, e.xbutton.x / scale, LCD_RES - 1);
                 pointer.y = LV_CLAMP(0, e.xbutton.y / scale, LCD_RES - 1);
                 break;
@@ -211,6 +243,12 @@ static void poll_events(void)
                 {
                     host_screenshot_press();
                 }
+                else if (key == XK_t)
+                {
+                    panel_shown = !panel_shown;
+                    fix_size();
+                    XResizeWindow(x, window, (unsigned)window_width(), (unsigned)(LCD_RES * scale));
+                }
                 break;
             }
             case ClientMessage:
@@ -227,6 +265,10 @@ static void poll_events(void)
 static void poll_timer_cb(lv_timer_t *timer)
 {
     poll_events();
+    if (panel_shown)
+    {
+        toys_panel_tick();
+    }
 }
 
 static void pointer_read_cb(lv_indev_t *indev, lv_indev_data_t *data)

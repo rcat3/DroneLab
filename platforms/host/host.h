@@ -15,6 +15,7 @@ typedef struct
     bool no_mic;                // don't open the microphone
     bool no_speaker;            // or the speaker
     int scale;                  // the window's size, in screen pixels to each of the unit's
+    bool show_toys;             // show the virtual toys' panel from the start
     char **argv;                // for restarting
 } host_options_t;
 

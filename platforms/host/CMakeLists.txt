@@ -84,11 +84,13 @@ find_package(Threads REQUIRED)
 add_executable(dronelab-unit
     main.c
     hal_audio.c
+    hal_ble.c
     hal_direct.c
     hal_display.c
     hal_peer.c
     hal_storage.c
-    hal_system.c)
+    hal_system.c
+    toys_panel.c)
 target_include_directories(dronelab-unit PRIVATE ${THIRD_PARTY}/miniaudio)
 target_compile_definitions(dronelab-unit PRIVATE RCAT_GIT_VERSION="${RCAT_GIT_VERSION}")
 target_compile_options(dronelab-unit PRIVATE -Wall)

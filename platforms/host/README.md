@@ -26,10 +26,12 @@ LVGL, Mbed TLS, Opus, miniaudio and dr_libs come from the submodules
 
 ## Running
 
-    build-host/dronelab-unit [--unit N] [--sdcard DIR] [--scale N] [--no-mic] [--no-speaker]
+    build-host/dronelab-unit [--unit N] [--sdcard DIR] [--scale N] [--toy MODEL] [--no-mic] [--no-speaker]
 
-- **The screen** is the window: the mouse is a finger. **B** is the BOOT
-  button, **F12** takes a screenshot (what PWR and BOOT do on the board).
+- **The screen** is the window, titled *DroneLab: Virtual Display Unit*:
+  the mouse is a finger. **B** is the BOOT button, **F12** takes a
+  screenshot (what PWR and BOOT do on the board), and **T** shows or hides
+  the virtual toys.
 - **The app** finds it in its list of units, as *Virtual unit*, *On this
   computer*. It listens on `$XDG_RUNTIME_DIR/dronelab-unit.sock` (see
   "Virtual units" in `app/linux/README.md`); there's no pairing, as only
@@ -44,6 +46,22 @@ LVGL, Mbed TLS, Opus, miniaudio and dr_libs come from the submodules
 - **Voice effects** played out loud feed back through the computer's
   speakers, as there's no echo cancelling like the board's: use headphones.
 
+## Virtual Lovense toys
+
+For trying the Lovense feature, and the app's remote for it, without a toy:
+press **T** for the panel beside the screen, and switch on up to three
+toys (Lush, Edge, Nora, Max, Gravity, Lapis or Solace), or start with
+`--toy Lush --toy Nora`. Each advertises as a real one does (`LVS-S01`),
+for the Lovense feature's scan to find, connects when it's tapped, and
+answers Lovense's own commands, so `core/app/lovense.c` drives it as it
+would a real toy. The panel shows each one's state, battery (which runs
+down slowly while it's running), the last command it was sent, and its
+motors' levels. **Off** switches one off, as if its button were pressed:
+its connection drops.
+
+They're in `hal_ble.c`, behind the HAL's Bluetooth central functions,
+which is where the computer's own Bluetooth will go, for real toys.
+
 ## Direct comms
 
 Virtual units can't reach real ones over the radio. They talk among
@@ -55,6 +73,6 @@ connected to the app is still the way to take part in a real Direct mesh.
 ## What it leaves out
 
 The battery, the accelerometer (the spirit level isn't built), Bluetooth of
-its own (so no Lovense or Terminal, and no talk button), the hotspot, and
+its own (so only virtual toys, and no talk button), the hotspot, and
 firmware updates: it's updated by building it again. The HAL is in the
 `hal_*.c` files here; see `core/include/hal.h`.

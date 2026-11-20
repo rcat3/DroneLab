@@ -1,7 +1,6 @@
 /*
  * The rest of the virtual unit's HAL: time, tasks, its identity, the network,
- * and what a computer doesn't have (battery, accelerometer, Bluetooth of its
- * own, firmware updates)
+ * and what a computer doesn't have (battery, accelerometer, firmware updates)
  */
 
 #define _GNU_SOURCE
@@ -317,82 +316,4 @@ bool rcat_hal_accel_read(float *x, float *y, float *z)
 bool rcat_hal_audio_levels(rcat_hal_audio_levels_t *levels)
 {
     return false;
-}
-
-/* Bluetooth as a central (the Lovense feature) and the talk button: the
- * computer's Bluetooth is the app's. */
-
-bool rcat_hal_ble_scan_start(void)
-{
-    return false;
-}
-
-void rcat_hal_ble_scan_stop(void)
-{
-}
-
-size_t rcat_hal_ble_scan_results(rcat_hal_ble_device_t *devices, size_t max)
-{
-    return 0;
-}
-
-int rcat_hal_ble_connect(const rcat_hal_ble_device_t *device, rcat_hal_ble_service_match_t match)
-{
-    return -1;
-}
-
-void rcat_hal_ble_disconnect(int link)
-{
-}
-
-rcat_hal_ble_state_t rcat_hal_ble_link_state(int link)
-{
-    return RCAT_HAL_BLE_IDLE;
-}
-
-bool rcat_hal_ble_send(int link, const void *data, size_t len)
-{
-    return false;
-}
-
-size_t rcat_hal_ble_receive(int link, void *data, size_t max)
-{
-    return 0;
-}
-
-bool rcat_hal_ble_button_find(void)
-{
-    return false;
-}
-
-void rcat_hal_ble_button_find_stop(void)
-{
-}
-
-size_t rcat_hal_ble_button_found(rcat_hal_ble_device_t *devices, size_t max)
-{
-    return 0;
-}
-
-bool rcat_hal_ble_button_use(const rcat_hal_ble_device_t *device, bool connect_now)
-{
-    return false;
-}
-
-void rcat_hal_ble_button_stop(void)
-{
-}
-
-void rcat_hal_ble_button_forget(const rcat_hal_ble_device_t *device)
-{
-}
-
-rcat_hal_ble_button_state_t rcat_hal_ble_button_state(void)
-{
-    return RCAT_HAL_BLE_BUTTON_OFF;
-}
-
-uint32_t rcat_hal_ble_button_held(void)
-{
-    return 0;
 }
