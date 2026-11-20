@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../comm/app_profile.dart';
 import '../comm/board_link.dart';
 import '../comm/comm_controller.dart';
 import 'status_strip.dart';
@@ -56,6 +57,16 @@ class _AboutPageState extends State<AboutPage> {
 
   Future<void> _readPhone() async {
     String os, phone = '';
+    if (Platform.isLinux) {
+      (os, phone) = await _linuxInfo();
+      if (mounted) {
+        setState(() {
+          _os = os;
+          _phone = phone;
+        });
+      }
+      return;
+    }
     try {
       final m = await _device.invokeMapMethod<String, dynamic>('info');
       os = 'Android ${m?['release'] ?? ''} (API ${m?['sdk'] ?? '?'})';
@@ -71,6 +82,28 @@ class _AboutPageState extends State<AboutPage> {
         _phone = phone;
       });
     }
+  }
+
+  /// The distribution (os-release), and the computer's model: a Raspberry
+  /// Pi's device tree says, a PC's firmware (DMI) usually does.
+  static Future<(String, String)> _linuxInfo() async {
+    Future<String> read(String path) async {
+      try {
+        return (await File(path).readAsString()).replaceAll('\x00', '').trim();
+      } catch (_) {
+        return '';
+      }
+    }
+
+    final release = await read('/etc/os-release');
+    final name = RegExp(r'^PRETTY_NAME="?([^"\n]*)"?', multiLine: true).firstMatch(release)?.group(1);
+    var model = await read('/proc/device-tree/model');
+    if (model.isEmpty) {
+      model = [await read('/sys/devices/virtual/dmi/id/sys_vendor'), await read('/sys/devices/virtual/dmi/id/product_name')]
+          .where((s) => s.isNotEmpty)
+          .join(' ');
+    }
+    return (name ?? 'Linux', model);
   }
 
   Future<void> _read() async {
@@ -130,6 +163,7 @@ class _AboutPageState extends State<AboutPage> {
                 _Fact('Version', _app?.version ?? '...', onTap: _versionTapped),
                 _Fact('OS', _os ?? '...'),
                 if ((_phone ?? '').isNotEmpty) _Fact('Device', _phone!),
+                if (AppProfile.name != null) _Fact('Profile', AppProfile.name!),
               ]),
               const SectionHeader('Display unit'),
               Panel(children: [
@@ -209,6 +243,7 @@ class _AboutPageState extends State<AboutPage> {
   /// shortened to what's on its box.
   static String _boardName(String board) => switch (board) {
         'waveshare_esp32s3_touch_amoled_1_75' => 'Waveshare ESP32-S3 Touch AMOLED 1.75"',
+        'virtual_unit' => 'Virtual unit, on a computer',
         _ => board,
       };
 

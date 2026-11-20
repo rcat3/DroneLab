@@ -46,6 +46,9 @@ static void set_defaults(settings_t *s)
     s->lovense_release_to_zero = 0;
     s->voice_volume = SETTINGS_DEFAULT_VOICE_VOLUME;
     s->speaker = SETTINGS_SPEAKER_ASK;
+#if RCAT_DEFAULT_COMM_ON
+    s->comm_on = 1;     // the comm channel's what this unit's for (the virtual unit)
+#endif
 }
 
 static uint32_t checksum(const void *data, size_t len)

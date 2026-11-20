@@ -1,0 +1,82 @@
+/// Pairing with the board on Linux. The board shows a code and wants it typed
+/// in; on a phone, the phone asks for it. A Linux computer only asks if
+/// something is there to ask (a "pairing agent"): GNOME's is only there while
+/// its Bluetooth settings are open, and a Raspberry Pi may have none. Without
+/// one, BlueZ pairs without a code, which the board turns down.
+///
+/// So the app pairs the board itself, with an agent of its own, which BlueZ
+/// asks only about the pairings the app starts: everything else on the
+/// computer pairs as before.
+library;
+
+import 'package:bluez/bluez.dart';
+import 'package:dbus/dbus.dart';
+import 'package:flutter/foundation.dart';
+
+/// Asks the wearer for the code on [boardName]'s screen: null if they don't
+/// give it.
+typedef AskCode = Future<int?> Function(String boardName);
+
+class LinuxPairing extends BlueZAgent {
+  final AskCode askCode;
+  LinuxPairing(this.askCode);
+
+  Future<BlueZClient?>? _starting;
+
+  Future<BlueZClient?> _start() => _starting ??= () async {
+        final client = BlueZClient(bus: DBusClient.system());
+        try {
+          await client.connect();
+          await client.registerAgent(this,
+              path: DBusObjectPath('/io/github/rcat3/dronelab/agent'),
+              capability: BlueZAgentCapability.keyboardOnly);
+          return client;
+        } catch (e) {
+          debugPrint('Pairing agent not started: $e');
+          await client.close();
+          _starting = null;
+          return null;
+        }
+      }();
+
+  /// Whether the last code asked for was turned down.
+  bool cancelled = false;
+
+  /// Pair with the board at [address], if it isn't already: true once it is.
+  /// The board's code is asked for with [askCode]. Asked again while it's
+  /// pairing (the link drops and comes back meanwhile), it waits for the same
+  /// pairing, rather than asking for the code twice.
+  Future<bool> pair(String address) => _pairing ??= _pair(address).whenComplete(() => _pairing = null);
+  Future<bool>? _pairing;
+
+  Future<bool> _pair(String address) async {
+    cancelled = false;
+    final client = await _start();
+    if (client == null) return false;
+    for (var i = 0; i < 3; i++) {
+      final device = client.devices.where((d) => d.address.toUpperCase() == address.toUpperCase()).firstOrNull;
+      if (device == null) return false;
+      if (device.paired) return true;
+      try {
+        await device.pair();
+        return true;
+      } on DBusMethodResponseException catch (e) {
+        // BlueZ was already pairing (the board asks as it connects): wait for
+        // it, and see
+        if (e.errorName != 'org.bluez.Error.InProgress' && e.errorName != 'org.bluez.Error.AlreadyExists') {
+          debugPrint('Pairing failed: ${e.errorName}');
+          return false;
+        }
+        await Future<void>.delayed(const Duration(seconds: 2));
+      }
+    }
+    return client.devices.any((d) => d.address.toUpperCase() == address.toUpperCase() && d.paired);
+  }
+
+  @override
+  Future<BlueZAgentPasskeyResponse> requestPasskey(BlueZDevice device) async {
+    final code = await askCode(device.alias.isNotEmpty ? device.alias : device.name);
+    cancelled = code == null;
+    return code == null ? BlueZAgentPasskeyResponse.canceled() : BlueZAgentPasskeyResponse.success(code);
+  }
+}

@@ -4,8 +4,8 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
+import 'app_profile.dart';
 import 'board_protocol.dart';
 import 'message_details.dart';
 
@@ -142,7 +142,7 @@ class Conversations extends ChangeNotifier {
 
   Future<void> load() async {
     try {
-      final docs = (await getApplicationDocumentsDirectory()).path;
+      final docs = (await AppProfile.files()).path;
       photosPath = '$docs/photos';
       _file = File('$docs/conversations.json');
       if (!await _file!.exists()) return;

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../comm/board_link.dart';
+import '../comm/board_transport.dart' show socketIdPrefix, socketUnitName;
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
+import '../comm/virtual_unit.dart';
 import 'server_page.dart';
 import 'setup_page.dart';
 import 'theme.dart';
@@ -208,6 +210,10 @@ Future<void> showLinks(BuildContext context, CommController comm) => showModalBo
                       title: b.name ?? 'Board',
                       subtitle: boardStatusText(comm),
                       trailing: [
+                        if (virtualUnitStopped(comm))
+                          FilledButton(
+                              onPressed: () => comm.connectBoard(b.deviceId!, b.name ?? 'Virtual unit'),
+                              child: const Text('Start')),
                         b.state == BoardState.off || b.state == BoardState.scanning
                             ? FilledButton(onPressed: () => pickBoard(context, comm), child: const Text('Find'))
                             : OutlinedButton(onPressed: comm.disconnectBoard, child: const Text('Disconnect')),
@@ -282,6 +288,14 @@ Future<void> showLinks(BuildContext context, CommController comm) => showModalBo
 /// A direct comms channel's name, as shown.
 String directChannelName(DirectSettings d) => d.keyed ? d.group : 'Open channel';
 
+/// The virtual unit the app's trying to reach isn't running, and the app
+/// can start it again (its window was closed, which switches it off).
+bool virtualUnitStopped(CommController comm) {
+  final b = comm.board;
+  return b.local && b.state == BoardState.connecting && b.error != null && b.deviceId != null &&
+      VirtualUnits.available;
+}
+
 String boardStatusText(CommController comm) {
   final b = comm.board;
   final st = b.status;
@@ -290,6 +304,7 @@ String boardStatusText(CommController comm) {
     case BoardState.scanning:
       return b.error ?? "Not connected. Switch on the Phone App in the board's Settings";
     case BoardState.connecting:
+      if (b.local && b.error != null) return '${b.error}. Waiting for it to start...';
       return b.error == null ? 'Connecting...' : '${b.error}. Trying again...';
     case BoardState.connected:
       return st == null
@@ -329,14 +344,37 @@ Future<void> pickBoard(BuildContext context, CommController comm) async {
                 const Text('Those with the Phone App on. Looking...', style: TextStyle(color: Kc.muted, fontSize: 13)),
                 if (comm.board.error != null) Text(comm.board.error!, style: const TextStyle(color: Kc.softRed)),
                 const SizedBox(height: 8),
-                if (boards.isNotEmpty)
+                if (boards.isNotEmpty || VirtualUnits.available)
                   Panel(color: Kc.bg, children: [
                     for (final f in boards)
+                      // Another app's virtual unit: this one can't have it
+                      f.inUse && !(f.id == comm.board.deviceId && comm.board.state == BoardState.connected)
+                          ? PanelRow(
+                              leading: const Icon(Icons.computer, color: Kc.off),
+                              title: f.name,
+                              subtitle: 'In use by another DroneLab app',
+                            )
+                          : PanelRow(
+                              leading: Icon(f.local ? Icons.computer : Icons.bluetooth, color: Kc.muted),
+                              title: f.name,
+                              subtitle: f.id == comm.lastBoardId
+                                  ? 'Yours, last time'
+                                  : f.local
+                                      ? 'On this computer'
+                                      : 'Signal ${f.rssi} dBm',
+                              onTap: () => Navigator.pop(context, f),
+                            ),
+                    if (VirtualUnits.available)
                       PanelRow(
-                        leading: const Icon(Icons.bluetooth, color: Kc.muted),
-                        title: f.name,
-                        subtitle: f.id == comm.lastBoardId ? 'Yours, last time' : 'Signal ${f.rssi} dBm',
-                        onTap: () => Navigator.pop(context, f),
+                        leading: const Icon(Icons.add_to_queue, color: Kc.muted),
+                        title: 'Start a virtual unit',
+                        subtitle: 'No hardware: the firmware in a window on this computer',
+                        onTap: () async {
+                          final path = VirtualUnits.socketFor(await VirtualUnits.nextFree());
+                          if (path != null && context.mounted) {
+                            Navigator.pop(context, FoundBoard('$socketIdPrefix$path', socketUnitName(path), 0, local: true));
+                          }
+                        },
                       ),
                   ]),
               ],

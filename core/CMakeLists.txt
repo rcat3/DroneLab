@@ -10,7 +10,8 @@
 # RCAT_DEFAULT_ROTATION to the display's rotation on a new board, in clockwise
 # quarter turns (0 if not set), to suit the way its housing holds it, and
 # RCAT_SPEAKER_OPTIONAL ON if the speaker plugs in, so a housing may not have
-# one: a new board then asks which it is.
+# one: a new board then asks which it is, and
+# RCAT_DEFAULT_COMM_ON ON to have the comm channel on on a new board.
 # It sets RCAT_FEATURE_<NAME> to choose the optional features (see features.cmake).
 # RCAT_PYTHON can be set to pick the Python used for the image converter.
 
@@ -48,5 +49,8 @@ if(RCAT_SPEAKER_OPTIONAL)
 endif()
 if(RCAT_DEFAULT_ROTATION)
     target_compile_definitions(rcat_core PRIVATE RCAT_DEFAULT_ROTATION=${RCAT_DEFAULT_ROTATION})
+endif()
+if(RCAT_DEFAULT_COMM_ON)
+    target_compile_definitions(rcat_core PRIVATE RCAT_DEFAULT_COMM_ON=1)
 endif()
 target_link_libraries(rcat_core PUBLIC lvgl)

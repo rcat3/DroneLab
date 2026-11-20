@@ -197,6 +197,11 @@ class CommController extends ChangeNotifier {
 
   late final Mixer mixer = Mixer(sampleRate: outputRate, newDecoder: OpusVoiceDecoder.new, targetMs: bufferMs);
   late final AudioOut _audio = AudioOut(mixer);
+
+  /// How the sound out's kept up, for the developer commands (a computer's).
+  String get audioOutHealth =>
+      'Sound out: ${_audio.underruns} underruns, timer held up ${_audio.longestTickMs} ms at most, '
+      'the card takes up to ${_audio.burstMs} ms at once, kept ${_audio.aheadMs} ms ahead';
   Timer? _talkingTimer;
 
   /// Who's talking on the channel, in the order they started. Counted from
@@ -1160,6 +1165,22 @@ class CommController extends ChangeNotifier {
 
   /// Play the ring tone, to hear what it's like.
   void previewRing(String tone) => _tone(_callTones.ring(tone));
+
+  /// Play a call tone by name, for the developer commands: false if there's
+  /// no such tone.
+  bool playCallTone(String name) {
+    final t = switch (name) {
+      'ringback' => _callTones.ringBack(),
+      'ring' => _callTones.ring(ringTone),
+      'connected' => _callTones.connected(),
+      'ended' => _callTones.ended(),
+      'text' => _callTones.text(),
+      _ => null,
+    };
+    if (t == null) return false;
+    _tone(t);
+    return true;
+  }
 
   void _tone(Int16List t) {
     _audio.start();

@@ -1,9 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
+import 'dart:io' show Platform;
+
+import 'comm/app_profile.dart';
 import 'comm/comm_controller.dart';
+import 'comm/linux_pairing.dart';
 import 'comm/release_check.dart';
 import 'ui/firmware_ui.dart';
+import 'ui/pairing_code.dart';
 import 'ui/call_ui.dart';
 import 'ui/splash.dart';
 import 'ui/hivemind_page.dart';
@@ -24,10 +30,18 @@ final navigatorKey = GlobalKey<NavigatorState>();
 /// For saying what happened to a call, wherever the app is.
 final messengerKey = GlobalKey<ScaffoldMessengerState>();
 
-void main() {
+void main(List<String> args) {
+  AppProfile.init(args);
   WidgetsFlutterBinding.ensureInitialized();
-  FlutterForegroundTask.initCommunicationPort();
+  if (defaultTargetPlatform == TargetPlatform.android) FlutterForegroundTask.initCommunicationPort();
   final comm = CommController();
+  if (Platform.isLinux) {
+    final pairing = LinuxPairing((name) async {
+      final context = navigatorKey.currentContext;
+      return context == null ? null : askPairingCode(context, name);
+    });
+    comm.board.pairFirst = (id) async => await pairing.pair(id) ? true : pairing.cancelled ? null : false;
+  }
   comm.notifier.opens.listen((key) => _openConversation(comm, key));
   comm.incomingCalls.listen((call) => showIncomingCall(comm, call.personId));
   comm.invitations.listen((inv) => showInvitation(comm, inv));
@@ -80,6 +94,7 @@ class DroneLabApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'DroneLab',
       navigatorKey: navigatorKey,
       scaffoldMessengerKey: messengerKey,

@@ -1,6 +1,7 @@
-/// The Bluetooth LE link to the board: finds boards with the comm channel
-/// on, connects, and passes on what the board sends. It reconnects by itself
-/// if the link drops, until [disconnect].
+/// The link to the board: finds boards with the comm channel on, connects,
+/// and passes on what the board sends. It reconnects by itself if the link
+/// drops, until [disconnect]. The link itself is Bluetooth LE, or a local
+/// socket to a virtual unit (board_transport.dart).
 library;
 
 import 'dart:async';
@@ -10,18 +11,13 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:universal_ble/universal_ble.dart';
 
 import 'board_protocol.dart';
+import 'board_transport.dart';
+
+export 'board_transport.dart' show FoundBoard;
 
 enum BoardState { off, scanning, connecting, connected }
-
-class FoundBoard {
-  final String id;
-  final String name;
-  int rssi;
-  FoundBoard(this.id, this.name, this.rssi);
-}
 
 /// The board's answer to one of the phone remote's requests.
 class RemoteAnswer {
@@ -79,10 +75,29 @@ class BoardLink extends ChangeNotifier {
   BoardState state = BoardState.off;
   String? error;
   String? deviceId;
+
+  /// Pairs with the board before it's used, where the system doesn't by
+  /// itself (Linux: linux_pairing.dart): true once it's paired, false if it
+  /// didn't, and null if the wearer turned it down.
+  Future<bool?> Function(String id)? get pairFirst => _ble.pairFirst;
+  set pairFirst(Future<bool?> Function(String id)? f) => _ble.pairFirst = f;
   String? name;
   BoardStatus? status;
-  int mtu = 23;
+  int get mtu => _transport.mtu;
   final Map<String, FoundBoard> found = {};
+
+  final _ble = BleTransport();
+  final _socket = SocketTransport();
+  late BoardTransport _transport = _ble;
+  bool _scanning = false;
+
+  /// Whether virtual units are looked for too (Linux).
+  bool get _socketsToo => socketDirectory() != null;
+
+  BoardTransport _transportFor(String id) => id.startsWith(socketIdPrefix) ? _socket : _ble;
+
+  /// Whether the board is a virtual unit on this computer.
+  bool get local => _transport == _socket;
 
   final _sounds = StreamController<BoardSound>.broadcast();
   Stream<BoardSound> get sounds => _sounds.stream;
@@ -95,56 +110,44 @@ class BoardLink extends ChangeNotifier {
   BytesBuilder? _answerBytes;
   bool _askingVersion = false;   // the version swap's request is out
 
-  StreamSubscription<BleDevice>? _scanSub;
-  StreamSubscription<Uint8List>? _valueSub;
-  StreamSubscription<BleConnectionChange>? _connSub;
   bool _wanted = false;     // keep reconnecting
   Timer? _retry;
 
-  Future<bool> _ready() async {
-    if (!await UniversalBle.hasPermissions()) {
-      await UniversalBle.requestPermissions();
-      if (!await UniversalBle.hasPermissions()) {
-        error = 'Bluetooth permission is needed to find the board';
-        notifyListeners();
-        return false;
-      }
-    }
-    final avail = await UniversalBle.getBluetoothAvailabilityState();
-    if (avail != AvailabilityState.poweredOn) {
-      error = avail == AvailabilityState.poweredOff ? 'Bluetooth is off' : 'Bluetooth is not available';
-      notifyListeners();
-      return false;
-    }
-    return true;
-  }
-
-  /// Look for boards with Comm switched on.
+  /// Look for boards with Comm switched on, and virtual units where there
+  /// can be any. Bluetooth being off only stops the first.
   Future<void> scan() async {
-    if (!await _ready()) return;
+    final why = await _ble.ready();
+    if (why != null && !_socketsToo) {
+      error = why;
+      notifyListeners();
+      return;
+    }
     await stopScan();
     found.clear();
-    error = null;
+    error = why;
     if (state == BoardState.off) state = BoardState.scanning;
     notifyListeners();
-    _scanSub = UniversalBle.scanStream.listen((d) {
-      final b = found[d.deviceId];
-      if (b == null) {
-        found[d.deviceId] = FoundBoard(d.deviceId, d.name ?? d.deviceId, d.rssi ?? -100);
-      } else {
-        b.rssi = d.rssi ?? b.rssi;
-      }
-      notifyListeners();
-    });
-    await UniversalBle.startScan(scanFilter: ScanFilter(withServices: [serviceUuid]));
+    _scanning = true;
+    if (why == null) await _ble.startScan(_onFound);
+    if (_socketsToo) await _socket.startScan(_onFound);
+  }
+
+  void _onFound(FoundBoard f) {
+    if (!_scanning) return;
+    final b = found[f.id];
+    if (b == null) {
+      found[f.id] = f;
+    } else {
+      b.rssi = f.rssi;
+      b.inUse = f.inUse;
+    }
+    notifyListeners();
   }
 
   Future<void> stopScan() async {
-    await _scanSub?.cancel();
-    _scanSub = null;
-    try {
-      await UniversalBle.stopScan();
-    } catch (_) {}
+    _scanning = false;
+    await _ble.stopScan();
+    await _socket.stopScan();
     if (state == BoardState.scanning) {
       state = BoardState.off;
       notifyListeners();
@@ -153,59 +156,85 @@ class BoardLink extends ChangeNotifier {
 
   Future<void> connect(String id, String boardName) async {
     await stopScan();
-    if (!await _ready()) return;
+    final t = _transportFor(id);
+    final why = await t.ready();
+    if (why != null) {
+      error = why;
+      notifyListeners();
+      return;
+    }
+    if (t != _transport) {
+      await _transport.close();
+      _transport = t;
+    }
     _wanted = true;
+    _retry?.cancel();
     deviceId = id;
     name = boardName;
+    // Asked for: a virtual unit that isn't running is started
+    _socket.startIfStopped = t == _socket;
     await _connect();
   }
+
+  /// Which try at connecting is the current one: one that's been overtaken
+  /// (the link dropped meanwhile, as it does while it pairs, and it's being
+  /// tried again) stops where it is, instead of carrying on beside the new.
+  int _attempt = 0;
 
   Future<void> _connect() async {
     final id = deviceId;
     if (id == null || !_wanted) return;
+    final attempt = ++_attempt;
+    bool overtaken() => attempt != _attempt || !_wanted;
+    final t = _transport;
     state = BoardState.connecting;
     error = null;
     notifyListeners();
-    await _connSub?.cancel();
-    _connSub = UniversalBle.connectionChangeStream(id).listen((c) {
-      if (!c.isConnected && _wanted && state != BoardState.off) {
-        // Dropped before it ever said how it is: it wouldn't pair
-        _lost(state == BoardState.connected && status == null
-            ? "The board didn't let this phone pair. On the board, open Settings, Paired Phones, "
-                'and tap Pair a phone'
-            : c.error ?? 'The board went out of range');
-      }
-    });
+    void dropped(String? why) {
+      if (attempt != _attempt || !_wanted || state == BoardState.off) return;
+      // Dropped before it ever said how it is: it wouldn't pair
+      _lost(state == BoardState.connected && status == null && t.pairs
+          ? "The board didn't let this phone pair. On the board, open Settings, Paired Phones, "
+              'and tap Pair a phone'
+          : why ?? (t.pairs ? 'The board went out of range' : 'The virtual unit stopped'));
+    }
+
     try {
-      await UniversalBle.connect(id, timeout: const Duration(seconds: 15));
-      await UniversalBle.discoverServices(id);
-      try {
-        mtu = await UniversalBle.requestMtu(id, 247);
-      } catch (_) {}
-      if (defaultTargetPlatform == TargetPlatform.android) {
-        try {
-          await UniversalBle.requestConnectionPriority(id, BleConnectionPriority.highPerformance);
-        } catch (_) {}
-      }
-      await _valueSub?.cancel();
-      _valueSub = UniversalBle.characteristicValueStream(id, toPhoneUuid).listen(_onValue);
-      await UniversalBle.subscribeNotifications(id, serviceUuid, toPhoneUuid);
+      await t.open(id, onMessage: _onValue, onDropped: dropped, overtaken: overtaken);
+      if (overtaken()) return;
       state = BoardState.connected;
       notifyListeners();
+    } on PairingDeclined {
+      if (overtaken()) return;
+      await disconnect();
+      error = 'Not paired: the code was not given';
+      notifyListeners();
+    } on TransportFailure catch (e) {
+      if (overtaken()) return;
+      if (e.inUse) {
+        await disconnect();
+        error = e.message;
+        notifyListeners();
+        return;
+      }
+      if (e.notFound && await t.findAgain(id) && !overtaken()) {
+        _connect();
+        return;
+      }
+      if (overtaken()) return;
+      _lost(e.message);
     } catch (e) {
+      debugPrint('board: failed $e');
+      if (overtaken()) return;
       _lost("Couldn't connect to the board");
     }
   }
 
-  /// The link's signal strength now, in dBm; null if it can't be read.
+  /// The link's signal strength now, in dBm; null if it can't be read, or
+  /// it's a virtual unit's.
   Future<int?> readRssi() async {
-    final id = deviceId;
-    if (id == null || state != BoardState.connected) return null;
-    try {
-      return await UniversalBle.readRssi(id);
-    } catch (_) {
-      return null;
-    }
+    if (deviceId == null || state != BoardState.connected) return null;
+    return _transport.readRssi();
   }
 
   void _lost(String why) {
@@ -219,15 +248,8 @@ class BoardLink extends ChangeNotifier {
     avatarSize = avatarSlots = 0;
     notifyListeners();
     _retry?.cancel();
-    // Stop hearing about this link first: letting go of one that's already
-    // down says it's disconnected again, which would land back here and put
-    // off the retry, over and over, for good
-    _connSub?.cancel();
-    _connSub = null;
-    // Let go of what's left of the link, or Android can keep it half open,
-    // and the board, thinking it's still connected, stops advertising
-    final id = deviceId;
-    if (id != null) UniversalBle.disconnect(id).catchError((_) {});
+    // Stop hearing about this link, and let go of what's left of it
+    _transport.close();
     if (_wanted) {
       _retry = Timer(const Duration(seconds: 3), _connect);
     }
@@ -266,7 +288,7 @@ class BoardLink extends ChangeNotifier {
         // Paired and talking: swap versions. Asked again at the next status
         // until it's answered, as the first can come before the link's up.
         _askingVersion = true;
-        request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}&os=${Platform.isIOS ? 'iPhone' : 'Android'}').then((a) {
+        request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}&os=${Platform.isIOS ? 'iPhone' : Platform.isLinux ? 'Linux' : 'Android'}').then((a) {
           if (a.status == 200) {
             final v = jsonDecode(a.body) as Map<String, dynamic>;
             firmware = v['firmware'] as String?;
@@ -292,10 +314,9 @@ class BoardLink extends ChangeNotifier {
   }
 
   Future<void> _write(Uint8List msg) async {
-    final id = deviceId;
-    if (id == null || state != BoardState.connected) return;
+    if (deviceId == null || state != BoardState.connected) return;
     try {
-      await UniversalBle.write(id, serviceUuid, fromPhoneUuid, msg);
+      await _transport.write(msg);
     } catch (_) {}
   }
 
@@ -330,8 +351,7 @@ class BoardLink extends ChangeNotifier {
   }
 
   Future<RemoteAnswer> _send(String method, String target, String body, Duration timeout) async {
-    final id = deviceId;
-    if (id == null || state != BoardState.connected) {
+    if (deviceId == null || state != BoardState.connected) {
       throw StateError('The board is not connected');
     }
     _requestId = (_requestId + 1) & 0xFF;
@@ -340,7 +360,7 @@ class BoardLink extends ChangeNotifier {
     _answerBytes = null;
     final text = Uint8List.fromList(utf8.encode('$method $target\n$body'));
     for (final m in requestMessages(_requestId, text, maxWrite)) {
-      await UniversalBle.write(id, serviceUuid, fromPhoneUuid, m);
+      await _transport.write(m);
     }
     try {
       return await answer.future.timeout(timeout);
@@ -356,14 +376,9 @@ class BoardLink extends ChangeNotifier {
   /// pieces. Returns false if the link's gone.
   Future<bool> sendFast(Uint8List msg, {int tries = 20, Duration wait = const Duration(milliseconds: 20)}) async {
     for (var i = 0; i < tries; i++) {
-      final id = deviceId;
-      if (id == null || state != BoardState.connected) return false;
-      try {
-        await UniversalBle.write(id, serviceUuid, fromPhoneUuid, msg, withoutResponse: true);
-        return true;
-      } catch (_) {
-        await Future<void>.delayed(wait);   // its buffer's full
-      }
+      if (deviceId == null || state != BoardState.connected) return false;
+      if (await _transport.writeFast(msg)) return true;
+      await Future<void>.delayed(wait);   // its buffer's full
     }
     return false;
   }
@@ -373,17 +388,9 @@ class BoardLink extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _wanted = false;
+    _attempt++;
     _retry?.cancel();
-    final id = deviceId;
-    await _valueSub?.cancel();
-    _valueSub = null;
-    await _connSub?.cancel();
-    _connSub = null;
-    if (id != null) {
-      try {
-        await UniversalBle.disconnect(id);
-      } catch (_) {}
-    }
+    await _transport.close();
     state = BoardState.off;
     status = null;
     firmware = model = null;

@@ -1,13 +1,14 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
+import '../comm/remote_server.dart';
 import 'people.dart';
 import 'theme.dart';
 
@@ -119,25 +120,19 @@ class _RemotePageState extends State<RemotePage> {
     if (connected != _wasConnected) setState(() => _wasConnected = connected);
   }
 
-  /// The page: the board's, or the one kept from last time if the board says
-  /// it's the same, or the app's own.
-  Future<String> _page() async {
-    final prefs = await SharedPreferences.getInstance();
-    final kept = prefs.getString('remotePage');
-    final keptHash = kept == null ? '' : fnv1a(utf8.encode(kept)).toRadixString(16).padLeft(8, '0');
-    try {
-      final a = await _board.request('GET', '/remote.html?h=$keptHash', '', const Duration(seconds: 30));
-      if (a.status == 304 && kept != null) return kept;
-      if (a.status == 200 && a.body.isNotEmpty) {
-        await prefs.setString('remotePage', a.body);
-        return a.body;
-      }
-    } catch (_) {}
-    return kept ?? await rootBundle.loadString('assets/remote_page.html');
+  /// On a computer there's no web view: the remote opens in the browser,
+  /// served by the app (remote_server.dart).
+  static final _desktop = Platform.isLinux;
+  RemoteServer? _server;
+
+  Future<void> _openInBrowser() async {
+    final url = await (_server ??= RemoteServer(_board)).openUrl();
+    await launchUrl(url);
   }
 
   Future<void> _load() async {
-    var html = await _page();
+    if (_desktop) return;
+    var html = await remotePageHtml(_board);
     final head = html.indexOf('<head>');
     final bridge = _bridge.replaceFirst('APP_VERSION', _board.appVersion.replaceAll('"', ''));
     html = head < 0 ? bridge + html : html.replaceRange(head + 6, head + 6, bridge);
@@ -195,6 +190,25 @@ class _RemotePageState extends State<RemotePage> {
                   'or use its WiFi remote (Settings, Phone Remote).',
                   textAlign: TextAlign.center,
                 ),
+              ),
+            )
+          : _wasConnected && _desktop
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Text(
+                    'The remote opens in your browser, and runs the board over Bluetooth through the app. '
+                    'It works while the app is open.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: _openInBrowser,
+                    icon: const Icon(Icons.open_in_browser),
+                    label: const Text('Open the remote'),
+                  ),
+                ]),
               ),
             )
           : _wasConnected && web != null

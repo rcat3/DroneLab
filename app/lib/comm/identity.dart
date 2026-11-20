@@ -7,23 +7,27 @@
 ///   - a P-256 certificate for the Mumble server, the same every time (fixed
 ///     dates and serial, and an RFC 6979 signature), so the server, and
 ///     everyone on it, sees the same certificate hash each time we connect.
-/// Plain Dart but for [Identity.load], so it can be tested on a computer.
+/// Plain Dart but for where the seed's kept ([SeedStore]), so it can be
+/// tested on a computer.
 library;
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as hash;
 import 'package:cryptography/cryptography.dart' as c;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pointycastle/export.dart' as pc;
+
+import 'app_profile.dart';
 
 class Identity {
   static const seedLength = 32;
   static const keyLength = 32;
   static const signatureLength = 64;
-  static const _storeKey = 'identitySeed';
 
   final Uint8List seed;
   final Uint8List publicKey;
@@ -40,9 +44,10 @@ class Identity {
 
   static final _ed25519 = c.Ed25519();
 
-  /// Ours: made from the seed in secure storage, or a new one the first time.
-  static Future<Identity> load([FlutterSecureStorage storage = const FlutterSecureStorage()]) async {
-    final stored = await storage.read(key: _storeKey);
+  /// Ours: made from the seed in [store], or a new one the first time.
+  static Future<Identity> load([SeedStore? store]) async {
+    store ??= SeedStore.standard();
+    final stored = await store.read();
     if (stored != null) {
       try {
         final seed = base64.decode(stored);
@@ -52,14 +57,14 @@ class Identity {
       }
     }
     final seed = Uint8List.fromList(List.generate(seedLength, (_) => Random.secure().nextInt(256)));
-    await storage.write(key: _storeKey, value: base64.encode(seed));
+    await store.write(base64.encode(seed));
     return fromSeed(seed);
   }
 
   /// Take on the identity in an exported code, in place of ours.
-  static Future<Identity> import(String code, [FlutterSecureStorage storage = const FlutterSecureStorage()]) async {
+  static Future<Identity> import(String code, [SeedStore? store]) async {
     final seed = seedFromCode(code);
-    await storage.write(key: _storeKey, value: base64.encode(seed));
+    await (store ?? SeedStore.standard()).write(base64.encode(seed));
     return fromSeed(seed);
   }
 
@@ -351,4 +356,74 @@ class IdentityAnnouncement {
 
   static List<int> _unhex(String hex) =>
       [for (var i = 0; i + 1 < hex.length; i += 2) int.parse(hex.substring(i, i + 2), radix: 16)];
+}
+
+/// Where the identity's seed is kept.
+abstract class SeedStore {
+  Future<String?> read();
+  Future<void> write(String value);
+
+  /// The phone's secure storage; on Linux, a file only its user can read
+  /// ([FileSeedStore]), as a keyring isn't always there to keep it (a
+  /// Raspberry Pi with no desktop), and keeping it one place one day and
+  /// another the next would make a second identity. The folder's the
+  /// profile's own (app_profile.dart); only the usual one's seed was ever in
+  /// the keyring, so only it looks there.
+  factory SeedStore.standard() {
+    const secure = SecureSeedStore();
+    if (!Platform.isLinux) return secure;
+    return FileSeedStore(() async => File('${(await getApplicationSupportDirectory()).path}/identity-seed'),
+        moveFrom: AppProfile.name == null ? secure : null);
+  }
+}
+
+class SecureSeedStore implements SeedStore {
+  static const _key = 'identitySeed';
+  final FlutterSecureStorage storage;
+  const SecureSeedStore([this.storage = const FlutterSecureStorage()]);
+
+  @override
+  Future<String?> read() => storage.read(key: _key);
+
+  @override
+  Future<void> write(String value) => storage.write(key: _key, value: value);
+}
+
+/// The seed in a file, readable by its owner alone, as ~/.ssh's keys are.
+/// [moveFrom] is where it was kept before, if it isn't in the file yet.
+class FileSeedStore implements SeedStore {
+  final Future<File> Function() file;
+  final SeedStore? moveFrom;
+  FileSeedStore(this.file, {this.moveFrom});
+
+  @override
+  Future<String?> read() async {
+    final f = await file();
+    if (await f.exists()) {
+      final v = (await f.readAsString()).trim();
+      return v.isEmpty ? null : v;
+    }
+    String? old;
+    try {
+      old = await moveFrom?.read();
+    } catch (_) {
+      // no keyring
+    }
+    if (old != null) await write(old);
+    return old;
+  }
+
+  @override
+  Future<void> write(String value) async {
+    final f = await file();
+    await f.parent.create(recursive: true);
+    // Made, and made private, before the seed goes in; then put in place
+    // whole, so a crash leaves the old one or the new, never half of one
+    final next = File('${f.path}.new');
+    await next.writeAsString('');
+    final chmod = await Process.run('chmod', ['600', next.path]);
+    if (chmod.exitCode != 0) throw FileSystemException('chmod failed', next.path);
+    await next.writeAsString(value, flush: true);
+    await next.rename(f.path);
+  }
 }
