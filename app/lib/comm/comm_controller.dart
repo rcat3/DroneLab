@@ -79,7 +79,13 @@ class BoardCommSettings {
   final int voice;                // the comm channel's own voice effect, -1 for the speaker's
   final List<String> voices;      // the voice effects
   final int talkOn;               // before commVersion 11: the channel talked on, 0 the server's, 1 direct
-  const BoardCommSettings(this.muteSpeaker, this.show, this.direct, this.voice, this.voices, this.talkOn);
+  final String? housing;          // 'speaker' or 'low-profile'; null from older firmware
+  const BoardCommSettings(this.muteSpeaker, this.show, this.direct, this.voice, this.voices, this.talkOn,
+      [this.housing]);
+
+  /// Whether the housing has a speaker: not the low-profile model. Older
+  /// firmware doesn't say, and is taken to have one, showing everything.
+  bool get hasSpeaker => housing != 'low-profile';
 }
 
 /// Direct comms on the board (core/app/direct.h).
@@ -401,7 +407,8 @@ class CommController extends ChangeNotifier {
                   d['id'] as String? ?? '', (d['channel'] as num?)?.toInt() ?? 6, d['lr'] == 1, d['scanning'] == 1),
           (v['voice'] as num?)?.toInt() ?? -1,
           [for (final n in (v['voices'] as List<dynamic>? ?? const [])) n as String],
-          (v['talk'] as num?)?.toInt() ?? 0);
+          (v['talk'] as num?)?.toInt() ?? 0,
+          v['housing'] as String?);
       notifyListeners();
       _nameBoard();
     } catch (_) {}

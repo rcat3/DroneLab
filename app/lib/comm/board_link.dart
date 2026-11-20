@@ -195,6 +195,17 @@ class BoardLink extends ChangeNotifier {
     }
   }
 
+  /// The link's signal strength now, in dBm; null if it can't be read.
+  Future<int?> readRssi() async {
+    final id = deviceId;
+    if (id == null || state != BoardState.connected) return null;
+    try {
+      return await UniversalBle.readRssi(id);
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _lost(String why) {
     state = _wanted ? BoardState.connecting : BoardState.off;
     error = why;

@@ -93,7 +93,7 @@ The app keeps going with the screen off, so the phone can go in a pocket.  A not
 
 ### Direct channels
 
-**Over direct mode**, units start on the *open channel*, which any unit in range can hear.  To keep it to your hive, use a channel with a passphrase: everything on it is encrypted, so units outside it can neither hear it nor send to it.  In Setup, under *Direct*, tap the channel (or *Change* on the Voice tab while talking direct):
+**Over direct mode**, units start on the *open channel*, which any unit in range can hear.  To keep it to your hive, use a channel with a passphrase: everything on it is encrypted, so units outside it can neither hear it nor send to it.  On the Text tab, tap **Direct channel** by *Channels* (or *Change* on the Voice tab while talking direct):
 
 - **Create a channel**: give it a name, which others nearby can see, and a passphrase, which they'll need to join.  A few unrelated words make a good passphrase.
 - **Heard nearby**: channels about, with how many units are on each.  Tap one and type its passphrase to join.
@@ -106,18 +106,17 @@ The status strip's grey down arrow means someone's talking on *another* direct c
 
 ## Setup: talking
 
-<img src="../images/app/setup_talking.png" width="300" alt="Setup's Talking and Direct sections">
+<img src="../images/app/setup_talking.png" width="300" alt="Setup's Talking section">
 
 In Setup, behind the gear, while the unit's connected:
 
 - **Talk with**: *PUSH TO TALK*, while a button's held, or *VOICE*, whenever the unit hears you speak (see [Ways to talk](#ways-to-talk)).
-- **HiveMind voice**: the voice effect the hive hears: *Same as speaker*, or any of the [voice effects](../features/voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.
-- **Mute speaker on Tx**: the unit's speaker goes quiet while you're talking to the hive, so those around you don't hear what goes to it.
+- **HiveMind voice**: the voice effect the hive hears: *Same as speaker*, or any of the [voice effects](../features/voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.  A low-profile unit has no speaker, so its first choice is *As set on the unit*: the effect picked on its own Voice page.
+- **Mute speaker on Tx**: the unit's speaker goes quiet while you're talking to the hive, so those around you don't hear what goes to it.  Not shown for a low-profile unit, which has no speaker.
 - **Talk tones**: two short notes up in your headphones as push to talk starts, and two down as it ends, so you know it took.  Not in voice mode, which starts at every word.  The low buzz for [nobody hearing you](#where-your-voice-goes) sounds either way.
 - **Show HiveMind on the board while**: the unit's display switches to its HiveMind screen by itself when you *TALK*, when you *HEAR* someone, or *BOTH*, and goes back to what it was showing after.  *NEVER* leaves the display alone.
-- **Direct, board to board**: direct mode on or off.  It costs some battery, as the unit's radio listens the whole time.  Under it, the direct channel, and the name others see you as (your server name).
 
-These are the unit's own settings, so they also show on its display, in the HiveMind feature.
+These are the unit's own settings, so they also show on its display, in the HiveMind feature.  Direct mode is switched on and off from the status strip at the top: tap it for the links.  It costs some battery, as the unit's radio listens the whole time.
 
 ## Setup: your identity
 
@@ -128,6 +127,10 @@ The app makes you an identity the first time it runs: a key pair kept in the pho
 Without the code, a new phone, or the app put back, is a new identity: others' apps show you with the ⚠, as someone new using your name, and their units don't take your commands until they allow you again.  When it really is someone you know with a new identity (ask them, as anyone can use a name), tap them, then **It's (their name), with a new identity** under the warning: the new one takes the old one's place in the app, with your conversation, and the old one's forgotten.  If you'd allowed them on your unit, allow them again there.
 
 There's no way to call an identity back.  If your phone's lost, or someone's seen your code, whoever has it can pass as you until those who know you forget you: on their units, hold your name in the *Permissions* list to forget it, and allow your new identity instead.  So keep the code safe, and a screen lock on the phone.
+
+## About
+
+The **(i)** at the top of Setup, or *About DroneLab* at the bottom, shows the app's version and the phone's Android version, and the unit it's linked to: its connection and signal strength, firmware version and build time, Bluetooth and WiFi MAC addresses, enclosure (speaker or low-profile), uptime, and battery: charge, voltage, and whether it's charging.  The logo opens the project on GitHub.
 
 ## When it doesn't work
 

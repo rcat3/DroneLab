@@ -78,6 +78,8 @@ flutter:
   # The phone remote's page, copied from core/app by tools/gen_remote_page.py
   assets:
     - assets/remote_page.html
+    # The logo, cut from core/ui/assets/dronelab_logo.png, for the About page
+    - assets/dronelab_logo.png
     # The firmware it carries, put there by tools/release/bundle_firmware.sh
     - assets/firmware/
 

@@ -42,6 +42,8 @@
  *     POST /api/vis?v=<style>[&show=1]  the Visualizer's style, and bring
  *                                     it on screen
  *     GET  /api/tracks    the sound player's tracks, which don't change
+ *     GET  /api/about     the board: firmware, build, MAC addresses, housing,
+ *                                     uptime and battery, for the app's About page
  *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>]   the voice
  *                                     effect, Play on speaker and Effect Volume
  *     POST /api/sound?[play=<1 or 0>][&skip=<1 or -1>][&t=<track>][&seek=<ms>]
@@ -548,14 +550,52 @@ static void write_state(json_t *j)
     jprintf(j, "]}");
 }
 
+/* Which housing the board's in, for the app to leave out what it hasn't got:
+ * "speaker", or "low-profile", which has no speaker. */
+static const char *housing_name(void)
+{
+    return settings_speaker_fitted() ? "speaker" : "low-profile";
+}
+
+static void write_mac(json_t *j, const char *name, bool (*read)(uint8_t[6]))
+{
+    uint8_t mac[6];
+    if (read(mac))
+    {
+        jprintf(j, ",\"%s\":\"%02X:%02X:%02X:%02X:%02X:%02X\"", name, mac[0], mac[1], mac[2], mac[3], mac[4],
+                mac[5]);
+    }
+}
+
+/* The board, for the app's About page. */
+static void write_about(json_t *j)
+{
+    jprintf(j, "{\"firmware\":");
+    jstring(j, rcat_hal_firmware_version());
+    jprintf(j, ",\"built\":");
+    jstring(j, rcat_hal_firmware_built());
+    jprintf(j, ",\"board\":");
+    jstring(j, RCAT_BOARD_NAME);
+    write_mac(j, "wifi_mac", rcat_hal_mac_address);
+    write_mac(j, "bt_mac", rcat_hal_bt_mac_address);
+    jprintf(j, ",\"housing\":\"%s\",\"uptime\":%lu", housing_name(), (unsigned long)(rcat_hal_millis() / 1000));
+    battery_status_t battery;
+    if (battery_latest(&battery))
+    {
+        jprintf(j, ",\"battery\":{\"percent\":%u,\"volts\":%.2f,\"charging\":%d}", battery.percent,
+                battery.volts, battery.charging ? 1 : 0);
+    }
+    jprintf(j, "}");
+}
+
 /* The comm channel's settings, as on its Comm Setup page. */
 static void write_comm(json_t *j)
 {
     const settings_t *s = settings_get();
     jprintf(j, "{\"available\":%d,\"mode\":%d,\"mute\":%u,\"show\":%u,\"voice\":%d,\"talk\":%d,\"talk_now\":%d,"
-               "\"voices\":[",
+               "\"housing\":\"%s\",\"voices\":[",
             comm_available() ? 1 : 0, (int)comm_mode(), s->comm_mute_speaker, s->comm_auto_show, comm_voice_effect(),
-            (int)comm_talk_to(), (int)comm_talk_now());
+            (int)comm_talk_to(), (int)comm_talk_now(), housing_name());
     for (size_t i = 0; i < voice_fx_preset_count(); i++)
     {
         jprintf(j, "%s", i ? "," : "");
@@ -1223,6 +1263,10 @@ int remote_api(const char *method, const char *target, const char *body, size_t 
     else if (strcmp(path, "/api/tracks") == 0)
     {
         write = write_tracks;
+    }
+    else if (strcmp(path, "/api/about") == 0)
+    {
+        write = write_about;
     }
     else if (strcmp(path, "/api/comm") == 0)
     {

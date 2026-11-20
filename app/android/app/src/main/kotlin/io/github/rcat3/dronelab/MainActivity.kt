@@ -50,6 +50,19 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+        // The phone, for the About page
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/device").setMethodCallHandler { call, result ->
+            if (call.method == "info") {
+                result.success(mapOf(
+                    "release" to Build.VERSION.RELEASE,
+                    "sdk" to Build.VERSION.SDK_INT,
+                    "manufacturer" to Build.MANUFACTURER,
+                    "model" to Build.MODEL,
+                ))
+            } else {
+                result.notImplemented()
+            }
+        }
     }
 
     private fun press(keyCode: Int) {

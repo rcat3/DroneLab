@@ -6,15 +6,16 @@ import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/notifier.dart';
+import 'about_page.dart';
 import 'firmware_ui.dart';
-import 'groups_page.dart';
 import 'server_page.dart';
 import 'status_strip.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
 /// What's set once and left: getting connected (the board, the server, your
-/// avatar), how the board talks, direct comms, and who's muted.
+/// avatar), how the board talks, and who's muted. Direct comms are on the
+/// Text tab and the links' sheet.
 class SetupPage extends StatelessWidget {
   final CommController comm;
   const SetupPage({super.key, required this.comm});
@@ -27,11 +28,15 @@ class SetupPage extends StatelessWidget {
         final b = comm.board;
         final boardUp = b.state == BoardState.connected && b.status != null;
         final settings = boardUp ? comm.boardSettings : null;
-        final direct = settings?.direct;
         final paired = boardUp || comm.lastBoardId != null;
         const showWhile = [(0, 'NEVER'), (1, 'TALK'), (2, 'HEAR'), (3, 'BOTH')];
         return Scaffold(
-          appBar: AppBar(title: const Text('Setup')),
+          appBar: AppBar(
+            title: const Text('Setup'),
+            actions: [
+              IconButton(tooltip: 'About', icon: const Icon(Icons.info_outline), onPressed: () => _about(context)),
+            ],
+          ),
           body: ListView(
             // Clear of the system's navigation bar, which can sit over the page
             padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom),
@@ -97,7 +102,9 @@ class SetupPage extends StatelessWidget {
                             dropdownColor: Kc.raised,
                             onChanged: (v) => comm.setBoardSettings(voice: v),
                             items: [
-                              const DropdownMenuItem(value: -1, child: Text('Same as speaker')),
+                              // Without a speaker, the unit's own Voice page sets it
+                              DropdownMenuItem(
+                                  value: -1, child: Text(settings.hasSpeaker ? 'Same as speaker' : 'As set on the unit')),
                               for (var i = 0; i < settings.voices.length; i++)
                                 DropdownMenuItem(value: i, child: Text(settings.voices[i])),
                             ],
@@ -105,16 +112,18 @@ class SetupPage extends StatelessWidget {
                         ],
                       ),
                     ),
-                  Explained(
-                    help: 'Mute speaker when speaking to hive.',
-                    builder: (context, info) => PanelRow(
-                      title: 'Mute speaker on Tx',
-                      trailing: [
-                        info,
-                        Switch(value: settings.muteSpeaker, onChanged: (on) => comm.setBoardSettings(muteSpeaker: on)),
-                      ],
+                  // The low-profile housing has no speaker to mute
+                  if (settings.hasSpeaker)
+                    Explained(
+                      help: 'Mute speaker when speaking to hive.',
+                      builder: (context, info) => PanelRow(
+                        title: 'Mute speaker on Tx',
+                        trailing: [
+                          info,
+                          Switch(value: settings.muteSpeaker, onChanged: (on) => comm.setBoardSettings(muteSpeaker: on)),
+                        ],
+                      ),
                     ),
-                  ),
                   if (comm.boardTalksTo)
                     Explained(
                       help: 'Two short notes up in your headphones as push to talk starts, and down as it ends. '
@@ -138,25 +147,6 @@ class SetupPage extends StatelessWidget {
                     ]),
                   ),
                 ]),
-              if (direct != null) ...[
-                const SectionHeader('Direct'),
-                Panel(children: [
-                  Explained(
-                    help: 'Local comms without Internet.',
-                    builder: (context, info) => PanelRow(
-                      title: 'Direct, board to board',
-                      trailing: [info, Switch(value: direct.on, onChanged: comm.setDirect)],
-                    ),
-                  ),
-                  PanelRow(
-                    leading: Icon(direct.keyed ? Icons.lock : Icons.lock_open, color: Kc.muted),
-                    title: 'Channel: ${directChannelName(direct)}',
-                    subtitle: 'F${radioText(direct.channel, direct.longRange).substring(1)} · others see you as ${direct.name}',
-                    trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupsPage(comm: comm))),
-                  ),
-                ]),
-              ],
               const SectionHeader('Your identity'),
               _IdentityPanel(comm: comm),
               const SectionHeader('Notifications'),
@@ -177,12 +167,25 @@ class SetupPage extends StatelessWidget {
                     ),
                 ]),
               ],
+              const SectionHeader('About'),
+              Panel(children: [
+                PanelRow(
+                  leading: const Icon(Icons.info_outline, color: Kc.muted),
+                  title: 'About DroneLab',
+                  subtitle: 'Versions, the unit, its battery',
+                  trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
+                  onTap: () => _about(context),
+                ),
+              ]),
             ],
           ),
         );
       },
     );
   }
+
+  void _about(BuildContext context) =>
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => AboutPage(comm: comm)));
 
   void _server(BuildContext context) =>
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => ServerPage(comm: comm)));

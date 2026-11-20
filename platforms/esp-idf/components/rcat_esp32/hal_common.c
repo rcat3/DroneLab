@@ -208,6 +208,11 @@ bool rcat_hal_mac_address(uint8_t mac[6])
     return esp_read_mac(mac, ESP_MAC_WIFI_STA) == ESP_OK;
 }
 
+bool rcat_hal_bt_mac_address(uint8_t mac[6])
+{
+    return esp_read_mac(mac, ESP_MAC_BT) == ESP_OK;
+}
+
 const char *rcat_hal_firmware_built(void)
 {
     static char built[40];  // the date and time fields are 16 bytes each

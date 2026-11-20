@@ -207,6 +207,10 @@ const char *rcat_hal_firmware_version(void);
  * has none. */
 bool rcat_hal_mac_address(uint8_t mac[6]);
 
+/* The board's Bluetooth MAC address, as phones see it. Returns false if it
+ * has none. */
+bool rcat_hal_bt_mac_address(uint8_t mac[6]);
+
 /* When the firmware was built, as the compiler puts it: "Nov 15 2026 01:30:12". */
 const char *rcat_hal_firmware_built(void);
 
