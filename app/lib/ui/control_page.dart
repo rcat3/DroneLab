@@ -178,7 +178,7 @@ class _ControlPageState extends State<ControlPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Explained(
-                      help: "Their toys only do it if they allow you, on their board's Hive Commands page.",
+                      help: "Their toys only do it if they allow you. If not, your first command asks them for permission.",
                       helpPadding: const EdgeInsets.only(bottom: 6),
                       builder: (context, info) => SectionHeader(
                           'To ${widget.target.audience}',

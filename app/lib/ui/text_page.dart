@@ -736,7 +736,7 @@ Future<void> showTerminalSheet(BuildContext context, CommController comm, Conver
                 const SectionHeader('Their display'),
                 Text(
                     "On ${c.kind == ConversationKind.person ? "${c.title}'s display" : 'the displays of ${c.audience}'}, "
-                    'as typed: no name is added. Only if they allow you, on their Hive Messages page.',
+                    'as typed: no name is added. It only shows if they allow you; if not, it asks them.',
                     style: const TextStyle(color: Kc.muted, fontSize: 13)),
                 const SizedBox(height: 10),
                 Row(children: [

@@ -140,6 +140,10 @@ class Permissions extends ChangeNotifier {
   /// The requests are all seen to, for the notification to go.
   VoidCallback? onNone;
 
+  /// A command wasn't taken: the board may have added its sender to its
+  /// list, so its state's wanted again.
+  VoidCallback? onRefused;
+
   void load(SharedPreferences p) {
     _prefs = p;
     List<PermissionRequest> read(String name) {
@@ -213,6 +217,7 @@ class Permissions extends ChangeNotifier {
     } else {
       outcome = refused(cap, key, name, who,
           everyone: scope == _scopeEveryone || openChannel, channel: scope == _scopeChannel, what: what);
+      onRefused?.call();
     }
     log(LogEntry(DateTime.now(), name, what,
         via: direct ? 'Direct' : 'Cloud',

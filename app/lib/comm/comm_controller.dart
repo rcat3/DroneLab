@@ -300,6 +300,8 @@ class CommController extends ChangeNotifier {
       notifier.showPermissionRequest(r.name, r.what);
     };
     permissions.onNone = notifier.clearPermissionRequests;
+    // A command refused: the board's list has them now, for Permissions
+    permissions.onRefused = _askBoardState;
     try {
       final saved = jsonDecode(p.getString('unitSounds') ?? '{}') as Map<String, dynamic>;
       for (final e in UnitSoundEvent.values) {
