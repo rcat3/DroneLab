@@ -160,11 +160,13 @@ class BleTransport implements BoardTransport {
       required void Function(String? why) onDropped,
       required bool Function() overtaken}) async {
     _id = id;
+    mtu = 23;   // until this link's agreed
     await _connSub?.cancel();
     _connSub = UniversalBle.connectionChangeStream(id).listen((c) {
       if (!c.isConnected) onDropped(c.error);
     });
     try {
+      await _watchOnLinux();
       await UniversalBle.connect(id, timeout: const Duration(seconds: 15));
       if (overtaken()) return;
       await UniversalBle.discoverServices(id).timeout(const Duration(seconds: 15));
@@ -179,9 +181,7 @@ class BleTransport implements BoardTransport {
               'and tap Pair a phone, then type the code it shows');
         }
       }
-      try {
-        mtu = await UniversalBle.requestMtu(id, 247);
-      } catch (_) {}
+      mtu = await _askMtu(id, overtaken);
       if (defaultTargetPlatform == TargetPlatform.android) {
         try {
           await UniversalBle.requestConnectionPriority(id, BleConnectionPriority.highPerformance);
@@ -207,6 +207,39 @@ class BleTransport implements BoardTransport {
       debugPrint('board: failed $e');
       throw TransportFailure("Couldn't connect to the board");
     }
+  }
+
+  /// On Linux, universal_ble only hears whether a board's connected once a
+  /// scan has shown it the board: until then, a connect goes through but is
+  /// never said to, so each try timed out and dropped it again, for good
+  /// (a board remembered from before, after an update or restarting the
+  /// app). A moment's scan sets that up, and it stays once the scan's done.
+  Future<void> _watchOnLinux() async {
+    if (defaultTargetPlatform != TargetPlatform.linux || _scanSub != null) return;
+    try {
+      await UniversalBle.startScan(scanFilter: ScanFilter(withServices: [serviceUuid]));
+    } catch (_) {}
+    try {
+      await UniversalBle.stopScan();
+    } catch (_) {}
+  }
+
+  /// The link's ATT MTU. Linux doesn't ask for one: BlueZ agrees it by
+  /// itself, a little after connecting, and until then there's none to read.
+  /// Missing it left messages at 20 bytes, and updates at 2 kB/s, so it's
+  /// asked again for a while. Linux also gives it less the 3-byte header.
+  Future<int> _askMtu(String id, bool Function() overtaken) async {
+    final linux = defaultTargetPlatform == TargetPlatform.linux;
+    for (var i = 0; i < (linux ? 15 : 1); i++) {
+      if (i > 0) await Future<void>.delayed(const Duration(milliseconds: 200));
+      if (overtaken()) break;
+      try {
+        final got = await UniversalBle.requestMtu(id, 247) + (linux ? 3 : 0);
+        if (got > 23) return got;
+      } catch (_) {}
+    }
+    debugPrint('board: no MTU, messages kept short');
+    return 23;
   }
 
   @override
