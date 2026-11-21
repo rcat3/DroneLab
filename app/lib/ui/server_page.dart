@@ -14,14 +14,13 @@ class ServerPage extends StatefulWidget {
 class _ServerPageState extends State<ServerPage> {
   late final _host = TextEditingController(text: widget.comm.server.host);
   late final _port = TextEditingController(text: '${widget.comm.server.port}');
-  late final _user = TextEditingController(text: widget.comm.server.username);
   late final _password = TextEditingController(text: widget.comm.server.password);
   late double _buffer = widget.comm.bufferMs.toDouble();
   bool _showPassword = false;
 
   @override
   void dispose() {
-    for (final c in [_host, _port, _user, _password]) {
+    for (final c in [_host, _port, _password]) {
       c.dispose();
     }
     super.dispose();
@@ -31,12 +30,11 @@ class _ServerPageState extends State<ServerPage> {
     final s = ServerSettings(
       host: _host.text.trim(),
       port: int.tryParse(_port.text.trim()) ?? 64738,
-      username: _user.text.trim(),
+      username: widget.comm.server.username,     // set under Identity
       password: _password.text,
     );
     final changed = s.host != widget.comm.server.host ||
         s.port != widget.comm.server.port ||
-        s.username != widget.comm.server.username ||
         s.password != widget.comm.server.password;
     await widget.comm.saveServer(s, _buffer.round());
     if (changed && widget.comm.serverWanted) {
@@ -69,12 +67,6 @@ class _ServerPageState extends State<ServerPage> {
             controller: _port,
             decoration: const InputDecoration(labelText: 'Port'),
             keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _user,
-            decoration: const InputDecoration(labelText: 'Your name', hintText: 'What the others see'),
-            autocorrect: false,
           ),
           const SizedBox(height: 12),
           TextField(

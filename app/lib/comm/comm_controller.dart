@@ -382,6 +382,23 @@ class CommController extends ChangeNotifier {
     return true;
   }
 
+  /// The longest a name can be, in UTF-8 bytes: what the unit keeps of it
+  /// for direct comms (DIRECT_NAME_MAX in core/app/direct.h, less its zero).
+  static const nameMaxBytes = 15;
+
+  /// What the others see us as: on the server, their app and display, and
+  /// over direct comms. A new one's taken to the board, and to the server by
+  /// joining it again. An empty name's not taken.
+  Future<void> setName(String name) async {
+    name = name.trim();
+    if (name.isEmpty || name == server.username) return;
+    server.username = name;
+    await _prefs?.setString('username', name);
+    notifyListeners();
+    _nameBoard();
+    if (_serverWanted && server.complete) await _connectServer();
+  }
+
   String? get lastBoardId => _prefs?.getString('boardId');
   String? get lastBoardName => _prefs?.getString('boardName');
 
@@ -2772,6 +2789,7 @@ class CommController extends ChangeNotifier {
     _reconnect?.cancel();
     if (!_serverWanted) return;
     _closeMumble();
+    refusedName = null;
     final m = MumbleClient(
         host: server.host,
         port: server.port,
@@ -2801,9 +2819,34 @@ class CommController extends ChangeNotifier {
 
     } on MumbleException catch (e) {
       serverError = e.message;
+      _checkNameRefused(m);
       _scheduleReconnect();
     }
     notifyListeners();
+  }
+
+  /// The name the server turned away, when it did: not tried again, as
+  /// trying again won't help. Changing the name (setName) tries that.
+  String? refusedName;
+
+  /// Characters in [name] a server may not take: Mumble's, as it comes,
+  /// only takes plain ASCII letters, digits, spaces and punctuation.
+  static List<String> unusualCharacters(String name) =>
+      {for (final r in name.runes) if (r < 0x20 || r > 0x7E) String.fromCharCode(r)}.toList();
+
+  /// Why the server turned the name away, in more words than its own.
+  String get refusedNameHelp {
+    final odd = unusualCharacters(refusedName ?? '');
+    return odd.isEmpty
+        ? 'Ask whoever runs the server which names it takes.'
+        : "It may not take ${odd.join(' or ')} in a name: many servers only take plain letters, digits and "
+            'punctuation. Change your name, or ask whoever runs the server to allow it.';
+  }
+
+  void _checkNameRefused(MumbleClient m) {
+    if (m.rejectType != MumbleClient.rejectInvalidUsername) return;
+    refusedName = server.username;
+    serverError = 'The server won\'t take the name "${server.username}"';
   }
 
   /// Trust the server's certificate the first time, and refuse it if it
@@ -2839,6 +2882,7 @@ class CommController extends ChangeNotifier {
     _updateBoardScreen();
     if (m.state == MumbleState.disconnected && _serverWanted) {
       serverError = m.error;
+      _checkNameRefused(m);
       _scheduleReconnect();
     }
     notifyListeners();
@@ -2846,7 +2890,7 @@ class CommController extends ChangeNotifier {
 
   void _scheduleReconnect() {
     _reconnect?.cancel();
-    if (_serverWanted && !(serverError ?? '').contains('certificate')) {
+    if (_serverWanted && refusedName == null && !(serverError ?? '').contains('certificate')) {
       _reconnect = Timer(const Duration(seconds: 5), _connectServer);
     }
   }

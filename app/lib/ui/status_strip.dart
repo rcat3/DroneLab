@@ -5,6 +5,7 @@ import '../comm/board_transport.dart' show socketIdPrefix, socketUnitName;
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
 import '../comm/virtual_unit.dart';
+import 'identity_page.dart';
 import 'permissions_page.dart';
 import 'server_page.dart';
 import 'setup_page.dart';
@@ -305,6 +306,18 @@ Future<void> showLinks(BuildContext context, CommController comm) => showTopShee
                           ),
                         ),
                       ),
+                    if (comm.refusedName != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(comm.refusedNameHelp, style: const TextStyle(color: Kc.muted, fontSize: 13)),
+                          TextButton(
+                            onPressed: () => Navigator.of(context)
+                                .push(MaterialPageRoute(builder: (_) => IdentityPage(comm: comm))),
+                            child: const Text('Change your name'),
+                          ),
+                        ]),
+                      ),
                     PanelRow(
                       leading: _LinkIcon(l.direct, directIcon),
                       title: 'Direct',
@@ -382,6 +395,7 @@ String serverStatusText(CommController comm) {
   final s = comm.server;
   if (!s.complete) return 'Not set up';
   if (comm.mumble?.state == MumbleState.connected) return 'Connected as ${s.username}';
+  if (comm.refusedName != null) return comm.serverError!;     // not tried again
   if (comm.serverWanted) return comm.serverError == null ? 'Connecting...' : '${comm.serverError}. Trying again...';
   return comm.serverError ?? 'Not connected';
 }

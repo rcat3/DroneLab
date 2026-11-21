@@ -121,6 +121,8 @@ class MumbleClient {
 
   MumbleState state = MumbleState.disconnected;
   String? error;          // why it disconnected, if it wasn't asked to
+  int? rejectType;        // the server's Reject type, if it turned us away
+  static const rejectInvalidUsername = 2;    // Mumble.proto's Reject.RejectType
   int? mySession;
   String welcome = '';
   String? fingerprint;    // SHA-256 of the server's certificate, hex
@@ -293,6 +295,7 @@ class MumbleClient {
   }) async {
     state = MumbleState.connecting;
     error = null;
+    rejectType = null;
     _changes.add(null);
     try {
       final me = identity;
@@ -512,6 +515,7 @@ class MumbleClient {
         _changes.add(null);
       case _reject:
         final m = ProtoMessage.parse(payload);
+        rejectType = m.int_(1);
         final reason = m.string(2);
         _shutdown(reason == null || reason.isEmpty ? 'The server turned us away' : reason);
       case _serverConfig:

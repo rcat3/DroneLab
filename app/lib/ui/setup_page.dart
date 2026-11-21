@@ -1,7 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
@@ -11,6 +9,7 @@ import '../comm/notifier.dart';
 import '../comm/virtual_unit.dart';
 import 'about_page.dart';
 import 'developer_page.dart';
+import 'identity_page.dart';
 import 'permissions_page.dart';
 import 'unit_sounds_page.dart';
 import 'firmware_ui.dart';
@@ -19,8 +18,8 @@ import 'status_strip.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// What's set once and left: getting connected (the board, the server, your
-/// avatar), how the board talks, and who's muted. Direct comms are on the
+/// What's set once and left: getting connected (the board, the server, who
+/// you are), how the board talks, and who's muted. Direct comms are on the
 /// Text tab and the links' sheet.
 class SetupPage extends StatelessWidget {
   final CommController comm;
@@ -65,16 +64,20 @@ class SetupPage extends StatelessWidget {
                 PanelRow(
                   leading: _Step(2, comm.server.complete),
                   title: 'Join the server',
-                  subtitle: comm.server.complete
+                  subtitle: comm.refusedName != null
+                      ? '${comm.serverError}: change it under Identity'
+                      : comm.server.complete
                       ? '${comm.server.host} · as ${comm.server.username}'
-                      : 'A Mumble server: address, name, password',
+                      : comm.server.host.isNotEmpty
+                          ? 'Set your name under Identity to join'
+                          : 'A Mumble server: address and password',
                   trailing: [
                     comm.server.complete
                         ? OutlinedButton(onPressed: () => _server(context), child: const Text('Edit'))
                         : FilledButton(onPressed: () => _server(context), child: const Text('Set up')),
                   ],
                 ),
-                _AvatarRow(comm: comm),
+                _IdentityRow(comm: comm),
               ]),
               const SectionHeader('Permissions'),
               Panel(children: [PermissionsRow(comm: comm)]),
@@ -175,8 +178,6 @@ class SetupPage extends StatelessWidget {
               ],
               const SectionHeader('Headphones'),
               _CallsPanel(comm: comm),
-              const SectionHeader('Your identity'),
-              _IdentityPanel(comm: comm),
               const SectionHeader('Notifications'),
               _NotificationsPanel(comm: comm),
               if (boardUp) ...[
@@ -230,91 +231,6 @@ class SetupPage extends StatelessWidget {
 
   void _server(BuildContext context) =>
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => ServerPage(comm: comm)));
-}
-
-/// Who others know us as: the key the app made, which signs what we send.
-/// Backing it up is its code; the same code on another phone, or after
-/// reinstalling, makes that phone us.
-class _IdentityPanel extends StatelessWidget {
-  final CommController comm;
-  const _IdentityPanel({required this.comm});
-
-  @override
-  Widget build(BuildContext context) {
-    final me = comm.identity;
-    return Panel(children: [
-      PanelRow(
-        leading: const Icon(Icons.fingerprint, color: Kc.muted),
-        title: me == null ? 'None' : 'Identity ${me.id.substring(0, 8)}',
-        subtitle: me == null
-            ? "The phone's secure storage couldn't be used"
-            : 'Others know you by this, not your name. Back it up to keep it.',
-        trailing: [
-          if (me != null)
-            OutlinedButton(onPressed: () => _showCode(context, me.exportCode), child: const Text('Back up')),
-        ],
-      ),
-      PanelRow(
-        title: 'Restore an identity',
-        subtitle: 'Become the identity in a backed-up code',
-        trailing: [OutlinedButton(onPressed: () => _restore(context), child: const Text('Restore'))],
-      ),
-    ]);
-  }
-
-  void _showCode(BuildContext context, String code) => showDialog<void>(
-        context: context,
-        builder: (dialog) => AlertDialog(
-          title: const Text('Your identity code'),
-          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SelectableText(code, style: Kc.term(16)),
-            const SizedBox(height: 12),
-            const Text('Anyone with this code can pass as you. Keep it somewhere safe, and nowhere else.',
-                style: TextStyle(color: Kc.muted, fontSize: 13)),
-          ]),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: code));
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
-              },
-              child: const Text('Copy'),
-            ),
-            TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Done')),
-          ],
-        ),
-      );
-
-  Future<void> _restore(BuildContext context) async {
-    final field = TextEditingController();
-    final code = await showDialog<String>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: const Text('Restore an identity'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: field,
-            autofocus: true,
-            minLines: 2,
-            maxLines: 3,
-            decoration: const InputDecoration(hintText: 'XXXX-XXXX-...'),
-          ),
-          const SizedBox(height: 12),
-          const Text("This phone's identity is replaced: back it up first if you'll want it again.",
-              style: TextStyle(color: Kc.muted, fontSize: 13)),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(dialog, field.text), child: const Text('Restore')),
-        ],
-      ),
-    );
-    if (code == null || code.trim().isEmpty) return;
-    final error = await comm.importIdentity(code);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'Identity restored')));
-    }
-  }
 }
 
 /// Which of DroneLab's notifications come, and a way into Android's own
@@ -456,61 +372,46 @@ class _Step extends StatelessWidget {
       );
 }
 
-/// Your avatar, for the server and direct comms alike.
-class _AvatarRow extends StatefulWidget {
+/// Who you are, at a glance: your avatar, name and identity, and the way
+/// into the Identity page to change them or back the key up.
+class _IdentityRow extends StatelessWidget {
   final CommController comm;
-  const _AvatarRow({required this.comm});
-
-  @override
-  State<_AvatarRow> createState() => _AvatarRowState();
-}
-
-class _AvatarRowState extends State<_AvatarRow> {
-  bool _picking = false;
-
-  Future<void> _pick() async {
-    setState(() => _picking = true);
-    try {
-      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
-      if (file == null) return;
-      final ok = await widget.comm.setAvatar(await file.readAsBytes());
-      if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("That doesn't look like a picture")));
-      }
-    } finally {
-      if (mounted) setState(() => _picking = false);
-    }
-  }
+  const _IdentityRow({required this.comm});
 
   @override
   Widget build(BuildContext context) {
-    final avatar = widget.comm.avatar;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            _Step(3, avatar != null),
-            const SizedBox(width: 12),
-            const Text('Your avatar', style: TextStyle(fontWeight: FontWeight.w600)),
-          ]),
-          const SizedBox(height: 12),
-          Row(children: [
-            DroneAvatar(picture: avatar, size: 96),
-            const Spacer(),
-            if (avatar != null)
-              IconButton(
-                tooltip: 'Remove your avatar',
-                icon: const Icon(Icons.delete_outline, color: Kc.muted),
-                onPressed: () => widget.comm.setAvatar(null),
+    final name = comm.server.username;
+    final me = comm.identity;
+    return InkWell(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => IdentityPage(comm: comm))),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              _Step(3, name.isNotEmpty),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('Identity', style: TextStyle(fontWeight: FontWeight.w600))),
+              const Icon(Icons.chevron_right, color: Kc.muted),
+            ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              DroneAvatar(picture: comm.avatar, size: 72),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(name.isEmpty ? 'No name yet' : name,
+                      style: TextStyle(fontSize: 18, color: name.isEmpty ? Kc.muted : null),
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Text(me == null ? 'No identity key' : 'Identity ${me.id.substring(0, 8)}',
+                      style: const TextStyle(color: Kc.muted, fontSize: 13)),
+                ]),
               ),
-            const SizedBox(width: 4),
-            avatar == null
-                ? FilledButton(onPressed: _picking ? null : _pick, child: const Text('Choose'))
-                : OutlinedButton(onPressed: _picking ? null : _pick, child: const Text('Change')),
-          ]),
-        ],
+            ]),
+          ],
+        ),
       ),
     );
   }
