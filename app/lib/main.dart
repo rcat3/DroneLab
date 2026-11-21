@@ -36,9 +36,9 @@ void main(List<String> args) {
   if (defaultTargetPlatform == TargetPlatform.android) FlutterForegroundTask.initCommunicationPort();
   final comm = CommController();
   if (Platform.isLinux) {
-    final pairing = LinuxPairing((name) async {
+    final pairing = LinuxPairing((name, withdrawn) async {
       final context = navigatorKey.currentContext;
-      return context == null ? null : askPairingCode(context, name);
+      return context == null ? null : askPairingCode(context, name, withdrawn);
     });
     comm.board.pairFirst = (id) async => await pairing.pair(id) ? true : pairing.cancelled ? null : false;
     comm.board.letGo = pairing.letGo;

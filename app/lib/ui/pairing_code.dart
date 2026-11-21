@@ -2,13 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// Asks for the code the board shows while it pairs (Linux: the system doesn't
-/// ask, see linux_pairing.dart). Null if it's not given.
-Future<int?> askPairingCode(BuildContext context, String boardName) {
+/// ask, see linux_pairing.dart). Null if it's not given. Closes by itself once
+/// [withdrawn] completes: the pairing's over without it.
+Future<int?> askPairingCode(BuildContext context, String boardName, Future<void> withdrawn) async {
   final field = TextEditingController();
-  return showDialog<int>(
+  final navigator = Navigator.of(context);
+  Route<int>? route;
+  var open = true;
+  withdrawn.then((_) {
+    final r = route;
+    if (open && r != null && r.isActive) navigator.removeRoute(r);
+  });
+  final code = await showDialog<int>(
     context: context,
     barrierDismissible: false,
     builder: (context) {
+      route ??= ModalRoute.of(context) as Route<int>?;
       void done() {
         final code = int.tryParse(field.text);
         if (code != null) Navigator.of(context).pop(code);
@@ -36,4 +45,6 @@ Future<int?> askPairingCode(BuildContext context, String boardName) {
       );
     },
   );
+  open = false;
+  return code;
 }

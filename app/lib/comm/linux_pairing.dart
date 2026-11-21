@@ -9,13 +9,16 @@
 /// computer pairs as before.
 library;
 
+import 'dart:async';
+
 import 'package:bluez/bluez.dart';
 import 'package:dbus/dbus.dart';
 import 'package:flutter/foundation.dart';
 
 /// Asks the wearer for the code on [boardName]'s screen: null if they don't
-/// give it.
-typedef AskCode = Future<int?> Function(String boardName);
+/// give it. Once [withdrawn] completes, BlueZ no longer wants the code (the
+/// board gave up, or the pairing ended): stop asking.
+typedef AskCode = Future<int?> Function(String boardName, Future<void> withdrawn);
 
 class LinuxPairing extends BlueZAgent {
   final AskCode askCode;
@@ -50,6 +53,14 @@ class LinuxPairing extends BlueZAgent {
   Future<bool>? _pairing;
 
   Future<bool> _pair(String address) async {
+    try {
+      return await _pairOnce(address);
+    } finally {
+      _withdraw();   // a code still being asked for is no use now
+    }
+  }
+
+  Future<bool> _pairOnce(String address) async {
     cancelled = false;
     final client = await _start();
     if (client == null) return false;
@@ -104,10 +115,27 @@ class LinuxPairing extends BlueZAgent {
     } catch (_) {}
   }
 
+  /// Completes when BlueZ stops wanting the code being asked for.
+  Completer<void>? _asking;
+
+  void _withdraw() {
+    final asking = _asking;
+    _asking = null;
+    if (asking != null && !asking.isCompleted) asking.complete();
+  }
+
   @override
   Future<BlueZAgentPasskeyResponse> requestPasskey(BlueZDevice device) async {
-    final code = await askCode(device.alias.isNotEmpty ? device.alias : device.name);
-    cancelled = code == null;
+    _withdraw();
+    final asking = _asking = Completer<void>();
+    final code = await askCode(device.alias.isNotEmpty ? device.alias : device.name, asking.future);
+    final withdrawn = asking.isCompleted;
+    if (identical(_asking, asking)) _asking = null;
+    cancelled = code == null && !withdrawn;
     return code == null ? BlueZAgentPasskeyResponse.canceled() : BlueZAgentPasskeyResponse.success(code);
   }
+
+  /// BlueZ gave up on the code: the board stopped pairing, or took too long.
+  @override
+  Future<void> cancel() async => _withdraw();
 }
