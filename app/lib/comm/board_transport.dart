@@ -93,6 +93,14 @@ class BleTransport implements BoardTransport {
   /// didn't, and null if the wearer turned it down.
   Future<bool?> Function(String id)? pairFirst;
 
+  /// Lets go of the link, still connecting or not, where universal_ble only
+  /// disconnects one that's up (Linux: linux_pairing.dart).
+  Future<void> Function(String id)? letGo;
+
+  /// Waits until the board's services are known, where universal_ble says so
+  /// too soon (Linux: linux_pairing.dart): false if they aren't in time.
+  Future<bool> Function(String id, Duration timeout)? servicesReady;
+
   String? _id;
   @override
   int mtu = 23;
@@ -166,10 +174,22 @@ class BleTransport implements BoardTransport {
       if (!c.isConnected) onDropped(c.error);
     });
     try {
-      await _watchOnLinux();
-      await UniversalBle.connect(id, timeout: const Duration(seconds: 15));
+      final scanned = await _scanOnLinux();
+      try {
+        // Linux waits longer: a try given up on starts again from nothing,
+        // and one waiting catches a board that's restarting (after an
+        // update) as soon as it's back, as Android does
+        final wait = defaultTargetPlatform == TargetPlatform.linux ? 45 : 15;
+        await UniversalBle.connect(id, timeout: Duration(seconds: wait));
+      } finally {
+        if (scanned) await _stopScanning();
+      }
       if (overtaken()) return;
       await UniversalBle.discoverServices(id).timeout(const Duration(seconds: 15));
+      final ready = servicesReady;
+      if (ready != null && !await ready(id, const Duration(seconds: 15))) {
+        throw TransportFailure("Couldn't connect to the board");
+      }
       if (overtaken()) return;
       final pairFirst = this.pairFirst;
       if (pairFirst != null) {
@@ -195,7 +215,9 @@ class BleTransport implements BoardTransport {
       debugPrint('board: failed $e');
       // Linux only connects to a board it's seen lately: after it's been
       // forgotten (or the computer's started again), look for it first
-      final notFound = e.code == UniversalBleErrorCode.deviceNotFound;
+      // UnknownObject: BlueZ forgot it (its pairing was removed), and only a
+      // scan gives universal_ble the new one
+      final notFound = e.code == UniversalBleErrorCode.deviceNotFound || e.message.contains('UnknownObject');
       throw TransportFailure(
           notFound ? 'The board is out of range, or its Phone App is off' : "Couldn't connect to the board",
           notFound: notFound);
@@ -209,16 +231,25 @@ class BleTransport implements BoardTransport {
     }
   }
 
-  /// On Linux, universal_ble only hears whether a board's connected once a
-  /// scan has shown it the board: until then, a connect goes through but is
-  /// never said to, so each try timed out and dropped it again, for good
-  /// (a board remembered from before, after an update or restarting the
-  /// app). A moment's scan sets that up, and it stays once the scan's done.
-  Future<void> _watchOnLinux() async {
-    if (defaultTargetPlatform != TargetPlatform.linux || _scanSub != null) return;
+  /// On Linux, connecting is done while scanning. universal_ble only hears
+  /// whether a board's connected once a scan has shown it the board: before,
+  /// a connect went through but was never said to, so each try timed out and
+  /// dropped it again (a board remembered from before, after an update or
+  /// restarting the app). And BlueZ only got through while scanning: without,
+  /// the connect waited out its time, and a board not yet paired, which BlueZ
+  /// only keeps while it's scanning, was forgotten. True if it started one.
+  Future<bool> _scanOnLinux() async {
+    if (defaultTargetPlatform != TargetPlatform.linux || _scanSub != null) return false;
     try {
       await UniversalBle.startScan(scanFilter: ScanFilter(withServices: [serviceUuid]));
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _stopScanning() async {
+    if (_scanSub != null) return;   // the wearer's started one meanwhile
     try {
       await UniversalBle.stopScan();
     } catch (_) {}
@@ -288,6 +319,7 @@ class BleTransport implements BoardTransport {
       try {
         await UniversalBle.disconnect(id);
       } catch (_) {}
+      await letGo?.call(id);
     }
   }
 }

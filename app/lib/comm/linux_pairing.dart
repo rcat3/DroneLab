@@ -73,6 +73,37 @@ class LinuxPairing extends BlueZAgent {
     return client.devices.any((d) => d.address.toUpperCase() == address.toUpperCase() && d.paired);
   }
 
+  /// Wait until BlueZ has the board's services: a board it knows shows the
+  /// ones it kept from before as soon as it connects, before they've been
+  /// checked, and universal_ble takes those as found. Used then, the MTU
+  /// wasn't there yet and subscribing hung. False if it doesn't in [timeout].
+  Future<bool> servicesReady(String address, Duration timeout) async {
+    final client = await _start();
+    final device = client?.devices.where((d) => d.address.toUpperCase() == address.toUpperCase()).firstOrNull;
+    if (device == null) return true;   // nothing to wait on: carry on as before
+    if (device.servicesResolved) return true;
+    try {
+      await device.propertiesChanged
+          .where((_) => device.servicesResolved || !device.connected)
+          .first
+          .timeout(timeout);
+    } catch (_) {}
+    return device.servicesResolved;
+  }
+
+  /// Let go of the link to [address], connecting or connected. A connect the
+  /// app's stopped waiting for carries on in BlueZ, and until it ends every
+  /// new try fails "already in progress": disconnecting stops it too. Not
+  /// while pairing, which this would break off.
+  Future<void> letGo(String address) async {
+    if (_pairing != null) return;
+    final client = await _start();
+    final device = client?.devices.where((d) => d.address.toUpperCase() == address.toUpperCase()).firstOrNull;
+    try {
+      await device?.disconnect();
+    } catch (_) {}
+  }
+
   @override
   Future<BlueZAgentPasskeyResponse> requestPasskey(BlueZDevice device) async {
     final code = await askCode(device.alias.isNotEmpty ? device.alias : device.name);

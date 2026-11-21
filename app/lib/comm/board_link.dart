@@ -81,6 +81,13 @@ class BoardLink extends ChangeNotifier {
   /// didn't, and null if the wearer turned it down.
   Future<bool?> Function(String id)? get pairFirst => _ble.pairFirst;
   set pairFirst(Future<bool?> Function(String id)? f) => _ble.pairFirst = f;
+
+  /// Lets go of a board's link where the system needs more than
+  /// universal_ble does (Linux: linux_pairing.dart).
+  set letGo(Future<void> Function(String id)? f) => _ble.letGo = f;
+
+  /// Waits for a board's services where universal_ble doesn't (Linux).
+  set servicesReady(Future<bool> Function(String id, Duration timeout)? f) => _ble.servicesReady = f;
   String? name;
   BoardStatus? status;
   int get mtu => _transport.mtu;

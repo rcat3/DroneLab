@@ -41,6 +41,8 @@ void main(List<String> args) {
       return context == null ? null : askPairingCode(context, name);
     });
     comm.board.pairFirst = (id) async => await pairing.pair(id) ? true : pairing.cancelled ? null : false;
+    comm.board.letGo = pairing.letGo;
+    comm.board.servicesReady = pairing.servicesReady;
   }
   comm.notifier.opens.listen((key) => _openConversation(comm, key));
   comm.incomingCalls.listen((call) => showIncomingCall(comm, call.personId));
