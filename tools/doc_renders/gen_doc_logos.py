@@ -3,7 +3,8 @@
 Draw KatCorp's logo for the display, imgs/katcorp.png, the first image it
 shows on a new build, and the logos the documentation uses, in docs/images/:
 
-  dronelab_banner.png   DroneLab's banner for the top of the README: the
+  dronelab_banner.png   DroneLab's banner for the top of the README, a panel
+                        with rounded corners and a green edge: the
                         startup logo's glitched green title in its brackets
                         (see tools/gen_logo.py), on a wide strip, with
                         KatCorp's mark and name
@@ -11,6 +12,12 @@ shows on a new build, and the logos the documentation uses, in docs/images/:
                         the cat (katcorp_cat.bmp, here) in a ring, with its
                         name and "Drone Systems Division"
   katcorp_mark.png      Just the cat in its ring, small, for page headings
+  downloads/heading_*.png
+                        The release notes' section headings, Downloads and
+                        Release notes, in the banner's style, and the
+                        Downloads section's subheadings for its groups,
+                        with no background, and a _light version of each
+                        for GitHub's light theme
 
 It needs Pillow, and the same two fonts as tools/gen_logo.py, from Google
 Fonts (SIL Open Font License), in the folder given with --fonts:
@@ -143,7 +150,7 @@ def glitch(img, top, bottom, rng, slices=4):
         height = rng.randint(2, 6) * SS
         dx = rng.choice([-1, 1]) * rng.randint(4, 10) * SS
         band = img.crop((0, y, img.width, y + height))
-        out.paste((0, 0, 0), (0, y, img.width, y + height))
+        out.paste((0, 0, 0, 0) if img.mode == "RGBA" else (0, 0, 0), (0, y, img.width, y + height))
         out.paste(band, (dx, y))
     return out
 
@@ -227,7 +234,7 @@ def banner(fonts):
     c.paint(c.text("KATCORP // DRONE SYSTEMS DIVISION", small, (fx0, fy0 - 12 * SS), anchor="ls"), GREEN_MID)
     c.paint(c.text("UPGRADE AVAILABLE", small, (fx1, fy0 - 12 * SS), anchor="rs"), GREEN_MID)
 
-    prompt = c.text("> VOICE PORT INTERFACE ONLINE_", font(mono, 30), (fx0, fy1 + 46 * SS), anchor="lm")
+    prompt = c.text("> HIVE CONNECTED_", font(mono, 30), (fx0, fy1 + 46 * SS), anchor="lm")
     c.glow(prompt, GREEN, (6, 2), (0.5, 1.0))
     c.paint(prompt, GREEN)
 
@@ -291,17 +298,123 @@ def katcorp_mark():
     return c.finish(scan=False)
 
 
+# The release notes' section headings: name, title
+HEADINGS = [
+    ("heading_downloads", "DOWNLOADS"),
+    ("heading_release_notes", "RELEASE NOTES"),
+]
+
+# The Downloads section's groups: name, title
+SUBHEADINGS = [
+    ("subheading_app", "COMPANION APP"),
+    ("subheading_firmware", "DISPLAY UNIT FIRMWARE"),
+    ("subheading_parts", "3D PRINTED PARTS"),
+]
+
+
+# Colours for the headings, which have no background of their own: a softer
+# neon for GitHub's dark themes, and deeper greens that read on its light one
+THEMES = {
+    "dark": dict(glow=(45, 220, 70), glow_strength=0.75, stops=[(0, (120, 235, 130)), (0.5, (40, 205, 65)), (1, (18, 140, 40))],
+                shadow=(12, 80, 20), line=(30, 170, 55)),
+    "light": dict(glow=(40, 200, 70), glow_strength=0.45, stops=[(0, (20, 150, 50)), (0.5, (10, 125, 40)), (1, (5, 95, 30))],
+                  shadow=(150, 220, 160), line=(20, 140, 50)),
+}
+
+
+def subheading(fonts, title, theme):
+    """A group's heading in the Downloads section: the title, centred and
+    smaller, between traces that end in dots"""
+    orbitron, _ = fonts
+    t = THEMES[theme]
+    k = t["glow_strength"]
+    c = Canvas(800, 80, "RGBA")
+    cx, cy = c.w // 2, c.h // 2
+    text = centered(c.text(title, font(orbitron, 30, 800), (cx, cy)), cx, cy)
+    tx0, ty0, tx1, ty1 = text.getbbox()
+    c.glow(text, t["glow"], (8, 3), (0.35 * k, 0.8 * k))
+    c.gradient(text, t["stops"])
+    lines = c.mask()
+    draw = ImageDraw.Draw(lines)
+    gap, dot = 22 * SS, 4 * SS
+    for side, x in ((-1, tx0 - gap), (1, tx1 + gap)):
+        end = cx + side * (c.w // 2 - 40 * SS)
+        draw.line([(x, cy), (end, cy)], fill=255, width=2 * SS)
+        draw.ellipse(circle(end, cy, dot), fill=255)
+    c.glow(lines, t["glow"], (5,), (0.6 * k,))
+    c.paint(lines, t["line"])
+    return c.finish(scan=False)
+
+
+def heading(fonts, title, theme):
+    """A section heading for the release notes, as wide as the banner: the
+    green title in brackets, with a trace off to the right"""
+    orbitron, _ = fonts
+    t = THEMES[theme]
+    k = t["glow_strength"]
+    rng = random.Random(title)
+    c = Canvas(1280, 130, "RGBA")
+    x0, cy = 96 * SS, 65 * SS
+    text = c.text(title, font(orbitron, 62, 900), (x0, cy), anchor="lm")
+    tx0, ty0, tx1, ty1 = text.getbbox()
+    c.glow(text, t["glow"], (12, 5, 2), (0.35 * k, 0.6 * k, 0.9 * k))
+    c.paint(ImageChops.offset(text, -7 * SS, 0).point(lambda v: v // 3), t["shadow"])
+    c.gradient(text, t["stops"])
+    c.img = glitch(c.img, ty0, ty1, rng, slices=3)
+
+    pad, arm, line = 18 * SS, 24 * SS, 4 * SS
+    fx0, fy0, fx1, fy1 = tx0 - pad, ty0 - pad, tx1 + pad, ty1 + pad
+    frame = c.mask()
+    draw = ImageDraw.Draw(frame)
+    for x, y, sx, sy in [(fx0, fy0, 1, 1), (fx1, fy0, -1, 1), (fx0, fy1, 1, -1), (fx1, fy1, -1, -1)]:
+        draw.line([(x, y + sy * arm), (x, y), (x + sx * arm, y)], fill=255, width=line)
+    mid = (fy0 + fy1) // 2
+    end = c.w - 70 * SS
+    draw.line([(fx1 + 14 * SS, mid), (end - 44 * SS, mid), (end - 30 * SS, mid + 12 * SS), (end, mid + 12 * SS)],
+              fill=255, width=2 * SS)
+    draw.ellipse(circle(end, mid + 12 * SS, 5 * SS), fill=255)
+    c.glow(frame, t["glow"], (8, 3), (0.5 * k, 1.0 * k))
+    c.paint(frame, t["line"] if theme == "light" else GREEN)
+
+    return c.finish(scan=False)
+
+
+def panel(img):
+    """The banner as a panel: rounded corners and a thin green border, so it
+    sits as well on a light page as a dark one"""
+    w, h = img.size
+    r, line = 24 * SS, 2 * SS
+    big = (w * SS, h * SS)
+    shape = Image.new("L", big, 0)
+    ImageDraw.Draw(shape).rounded_rectangle([0, 0, big[0] - 1, big[1] - 1], radius=r, fill=255)
+    edge = Image.new("L", big, 0)
+    ImageDraw.Draw(edge).rounded_rectangle([0, 0, big[0] - 1, big[1] - 1], radius=r, outline=255, width=line)
+    out = img.convert("RGBA")
+    border = Image.new("RGBA", img.size, GREEN_MID + (255,))
+    out = Image.composite(border, out, edge.resize(img.size, Image.LANCZOS))
+    out.putalpha(shape.resize(img.size, Image.LANCZOS))
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--fonts", required=True, help="folder with the two fonts")
     args = parser.parse_args()
     fonts = (os.path.join(args.fonts, "Orbitron[wght].ttf"), os.path.join(args.fonts, "ShareTechMono-Regular.ttf"))
-    for name, img in (("dronelab_banner.png", banner(fonts)), ("katcorp_logo.png", katcorp_logo(fonts)),
+    for name, img in (("dronelab_banner.png", panel(banner(fonts))), ("katcorp_logo.png", katcorp_logo(fonts)),
                       ("katcorp_mark.png", katcorp_mark()), ("../../imgs/katcorp.png", display_logo())):
         path = os.path.join(OUT, name)
         img.save(path, optimize=True)
         print(f"Wrote {os.path.normpath(path)}")
-
+    for theme, suffix in (("dark", ""), ("light", "_light")):
+        for name, title in SUBHEADINGS:
+            path = os.path.join(OUT, "downloads", name + suffix + ".png")
+            subheading(fonts, title, theme).save(path, optimize=True)
+            print(f"Wrote {os.path.normpath(path)}")
+        for name, title in HEADINGS:
+            path = os.path.join(OUT, "downloads", name + suffix + ".png")
+            heading(fonts, title, theme).save(path, optimize=True)
+            print(f"Wrote {os.path.normpath(path)}")
 
 if __name__ == "__main__":
     main()

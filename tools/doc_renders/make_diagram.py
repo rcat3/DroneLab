@@ -46,8 +46,10 @@ SIZE = (1600, 900)      # CSS pixels
 SCALE = 1.5             # and the picture's pixels per CSS pixel
 
 
-def render_unit(tmp):
-    """The housing from the front, as RGBA, and the mask of its glass.
+def render_unit(tmp, scad="diagram_unit.scad", centre="0,-15,0"):
+    """The housing from the front, as RGBA, and the mask of its glass: the
+    speaker housing, or another drawn the same way (scad, in this folder, and
+    the point the camera looks at).
 
     OpenSCAD can't render a transparent background, so it's rendered on a
     dark background and a light one, and the difference between them gives
@@ -55,9 +57,9 @@ def render_unit(tmp):
     paths = {}
     for scheme, name in (("Tomorrow Night", "dark"), ("Tomorrow", "light")):
         paths[name] = os.path.join(tmp, f"unit_{name}.png")
-        subprocess.run(["openscad", "-D", 'part="none"', "--camera=0,-15,0,0,0,0,330",
+        subprocess.run(["openscad", "-D", 'part="none"', f"--camera={centre},0,0,0,330",
                         "--projection=o", "--imgsize=1200,1200", f"--colorscheme={scheme}",
-                        "-o", paths[name], os.path.join(HERE, "diagram_unit.scad")],
+                        "-o", paths[name], os.path.join(HERE, scad)],
                        check=True, capture_output=True)
     d = np.asarray(Image.open(paths["dark"]).convert("RGB")).astype(float)
     l = np.asarray(Image.open(paths["light"]).convert("RGB")).astype(float)

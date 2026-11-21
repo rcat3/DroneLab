@@ -73,6 +73,7 @@ A few ideas run through it:
 - `tools/gen_app_icon.py` - Draws the app's icon from the logo, for Android and the iPhone.  It needs the same fonts.
 - `tools/doc_renders/gen_doc_logos.py` - Draws KatCorp's logo for the display, `imgs/katcorp.png`, and the documentation's logos in `docs/images/`: the DroneLab banner, and KatCorp's logo and mark, all from the cat in `tools/doc_renders/katcorp_cat.bmp`.  It needs the same fonts.
 - `tools/doc_renders/make_diagram.py` - Draws the README's How it works diagram (`docs/images/how_it_works.jpg`) from `tools/doc_renders/diagram/`, with the unit rendered from its design and screenshots on its display, and the Features page's tiles for the features with no screen of their own.  It needs OpenSCAD, Google Chrome and the same fonts.  Run it after retaking the screenshots or changing the speaker housing.
+- `tools/release/download_icons/make_icons.py` - Draws the release notes' download buttons (`docs/images/downloads/`), the printed parts' with their housing rendered as in How it works (the low-profile one from `tools/doc_renders/diagram_unit_low_profile.scad`).  It needs Inkscape, OpenSCAD, NumPy and Pillow.  Run it after changing a button or a housing.
 - `tools/screenshots.py` - Takes screenshots over USB, and the documentation's set in `docs/images/screens/` (see [Screenshots](#screenshots)).
 - `tools/release/build_firmware.sh` - Builds a release's firmware and the web installer (see [Releases](#releases)).
 - `tools/release/build_models.sh` - Renders a release's printable parts, one zip per model (see [Releases](#releases)).
@@ -120,10 +121,12 @@ The app carries the release's firmware, to keep boards up to date with it, so it
    flutter build apk --release --split-per-abi
    ```
    Copy `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` to `DroneLab.apk` and `app-armeabi-v7a-release.apk` to `DroneLab-armv7.apk`.  Keep those names: the app's QR code and the docs link to `releases/latest/download/DroneLab.apk`.  Always build with `--split-per-abi`: its version codes (`N` plus 1000 or 2000) are what installed copies have, and a plain build's are lower, so it won't install over them.
-6. **Publish** it as a full release, not a pre-release or a draft, so `releases/latest` finds it, with the notes in a file:
+6. **Publish** it as a full release, not a pre-release or a draft, so `releases/latest` finds it.  Write the notes in `notes.md`: a short paragraph about each kind of download, then the changes under `## New in X.Y.Z`.  `tools/release/release_notes.sh` puts them under DroneLab's banner, a Downloads heading with a button for each download, linked to this release's files (the firmware's to the web installer) in three groups (Companion App, Display Unit Firmware and 3D Printed Parts), and a Release notes heading:
    ```
-   gh release create vX.Y.Z --title "DroneLab X.Y.Z (test build)" --notes-file notes.md DroneLab.apk DroneLab-armv7.apk
+   tools/release/release_notes.sh vX.Y.Z notes.md > release-notes.md
+   gh release create vX.Y.Z --title "DroneLab X.Y.Z (test build)" --notes-file release-notes.md DroneLab.apk DroneLab-armv7.apk
    ```
+   The buttons link to the files the workflows attach, so they work once step 7's workflows have passed.  For a new platform, draw its button in [`tools/release/download_icons/make_icons.py`](../../tools/release/download_icons/make_icons.py), run it, and add the button to `release_notes.sh`.  The banner, headings and subheadings are drawn by `tools/doc_renders/gen_doc_logos.py`; the headings have no background, and a `_light` version each, which GitHub shows in its light theme through a `<picture>` tag.  This `gh` can't change a published release's notes; to fix them, use `gh api -X PATCH repos/rcat3/DroneLab/releases/ID -F body=@release-notes.md`, with the release's `ID` from `gh api repos/rcat3/DroneLab/releases/tags/vX.Y.Z -q .id`.
 7. **Check** the [Firmware](../../.github/workflows/firmware.yml) and [Models](../../.github/workflows/models.yml) workflows pass (about 10 minutes): the release ends up with five files, the two APKs, `DroneLab-firmware-1.75.bin` and the two model zips, and the web installer shows `vX.Y.Z`.
 
 The workflow builds the release's firmware again, for the web installer and the release, so it's not byte for byte the app's copy.  That doesn't matter: both are built from the same tag, and boards are compared by version.
