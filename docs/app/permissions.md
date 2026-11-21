@@ -80,10 +80,8 @@ Each unit tells the others what its wearer lets others control: over the server 
 
 <img src="../images/app/person_capabilities.png" width="300" alt="What RCat-Linux lets others control: Terminal, only people they allow; Lovense, not available">
 
-On someone's card ([Voice](voice.md#whos-there)), *Lets others control* shows an icon for each.  Tap it for the whole list: *Anyone can control it*, *Only people they allow*, or *Not available*.  *Not known* means their app or unit is too old to say.  See [Control](control.md#sending) for how it's used.
+On someone's card ([Voice](voice.md#whos-there)), *Lets others control* shows an icon for each.  Tap it for the whole list: *Anyone can control it*, *Only people they allow*, or *Not available*.  See [Control](control.md#sending) for how it's used.
 
 ## On the unit and the remote
 
 The same settings are on the unit itself, on each feature's *Others* pages (the Lovense feature's *Hive Commands*, the Terminal's *Hive Messages*), and under *From others* in the [Remote](remote.md) tab.  They're one set of settings, kept on the unit: change them anywhere and the others follow.
-
-Older unit firmware can only allow someone a feature they've already sent a command for, and doesn't tell other units what it lets others control: [update it](firmware-updates.md).  Permissions greys out what it can't do yet, and says when your unit didn't take a change.

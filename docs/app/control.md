@@ -12,7 +12,7 @@ The **Control button** (a remote) at the top of a [Text](text.md) conversation o
 
 <img src="../images/app/control_menu.png" width="300" alt="The Control menu in a conversation: Terminal, and Lovense greyed out">
 
-For one person, what they don't let others control is greyed out: they've set it to *Nobody*, or for Lovense, have no toy paired.  Each unit says what it lets others control (see [What others see](permissions.md#what-others-see)); if theirs is too old to say, everything's there to try.  In a channel, everything is, as each person in it may allow different things.
+For one person, what they don't let others control is greyed out: they've set it to *Nobody*, or for Lovense, have no toy paired.  Each unit says what it lets others control (see [What others see](permissions.md#what-others-see)).  In a channel, everything is, as each person in it may allow different things.
 
 The **Control** button on someone's card, from the [Voice](voice.md#whos-there) list, opens the same choice as a screen: each feature, whether anyone can control it or only people they allow, and what's greyed out.
 
