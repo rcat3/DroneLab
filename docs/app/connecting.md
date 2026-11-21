@@ -6,7 +6,7 @@ A **Mumble server** on the internet is **optional**.  Join one only if your hive
 
 Both are set up once, in *Setup*, behind the gear at the top of the Voice tab, under *Get connected*.  Each step gets a green tick once it's done.  After that, the app connects to them by itself whenever it starts.
 
-<img src="../images/app/setup_connected.png" width="300" alt="Setup's Get connected section: the unit paired and connected, the server joined, and an avatar">
+<img src="../images/app/setup_connected.png" width="300" alt="Setup's Get connected section: the unit paired and connected, the server joined, and Identity with the avatar, name and identity">
 
 Back to [the app](README.md).
 
@@ -27,13 +27,12 @@ Pairing only opens when someone at the display asks for it, because the display 
 
 Only if your hive uses a server: it's for the [cloud link](voice.md#two-links-server-and-direct), to reach drones anywhere over the internet.  Without one, the app works the same with drones nearby, over direct mode.  Skip this step, and leave *Join the server* unticked.
 
-<img src="../images/app/server.png" width="300" alt="The Server page: address, port, your name, the server password, and the buffer">
+<img src="../images/app/server.png" width="300" alt="The Server page: address, port, the server password, and the buffer">
 
-Tap *Set up* by *Join the server*, and fill in what the hive's server needs:
+Tap *Set up* by *Join the server*, and fill in what the hive's server needs.  Your name isn't here: it's under [Identity](#3-identity), and it's needed to join.
 
 - **Address**: the server's name or IP address.
 - **Port**: 64738, unless you've been told otherwise.
-- **Your name**: what the others see, on their app and their display.  It's your name over direct mode too.
 - **Server password**: if it has one.
 - **Buffer**: how long the others' voices wait before playing, to ride out an uneven connection.  60 ms is right on WiFi; more is smoother on mobile data.
 
@@ -41,9 +40,17 @@ Tap *Set up* by *Join the server*, and fill in what the hive's server needs:
 
 The first time it connects, the app trusts the server's certificate.  If the certificate ever changes, the app won't connect without asking, as that could be someone pretending to be the server: *Trust the new certificate* appears under the server in the [links sheet](#the-links-sheet), only to be tapped if you know the server was set up again.
 
-## 3. Your avatar
+## 3. Identity
 
-Your picture, shown to the hive on their app and their display while you talk.  *Change* picks a photo, cut square from the middle.  It's your [Mumble](https://www.mumble.info) avatar too, so the Mumble apps show it, and it goes to units nearby over direct mode.  Anyone without one shows as a head in a visor.
+Who you are to the hive.  Setup shows your avatar, name and identity; tap it to change them.
+
+<img src="../images/app/identity.png" width="300" alt="The Identity page: your name with its byte count and the hexagon button, your avatar, and your identity key with Back up and Restore">
+
+- **Your name**: the name or designation the others know you by, on the server, their app and their display, and over direct mode.  It's taken as you leave the page, and the app joins the server again under it.  It can be up to 15 bytes, counted under the field as you type: a unit sends no more than that over direct mode.
+- **Your avatar**: your picture, shown to the hive on their app and their display while you talk.  *Choose* or *Change* picks a photo, cut square from the middle.  It's your [Mumble](https://www.mumble.info) avatar too, so the Mumble apps show it, and it goes to units nearby over direct mode.  Anyone without one shows as a head in a visor.
+- **Your identity key**: the cryptographic key that establishes your identity, and what others really know you by.  **Back up** and **Restore** keep it, as in [Setup: your identity](voice.md#setup-your-identity).
+
+> **Note:** the ⬡ button at the end of the name field adds a hexagon, for HexDrones; it takes 3 of the 15 bytes.  Units show it from this release on.  Some servers only take plain letters, digits and punctuation in a name: if yours turns the name away, the app says so and doesn't keep trying, so you can change it.
 
 ## The links sheet
 

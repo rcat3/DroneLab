@@ -100,7 +100,7 @@ The headphones' play/pause button talks too, while the app's connected.  Headpho
 
 ### Avatars
 
-Each person's avatar is their [Mumble](https://www.mumble.info) avatar, so desktop Mumble shows the same pictures, and anyone who's set one in Mumble shows up with it on the units.  Set yours in the app's *Setup*: *Choose* cuts it square from the middle.  Anyone without one shows as a head in a visor.
+Each person's avatar is their [Mumble](https://www.mumble.info) avatar, so desktop Mumble shows the same pictures, and anyone who's set one in Mumble shows up with it on the units.  Set yours in the app's *Setup*, under *Identity*: *Choose* cuts it square from the middle.  Anyone without one shows as a head in a visor.
 
 In cloud mode, the app gives yours to the server each time it connects, fetches everyone's, shrinks them to the unit's size, and sends them to the unit in the background, yours and whoever's talking first, about a second each.  The unit keeps 16, until the app's link drops.
 
