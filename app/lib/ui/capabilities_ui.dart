@@ -48,8 +48,8 @@ Capabilities? capabilitiesOfConversation(CommController comm, Conversation c) =>
 bool canControl(Capabilities? caps, int id) => caps == null || caps.has(id);
 
 String _howOpen(Capabilities? caps, int id) => switch (caps?[id]) {
-      CapOpen.open => 'Open to anyone',
-      CapOpen.ask => 'If they allow you',
+      CapOpen.open => 'Anyone can control it',
+      CapOpen.ask => 'Only people they allow',
       null => caps == null ? 'Not known' : 'Not available',
     };
 
@@ -89,7 +89,7 @@ class CapabilityIcons extends StatelessWidget {
 Future<void> showCapabilities(BuildContext context, String name, Capabilities? caps) => showDialog<void>(
       context: context,
       builder: (dialog) => AlertDialog(
-        title: Text('$name lets others control'),
+        title: Text('What $name lets others control'),
         contentPadding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           for (final k in controlKinds) _KindRow(k, caps),
@@ -97,8 +97,8 @@ Future<void> showCapabilities(BuildContext context, String name, Capabilities? c
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
               caps == null
-                  ? "They haven't said: their app or unit is from before it could."
-                  : "As their unit's permissions are: those set to ask need them to allow you.",
+                  ? "Not known: their app or unit is too old to say."
+                  : "If it's only people they allow, your first command asks them for permission.",
               style: const TextStyle(color: Kc.muted, fontSize: 13),
             ),
           ),
@@ -161,9 +161,8 @@ class ControlChooserPage extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   caps == null
-                      ? "They haven't said what they let others control: their app or unit is from before it "
-                          'could. Whatever they allow works.'
-                      : 'Greyed out, they let nobody control it, or haven\'t got it.',
+                      ? "Their app or unit is too old to say what they let others control. You can try any of these."
+                      : "Greyed out: they don't let anyone control it, or don't have it.",
                   style: const TextStyle(color: Kc.muted, fontSize: 13),
                 ),
               ],

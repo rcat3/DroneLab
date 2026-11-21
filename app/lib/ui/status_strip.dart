@@ -10,6 +10,7 @@ import 'server_page.dart';
 import 'setup_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'wordmark.dart';
 
 /// The links at a glance, on every tab: the board, the server and direct
 /// comms, what's going out and coming in, and the board's battery. Tapping it
@@ -261,12 +262,7 @@ Future<void> showLinks(BuildContext context, CommController comm) => showTopShee
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Center(
-                      child: Image.asset('assets/dronelab_logo.png', height: 40, semanticLabel: 'DroneLab'),
-                    ),
-                  ),
+                  const Padding(padding: EdgeInsets.fromLTRB(4, 14, 4, 0), child: DroneLabWordmark()),
                   const SectionHeader('Links'),
                   Panel(color: Kc.bg, children: [
                     PanelRow(

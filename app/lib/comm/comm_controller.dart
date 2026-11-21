@@ -2675,7 +2675,13 @@ class CommController extends ChangeNotifier {
     }
     // Who, by the key they signed it with
     final who = people.byKey(h.key, h.from);
-    if (who.muted) return;
+    if (who.muted) {
+      if (h.what == Heard.terminal || h.what == Heard.lovense) {
+        permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.lovense, h.key, h.from, who.id,
+            done: h.done, muted: true, direct: h.direct, scope: h.scope, what: describeCommand(h.data, mine: false));
+      }
+      return;
+    }
     if (h.what == Heard.call) {
       if (h.scope == OthersCommand.scopeOne) _onCallSignal(who, h.data);
       return;
@@ -2688,19 +2694,16 @@ class CommController extends ChangeNotifier {
       _onReaction(who, h.data);
       return;
     }
-    // A command not taken, for want of being allowed: a request
+    // Logged, and one not taken for want of being allowed is a request
     if (h.what == Heard.terminal || h.what == Heard.lovense) {
-      final cap = h.what == Heard.terminal ? Capabilities.terminal : Capabilities.lovense;
-      if (h.done) {
-        permissions.taken(cap, h.key);
-      } else {
-        // To the open direct channel is to anyone nearby, as the board ignores it
-        final openChannel = h.scope == OthersCommand.scopeChannel && h.direct && !(boardSettings?.direct?.keyed ?? true);
-        permissions.refused(cap, h.key, h.from, who.id,
-            everyone: h.scope == OthersCommand.scopeEveryone || openChannel,
-            channel: h.scope == OthersCommand.scopeChannel,
-            what: describeCommand(h.data, mine: false));
-      }
+      permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.lovense, h.key, h.from, who.id,
+          done: h.done,
+          muted: false,
+          direct: h.direct,
+          scope: h.scope,
+          // To the open direct channel is to anyone nearby, as the board takes it
+          openChannel: h.scope == OthersCommand.scopeChannel && h.direct && !(boardSettings?.direct?.keyed ?? true),
+          what: describeCommand(h.data, mine: false));
     }
     final c = switch (h.scope) {
       OthersCommand.scopeOne => personConversation(who.id),

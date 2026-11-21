@@ -46,9 +46,9 @@ class PermissionsRow extends StatelessWidget {
             leading: const Icon(Icons.admin_panel_settings_outlined, color: Kc.muted),
             title: 'Permissions',
             subtitle: n == 0
-                ? 'Who may control what of yours'
+                ? 'Choose who can control your unit'
                 : n == 1
-                    ? 'A request waiting'
+                    ? '1 request waiting'
                     : '$n requests waiting',
             trailing: [RequestsBadge(n), const Icon(Icons.chevron_right, color: Kc.muted)],
             onTap: () {
@@ -71,7 +71,7 @@ String _ago(DateTime t) {
   return '${s ~/ 86400} d ago';
 }
 
-ControlKind _kind(int cap) => controlKinds.firstWhere((k) => k.id == cap);
+String _names(Iterable<int> caps) => [for (final k in controlKinds) if (caps.contains(k.id)) k.name].join(' and ');
 
 Widget _capIcons(Iterable<int> caps, {Color color = Kc.pink}) => Row(mainAxisSize: MainAxisSize.min, children: [
       for (final k in controlKinds)
@@ -82,22 +82,38 @@ Widget _capIcons(Iterable<int> caps, {Color color = Kc.pink}) => Row(mainAxisSiz
           ),
     ]);
 
-/// Pick what to allow someone: [initial] ticked. Returns what's picked, or
-/// null if it's left. [all] offers Grant all.
+/// Say what the unit didn't take, if anything.
+void _reportFailed(BuildContext context, String name, Set<int> failed) {
+  if (failed.isEmpty || !context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text("Your unit didn't change ${_names(failed)} for $name. Check it's connected, "
+          'or update its firmware.')));
+}
+
+/// Pick what to allow someone ([id], their key's id): [initial] ticked.
+/// Returns what's picked, or null if it's left. [all] offers Allow all.
+/// What the unit can't allow them just now (older firmware, and they've
+/// never sent a command for it) can't be picked.
 Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
-    {required String title, required Set<int> initial, String action = 'Grant', bool all = true}) {
-  final picked = {...initial};
+    {required String title, required String id, required Set<int> initial, String action = 'Allow', bool all = true}) {
+  final perms = comm.permissions;
+  bool can(int cap) => perms.canAllow(id, cap) || initial.contains(cap);
+  final picked = {for (final c in initial) if (can(c)) c};
   return showModalBottomSheet<Set<int>>(
     context: context,
     isScrollControlled: true,
     builder: (sheet) => StatefulBuilder(
       builder: (sheet, setState) {
-        final policy = comm.permissions.policy;
-        String? note(int cap) => switch (policy?.caps[cap]?.policy) {
-              Policy.off => "Off just now: it's theirs once you switch it on",
-              Policy.anyone => 'Open to anyone just now: theirs too if you set it to Ask',
-              _ => null,
-            };
+        String note(ControlKind k) {
+          if (!can(k.id)) return "Your unit's firmware can't allow this until they've sent a ${k.name} command";
+          return switch (perms.policy?.caps[k.id]?.policy) {
+            Policy.off => '${k.name} is off. This takes effect when you turn it on',
+            Policy.anyone => '${k.name} is open to everyone, so this only matters if you change that',
+            _ => k.does,
+          };
+        }
+
+        final allowable = {for (final k in controlKinds) if (can(k.id)) k.id};
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -107,10 +123,12 @@ Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
                 for (final k in controlKinds)
                   CheckboxListTile(
                     value: picked.contains(k.id),
-                    onChanged: (on) => setState(() => on == true ? picked.add(k.id) : picked.remove(k.id)),
-                    secondary: Icon(k.icon, color: Kc.pink),
+                    onChanged: can(k.id)
+                        ? (on) => setState(() => on == true ? picked.add(k.id) : picked.remove(k.id))
+                        : null,
+                    secondary: Icon(k.icon, color: can(k.id) ? Kc.pink : Kc.dim),
                     title: Text(k.name),
-                    subtitle: Text(note(k.id) ?? k.does, style: const TextStyle(color: Kc.muted, fontSize: 13)),
+                    subtitle: Text(note(k), style: const TextStyle(color: Kc.muted, fontSize: 13)),
                   ),
               ]),
               const SizedBox(height: 12),
@@ -118,8 +136,8 @@ Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
                 if (all) ...[
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(sheet, {for (final k in controlKinds) k.id}),
-                      child: const Text('Grant all'),
+                      onPressed: allowable.isEmpty ? null : () => Navigator.pop(sheet, allowable),
+                      child: const Text('Allow all'),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -139,9 +157,9 @@ Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
   );
 }
 
-/// Who may control what of yours, in one place, a tab each: requests
-/// waiting, each feature's policy and who's allowed it, everyone on the
-/// unit's list and all they're allowed, and who's been declined.
+/// Who can control what on your unit, a tab each: requests waiting, each
+/// feature's setting and who's allowed it, each person and all they're
+/// allowed, and who's been declined. The log of commands is a tap away.
 class PermissionsPage extends StatelessWidget {
   final CommController comm;
   const PermissionsPage({super.key, required this.comm});
@@ -167,13 +185,21 @@ class PermissionsPage extends StatelessWidget {
             child: Scaffold(
               appBar: AppBar(
                 title: const Text('Permissions'),
+                actions: [
+                  IconButton(
+                    tooltip: 'Command log',
+                    icon: const Icon(Icons.receipt_long),
+                    onPressed: () =>
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => CommandLogPage(comm: comm))),
+                  ),
+                ],
                 bottom: TabBar(
                   isScrollable: true,
                   tabAlignment: TabAlignment.start,
                   tabs: [
                     tab('Requests', perms.requests.length, badge: true),
                     tab('Features', 0),
-                    tab('Users', policy?.everyone.length ?? 0),
+                    tab('People', policy?.everyone.length ?? 0),
                     tab('Declined', perms.declined.length),
                   ],
                 ),
@@ -182,13 +208,14 @@ class PermissionsPage extends StatelessWidget {
                 if (policy == null)
                   const Padding(
                     padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
-                    child: Text('Connect to your unit to change these: it keeps them.', style: _small),
+                    child: Text("Connect to your unit to see and change these. They're kept on the unit.",
+                        style: _small),
                   ),
                 Expanded(
                   child: TabBarView(children: [
                     _RequestsTab(comm: comm, policy: policy),
                     _FeaturesTab(comm: comm, policy: policy),
-                    _UsersTab(comm: comm, policy: policy),
+                    _PeopleTab(comm: comm, policy: policy),
                     _DeclinedTab(comm: comm, policy: policy),
                   ]),
                 ),
@@ -212,8 +239,10 @@ class _RequestsTab extends StatelessWidget {
   const _RequestsTab({required this.comm, required this.policy});
 
   Future<void> _accept(BuildContext context, PermissionRequest r) async {
-    final caps = await showGrantSheet(context, comm, title: 'Allow ${r.name}', initial: r.caps);
-    if (caps != null) await comm.permissions.accept(r, caps);
+    final caps = await showGrantSheet(context, comm, title: 'Allow ${r.name} to control', id: r.id, initial: r.caps);
+    if (caps == null) return;
+    final failed = await comm.permissions.accept(r, caps);
+    if (context.mounted) _reportFailed(context, r.name, failed);
   }
 
   @override
@@ -221,7 +250,7 @@ class _RequestsTab extends StatelessWidget {
     final perms = comm.permissions;
     return ListView(padding: _tabPadding(context), children: [
       if (perms.requests.isEmpty)
-        const Panel(children: [PanelRow(title: 'None waiting')])
+        const Panel(children: [PanelRow(title: 'No requests')])
       else
         Panel(children: [
           for (final r in perms.requests)
@@ -233,11 +262,8 @@ class _RequestsTab extends StatelessWidget {
                   _capIcons(r.caps),
                   Text(_ago(r.time), style: _small),
                 ]),
-                Text(
-                  'Asks for ${r.caps.map((c) => _kind(c).name).join(' and ')}'
-                  '${r.what.isEmpty ? '' : ' · ${r.what}'}',
-                  style: _small,
-                ),
+                Text('Wants to control: ${_names(r.caps)}', style: _small),
+                if (r.what.isNotEmpty) Text('Last tried: ${r.what}', style: _small),
                 const SizedBox(height: 6),
                 Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                   TextButton(onPressed: () => perms.decline(r), child: const Text('Decline')),
@@ -248,14 +274,15 @@ class _RequestsTab extends StatelessWidget {
               ]),
             ),
         ]),
-      _note("Commands from those you haven't allowed, for a feature set to Ask. They're not told: their "
-          'commands are just done once you accept.'),
+      _note("A request appears when someone who isn't allowed sends you a command for a feature only allowed "
+          "people can control. The command isn't carried out, and they aren't told either way. Accept, and "
+          'their next commands work.'),
     ]);
   }
 }
 
-/// One feature at a time: who it's taken from, what it ignores, and each
-/// user on the unit's list, allowed it or not.
+/// One feature at a time: who can control it, what it ignores, and each
+/// person on the unit's list, allowed it or not.
 class _FeaturesTab extends StatefulWidget {
   final CommController comm;
   final BoardPolicy? policy;
@@ -268,12 +295,17 @@ class _FeaturesTab extends StatefulWidget {
 class _FeaturesTabState extends State<_FeaturesTab> {
   int _cap = controlKinds.first.id;
 
+  Future<void> _set(ListedPerson u, bool on) async {
+    final failed = await widget.comm.permissions.setAllowed(u.id, {_cap: on});
+    if (mounted) _reportFailed(context, u.name, failed);
+  }
+
   @override
   Widget build(BuildContext context) {
     final perms = widget.comm.permissions;
-    final kind = _kind(_cap);
+    final kind = controlKinds.firstWhere((k) => k.id == _cap);
     final p = widget.policy?.caps[_cap];
-    final users = widget.policy?.everyone ?? const <ListedPerson>[];
+    final people = widget.policy?.everyone ?? const <ListedPerson>[];
     Widget ignoring(String title, String subtitle, int bit) => PanelRow(
           title: title,
           subtitle: subtitle,
@@ -297,78 +329,81 @@ class _FeaturesTabState extends State<_FeaturesTab> {
         selected: {_cap},
         onSelectionChanged: (sel) => setState(() => _cap = sel.first),
       ),
-      const SizedBox(height: 4),
-      SectionHeader('Who may'),
+      SectionHeader('Who can control ${kind.name}'),
       Panel(children: [
         Padding(
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text(kind.does, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
             SegmentedButton<Policy>(
               showSelectedIcon: false,
               segments: const [
-                ButtonSegment(value: Policy.off, label: Text('OFF')),
-                ButtonSegment(value: Policy.ask, label: Text('ASK')),
+                ButtonSegment(value: Policy.off, label: Text('NOBODY')),
+                ButtonSegment(value: Policy.ask, label: Text('ALLOWED')),
                 ButtonSegment(value: Policy.anyone, label: Text('ANYONE')),
               ],
               selected: {p?.policy ?? Policy.off},
               onSelectionChanged: p == null ? null : (sel) => perms.setPolicy(_cap, sel.first),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               switch (p?.policy) {
-                Policy.off => "Nobody. Who you've allowed is kept for when it's on again",
-                Policy.ask => "Those you allow below. Others' commands come as requests",
-                Policy.anyone => 'Anyone in the hive',
+                Policy.off => "Nobody. The people you've allowed below are kept for when you turn it back on.",
+                Policy.ask => 'Only the people switched on below. Commands from anyone else become requests.',
+                Policy.anyone => 'Everyone. The switches below make no difference while this is set.',
                 null => '',
               },
               style: _small,
             ),
           ]),
         ),
-        ignoring('Ignore commands to everyone', 'Broadcasts, and the open direct channel', ignoreEveryone),
-        ignoring('Ignore commands to a channel', 'Only those to you alone', ignoreChannel),
+        ignoring('Ignore broadcasts', 'Commands sent to everyone, including on the open direct channel',
+            ignoreEveryone),
+        ignoring('Ignore channel commands', 'Commands sent to a whole channel rather than just to you', ignoreChannel),
       ]),
-      SectionHeader('Users allowed ${kind.name}'),
-      if (users.isEmpty)
-        const Panel(children: [PanelRow(title: 'Nobody on your unit\'s list yet')])
+      const SectionHeader('People'),
+      if (people.isEmpty)
+        const Panel(children: [PanelRow(title: 'Nobody yet')])
       else
         Panel(children: [
-          for (final u in users)
+          for (final u in people)
             PanelRow(
               title: u.clash ? '⚠ ${u.name}' : u.name,
-              subtitle: p?.person(u.id) == null ? "Hasn't sent ${kind.name} commands" : null,
+              subtitle: perms.canAllow(u.id, _cap)
+                  ? null
+                  : "Can't be allowed until they send a ${kind.name} command (update your unit's firmware)",
               trailing: [
                 Switch(
                   value: p?.person(u.id)?.allowed ?? false,
-                  onChanged: p == null ? null : (on) => perms.setAllowed(u.id, {_cap: on}),
+                  onChanged: p == null || !(perms.canAllow(u.id, _cap) || (p.person(u.id)?.allowed ?? false))
+                      ? null
+                      : (on) => _set(u, on),
                 ),
               ],
             ),
         ]),
-      _note(switch (p?.policy) {
-        Policy.off => "Off, so nobody's commands are taken, allowed or not.",
-        Policy.anyone => "Open to anyone, so everyone's commands are taken, allowed or not.",
-        _ => "Everyone on your unit's list: those who've sent commands, or are allowed.",
-      }),
+      _note('Everyone who has sent you a command or been allowed something. Switch someone on to let them '
+          'control ${kind.name}.'),
     ]);
   }
 }
 
 /// Everyone on the unit's list, and all they're allowed: tap one to change
 /// it.
-class _UsersTab extends StatelessWidget {
+class _PeopleTab extends StatelessWidget {
   final CommController comm;
   final BoardPolicy? policy;
-  const _UsersTab({required this.comm, required this.policy});
+  const _PeopleTab({required this.comm, required this.policy});
 
   Future<void> _edit(BuildContext context, BoardPolicy policy, ListedPerson p) async {
     final now = {for (final e in policy.caps.entries) if (e.value.person(p.id)?.allowed ?? false) e.key};
-    final caps =
-        await showGrantSheet(context, comm, title: 'Allow ${p.name}', initial: now, action: 'Save', all: false);
+    final caps = await showGrantSheet(context, comm,
+        title: 'What ${p.name} can control', id: p.id, initial: now, action: 'Save', all: false);
     if (caps == null) return;
-    await comm.permissions.setAllowed(p.id, {for (final k in controlKinds) k.id: caps.contains(k.id)});
+    final failed = await comm.permissions.setAllowed(p.id, {
+      for (final k in controlKinds)
+        if (comm.permissions.canAllow(p.id, k.id) || now.contains(k.id)) k.id: caps.contains(k.id)
+    });
+    if (context.mounted) _reportFailed(context, p.name, failed);
   }
 
   Future<void> _forget(BuildContext context, ListedPerson p) async {
@@ -376,8 +411,8 @@ class _UsersTab extends StatelessWidget {
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Remove ${p.name}?'),
-        content: const Text("They're taken off your unit's list, and allowed nothing. If they send again, "
-            "they're back on it, and ask again."),
+        content: const Text('They lose everything they were allowed. If they send you a command again, '
+            "they're added back and it comes in as a request."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
           TextButton(onPressed: () => Navigator.pop(d, true), child: const Text('Remove')),
@@ -390,16 +425,16 @@ class _UsersTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final policy = this.policy;
-    final users = policy?.everyone ?? const <ListedPerson>[];
+    final people = policy?.everyone ?? const <ListedPerson>[];
     return ListView(padding: _tabPadding(context), children: [
-      if (policy == null || users.isEmpty)
-        const Panel(children: [PanelRow(title: 'Nobody on your unit\'s list yet')])
+      if (policy == null || people.isEmpty)
+        const Panel(children: [PanelRow(title: 'Nobody yet')])
       else
         Panel(children: [
-          for (final u in users)
+          for (final u in people)
             PanelRow(
               title: u.clash ? '⚠ ${u.name}' : u.name,
-              subtitle: u.clash ? 'Someone else using a name someone listed had first' : null,
+              subtitle: u.clash ? 'Not the person who used this name first' : null,
               trailing: [
                 _capIcons({
                   for (final e in policy.caps.entries)
@@ -415,21 +450,23 @@ class _UsersTab extends StatelessWidget {
               onTap: () => _edit(context, policy, u),
             ),
         ]),
-      _note("Those who've sent commands, or are allowed: the icons are what they're allowed. Tap one to "
-          'change all of it.'),
+      _note('Everyone who has sent you a command or been allowed something. The icons show what each person '
+          'is allowed. Tap someone to change it.'),
     ]);
   }
 }
 
-/// Those declined: off the list, or granted after all.
+/// Those declined: taken off the list, or allowed after all.
 class _DeclinedTab extends StatelessWidget {
   final CommController comm;
   final BoardPolicy? policy;
   const _DeclinedTab({required this.comm, required this.policy});
 
-  Future<void> _grant(BuildContext context, PermissionRequest r) async {
-    final caps = await showGrantSheet(context, comm, title: 'Allow ${r.name}', initial: r.caps);
-    if (caps != null) await comm.permissions.grant(r.key, r.name, caps);
+  Future<void> _allow(BuildContext context, PermissionRequest r) async {
+    final caps = await showGrantSheet(context, comm, title: 'Allow ${r.name} to control', id: r.id, initial: r.caps);
+    if (caps == null) return;
+    final failed = await comm.permissions.grant(r.key, r.name, caps);
+    if (context.mounted) _reportFailed(context, r.name, failed);
   }
 
   @override
@@ -443,20 +480,99 @@ class _DeclinedTab extends StatelessWidget {
           for (final r in perms.declined)
             PanelRow(
               title: r.name,
-              subtitle: 'Declined ${r.caps.map((c) => _kind(c).name).join(' and ')} · ${_ago(r.time)}',
+              subtitle: 'Declined for ${_names(r.caps)} · ${_ago(r.time)}',
               trailing: [
                 IconButton(
-                  tooltip: 'Take off the list',
+                  tooltip: 'Remove from this list',
                   icon: const Icon(Icons.close, color: Kc.muted),
                   onPressed: () => perms.removeDeclined(r),
                 ),
                 OutlinedButton(
-                    onPressed: policy == null ? null : () => _grant(context, r), child: const Text('Grant')),
+                    onPressed: policy == null ? null : () => _allow(context, r), child: const Text('Allow')),
               ],
             ),
         ]),
-      _note("Their commands don't ask again for what was declined. Taken off this list, they can; or grant "
-          'them permissions now, without a new request.'),
+      _note("Commands from these people for what you declined don't make new requests. Remove someone (×) to "
+          'let them ask again, or Allow them now.'),
     ]);
   }
+}
+
+/// Every command that came, newest first: who, what, how it came and what
+/// came of it; and the requests accepted and declined.
+class CommandLogPage extends StatelessWidget {
+  final CommController comm;
+  const CommandLogPage({super.key, required this.comm});
+
+  static String _time(DateTime t) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    final now = DateTime.now();
+    final clock = '${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
+    return t.year == now.year && t.month == now.month && t.day == now.day ? clock : '${t.month}/${t.day} $clock';
+  }
+
+  static Color _color(LogEntry e) {
+    if (!e.isCommand) return Kc.pink;
+    if (e.outcome == 'Done') return Kc.green;
+    if (e.outcome.contains('asked for permission') || e.outcome.contains('request is waiting')) return Kc.warn;
+    return Kc.softRed;
+  }
+
+  Future<void> _clear(BuildContext context) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Clear the log?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(d, true), child: const Text('Clear')),
+        ],
+      ),
+    );
+    if (yes == true) comm.permissions.clearLog();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: comm.permissions,
+        builder: (context, _) {
+          final log = comm.permissions.commandLog;
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Command log'),
+              actions: [
+                IconButton(
+                  tooltip: 'Clear',
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  onPressed: log.isEmpty ? null : () => _clear(context),
+                ),
+              ],
+            ),
+            body: log.isEmpty
+                ? const Center(child: Text('No commands yet', style: _small))
+                : ListView.separated(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom),
+                    itemCount: log.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1, color: Kc.line),
+                    itemBuilder: (context, i) {
+                      final e = log[i];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          SizedBox(width: 92, child: Text(_time(e.time), style: Kc.term(13, color: Kc.muted))),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              if (e.isCommand) Text('${e.who} ${e.what}'),
+                              Text(e.outcome,
+                                  style: TextStyle(color: _color(e), fontSize: e.isCommand ? 13 : 14)),
+                              if (e.via != null) Text('${e.via} · ${e.scope}', style: _small),
+                            ]),
+                          ),
+                        ]),
+                      );
+                    },
+                  ),
+          );
+        },
+      );
 }

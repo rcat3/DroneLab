@@ -332,7 +332,10 @@ String describeCommand(Uint8List op, {required bool mine}) {
     case OthersCommand.stop:
       return 'stopped $your toys';
     case OthersCommand.level:
-      return op.length >= 3 ? 'set $your ${motor(op[1])} to ${op[2]}' : 'set $your toys';
+      if (op.length < 3) return 'set $your toys';
+      return op[1] == OthersCommand.allMotors
+          ? "set all $your toys' motors to ${op[2]}"
+          : 'set $your toys to ${motor(op[1])} at ${op[2]}';
     case OthersCommand.pattern:
       final name = utf8.decode(op.sublist(1), allowMalformed: true);
       return name.isEmpty ? 'stopped $your patterns' : 'played $name on $your toys';

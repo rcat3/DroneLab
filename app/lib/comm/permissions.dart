@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'board_link.dart';
+import 'board_protocol.dart';
 import 'capabilities.dart';
 
 /// Who may control what of ours, in one place: the board's own policy for
@@ -154,6 +155,12 @@ class Permissions extends ChangeNotifier {
 
     requests.addAll(read('permissionRequests'));
     declined.addAll(read('permissionDeclined'));
+    try {
+      commandLog.addAll([
+        for (final e in jsonDecode(p.getString('commandLog') ?? '[]') as List<dynamic>)
+          LogEntry.fromJson(e as Map<String, dynamic>)
+      ]);
+    } catch (_) {}
   }
 
   void _save() {
@@ -184,23 +191,56 @@ class Permissions extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// A command for [cap] that the board didn't take, from someone not
-  /// muted: a request, if it's for want of being allowed (the capability on
-  /// Ask, not ignored for how it came, they're not allowed) and they haven't
-  /// been declined it. [everyone] is whether it came to everyone who can
-  /// hear them, as the board's ignoring has it (a broadcast, or the open
-  /// direct channel's).
-  void refused(int cap, List<int> key, String name, String who,
+  /// A command for [cap] that came, from [name] ([key] theirs, [who] who
+  /// they are): logged, with how it came and what came of it; one the
+  /// board didn't take, a request if it was for want of being allowed.
+  /// [scope] is OthersCommand.scope*; [openChannel] that it came to the
+  /// open direct channel, which anyone nearby hears, so the board takes it
+  /// as to everyone.
+  void heard(int cap, List<int> key, String name, String who,
+      {required bool done,
+      required bool muted,
+      required bool direct,
+      required int scope,
+      bool openChannel = false,
+      required String what}) {
+    final String outcome;
+    if (muted) {
+      outcome = 'Ignored: you muted them';
+    } else if (done) {
+      taken(cap, key);
+      outcome = 'Done';
+    } else {
+      outcome = refused(cap, key, name, who,
+          everyone: scope == _scopeEveryone || openChannel, channel: scope == _scopeChannel, what: what);
+    }
+    log(LogEntry(DateTime.now(), name, what,
+        via: direct ? 'Direct' : 'Cloud',
+        scope: switch (scope) { _scopeEveryone => 'To everyone', _scopeChannel => 'To the channel', _ => 'To you only' },
+        outcome: outcome));
+  }
+
+  static const _scopeEveryone = 0, _scopeChannel = 1;    // OthersCommand.scope*
+
+  /// A command for [cap] that the board didn't take: a request, if it's for
+  /// want of being allowed (the capability on Ask, not ignored for how it
+  /// came, they're not allowed) and they haven't been declined it.
+  /// [everyone] is whether it came to everyone who can hear them, as the
+  /// board's ignoring has it. Returns why it wasn't taken, for the log.
+  String refused(int cap, List<int> key, String name, String who,
       {required bool everyone, required bool channel, required String what}) {
     final c = policy?.caps[cap];
-    if (c == null || c.policy != Policy.ask) return;
-    if ((everyone && c.ignore & ignoreEveryone != 0) || (channel && !everyone && c.ignore & ignoreChannel != 0)) {
-      return;
+    final feature = capName(cap);
+    if (c == null) return 'Not done';
+    if (c.policy == Policy.off) return 'Not done: $feature is off';
+    if (c.policy == Policy.anyone) return 'Not done';
+    if (everyone && c.ignore & ignoreEveryone != 0) return 'Not done: you ignore commands sent to everyone';
+    if (channel && !everyone && c.ignore & ignoreChannel != 0) {
+      return 'Not done: you ignore commands sent to a channel';
     }
-    final hex = key.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    final id = hex.substring(0, 16);
-    if (c.person(id)?.allowed ?? false) return;
-    if (declined.any((d) => d.key == hex && d.caps.contains(cap))) return;
+    final hex = _hex(key);
+    if (c.person(hex.substring(0, 16))?.allowed ?? false) return 'Not done';
+    if (declined.any((d) => d.key == hex && d.caps.contains(cap))) return 'Not done: you declined them before';
     final now = DateTime.now();
     for (final r in requests) {
       if (r.key != hex) continue;
@@ -214,18 +254,19 @@ class Permissions extends ChangeNotifier {
         ..insert(0, r);
       _save();
       if (more) onNew?.call(r);
-      return;
+      return more ? 'Not done: they asked for permission' : 'Not done: their request is waiting';
     }
     final r = PermissionRequest(hex, name, who, {cap}, now, what);
     requests.insert(0, r);
     _save();
     onNew?.call(r);
+    return 'Not done: they asked for permission';
   }
 
   /// A command that was taken: one refused a moment ago, by the other way it
   /// came (the server or direct comms), wasn't a request after all.
   void taken(int cap, List<int> key) {
-    final hex = key.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final hex = _hex(key);
     for (final r in requests) {
       if (r.key == hex && r.caps.contains(cap) && DateTime.now().difference(r.time) < const Duration(seconds: 5)) {
         r.caps.remove(cap);
@@ -236,23 +277,40 @@ class Permissions extends ChangeNotifier {
     }
   }
 
+  static String _hex(List<int> key) => key.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
   bool get boardReady => board.state == BoardState.connected && board.status != null;
 
+  /// Whether the unit can allow someone a capability they've never sent a
+  /// command for (firmware from commVersion 14); before, only those
+  /// they've sent.
+  bool get unitAllowsAnyone => (board.status?.version ?? 0) >= commVersionCaps;
+
+  /// Whether the unit can allow [id] [cap] just now.
+  bool canAllow(String id, int cap) => unitAllowsAnyone || policy?.caps[cap]?.person(id) != null;
+
   /// Allow someone [caps] on the board: by their whole key, which firmware
-  /// from before it ignores and finds them by id instead, for the
-  /// capabilities they've sent. Those set to Off keep it for when they're
-  /// on again.
-  Future<void> grant(String key, String name, Set<int> caps) async {
-    final q = 'key=$key&id=${key.substring(0, 16)}&name=${Uri.encodeQueryComponent(name)}';
+  /// from before it ignores and finds them by id instead. Those set to Off
+  /// keep it for when they're on again. Returns those the unit didn't take.
+  Future<Set<int>> grant(String key, String name, Set<int> caps, {bool accepting = false}) async {
+    final id = key.substring(0, 16);
+    final q = 'key=$key&id=$id&name=${Uri.encodeQueryComponent(name)}';
+    String? state;
     for (final cap in caps) {
-      await _post('kind=${boardKindOf[cap]}&$q&allow=1');
+      state = await _post('kind=${boardKindOf[cap]}&$q&allow=1') ?? state;
     }
+    final failed = _notAsAsked(state, id, {for (final c in caps) c: true});
+    final got = caps.difference(failed);
     requests.removeWhere((r) => r.key == key);
-    declined.removeWhere((r) => r.key == key);
+    if (got.isNotEmpty) declined.removeWhere((r) => r.key == key);
     _save();
+    final what = got.isEmpty ? 'nothing' : _names(got);
+    log(LogEntry(DateTime.now(), name, '',
+        outcome: accepting ? "You accepted $name's request, allowing $what" : 'You allowed $name $what'));
+    return failed;
   }
 
-  Future<void> accept(PermissionRequest r, Set<int> caps) => grant(r.key, r.name, caps);
+  Future<Set<int>> accept(PermissionRequest r, Set<int> caps) => grant(r.key, r.name, caps, accepting: true);
 
   void decline(PermissionRequest r) {
     requests.remove(r);
@@ -264,6 +322,7 @@ class Permissions extends ChangeNotifier {
     final d = (had ?? r)..time = DateTime.now();
     declined.insert(0, d);
     _save();
+    log(LogEntry(DateTime.now(), r.name, '', outcome: "You declined ${r.name}'s request for ${_names(r.caps)}"));
   }
 
   void removeDeclined(PermissionRequest r) {
@@ -272,10 +331,23 @@ class Permissions extends ChangeNotifier {
   }
 
   /// Someone in the board's list: allowed or not for each capability.
-  Future<void> setAllowed(String id, Map<int, bool> allowed) async {
+  /// Returns those the unit didn't take.
+  Future<Set<int>> setAllowed(String id, Map<int, bool> allowed) async {
+    String? state;
     for (final MapEntry(key: cap, value: on) in allowed.entries) {
-      await _post('kind=${boardKindOf[cap]}&id=$id&allow=${on ? 1 : 0}');
+      state = await _post('kind=${boardKindOf[cap]}&id=$id&allow=${on ? 1 : 0}') ?? state;
     }
+    return _notAsAsked(state, id, allowed);
+  }
+
+  /// Those of [want] that the board's [state] doesn't have as asked: all of
+  /// them, if it didn't answer.
+  Set<int> _notAsAsked(String? state, String id, Map<int, bool> want) {
+    final p = state == null ? null : BoardPolicy.fromState(state);
+    return {
+      for (final MapEntry(key: cap, value: on) in want.entries)
+        if (p == null || (p.caps[cap]?.person(id)?.allowed ?? false) != on) cap
+    };
   }
 
   /// Out of the board's list, for every capability.
@@ -289,11 +361,70 @@ class Permissions extends ChangeNotifier {
 
   Future<void> setIgnore(int cap, int ignore) => _post('kind=${boardKindOf[cap]}&ignore=$ignore');
 
-  /// The answer has the board's state, which comes back through
-  /// BoardLink.states.
-  Future<void> _post(String query) async {
+  /// The answer: the board's state, which comes back through
+  /// BoardLink.states too. Null if it didn't answer.
+  Future<String?> _post(String query) async {
     try {
-      await board.request('POST', '/api/others?$query');
-    } catch (_) {}
+      final a = await board.request('POST', '/api/others?$query');
+      return a.status == 200 ? a.body : null;
+    } catch (_) {
+      return null;
+    }
   }
+
+  static String _names(Iterable<int> caps) => caps.map(capName).join(' and ');
+
+  // ----- The command log -----
+
+  /// Every command that came, and the requests seen to: newest first, the
+  /// last [logMax].
+  final List<LogEntry> commandLog = [];
+  static const logMax = 500;
+  bool _logSaving = false;
+
+  void log(LogEntry e) {
+    commandLog.insert(0, e);
+    if (commandLog.length > logMax) commandLog.removeRange(logMax, commandLog.length);
+    notifyListeners();
+    // Kept, but not on every slider step
+    if (_logSaving) return;
+    _logSaving = true;
+    Future.delayed(const Duration(seconds: 2), () {
+      _logSaving = false;
+      _prefs?.setString('commandLog', jsonEncode([for (final e in commandLog) e.toJson()]));
+    });
+  }
+
+  void clearLog() {
+    commandLog.clear();
+    _prefs?.remove('commandLog');
+    notifyListeners();
+  }
+}
+
+/// What a capability's called.
+String capName(int cap) => switch (cap) {
+      Capabilities.terminal => 'Terminal',
+      Capabilities.lovense => 'Lovense',
+      _ => 'something',
+    };
+
+/// A line of the command log: a command that came ([who] [what], how it
+/// came, and what came of it), or a request seen to ([outcome] alone).
+class LogEntry {
+  final DateTime time;
+  final String who;
+  final String what;
+  final String? via;        // 'Cloud' or 'Direct'
+  final String? scope;      // to everyone, the channel, or you only
+  final String outcome;
+  const LogEntry(this.time, this.who, this.what, {this.via, this.scope, required this.outcome});
+
+  bool get isCommand => what.isNotEmpty;
+
+  Map<String, Object?> toJson() =>
+      {'t': time.millisecondsSinceEpoch, 'who': who, 'what': what, 'via': via, 'scope': scope, 'out': outcome};
+  static LogEntry fromJson(Map<String, dynamic> j) => LogEntry(
+      DateTime.fromMillisecondsSinceEpoch(j['t'] as int), j['who'] as String, j['what'] as String,
+      via: j['via'] as String?, scope: j['scope'] as String?, outcome: j['out'] as String);
 }

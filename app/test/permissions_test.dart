@@ -48,4 +48,20 @@ void main() {
     p.boardState(state(toys: 2));
     expect(p.requests, isEmpty);
   });
+
+  test('the log says how each command came and what came of it', () {
+    final p = make()..boardState(state(toys: 0));
+    p.heard(Capabilities.terminal, key, 'Ann', 'k:1',
+        done: false, muted: false, direct: true, scope: 2, what: 'put “hi” on your display');
+    p.heard(Capabilities.lovense, key, 'Ann', 'k:1',
+        done: false, muted: false, direct: false, scope: 1, what: 'set your toys to vibrate at 4');
+    p.heard(Capabilities.lovense, key, 'Ann', 'k:1', done: true, muted: false, direct: false, scope: 0, what: 'x');
+    expect(p.commandLog.map((e) => (e.via, e.scope, e.outcome)), [
+      ('Cloud', 'To everyone', 'Done'),
+      ('Cloud', 'To the channel', 'Not done: Lovense is off'),
+      ('Direct', 'To you only', 'Not done: they asked for permission'),
+    ]);
+    p.decline(p.requests.first);
+    expect(p.commandLog.first.outcome, "You declined Ann's request for Terminal");
+  });
 }
