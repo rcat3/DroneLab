@@ -52,12 +52,19 @@ class BoardLink extends ChangeNotifier {
   final _updateAcks = StreamController<UpdateAck>.broadcast();
   final _directSounds = StreamController<DirectSound>.broadcast();
   final _directPeers = StreamController<DirectPeer>.broadcast();
+  final _directCaps = StreamController<DirectCaps>.broadcast();
+  final _states = StreamController<String>.broadcast();
   final _directGroups = StreamController<DirectGroupHeard>.broadcast();
   final _recorded = StreamController<BoardSound>.broadcast();
   Stream<BoardSound> get recorded => _recorded.stream;
   Stream<DirectGroupHeard> get directGroups => _directGroups.stream;
   Stream<DirectSound> get directSounds => _directSounds.stream;
   Stream<DirectPeer> get directPeers => _directPeers.stream;
+  Stream<DirectCaps> get directCaps => _directCaps.stream;
+
+  /// The board's state (/api/state's JSON), whenever a request's answer
+  /// has it: the remote's, or anyone's.
+  Stream<String> get states => _states.stream;
   final _heard = StreamController<Heard>.broadcast();
   Stream<Heard> get heard => _heard.stream;
   final _copies = StreamController<HeardCopy>.broadcast();
@@ -276,6 +283,8 @@ class BoardLink extends ChangeNotifier {
       _directSounds.add(msg);
     } else if (msg is DirectPeer) {
       _directPeers.add(msg);
+    } else if (msg is DirectCaps) {
+      _directCaps.add(msg);
     } else if (msg is DirectAvatarPiece) {
       _directAvatars.add(msg);
     } else if (msg is Heard) {
@@ -349,7 +358,10 @@ class BoardLink extends ChangeNotifier {
     final result = Completer<RemoteAnswer>();
     _requestChain = _requestChain.then((_) async {
       try {
-        result.complete(await _send(method, target, body, timeout));
+        final a = await _send(method, target, body, timeout);
+        // Commands answer with the state too
+        if (a.status == 200 && target.startsWith('/api/') && a.body.contains('"others":')) _states.add(a.body);
+        result.complete(a);
       } catch (e) {
         result.completeError(e);
       }

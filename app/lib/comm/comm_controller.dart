@@ -22,6 +22,7 @@ import 'background.dart';
 import 'board_link.dart';
 import 'board_protocol.dart';
 import 'calls.dart';
+import 'capabilities.dart';
 import 'invites.dart';
 import 'conversations.dart';
 import 'notifier.dart';
@@ -163,6 +164,7 @@ class NearbyBoard {
   String firmware;    // its version, '' if not known
   String app;         // its phone's app's version, '' for none or not known
   Uint8List? key;     // its wearer's public key, checked by our board
+  Capabilities? caps; // what its wearer lets others control, null if it hasn't said
   NearbyBoard(this.id, this.name, this.rssi, this.talking, this.seenMs, [this.firmware = '', this.app = '', this.key]);
 }
 
@@ -307,6 +309,11 @@ class CommController extends ChangeNotifier {
     recordSpeakerVoice = p.getBool('recordSpeakerVoice') ?? true;
     recordBeep = p.getBool('recordBeep') ?? false;
     _directPeerSub = board.directPeers.listen(_onDirectPeer);
+    _directCapsSub = board.directCaps.listen(_onDirectCaps);
+    _statesSub = board.states.listen((json) {
+      final c = Capabilities.fromBoardState(json);
+      if (c != null) _setMyCaps(c);
+    });
     _directAvatarSub = board.directAvatars.listen(_onDirectAvatar);
     _heardSub = board.heard.listen(_onHeard);
     _copySub = board.copies.listen(_onCopy);
@@ -418,11 +425,17 @@ class CommController extends ChangeNotifier {
       _settingsTimer = null;
       boardSettings = null;
       _boardNameSent = null;
+      _setMyCaps(null);
       return;
     }
     if (_settingsTimer == null) {
-      _settingsTimer = Timer.periodic(const Duration(seconds: 5), (_) => _boardSettingsRequest('GET', ''));
+      var ticks = 0;
+      _settingsTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        _boardSettingsRequest('GET', '');
+        if (++ticks % _askStateEvery == 0) _askBoardState();
+      });
       _boardSettingsRequest('GET', '');
+      _askBoardState();
     }
   }
 
@@ -490,6 +503,8 @@ class CommController extends ChangeNotifier {
 
   StreamSubscription<DirectSound>? _directSoundSub;
   StreamSubscription<DirectPeer>? _directPeerSub;
+  StreamSubscription<DirectCaps>? _directCapsSub;
+  StreamSubscription<String>? _statesSub;
   StreamSubscription<Heard>? _heardSub;
   StreamSubscription<Talked>? _talkedSub;
   StreamSubscription<HeardCopy>? _copySub;
@@ -684,6 +699,64 @@ class CommController extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  void _onDirectCaps(DirectCaps d) {
+    final b = nearby[d.id];
+    if (b == null || b.caps == d.caps) return;
+    b.caps = d.caps;
+    notifyListeners();
+  }
+
+  // ----- What we let others control -----
+
+  /// Ours, from the board's state, as told to those on the server; null
+  /// while there's no board, when nothing we're sent can be done.
+  Capabilities? myCaps;
+  final Map<int, Capabilities> _serverCaps = {};     // by session
+  final Set<int> _capsSentTo = {};
+  MumbleClient? _capsFor;
+
+  /// The board's state, now and then (every [_askStateEvery] of the
+  /// settings' reads), for what we let others control; the remote's
+  /// requests bring it sooner, as it's changed there (BoardLink.states).
+  static const _askStateEvery = 6;
+  void _askBoardState() {
+    if ((board.status?.version ?? 0) < commVersionRemote) return;
+    board.request('GET', '/api/state').catchError((_) => RemoteAnswer(0, ''));
+  }
+
+  void _setMyCaps(Capabilities? c) {
+    if (c == myCaps) return;
+    myCaps = c;
+    _capsSentTo.clear();
+    final m = mumble;
+    if (m != null) _advertiseCaps(m);
+    notifyListeners();
+  }
+
+  /// Tell those on the server what we let others control: everyone as it
+  /// changes, and each who comes.
+  void _advertiseCaps(MumbleClient m) {
+    final mine = m.mySession;
+    if (m.state != MumbleState.connected || mine == null) return;
+    if (_capsFor != m) {
+      _capsFor = m;
+      _capsSentTo.clear();
+      _serverCaps.clear();
+    }
+    _capsSentTo.removeWhere((s) => !m.users.containsKey(s));
+    _serverCaps.removeWhere((s, _) => !m.users.containsKey(s));
+    final to = [for (final s in m.users.keys) if (s != mine && !_capsSentTo.contains(s)) s];
+    if (to.isEmpty) return;
+    _capsSentTo.addAll(to);
+    m.sendPluginData(to, Capabilities.dataId, (myCaps ?? Capabilities.none).encode());
+  }
+
+  /// What someone lets others control, as they've said: on the server, or
+  /// their board over direct comms. Null if they haven't (an older app or
+  /// firmware).
+  Capabilities? capabilitiesOf({MumbleUser? user, NearbyBoard? board}) =>
+      (user == null ? null : _serverCaps[user.session]) ?? board?.caps;
 
   void _onDirectSound(DirectSound d) {
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -2000,6 +2073,14 @@ class CommController extends ChangeNotifier {
       _onAnnouncement(m, d);
       return;
     }
+    if (d.id == Capabilities.dataId) {
+      final c = Capabilities.decode(d.data);
+      if (c != null && m.users.containsKey(d.sender) && _serverCaps[d.sender] != c) {
+        _serverCaps[d.sender] = c;
+        notifyListeners();
+      }
+      return;
+    }
     if (d.id != commandDataId) return;
     final u = m.users[d.sender];
     final cmd = ReadCommand.parse(d.data);
@@ -2705,6 +2786,7 @@ class CommController extends ChangeNotifier {
     if (m.state != MumbleState.connected) _channelTried = false;
     _joinPickedChannel(m);
     _announce(m);
+    _advertiseCaps(m);
     // Forget those who left
     for (final session in mixer.speakers.keys.toList()) {
       if (!isDirectSession(session) && !m.users.containsKey(session)) mixer.remove(session);
@@ -2774,6 +2856,8 @@ class CommController extends ChangeNotifier {
     _soundSub?.cancel();
     _directSoundSub?.cancel();
     _directPeerSub?.cancel();
+    _directCapsSub?.cancel();
+    _statesSub?.cancel();
     _heardSub?.cancel();
     _copySub?.cancel();
     _talkedSub?.cancel();

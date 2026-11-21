@@ -7,7 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
-import 'control_page.dart';
+import 'capabilities_ui.dart';
 import 'message_details.dart';
 import 'channel_details.dart';
 import 'channel_lists.dart';
@@ -406,18 +406,30 @@ class _ConversationPageState extends State<ConversationPage> {
             ]),
             titleSpacing: 0,
             actions: [
-              IconButton(
-                tooltip: 'Put words on their display',
-                icon: const Icon(Icons.terminal),
-                onPressed: online ? () => showTerminalSheet(context, comm, c) : null,
-              ),
-              IconButton(
-                tooltip: 'Control their toys',
-                icon: const Icon(Icons.tune),
-                onPressed: online
-                    ? () => Navigator.of(context)
-                        .push(MaterialPageRoute(builder: (_) => ControlPage(comm: comm, target: c)))
-                    : null,
+              // Everything to control, in one menu; for one person, what they
+              // don't let others control is greyed out
+              PopupMenuButton<int>(
+                tooltip: 'Control',
+                icon: const Icon(controlIcon),
+                enabled: online,
+                onSelected: (id) => openControl(context, comm, c, id),
+                itemBuilder: (_) {
+                  final caps = capabilitiesOfConversation(comm, c);
+                  return [
+                    for (final k in controlKinds)
+                      PopupMenuItem(
+                        value: k.id,
+                        enabled: canControl(caps, k.id),
+                        child: ListTile(
+                          leading: Icon(k.icon),
+                          title: Text(k.name),
+                          subtitle: Text(k.does),
+                          enabled: canControl(caps, k.id),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                  ];
+                },
               ),
               PopupMenuButton<String>(
                 onSelected: (v) => v != 'details'

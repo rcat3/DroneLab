@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../comm/comm_controller.dart';
 import '../comm/known_people.dart';
-import 'control_page.dart';
+import 'capabilities_ui.dart';
 import 'people.dart';
 import 'status_strip.dart';
 import 'text_page.dart';
@@ -40,6 +40,7 @@ Future<void> showPerson(BuildContext context, CommController comm,
           final link = p.onServer
               ? 'Server · ${m == null ? '' : m.channelPath(p.user!.channel)}'
               : 'Direct · ${direct == null ? '' : directChannelName(direct)}';
+          final caps = capabilitiesOfPerson(comm, p.id);
           final ago = b == null ? null : (DateTime.now().millisecondsSinceEpoch - b.seenMs) ~/ 1000;
           Widget kv(String k, Widget v) => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -94,6 +95,10 @@ Future<void> showPerson(BuildContext context, CommController comm,
                     if (b != null) kv('Firmware', value(b.firmware.isEmpty ? 'Not known' : b.firmware)),
                     if (b != null) kv('App', value(b.app.isEmpty ? 'None linked' : b.app)),
                     kv('Known by', value(_knownBy(p.who))),
+                    InkWell(
+                      onTap: () => showCapabilities(context, p.name, caps),
+                      child: kv('Lets others control', CapabilityIcons(caps)),
+                    ),
                     kv('Mute for me', Switch(value: p.mutedByMe, onChanged: (on) => comm.setMuted(p.id, on))),
                   ]),
                   if (clash != null) _ClashNote(comm: comm, old: clash, now: p.who),
@@ -118,9 +123,9 @@ Future<void> showPerson(BuildContext context, CommController comm,
                         onPressed: () {
                           Navigator.pop(sheet);
                           Navigator.of(context).push(MaterialPageRoute(
-                              builder: (_) => ControlPage(comm: comm, target: comm.personConversation(p.id))));
+                              builder: (_) => ControlChooserPage(comm: comm, target: comm.personConversation(p.id))));
                         },
-                        icon: const Icon(Icons.tune, size: 18),
+                        icon: const Icon(controlIcon, size: 18),
                         label: const Text('Control'),
                       ),
                     ),

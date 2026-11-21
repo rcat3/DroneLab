@@ -30,6 +30,8 @@
 ///           a board heard over direct comms, every couple of seconds
 ///   message [0x0C][flags: 1 over direct, 2 for the app only][name length][name][text]
 ///           a message for the Terminal, from someone the wearer allows
+///   direct caps [0x17][id LE32][capabilities]   what a board heard over direct
+///           comms lets others control (capabilities.dart), after its 0x08
 ///   direct avatar [0x0D][id LE32][size][piece][pieces][pixels, RGB565 LE]
 ///           a piece of a board's avatar heard over direct comms, 100 pixels a piece
 ///   direct group [0x09][group id, 4 bytes][rssi][boards][channel][flags: 1 Long Range][name]
@@ -46,6 +48,8 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:pointycastle/export.dart' show HMac, PBKDF2KeyDerivator, Pbkdf2Parameters, SHA256Digest;
+
+import 'capabilities.dart';
 
 const serviceUuid = 'efe06e1b-a7ff-4823-bfbb-b3a82ea05849';
 const toPhoneUuid = 'efe06e1c-a7ff-4823-bfbb-b3a82ea05849';
@@ -67,7 +71,8 @@ const commVersionHeard = 8;      // what others send the board, passed on as it 
 const commVersionMuted = 9;      // who's muted here, whose commands the board ignores (0x10)
 const commVersionKeys = 10;     // commands signed by their sender's key; the wearer's key (0x11)
 const commVersionTalkTo = 11;   // who talking goes to (0x13), pairs' keys (0x14), and transmissions told (0x13)
-const commVersionCopies = 12;   // each copy of a command heard over direct comms, and how it came (0x15)
+const commVersionCopies = 12;
+const commVersionCaps = 14;     // what other boards' wearers let others control (0x17)   // each copy of a command heard over direct comms, and how it came (0x15)
 const commVersionDirectVoice = 13;  // voice from the phone for the board to send over direct comms (0x16)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
@@ -96,6 +101,7 @@ const _msgTalked = 0x13;      // from it: a transmission started, ended or was r
 const _msgPairs = 0x14;
 const _msgCopy = 0x15;        // from the board: a copy of a command heard over direct comms
 const _msgDirectVoice = 0x16; // to it: voice for it to send over direct comms
+const _msgDirectCaps = 0x17;  // from it: what a board's wearer lets others control
 const _msgDirectAvatar = 0x0D;
 const _msgUpdate = 0x0E;
 
@@ -178,6 +184,14 @@ class DirectPeer {
   final String app;         // its phone's app's version, '' for none
   final Uint8List? key;     // its wearer's public key, as its hello says
   DirectPeer(this.id, this.rssi, this.talking, this.name, [this.firmware = '', this.app = '', this.key]);
+}
+
+/// What a board heard over direct comms lets others control, as its hello
+/// says (commVersion 14).
+class DirectCaps {
+  final int id;
+  final Capabilities caps;
+  DirectCaps(this.id, this.caps);
 }
 
 /// A piece of a board's avatar, heard over direct comms: [size] pixels
@@ -282,6 +296,10 @@ Object? parseBoardMessage(Uint8List data) {
     }
     return DirectPeer(le32(1), data[5].toSigned(8), data[6] & 1 != 0,
         utf8.decode(data.sublist(at), allowMalformed: true), versions[0], versions[1], key);
+  }
+  if (data[0] == _msgDirectCaps && data.length >= 6) {
+    final caps = Capabilities.decode(Uint8List.sublistView(data, 5));
+    if (caps != null) return DirectCaps(le32(1), caps);
   }
   if (data[0] == _msgDirectAvatar && data.length >= 8) {
     return DirectAvatarPiece(le32(1), data[5], data[6], data[7], Uint8List.sublistView(data, 8));
