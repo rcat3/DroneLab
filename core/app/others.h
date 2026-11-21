@@ -235,6 +235,20 @@ void others_forget(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN]);
  * ms; NULL if none has been. */
 const char *others_last(others_kind_t kind, uint32_t now_ms, uint32_t *age_ms);
 
+/* What the wearer lets others control: their capabilities, for direct
+ * comms' hello and the app to say to the others. A list, so more can be
+ * added: how many (1), then for each, its id (OTHERS_CAP_*) and how
+ * (OTHERS_CAP_ASK: those the wearer allows; OTHERS_CAP_OPEN: anyone). One
+ * the wearer hasn't got (the Lovense devices, with none connected), or
+ * lets nobody control (Off), is left out. Worked out on the UI loop, by
+ * others_poll(); from any task. Returns its length, 1 for none. */
+#define OTHERS_CAP_TERMINAL     1
+#define OTHERS_CAP_LOVENSE      2
+#define OTHERS_CAP_ASK          1
+#define OTHERS_CAP_OPEN         2
+#define OTHERS_CAPS_MAX         (1 + 2 * OTHERS_KIND_COUNT)
+size_t others_capabilities(uint8_t out[OTHERS_CAPS_MAX]);
+
 /* Goes up whenever any of the above changes, for screens to redraw. */
 uint32_t others_changes(void);
 

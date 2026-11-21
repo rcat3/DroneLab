@@ -147,6 +147,10 @@
  *                  the version, and its phone's app's (0 long for none), then
  *                  its name: each board heard over direct comms, every couple
  *                  of seconds.
+ *     0x17 direct caps: 17, a board's id (32, as 0x08's), then what its
+ *                  wearer lets others control, as its hello says
+ *                  (others_capabilities): after its 0x08, for a board whose
+ *                  hello says (from COMM_VERSION 14).
  *     0x0C message: before COMM_VERSION 8, a message for the Terminal;
  *                  0x0F has taken its place.
  *     0x0F heard:  0F, flags (bit 0 heard over direct comms, bit 1 done:
@@ -262,8 +266,9 @@
  *  12  each copy of a command heard over direct comms, and how it came
  *      (0x15), for the app's details of a text
  *  13  voice from the phone for direct comms (0x16), for the app's voice
- *      auto responder */
-#define COMM_VERSION            13
+ *      auto responder
+ *  14  what other boards' wearers let others control (0x17) */
+#define COMM_VERSION            14
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

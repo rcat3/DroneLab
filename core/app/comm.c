@@ -78,6 +78,7 @@
 #define MSG_AVATAR          0x06    // both ways: a piece of it, and the ack
 #define MSG_DIRECT_SOUND    0x07    // to the phone: what's heard over direct comms
 #define MSG_DIRECT_PEER     0x08    // to the phone: a board that's about
+#define MSG_DIRECT_CAPS     0x17    // to the phone: what a board's wearer lets others control
 #define MSG_DIRECT_GROUP    0x09    // to the phone: a group heard about
 #define DIRECT_PEERS_EVERY_MS 2000
 #define AVATAR_FIRST        0x01
@@ -1635,6 +1636,14 @@ static void send_direct_peers(uint32_t now_ms)
         size_t len = strlen(peers[i].name);
         memcpy(msg + at, peers[i].name, len);
         rcat_hal_ble_peer_send(msg, at + len);
+        if (peers[i].caps_len > 0)
+        {
+            uint8_t caps[5 + OTHERS_CAPS_MAX];
+            caps[0] = MSG_DIRECT_CAPS;
+            memcpy(caps + 1, &peers[i].id, 4);
+            memcpy(caps + 5, peers[i].caps, peers[i].caps_len);
+            rcat_hal_ble_peer_send(caps, 5 + peers[i].caps_len);
+        }
     }
     direct_group_t groups[DIRECT_GROUPS_MAX];
     n = direct_groups(groups, DIRECT_GROUPS_MAX);

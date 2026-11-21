@@ -965,8 +965,60 @@ uint32_t others_changes(void)
     return changes;
 }
 
+/* The capabilities, a byte for each kind: how it's open (OTHERS_CAP_*),
+ * 0 for not at all. Set on the UI loop, read from any task. */
+static uint8_t caps_how[OTHERS_KIND_COUNT];
+
+/* Whether a Lovense device is connected, or on its way to it. */
+static bool lovense_any(void)
+{
+    for (size_t i = 0; i < LOVENSE_MAX_DEVICES; i++)
+    {
+        const lovense_device_t *d = lovense_device(i);
+        if (d != NULL && (d->state == LOVENSE_CONNECTED || d->state == LOVENSE_CONNECTING || d->state == LOVENSE_LOST))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void update_capabilities(void)
+{
+    for (int k = 0; k < OTHERS_KIND_COUNT; k++)
+    {
+        others_permission_t p = others_permission((others_kind_t)k);
+        uint8_t how = p == OTHERS_ACCEPT ? OTHERS_CAP_OPEN : p == OTHERS_ASK ? OTHERS_CAP_ASK : 0;
+        if (k == OTHERS_LOVENSE && !lovense_any())
+        {
+            how = 0;
+        }
+        __atomic_store_n(&caps_how[k], how, __ATOMIC_RELAXED);
+    }
+}
+
+size_t others_capabilities(uint8_t out[OTHERS_CAPS_MAX])
+{
+    static const uint8_t ids[OTHERS_KIND_COUNT] = { [OTHERS_LOVENSE] = OTHERS_CAP_LOVENSE,
+                                                    [OTHERS_TERMINAL] = OTHERS_CAP_TERMINAL };
+    size_t at = 1;
+    out[0] = 0;
+    for (int k = 0; k < OTHERS_KIND_COUNT; k++)
+    {
+        uint8_t how = __atomic_load_n(&caps_how[k], __ATOMIC_RELAXED);
+        if (how != 0)
+        {
+            out[at++] = ids[k];
+            out[at++] = how;
+            out[0]++;
+        }
+    }
+    return at;
+}
+
 void others_poll(uint32_t now_ms)
 {
+    update_capabilities();
     if (list == NULL)
     {
         return;

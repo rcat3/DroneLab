@@ -57,6 +57,7 @@
 #define HELLO_TALKING       0x01
 #define HELLO_ASKS          0x02        // it asks for pieces of an avatar
 #define HELLO_KEY           0x04        // the wearer's public key follows
+#define HELLO_CAPS          0x08        // what the wearer lets others control, after the name
 #define ASK_LEN             (4 + 1 + 16)    // whose, its version, and the pieces, a bit each
 #define MAX_OPUS            160
 
@@ -114,6 +115,8 @@ typedef struct
     bool used;
     uint8_t avatar_version;     // of the avatar coming in, 0 for none
     uint8_t avatar_changes;     // goes up with each piece of it
+    uint8_t caps[OTHERS_CAPS_MAX];  // what its wearer lets others control, as its hello says
+    uint8_t caps_len;           // 0 if it doesn't say
 } peer_t;
 
 typedef struct
@@ -499,7 +502,8 @@ static bool avatar_ask(uint8_t out[ASK_LEN]);
 /* Who we are, and, if we're missing pieces of a board's avatar, which. */
 static void send_hello(void)
 {
-    uint8_t plain[2 + ASK_LEN + OTHERS_KEY_LEN + OTHERS_SIG_LEN + 2 * (1 + DIRECT_VERSION_MAX) + DIRECT_NAME_MAX];
+    uint8_t plain[2 + ASK_LEN + OTHERS_KEY_LEN + OTHERS_SIG_LEN + 2 * (1 + DIRECT_VERSION_MAX) + DIRECT_NAME_MAX + 1 +
+                  OTHERS_CAPS_MAX];
     plain[0] = TYPE_HELLO;
     plain[1] = talking && !talking_alone ? HELLO_TALKING : 0;
     size_t at = 2;
@@ -526,7 +530,13 @@ static void send_hello(void)
     }
     size_t n = strlen(own_name);
     memcpy(plain + at, own_name, n);
-    send_sealed(plain, at + n);
+    at += n;
+    // What the wearer lets others control, after a zero that ends the name
+    // for boards from before it
+    plain[at++] = 0;
+    at += others_capabilities(plain + at);
+    plain[1] |= HELLO_CAPS;
+    send_sealed(plain, at);
 }
 
 /* A packet of voice, with the REPEATS before it too, so that as many lost in
@@ -1100,7 +1110,24 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
                 versions[i][v] = '\0';
                 at += 1 + plain[at];
             }
-            size_t n = plain_len - at < DIRECT_NAME_MAX - 1 ? plain_len - at : DIRECT_NAME_MAX - 1;
+            size_t end = plain_len;
+            p->caps_len = 0;
+            if (plain[1] & HELLO_CAPS)
+            {
+                const uint8_t *zero = memchr(plain + at, 0, plain_len - at);
+                if (zero != NULL)
+                {
+                    end = (size_t)(zero - plain);
+                    size_t caps = plain_len - end - 1;
+                    if (caps >= 1 && caps >= 1 + 2 * (size_t)plain[end + 1])
+                    {
+                        caps = caps < OTHERS_CAPS_MAX ? caps : OTHERS_CAPS_MAX;
+                        memcpy(p->caps, plain + end + 1, caps);
+                        p->caps_len = (uint8_t)caps;
+                    }
+                }
+            }
+            size_t n = end - at < DIRECT_NAME_MAX - 1 ? end - at : DIRECT_NAME_MAX - 1;
             memcpy(p->name, plain + at, n);
             p->name[n] = '\0';
         }
@@ -1702,6 +1729,8 @@ int direct_peers(direct_peer_t *out, int max)
         memcpy(p.app, copy[i].app, sizeof(p.app));
         memcpy(p.key, copy[i].key, sizeof(p.key));
         p.has_key = copy[i].has_key;
+        memcpy(p.caps, copy[i].caps, sizeof(p.caps));
+        p.caps_len = copy[i].caps_len;
         // Strongest first
         int at = n++;
         while (at > 0 && out[at - 1].rssi < p.rssi)

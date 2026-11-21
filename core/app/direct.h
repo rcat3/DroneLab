@@ -40,8 +40,10 @@
  *            of the app on the phone linked to it, after what the phone is
  *            ("Android 1.2.0", from comm_app_os and comm_app_version; 0 long
  *            with none), each UTF-8 and at most DIRECT_VERSION_MAX - 1
- *            bytes; then the board's name, in UTF-8. Every couple of
- *            seconds, and
+ *            bytes; then the board's name, in UTF-8; then, with bit 3, a
+ *            zero (ending the name for boards from before it) and what the
+ *            wearer lets others control (others_capabilities). Every couple
+ *            of seconds, and
  *            as it starts. A board asked for pieces of its avatar sends
  *            them, between its other broadcasts
  *     avatar: 03, its version (1, never 0), the piece (1), how many pieces
@@ -107,6 +109,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#include "app/others.h"
 
 #define DIRECT_VERSION          8       // 8: commands signed by their sender (others.h), for one board or all
 #define DIRECT_KEY_LEN          16
@@ -220,6 +224,8 @@ typedef struct
     char app[DIRECT_VERSION_MAX];           // its phone's app's, "" for none
     uint8_t key[32];        // its wearer's public key, as its hello says, checked
     bool has_key;
+    uint8_t caps[OTHERS_CAPS_MAX];  // what its wearer lets others control (others_capabilities)
+    uint8_t caps_len;       // 0 if its hello doesn't say
     int8_t rssi;            // dBm
     bool talking;
 } direct_peer_t;
