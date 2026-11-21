@@ -7,6 +7,7 @@ import 'dart:io' show Platform;
 import 'comm/app_profile.dart';
 import 'comm/comm_controller.dart';
 import 'comm/linux_pairing.dart';
+import 'comm/notifier.dart';
 import 'comm/release_check.dart';
 import 'ui/firmware_ui.dart';
 import 'ui/pairing_code.dart';
@@ -14,6 +15,7 @@ import 'ui/call_ui.dart';
 import 'ui/splash.dart';
 import 'ui/hivemind_page.dart';
 import 'ui/people.dart';
+import 'ui/permissions_page.dart';
 import 'ui/record_page.dart';
 import 'ui/release_banner.dart';
 import 'ui/remote_page.dart';
@@ -83,6 +85,11 @@ void main(List<String> args) {
 /// A text's notification's been tapped: its conversation, on the Text tab.
 void _openConversation(CommController comm, String key) {
   final nav = navigatorKey.currentState;
+  if (nav != null && key == Notifier.permissionsPayload) {
+    nav.popUntil((r) => r.isFirst);
+    nav.push(MaterialPageRoute(builder: (_) => PermissionsPage(comm: comm)));
+    return;
+  }
   if (nav == null || !comm.conversations.all.containsKey(key)) return;
   appTab.value = tabText;
   nav.popUntil((r) => r.isFirst);

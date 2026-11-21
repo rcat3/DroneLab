@@ -8,12 +8,12 @@ import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
 import 'capabilities_ui.dart';
+import 'permissions_page.dart';
 import 'message_details.dart';
 import 'channel_details.dart';
 import 'channel_lists.dart';
 import 'people.dart';
 import 'person_sheet.dart';
-import 'remote_page.dart';
 import 'setup_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -467,6 +467,7 @@ class _ConversationPageState extends State<ConversationPage> {
                           crossAxisAlignment: c.entries[i].mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                           children: [
                             _Entry(c.entries[i], _time(c.entries[i].time),
+                                comm: comm,
                                 from: comm.fromLabel(c.entries[i]),
                                 named: group,
                                 photo: comm.conversations.photoFile(c.entries[i])),
@@ -538,7 +539,8 @@ class _Entry extends StatelessWidget {
   final String from;    // who it's from, as shown: with a warning for someone using another's name
   final bool named;     // show who it's from: in a channel, not with one person
   final File? photo;    // a photo's file
-  const _Entry(this.e, this.time, {required this.from, required this.named, this.photo});
+  final CommController comm;
+  const _Entry(this.e, this.time, {required this.comm, required this.from, required this.named, this.photo});
 
   @override
   Widget build(BuildContext context) {
@@ -559,16 +561,15 @@ class _Entry extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(color: blocked ? Kc.softRed : Kc.muted, fontSize: 13, fontStyle: FontStyle.italic),
               ),
-              // Not taken: to where it's said who may, on the Remote tab
+              // Not taken: to where it's said who may, the Permissions screen
               if (blocked)
                 InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: () => showRemotePermissions(context, e.kind == ConversationEntry.terminal ? 1 : 0),
+                  onTap: () => openPermissions(context, comm),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: Text(
-                      'Not taken by your ${e.kind == ConversationEntry.terminal ? 'Hive Messages' : 'Hive Commands'} '
-                      'settings: change them ›',
+                      'Not taken by your permissions: change them ›',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                           color: Kc.pink, fontSize: 13, decoration: TextDecoration.underline, decorationColor: Kc.pink),

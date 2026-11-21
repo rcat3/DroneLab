@@ -15,6 +15,11 @@ class Notifier {
   static const callsChannel = 'calls';
   static const missedChannel = 'missed_calls';
   static const waitingChannel = 'call_waiting';
+  static const permissionsChannel = 'permission_requests';
+
+  /// A permission request's notification, tapped: [opens] gives this.
+  static const permissionsPayload = 'permissions';
+  static const _permissionsId = 2;
   static const _batteryId = 1;
   static const _native = MethodChannel('dronelab/notifications');
 
@@ -27,6 +32,7 @@ class Notifier {
   bool battery = true;
   bool calls = false;     // off at first: calls ring in the headphones, worn nearly all the time
   bool missed = true;
+  bool permissionRequests = false;    // off at first: the attention tone's in the headphones
 
   /// A call's notification, tapped or answered from it: what (null for the
   /// notification itself, 'answer' or 'decline') and who's calling.
@@ -46,6 +52,7 @@ class Notifier {
     battery = _prefs!.getBool('notifyBattery') ?? true;
     calls = _prefs!.getBool('notifyCalls') ?? false;
     missed = _prefs!.getBool('notifyMissed') ?? true;
+    permissionRequests = _prefs!.getBool('notifyPermissions') ?? false;
     try {
       await _plugin.initialize(
         settings: const InitializationSettings(
@@ -90,6 +97,9 @@ class Notifier {
           enableVibration: false));
       await android?.createNotificationChannel(const AndroidNotificationChannel(missedChannel, 'Missed calls',
           description: "Calls you didn't answer", importance: Importance.high));
+      await android?.createNotificationChannel(const AndroidNotificationChannel(permissionsChannel,
+          'Permission requests',
+          description: 'Someone asking to control something of yours', importance: Importance.high));
       _ready = true;
     } catch (e) {
       debugPrint('Notifications unavailable: $e');   // none, then
@@ -180,6 +190,35 @@ class Notifier {
   }
 
   Future<void> clearBattery() => _cancel(_batteryId);
+
+  Future<void> setPermissionRequests(bool on) async {
+    permissionRequests = on;
+    await _prefs?.setBool('notifyPermissions', on);
+    if (!on) await clearPermissionRequests();
+  }
+
+  /// Someone's asking to control something of ours: tapped, the
+  /// Permissions screen.
+  Future<void> showPermissionRequest(String name, String what) async {
+    if (!_ready || !permissionRequests) return;
+    try {
+      await _plugin.show(
+        id: _permissionsId,
+        title: 'Permission request',
+        body: what.isEmpty ? '$name asks to control your unit' : '$name asks to control your unit: $what',
+        payload: permissionsPayload,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(permissionsChannel, 'Permission requests',
+              channelDescription: 'Someone asking to control something of yours',
+              importance: Importance.high,
+              priority: Priority.high,
+              category: AndroidNotificationCategory.social),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> clearPermissionRequests() => _cancel(_permissionsId);
 
   static const _callPrefix = 'call:';
   static int _callId(String personId) => 3000 + (personId.hashCode & 0xFFFFFF);

@@ -26,6 +26,7 @@ import 'capabilities.dart';
 import 'invites.dart';
 import 'conversations.dart';
 import 'notifier.dart';
+import 'permissions.dart';
 import 'photos.dart';
 import 'unit_sounds.dart';
 import 'firmware_update.dart';
@@ -193,6 +194,9 @@ class CommController extends ChangeNotifier {
   /// with (see conversations.dart).
   final Conversations conversations = Conversations();
 
+  /// Who may control what of ours, and the requests to (permissions.dart).
+  late final Permissions permissions = Permissions(board);
+
   /// Notifications: texts that come in, and the unit's battery running low.
   final Notifier notifier = Notifier();
   bool _batteryWarned = false;
@@ -289,6 +293,13 @@ class CommController extends ChangeNotifier {
     DevRemote.listen(this);
     ringInHeadphones = p.getBool('ringInHeadphones') ?? true;
     textTone = p.getBool('textTone') ?? true;
+    attentionTone = p.getBool('attentionTone') ?? true;
+    permissions.load(p);
+    permissions.onNew = (r) {
+      if (attentionTone) _tone(_callTones.attention());
+      notifier.showPermissionRequest(r.name, r.what);
+    };
+    permissions.onNone = notifier.clearPermissionRequests;
     try {
       final saved = jsonDecode(p.getString('unitSounds') ?? '{}') as Map<String, dynamic>;
       for (final e in UnitSoundEvent.values) {
@@ -313,6 +324,7 @@ class CommController extends ChangeNotifier {
     _statesSub = board.states.listen((json) {
       final c = Capabilities.fromBoardState(json);
       if (c != null) _setMyCaps(c);
+      permissions.boardState(json);
     });
     _directAvatarSub = board.directAvatars.listen(_onDirectAvatar);
     _heardSub = board.heard.listen(_onHeard);
@@ -426,6 +438,7 @@ class CommController extends ChangeNotifier {
       boardSettings = null;
       _boardNameSent = null;
       _setMyCaps(null);
+      permissions.boardGone();
       return;
     }
     if (_settingsTimer == null) {
@@ -1223,6 +1236,18 @@ class CommController extends ChangeNotifier {
 
   /// Play the text tone, to hear what it's like.
   void previewTextTone() => _tone(_callTones.text());
+
+  /// A tone in the headphones when something needs seeing to: a permission
+  /// request. Kept for next time.
+  bool attentionTone = true;
+
+  Future<void> setAttentionTone(bool on) async {
+    attentionTone = on;
+    await _prefs?.setBool('attentionTone', on);
+    notifyListeners();
+  }
+
+  void previewAttentionTone() => _tone(_callTones.attention());
 
   Future<void> setRing({bool? headphones, String? tone}) async {
     if (headphones != null) {
@@ -2662,6 +2687,20 @@ class CommController extends ChangeNotifier {
     if (h.what == Heard.reaction) {
       _onReaction(who, h.data);
       return;
+    }
+    // A command not taken, for want of being allowed: a request
+    if (h.what == Heard.terminal || h.what == Heard.lovense) {
+      final cap = h.what == Heard.terminal ? Capabilities.terminal : Capabilities.lovense;
+      if (h.done) {
+        permissions.taken(cap, h.key);
+      } else {
+        // To the open direct channel is to anyone nearby, as the board ignores it
+        final openChannel = h.scope == OthersCommand.scopeChannel && h.direct && !(boardSettings?.direct?.keyed ?? true);
+        permissions.refused(cap, h.key, h.from, who.id,
+            everyone: h.scope == OthersCommand.scopeEveryone || openChannel,
+            channel: h.scope == OthersCommand.scopeChannel,
+            what: describeCommand(h.data, mine: false));
+      }
     }
     final c = switch (h.scope) {
       OthersCommand.scopeOne => personConversation(who.id),

@@ -11,6 +11,7 @@ import '../comm/notifier.dart';
 import '../comm/virtual_unit.dart';
 import 'about_page.dart';
 import 'developer_page.dart';
+import 'permissions_page.dart';
 import 'unit_sounds_page.dart';
 import 'firmware_ui.dart';
 import 'server_page.dart';
@@ -75,6 +76,8 @@ class SetupPage extends StatelessWidget {
                 ),
                 _AvatarRow(comm: comm),
               ]),
+              const SectionHeader('Permissions'),
+              Panel(children: [PermissionsRow(comm: comm)]),
               const SectionHeader('Talking'),
               if (settings == null)
                 const Panel(children: [PanelRow(title: 'Connect to the board to change these')])
@@ -354,6 +357,8 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
       row('Calls', "Ring on the phone too, with its ringtone. Off, calls ring in the headphones only", Notifier.callsChannel, n.calls, n.setCalls),
       row('Missed calls', "Calls you didn't answer", Notifier.missedChannel, n.missed, n.setMissed),
       row('Unit battery low', 'At 15%, unless it\'s charging', Notifier.batteryChannel, n.battery, n.setBattery),
+      row('Permission requests', 'Someone asks to control something of yours. Tap one to see to it',
+          Notifier.permissionsChannel, n.permissionRequests, n.setPermissionRequests),
     ]);
   }
 }
@@ -381,6 +386,22 @@ class _CallsPanel extends StatelessWidget {
               onPressed: comm.previewTextTone,
             ),
             Switch(value: comm.textTone, onChanged: comm.setTextTone),
+          ],
+        ),
+      ),
+      Explained(
+        help: 'Notes up and down in your headphones when something needs you: for now, someone asking to '
+            'control something of yours.',
+        builder: (context, info) => PanelRow(
+          title: 'Attention tone',
+          trailing: [
+            info,
+            IconButton(
+              tooltip: 'Play it',
+              icon: const Icon(Icons.play_arrow, color: Kc.muted),
+              onPressed: comm.previewAttentionTone,
+            ),
+            Switch(value: comm.attentionTone, onChanged: comm.setAttentionTone),
           ],
         ),
       ),

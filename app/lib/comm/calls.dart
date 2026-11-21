@@ -149,6 +149,10 @@ class CallTones {
   /// A text's come in: two quick high blips, unlike any of the others.
   Int16List text() => _notes([([1568.0], 45), ([], 35), ([2093.0], 70)], 0.09);
 
+  /// Something needs seeing to (a permission request): three notes, up,
+  /// down and up, clear of the text's blips and the rings.
+  Int16List attention() => _notes([([784.0], 90), ([], 40), ([1047.0], 90), ([], 40), ([784.0], 90), ([1319.0], 150)], 0.1);
+
   /// It's ringing at theirs.
   Int16List ringBack() => _notes([([440.0, 480.0], 500)], 0.07);
 

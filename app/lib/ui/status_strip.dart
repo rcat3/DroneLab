@@ -5,6 +5,7 @@ import '../comm/board_transport.dart' show socketIdPrefix, socketUnitName;
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
 import '../comm/virtual_unit.dart';
+import 'permissions_page.dart';
 import 'server_page.dart';
 import 'setup_page.dart';
 import 'theme.dart';
@@ -20,18 +21,26 @@ class StatusStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: comm,
+      listenable: Listenable.merge([comm, comm.permissions]),
       builder: (context, _) {
         final l = Links.of(comm);
         final st = comm.board.status;
-        Widget item(bool ok, String text) => Row(mainAxisSize: MainAxisSize.min, children: [
-              _Dot(ok),
-              const SizedBox(width: 6),
-              Text(text, style: Kc.term(14, color: ok ? Kc.text : Kc.dim)),
+        // Each link an icon, lit while it's up
+        Widget item(bool ok, IconData icon, [String? count]) => Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon,
+                  size: 18,
+                  color: ok ? Kc.green : Kc.off,
+                  shadows: ok ? [Shadow(color: Kc.green.withValues(alpha: 0.8), blurRadius: 8)] : null),
+              if (count != null) ...[
+                const SizedBox(width: 3),
+                Text(count, style: Kc.term(14, color: ok ? Kc.text : Kc.dim)),
+              ],
             ]);
+        final requests = comm.permissions.requests.length;
         return Semantics(
           button: true,
-          label: 'Links: ${l.summary}. Tap to connect or disconnect',
+          label: 'Links: ${l.summary}${requests > 0 ? ', $requests permission requests waiting' : ''}. '
+              'Tap to connect or disconnect',
           excludeSemantics: true,
           child: Material(
             color: Kc.dock,
@@ -47,11 +56,15 @@ class StatusStrip extends StatelessWidget {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Row(children: [
-                        item(l.board, 'BOARD'),
-                        const SizedBox(width: 12),
-                        item(l.server, 'SERVER'),
-                        const SizedBox(width: 12),
-                        item(l.direct, l.direct && l.nearby > 0 ? 'DIRECT ${l.nearby}' : 'DIRECT'),
+                        item(l.board, boardIcon),
+                        const SizedBox(width: 14),
+                        item(l.server, serverIcon),
+                        const SizedBox(width: 14),
+                        item(l.direct, directIcon, l.direct && l.nearby > 0 ? '${l.nearby}' : null),
+                        if (requests > 0) ...[
+                          const SizedBox(width: 14),
+                          RequestsBadge(requests, size: 15),
+                        ],
                       ]),
                     ),
                   ),
@@ -98,20 +111,21 @@ class Links {
       ].join(', ');
 }
 
-class _Dot extends StatelessWidget {
+/// The links' icons, on the strip and the sheet.
+const boardIcon = Icons.developer_board;
+const serverIcon = Icons.cloud_outlined;
+const directIcon = Icons.settings_input_antenna;
+
+class _LinkIcon extends StatelessWidget {
   final bool on;
-  const _Dot(this.on);
+  final IconData icon;
+  const _LinkIcon(this.on, this.icon);
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: 9,
-        height: 9,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: on ? Kc.green : Kc.off,
-          boxShadow: on ? [BoxShadow(color: Kc.green.withValues(alpha: 0.8), blurRadius: 8)] : null,
-        ),
-      );
+  Widget build(BuildContext context) => Icon(icon,
+      size: 20,
+      color: on ? Kc.green : Kc.off,
+      shadows: on ? [Shadow(color: Kc.green.withValues(alpha: 0.8), blurRadius: 8)] : null);
 }
 
 class _Arrow extends StatelessWidget {
@@ -176,12 +190,56 @@ class _Battery extends StatelessWidget {
   }
 }
 
-/// The links, to connect and disconnect: the board, the server, direct comms;
-/// and what the traffic arrows mean.
-Future<void> showLinks(BuildContext context, CommController comm) => showModalBottomSheet<void>(
+/// A sheet that comes down from the top, under the status strip it's
+/// opened from: tapped outside, or swiped up, it goes.
+Future<void> showTopSheet(BuildContext context, WidgetBuilder builder) => showGeneralDialog<void>(
       context: context,
-      isScrollControlled: true,
-      builder: (sheet) => ListenableBuilder(
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (sheet, _, _) => SafeArea(
+        bottom: false,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: GestureDetector(
+            onVerticalDragEnd: (d) {
+              if ((d.primaryVelocity ?? 0) < -300) Navigator.pop(sheet);
+            },
+            child: Material(
+              color: Theme.of(sheet).bottomSheetTheme.backgroundColor ?? Kc.panel,
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+              clipBehavior: Clip.antiAlias,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(sheet).height * 0.85),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Flexible(child: builder(sheet)),
+                  // The handle, at the bottom, as it came from the top
+                  Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(color: Kc.line, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+      transitionBuilder: (_, anim, _, child) => SlideTransition(
+        position: Tween(begin: const Offset(0, -1), end: Offset.zero)
+            .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+        child: child,
+      ),
+    );
+
+/// The links, to connect and disconnect: the board, the server, direct comms;
+/// permissions; and what the traffic arrows mean. From the top, under the
+/// strip.
+Future<void> showLinks(BuildContext context, CommController comm) => showTopSheet(
+      context,
+      (sheet) => ListenableBuilder(
         listenable: comm,
         builder: (sheet, _) {
           final b = comm.board;
@@ -206,7 +264,7 @@ Future<void> showLinks(BuildContext context, CommController comm) => showModalBo
                   const SectionHeader('Links'),
                   Panel(color: Kc.bg, children: [
                     PanelRow(
-                      leading: _Dot(l.board),
+                      leading: _LinkIcon(l.board, boardIcon),
                       title: b.name ?? 'Board',
                       subtitle: boardStatusText(comm),
                       trailing: [
@@ -220,7 +278,7 @@ Future<void> showLinks(BuildContext context, CommController comm) => showModalBo
                       ],
                     ),
                     PanelRow(
-                      leading: _Dot(l.server),
+                      leading: _LinkIcon(l.server, serverIcon),
                       title: s.host.isEmpty ? 'Server' : s.host,
                       subtitle: serverStatusText(comm),
                       trailing: [
@@ -246,7 +304,7 @@ Future<void> showLinks(BuildContext context, CommController comm) => showModalBo
                         ),
                       ),
                     PanelRow(
-                      leading: _Dot(l.direct),
+                      leading: _LinkIcon(l.direct, directIcon),
                       title: 'Direct',
                       subtitle: direct == null
                           ? 'Needs the board'
@@ -258,6 +316,8 @@ Future<void> showLinks(BuildContext context, CommController comm) => showModalBo
                       ],
                     ),
                   ]),
+                  const SectionHeader('Permissions'),
+                  Panel(color: Kc.bg, children: [PermissionsRow(comm: comm, before: () => Navigator.pop(sheet))]),
                   const SectionHeader('Traffic'),
                   Panel(color: Kc.bg, children: [
                     Padding(
