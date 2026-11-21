@@ -73,6 +73,7 @@
 #include "app/reactive.h"
 #include "app/remote.h"
 #include "app/settings.h"
+#include "app/utf8.h"
 #include "audio/audio_player.h"
 #include "audio/seal_test.h"
 #include "audio/speaker.h"
@@ -773,6 +774,7 @@ static bool query_str(const char *query, const char *name, char *out, size_t cap
                 }
             }
             out[len] = '\0';
+            utf8_trim(out);     // cut to fit, not partway through a character
             return true;
         }
         q = strchr(q, '&');

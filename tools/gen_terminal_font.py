@@ -19,6 +19,21 @@ SOURCE = os.path.join(REPO, "third_party", "lvgl", "src", "font", "lv_font_unsci
 OUT = os.path.join(REPO, "core", "ui", "terminal_font.c")
 SCALES = range(1, 7)
 
+# Characters unscii's LVGL subset hasn't got, drawn here in its style, after
+# U+007F: (code point, pixels, ofs_x, ofs_y). The white hexagon's for the
+# HexDrones' names, as tall as a capital.
+EXTRA = [
+    (0x2B21, [
+        "...#...",
+        ".##.##.",
+        "#.....#",
+        "#.....#",
+        "#.....#",
+        ".##.##.",
+        "...#...",
+    ], 0, 1),
+]
+
 
 def read_font():
     text = open(SOURCE).read()
@@ -48,10 +63,12 @@ def pack(rows):
 
 def font(bitmap, glyphs, line_height, s):
     data, dscs = [], []
-    for (index, adv_w, w, h, ox, oy) in glyphs:
+    extra = [(None, 128, len(px[0]), len(px), ox, oy, [[c == "#" for c in row] for row in px])
+             for (_, px, ox, oy) in EXTRA]
+    for (index, adv_w, w, h, ox, oy, *drawn) in list(glyphs) + extra:
         start = len(data)
         if w and h:
-            rows = glyph_pixels(bitmap, index, w, h)
+            rows = drawn[0] if drawn else glyph_pixels(bitmap, index, w, h)
             big = [[b for b in row for _ in range(s)] for row in rows for _ in range(s)]
             data += pack(big)
         dscs.append((start, adv_w * s, w * s, h * s, ox * s, oy * s))
@@ -69,7 +86,7 @@ def font(bitmap, glyphs, line_height, s):
     out.append(f"    .glyph_bitmap = {name}_bitmap,")
     out.append(f"    .glyph_dsc = {name}_glyphs,")
     out.append("    .cmaps = cmaps,")
-    out.append("    .cmap_num = 1,")
+    out.append(f"    .cmap_num = {1 + len(EXTRA)},")
     out.append("    .bpp = 1,")
     out.append("};\n")
     out.append(f"const lv_font_t {name} = {{")
@@ -97,12 +114,14 @@ def main():
         "",
         "#if RCAT_FEATURE_TERMINAL || RCAT_FEATURE_COMM",
         "",
-        "/* U+0020 to U+007F */",
+        "/* U+0020 to U+007F, then the characters drawn in the script */",
         "static const lv_font_fmt_txt_cmap_t cmaps[] = {",
         "    {.range_start = 32, .range_length = 96, .glyph_id_start = 1, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY},",
-        "};",
-        "",
     ]
+    for i, (code, _, _, _) in enumerate(EXTRA):
+        parts.append("    {.range_start = 0x%04X, .range_length = 1, .glyph_id_start = %d, "
+                     ".type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY}," % (code, len(glyphs) + i))
+    parts += ["};", ""]
     for s in SCALES:
         parts.append(font(bitmap, glyphs, line_height, s))
     parts.append("#endif")

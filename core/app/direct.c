@@ -21,6 +21,7 @@
 #include "mbedtls/sha256.h"
 
 #include "app/comm.h"
+#include "app/utf8.h"
 #include "app/others.h"
 #include "app/settings.h"
 #include "hal.h"
@@ -280,6 +281,7 @@ static void use_group(void)
     mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 128);
     memset(key, 0, sizeof(key));
     snprintf(group_name, sizeof(group_name), "%s", s->direct_keyed ? s->direct_group : "Open");
+    utf8_trim(group_name);
     keyed = s->direct_keyed;
     radio_channel = keyed && s->direct_channel ? s->direct_channel : DIRECT_CHANNEL_DEFAULT;
     radio_long_range = keyed ? s->direct_long_range != 0 : true;     // the open group reaches as far as it can
@@ -291,6 +293,7 @@ static void use_group(void)
     else
     {
         snprintf(own_name, sizeof(own_name), "%s", s->direct_name[0] ? s->direct_name : comm_name());
+        utf8_trim(own_name);
     }
 
     // A different group: nobody from the old one's about
@@ -473,6 +476,7 @@ static void heard_beacon(const uint8_t *msg, size_t len, int8_t rssi, uint32_t n
         size_t n = len - 12 < DIRECT_NAME_MAX - 1 ? len - 12 : DIRECT_NAME_MAX - 1;
         memcpy(g->name, msg + 12, n);
         g->name[n] = '\0';
+        utf8_trim(g->name);     // cut by an older unit
         g->channel = msg[10];
         g->long_range = (msg[11] & BEACON_LR) != 0;
         g->rssi = now - g->heard_ms > HELLO_EVERY_MS * 2 || rssi > g->rssi ? rssi : g->rssi;
@@ -1130,6 +1134,7 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
             size_t n = end - at < DIRECT_NAME_MAX - 1 ? end - at : DIRECT_NAME_MAX - 1;
             memcpy(p->name, plain + at, n);
             p->name[n] = '\0';
+            utf8_trim(p->name);     // cut by an older unit
         }
         else if (plain[0] == TYPE_VOICE && plain_len >= 5)
         {

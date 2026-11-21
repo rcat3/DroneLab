@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "app/settings.h"
+#include "app/utf8.h"
 #include "hal.h"
 #include "lvgl.h"
 
@@ -399,8 +400,10 @@ void settings_set_direct_group(const uint8_t *key, const char *group, const char
     }
     memset(current.direct_group, 0, sizeof(current.direct_group));
     strncpy(current.direct_group, group != NULL ? group : "", sizeof(current.direct_group) - 1);
+    utf8_trim(current.direct_group);
     memset(current.direct_name, 0, sizeof(current.direct_name));
     strncpy(current.direct_name, name != NULL ? name : "", sizeof(current.direct_name) - 1);
+    utf8_trim(current.direct_name);
     schedule_save();
 }
 
