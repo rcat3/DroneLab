@@ -8,15 +8,21 @@ import 'theme.dart';
 class DroneLabWordmark extends StatelessWidget {
   const DroneLabWordmark({super.key});
 
-  static const _green = Color(0xFF4DFF6A);
+  // As the release notes' banner (tools/doc_renders/gen_doc_logos.py): the
+  // Terminal's phosphor, the letters shading from pale to a deeper green
+  static const _green = Color(0xFF33FF33);
+  static const _greenBright = Color(0xFFBEFFBE);
+  static const _greenMid = Color(0xFF14A014);
+  static const _greenDark = Color(0xFF0A5A0A);
 
   @override
   Widget build(BuildContext context) {
-    final letters = Kc.term(40, color: _green, shadows: [
-      Shadow(color: _green.withValues(alpha: 0.9), blurRadius: 6),
-      Shadow(color: _green.withValues(alpha: 0.6), blurRadius: 18),
+    final glow = Kc.term(40, color: Colors.transparent, shadows: [
+      Shadow(color: _green.withValues(alpha: 0.6), blurRadius: 6),
+      Shadow(color: _green.withValues(alpha: 0.35), blurRadius: 18),
     ]);
-    final ghost = Kc.term(40, color: const Color(0xFFD8FFE0).withValues(alpha: 0.35));
+    final letters = Kc.term(40, color: Colors.white);
+    final ghost = Kc.term(40, color: _greenDark);
     return Semantics(
       label: 'DroneLab',
       excludeSemantics: true,
@@ -28,9 +34,17 @@ class DroneLabWordmark extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Stack(children: [
-              Text('DRONELAB', style: letters),
-              // A brighter copy a little off, as a screen's ghost
-              Transform.translate(offset: const Offset(2, -1), child: Text('DRONELAB', style: ghost)),
+              // A dark copy a little to the left, as the banner's ghost
+              Transform.translate(offset: const Offset(-3, 0), child: Text('DRONELAB', style: ghost)),
+              Text('DRONELAB', style: glow),
+              ShaderMask(
+                shaderCallback: (r) => const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [_greenBright, _green, _greenMid],
+                ).createShader(r),
+                child: Text('DRONELAB', style: letters),
+              ),
               Positioned.fill(child: CustomPaint(painter: _Scanlines())),
             ]),
           ),
