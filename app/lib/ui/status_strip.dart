@@ -261,6 +261,12 @@ Future<void> showLinks(BuildContext context, CommController comm) => showTopShee
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Center(
+                      child: Image.asset('assets/dronelab_logo.png', height: 40, semanticLabel: 'DroneLab'),
+                    ),
+                  ),
                   const SectionHeader('Links'),
                   Panel(color: Kc.bg, children: [
                     PanelRow(
