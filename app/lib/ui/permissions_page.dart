@@ -86,26 +86,21 @@ Widget _capIcons(Iterable<int> caps, {Color color = Kc.pink}) => Row(mainAxisSiz
 void _reportFailed(BuildContext context, String name, Set<int> failed) {
   if (failed.isEmpty || !context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text("Your unit didn't change ${_names(failed)} for $name. Check it's connected, "
-          'or update its firmware.')));
+      content: Text("Your unit didn't change ${_names(failed)} for $name. Check it's connected.")));
 }
 
 /// Pick what to allow someone ([id], their key's id): [initial] ticked.
 /// Returns what's picked, or null if it's left. [all] offers Allow all.
-/// What the unit can't allow them just now (older firmware, and they've
-/// never sent a command for it) can't be picked.
 Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
     {required String title, required String id, required Set<int> initial, String action = 'Allow', bool all = true}) {
   final perms = comm.permissions;
-  bool can(int cap) => perms.canAllow(id, cap) || initial.contains(cap);
-  final picked = {for (final c in initial) if (can(c)) c};
+  final picked = {...initial};
   return showModalBottomSheet<Set<int>>(
     context: context,
     isScrollControlled: true,
     builder: (sheet) => StatefulBuilder(
       builder: (sheet, setState) {
         String note(ControlKind k) {
-          if (!can(k.id)) return "Your unit's firmware can't allow this until they've sent a ${k.name} command";
           return switch (perms.policy?.caps[k.id]?.policy) {
             Policy.off => '${k.name} is off. This takes effect when you turn it on',
             Policy.anyone => '${k.name} is open to everyone, so this only matters if you change that',
@@ -113,7 +108,7 @@ Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
           };
         }
 
-        final allowable = {for (final k in controlKinds) if (can(k.id)) k.id};
+        final allowable = {for (final k in controlKinds) k.id};
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -123,10 +118,8 @@ Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
                 for (final k in controlKinds)
                   CheckboxListTile(
                     value: picked.contains(k.id),
-                    onChanged: can(k.id)
-                        ? (on) => setState(() => on == true ? picked.add(k.id) : picked.remove(k.id))
-                        : null,
-                    secondary: Icon(k.icon, color: can(k.id) ? Kc.pink : Kc.dim),
+                    onChanged: (on) => setState(() => on == true ? picked.add(k.id) : picked.remove(k.id)),
+                    secondary: Icon(k.icon, color: Kc.pink),
                     title: Text(k.name),
                     subtitle: Text(note(k), style: const TextStyle(color: Kc.muted, fontSize: 13)),
                   ),
@@ -136,7 +129,7 @@ Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
                 if (all) ...[
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: allowable.isEmpty ? null : () => Navigator.pop(sheet, allowable),
+                      onPressed: () => Navigator.pop(sheet, allowable),
                       child: const Text('Allow all'),
                     ),
                   ),
@@ -368,15 +361,10 @@ class _FeaturesTabState extends State<_FeaturesTab> {
           for (final u in people)
             PanelRow(
               title: u.clash ? '⚠ ${u.name}' : u.name,
-              subtitle: perms.canAllow(u.id, _cap)
-                  ? null
-                  : "Can't be allowed until they send a ${kind.name} command (update your unit's firmware)",
               trailing: [
                 Switch(
                   value: p?.person(u.id)?.allowed ?? false,
-                  onChanged: p == null || !(perms.canAllow(u.id, _cap) || (p.person(u.id)?.allowed ?? false))
-                      ? null
-                      : (on) => _set(u, on),
+                  onChanged: p == null ? null : (on) => _set(u, on),
                 ),
               ],
             ),
@@ -400,8 +388,7 @@ class _PeopleTab extends StatelessWidget {
         title: 'What ${p.name} can control', id: p.id, initial: now, action: 'Save', all: false);
     if (caps == null) return;
     final failed = await comm.permissions.setAllowed(p.id, {
-      for (final k in controlKinds)
-        if (comm.permissions.canAllow(p.id, k.id) || now.contains(k.id)) k.id: caps.contains(k.id)
+      for (final k in controlKinds) k.id: caps.contains(k.id)
     });
     if (context.mounted) _reportFailed(context, p.name, failed);
   }

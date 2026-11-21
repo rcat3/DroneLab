@@ -31,7 +31,7 @@ const controlKinds = [
 ];
 
 /// What someone lets others control, by who they are; null if they haven't
-/// said (an older app or firmware), or aren't about.
+/// said yet, or aren't about.
 Capabilities? capabilitiesOfPerson(CommController comm, String id) {
   for (final p in peopleOnce(comm)) {
     if (p.id == id) return comm.capabilitiesOf(user: p.user, board: p.board);
@@ -97,7 +97,7 @@ Future<void> showCapabilities(BuildContext context, String name, Capabilities? c
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
               caps == null
-                  ? "Not known: their app or unit is too old to say."
+                  ? "Not known: they haven't said yet."
                   : "If it's only people they allow, your first command asks them for permission.",
               style: const TextStyle(color: Kc.muted, fontSize: 13),
             ),
@@ -161,7 +161,7 @@ class ControlChooserPage extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   caps == null
-                      ? "Their app or unit is too old to say what they let others control. You can try any of these."
+                      ? "They haven't said yet what they let others control. You can try any of these."
                       : "Greyed out: they don't let anyone control it, or don't have it.",
                   style: const TextStyle(color: Kc.muted, fontSize: 13),
                 ),

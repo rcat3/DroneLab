@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'board_link.dart';
-import 'board_protocol.dart';
 import 'capabilities.dart';
 
 /// Who may control what of ours, in one place: the board's own policy for
@@ -286,16 +285,8 @@ class Permissions extends ChangeNotifier {
 
   bool get boardReady => board.state == BoardState.connected && board.status != null;
 
-  /// Whether the unit can allow someone a capability they've never sent a
-  /// command for (firmware from commVersion 14); before, only those
-  /// they've sent.
-  bool get unitAllowsAnyone => (board.status?.version ?? 0) >= commVersionCaps;
-
-  /// Whether the unit can allow [id] [cap] just now.
-  bool canAllow(String id, int cap) => unitAllowsAnyone || policy?.caps[cap]?.person(id) != null;
-
-  /// Allow someone [caps] on the board: by their whole key, which firmware
-  /// from before it ignores and finds them by id instead. Those set to Off
+  /// Allow someone [caps] on the board, by their whole key, added to its
+  /// list if they aren't on it. Those set to Off
   /// keep it for when they're on again. Returns those the unit didn't take.
   Future<Set<int>> grant(String key, String name, Set<int> caps, {bool accepting = false}) async {
     final id = key.substring(0, 16);
