@@ -128,6 +128,8 @@ The [**Build Guide**](docs/build/README.md) walks you through it, step by step:
 5. **[Set it up](docs/build/first-start.md)**: rotation, levelling it in the mask, and your images and sounds on an SD card.
 6. **[Install the app](docs/app/installing.md)** on an Android phone, for comms and the remote (optional).
 
+<p align="center"><a href="https://github.com/rcat3/DroneLab/releases/latest"><img src="docs/images/downloads/download_latest.png" width="520" alt="Download the latest release: app, firmware and 3D printed parts"></a></p>
+
 ## Documentation
 
 - **[Build Guide](docs/build/README.md):** choosing a model, the parts, printing, assembly and setup.

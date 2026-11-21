@@ -12,6 +12,12 @@ Pillow too. Run it again after changing a button or a housing:
 
 To add a platform, add a glyph function and an entry to BUTTONS, and the
 button to tools/release/release_notes.sh.
+
+It also draws download_latest.png, the wide Download button at the end of the
+README's Get a unit section, which links to releases/latest. Give names to
+draw just those buttons:
+
+    tools/release/download_icons/make_icons.py download_latest
 """
 
 import base64
@@ -167,16 +173,53 @@ def card(glyph, title, subtitle, label):
 '''
 
 
+WIDE_W, WIDE_H = 520, 104   # the README's Download button
+
+
+def wide_button():
+    """The README's Download button: a wide card in the same colours, with a
+    download arrow, and what the latest release has."""
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{WIDE_W}" height="{WIDE_H}" viewBox="0 0 {WIDE_W} {WIDE_H}">
+  <defs>
+    <radialGradient id="bg" cx="70" cy="52" r="330" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7a5a9c"/>
+      <stop offset="0.3" stop-color="#3a2650"/>
+      <stop offset="0.7" stop-color="#14101c"/>
+      <stop offset="1" stop-color="{BG}"/>
+    </radialGradient>
+  </defs>
+  <rect x="2" y="2" width="{WIDE_W - 4}" height="{WIDE_H - 4}" rx="18" fill="url(#bg)" stroke="{GREEN}" stroke-opacity="0.7" stroke-width="2.5"/>
+  <g transform="translate(66 52)">
+    <circle r="32" fill="{GREEN}"/>
+    <path d="M 0 -17 L 0 9 M -11 -2 L 0 10 L 11 -2 M -14 18 L 14 18" stroke="{BG}" stroke-width="5.5" fill="none"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="120" y="52" font-family="{FONT}" font-size="36" font-weight="bold" letter-spacing="2" fill="{TEXT}">DOWNLOAD</text>
+  <text x="121" y="78" font-family="{FONT}" font-size="15" fill="{SUB}">App, firmware and 3D printed parts</text>
+  <rect x="{WIDE_W - 136}" y="36" width="112" height="32" rx="16" fill="none" stroke="{PINK}" stroke-width="2.5"/>
+  <text x="{WIDE_W - 80}" y="57" font-family="{FONT}" font-size="14" font-weight="bold" fill="{PINK}" text-anchor="middle">Latest release</text>
+</svg>
+'''
+
+
+def render(tmp, name, svg_text, width):
+    svg = tmp / f"{name}.svg"
+    svg.write_text(svg_text)
+    png = OUT / f"{name}.png"
+    subprocess.run(["inkscape", str(svg), "--export-type=png", f"--export-filename={png}",
+                    f"--export-width={width * SCALE}"], check=True, capture_output=True)
+    print(png.relative_to(REPO))
+
+
 def main():
+    only = set(sys.argv[1:])
     OUT.mkdir(parents=True, exist_ok=True)
     tmp = pathlib.Path(tempfile.mkdtemp())
     for name, glyph, title, subtitle, label in BUTTONS:
-        svg = tmp / f"{name}.svg"
-        svg.write_text(card(glyph(), title, subtitle, label))
-        png = OUT / f"{name}.png"
-        subprocess.run(["inkscape", str(svg), "--export-type=png", f"--export-filename={png}",
-                        f"--export-width={W * SCALE}"], check=True, capture_output=True)
-        print(png.relative_to(REPO))
+        if not only or name in only:
+            render(tmp, name, card(glyph(), title, subtitle, label), W)
+    if not only or "download_latest" in only:
+        render(tmp, "download_latest", wide_button(), WIDE_W)
     shutil.rmtree(tmp)
 
 
