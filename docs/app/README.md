@@ -15,6 +15,7 @@ The DroneLab app is the phone's half of your unit.  It links your unit to the re
 - **[Voice](voice.md)**: talk to other drones and hear them, like a radio, over the internet through a shared server, or unit to unit with no signal at all.  Your voice goes out through your voice effect; theirs comes to your headphones, through the phone.  [Call](voice.md#calls) one drone to talk alone.
 - **[Text](text.md)**: text one drone, a channel, or everyone who can hear you, in a conversation for each, with photos over the server and emoji reactions; and from any of them, put words on their displays, if they've allowed you.
 - **[Control](control.md)**: run other drones' [Lovense](../features/lovense.md) toys, if they've allowed you, from a conversation.
+- **[Permissions](permissions.md)**: choose who can control your display and toys, accept or decline their requests, and see a log of every command that came.
 - **[Record](record.md)**: record your voice effect to the phone as WAV files, for videos, with a beep to line it up with the camera.
 - **[Remote](remote.md)**: everything on the unit's display, from the phone, so nobody has to reach the display in the mask.
 - **[Firmware updates](firmware-updates.md)**: the app carries the latest firmware for your unit and offers to put it on.
@@ -36,21 +37,22 @@ Four tabs along the bottom, and the status strip along the top of every one:
 | **Record** | Recording your voice, and your recordings. |
 | **Remote** | The unit's own controls, as on its display. |
 
-**Setup**, behind the gear on the Voice tab, has what's set once: [connecting](connecting.md) the unit and the server, your avatar, how you [talk](voice.md#setup-talking), the [unit's sounds](voice.md#setup-unit-sounds), the headphones' ring and text tones, [notifications](text.md#notifications), and the [unit's firmware](firmware-updates.md).  Its (i), top right, opens **About**: the app's and phone's versions, and the unit's connection, signal, firmware, MAC addresses, enclosure, uptime and battery.  The (i) buttons throughout the app explain each setting.  Tapping the version on *About* ten times shows [developer options](developer-options.md) in Setup, for testing range and relays alone.
+**Setup**, behind the gear on the Voice tab, has what's set once: [connecting](connecting.md) the unit and the server, your avatar, how you [talk](voice.md#setup-talking), the [unit's sounds](voice.md#setup-unit-sounds), [permissions](permissions.md), the headphones' ring, text and attention tones, [notifications](text.md#notifications), and the [unit's firmware](firmware-updates.md).  Its (i), top right, opens **About**: the app's and phone's versions, and the unit's connection, signal, firmware, MAC addresses, enclosure, uptime and battery.  The (i) buttons throughout the app explain each setting.  Tapping the version on *About* ten times shows [developer options](developer-options.md) in Setup, for testing range and relays alone.
 
 ### The status strip
 
-<img src="../images/app/status_strip.png" width="540" alt="The status strip, numbered: 1 board, 2 server, 3 direct, 4 arrows, 5 battery">
+<img src="../images/app/status_strip.png" width="540" alt="The status strip, numbered: 1 unit, 2 server, 3 direct, 4 requests, 5 arrows, 6 battery">
 
 | | Shows | |
 |---|---|---|
-| 1 | **BOARD** | Green while the app's connected to your unit over Bluetooth. |
-| 2 | **SERVER** | Green while it's connected to the hive's server, for the [cloud link](voice.md#two-links-server-and-direct). |
-| 3 | **DIRECT** | Green while [direct mode](voice.md#two-links-server-and-direct) is on, with how many units it hears nearby. |
-| 4 | **Arrows** | Up, pink: your voice is going out.  Down, green: you're hearing someone.  Down, grey: someone's talking on another direct channel nearby, which you can't hear. |
-| 5 | **Battery** | Your unit's charge, with a bolt while it charges.  It turns red at 15%. |
+| 1 | **Unit** (a circuit board) | Green while the app's connected to your unit over Bluetooth. |
+| 2 | **Server** (a cloud) | Green while it's connected to the hive's server, for the [cloud link](voice.md#two-links-server-and-direct). |
+| 3 | **Direct** (an antenna) | Green while [direct mode](voice.md#two-links-server-and-direct) is on, with how many units it hears nearby. |
+| 4 | **Requests** (a raised hand) | Yellow, with how many, while someone's [asking to control](permissions.md#requests) something of yours.  Gone when there are none. |
+| 5 | **Arrows** | Up, pink: your voice is going out.  Down, green: you're hearing someone.  Down, grey: someone's talking on another direct channel nearby, which you can't hear. |
+| 6 | **Battery** | Your unit's charge, with a bolt while it charges.  It turns red at 15%. |
 
-A grey dot is a link that's off, or not connected.  Tap the strip to open the [links sheet](connecting.md#the-links-sheet), which connects or disconnects each one.
+A grey icon is a link that's off, or not connected.  Tap the strip to pull down the [links sheet](connecting.md#the-links-sheet), which connects or disconnects each one, and opens Permissions.
 
 ### Other signs
 
@@ -67,6 +69,6 @@ A grey dot is a link that's off, or not connected.  Tap the strip to open the [l
 
 - [Installing the App](installing.md), and what to do if the phone won't let you.
 - [Connecting](connecting.md): pairing, the server, your avatar.
-- [Voice](voice.md), [Text](text.md), [Control](control.md), [Record](record.md), [Remote](remote.md).
+- [Voice](voice.md), [Text](text.md), [Control](control.md), [Permissions](permissions.md), [Record](record.md), [Remote](remote.md).
 - [Updating the unit's firmware](firmware-updates.md).
 - [HiveMind (Comms)](../features/comms.md): the unit's side of HiveMind, setting up a server, and how it works underneath.

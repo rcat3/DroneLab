@@ -26,7 +26,7 @@ Its pages, left to right:
 
 Others in your hive can send commands to your devices, from *Control* in the DroneLab app (see [Control](../app/control.md)): stop, set each kind of motor (all your vibrators, say) to a level, play a pattern, change the patterns' speed, or start a reaction (*React to*), to your own voice or movement, as your board senses them.  They come over the Mumble server, through your phone, or board to board over [direct mode](comms.md#direct-mode).  Your board does them as if you'd used its own controls, and they stay set until they're changed: **STOP**, on the Control page, stops them as it stops everything else, and a STOP sent by someone else stops reactions too.
 
-Whose commands are done is up to you, with **Off**, **Ask** or **Accept** on the *Hive Commands* page, or under *From others* in the remote's *Toys* tab (in the app's *Remote* tab too):
+Whose commands are done is up to you, with **Off**, **Ask** or **Accept** on the *Hive Commands* page, or under *From others* in the remote's *Toys* tab.  The app's [Permissions](../app/permissions.md) has the same settings, as *Nobody*, *Allowed* and *Anyone*, with requests to accept or decline and a log of every command:
 
 - **Ask**, to start with: only those you've allowed are obeyed.  The first time someone sends you a command, they're added to the *Permissions* list, not allowed, and you tick them there.
 - **Accept**: everyone's commands are done, allowed or not.  Anyone new is still added to the list, so you can see who's been sending, and tick them for when you go back to Ask.
@@ -35,6 +35,8 @@ Whose commands are done is up to you, with **Off**, **Ask** or **Accept** on the
 The *Ignore* page, after it (and the same switches under *From others* in the remote), ignores some commands whoever they're from: **Broadcasts**, sent to everyone who can hear the sender (with those to the channel on the open direct channel, which anyone nearby can hear), and those **To a whole channel**.  With both on, only commands sent to you alone get through.  And anyone you've muted in the app is ignored, whatever's set here.
 
 Someone's known by their identity, not their name: their DroneLab app makes a key pair the first time it runs and signs every command with it, and your board checks the signature (or your app does, for those that come over the server).  The list shows the first characters of their key beside their name, and it's the same person whether they're heard in cloud or direct mode.  Someone new using a name already on the list is marked ⚠: it's someone else with that name.  A command can't be recorded and played back later either, as each is numbered and an old one's dropped.
+
+Your board also tells the others what you let them control: the Lovense feature while it's on *Ask* or *Accept* and a toy is paired, and the [Terminal](terminal.md#messages-from-others) while it isn't *Off*.  It's said in its hello over direct mode, and by your app over the server, for their apps to grey out what you don't allow (see [What others see](../app/permissions.md#what-others-see)).  It doesn't say who you've allowed.
 
 A pattern plays if your board has one by the same name: the six built-in ones always do, and patterns on the SD card only if yours has one with that name too.  A level of 20 is each motor's top, so the air pump's 3.
 

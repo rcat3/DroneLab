@@ -47,9 +47,9 @@ Your picture, shown to the hive on their app and their display while you talk.  
 
 ## The links sheet
 
-Tap the [status strip](README.md#the-status-strip) at the top of any tab to see each link and connect or disconnect it: the unit (*Find* or *Disconnect*), the server (*Connect* or *Disconnect*), and *Direct* on or off.  The arrows' meanings are there too.
+Tap the [status strip](README.md#the-status-strip) at the top of any tab, and the links sheet pulls down from the top, under the DroneLab logo: each link to connect or disconnect, the unit (*Find* or *Disconnect*), the server (*Connect* or *Disconnect*), and *Direct* on or off.  Under them, **Permissions** opens [Permissions](permissions.md), with a yellow raised hand while requests are waiting, and the arrows' meanings are at the bottom.  Tap outside it, or swipe it up, to close it.
 
-<img src="../images/app/links.png" width="300" alt="The links sheet: the unit connected, the server connected, Direct on with one unit nearby, and what the traffic arrows mean">
+<img src="../images/app/links.png" width="300" alt="The links sheet under the DroneLab logo: the unit connected, the server connected, Direct on with one unit nearby, Permissions with a request waiting, and what the traffic arrows mean">
 
 ## Staying connected
 

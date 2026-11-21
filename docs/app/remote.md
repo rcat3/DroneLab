@@ -20,9 +20,9 @@ Once the unit's screwed into the mask, its display faces outward, where you can'
 The page is the unit's own, so it always matches the unit's firmware.  It has five tabs:
 
 - **Screen**: what's on the display now, with arrows to step through every page, the visualizer styles, and every feature's pages to jump straight to one.
-- **Toys**: your own [Lovense](../features/lovense.md) toys: a slider for each motor, the patterns, the reactions, the devices, and a big **STOP**.  *From others* is the list of who can [control your toys](control.md#who-can-control-your-toys).
+- **Toys**: your own [Lovense](../features/lovense.md) toys: a slider for each motor, the patterns, the reactions, the devices, and a big **STOP**.  *From others* is the list of who can [control your toys](control.md#who-can-control-your-toys), also in [Permissions](permissions.md).
 - **Sound**: the voice effect and its volume, the voice ring, and the sound player.  A low-profile unit has no speaker, so its voice effect isn't here: pick it as *HiveMind voice* in Setup, or on the unit.
-- **Terminal**: type a message onto your own display.  *From others* is who can [put words on it](text.md#who-can-put-words-on-your-display), *Off*, *Ask* or *Accept*, and the list of who's tried.
+- **Terminal**: type a message onto your own display.  *From others* is who can [put words on it](text.md#who-can-put-words-on-your-display), *Off*, *Ask* or *Accept*, and the list of who's tried, also in [Permissions](permissions.md).
 - **Setup**: the display's settings: brightness, rotation, what it shows at startup, and the battery.
 
 Each tab is described in full in [WiFi Hotspot Remote](../features/phone-remote.md), which is the same page.  The display and the phone control the same things, so each shows what the other does.

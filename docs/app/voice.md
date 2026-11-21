@@ -47,9 +47,9 @@ Under each name it says how they're linked, or what they're doing:
 
 The **speaker button** on each row mutes that person, for you alone: the app doesn't play them, and your unit doesn't show them talking.  Their texts are ignored too, and your unit doesn't do their commands.  The app remembers by name, so they stay muted next time.
 
-Tap someone's picture for more: how they're linked, their signal and when they were last heard, their unit's firmware and app versions (over direct mode), muting, and shortcuts to open your [conversation](text.md) with them or [control](control.md) their toys.
+Tap someone's picture for more: how they're linked, their signal and when they were last heard, their unit's firmware and app versions (over direct mode), what they **let others control** (an icon for each: tap it for the [whole list](permissions.md#what-others-see)), muting, and shortcuts to open your [conversation](text.md) with them or [control](control.md#sending) something of theirs.
 
-<img src="../images/app/person.png" width="300" alt="Someone tapped: their link, signal, when last heard, firmware and app, Mute for me, and Message and Control">
+<img src="../images/app/person.png" width="300" alt="Someone tapped: their link, signal, when last heard, firmware and app, what they let others control, Mute for me, and Message and Control">
 
 ## Talking
 

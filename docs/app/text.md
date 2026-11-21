@@ -30,7 +30,7 @@ Conversations are kept on the phone, the last 300 messages of each, so they're s
 
 ## Notifications
 
-A text that comes in while you're not looking at its conversation shows as a notification, with the conversation's latest texts and the sender's avatar.  Tap it to open the conversation.  Reading the conversation clears it.  Commands for your display or toys don't notify you: they're only noted in the conversation.
+A text that comes in while you're not looking at its conversation shows as a notification, with the conversation's latest texts and the sender's avatar.  Tap it to open the conversation.  Reading the conversation clears it.  Commands for your display or toys don't notify you: they're only noted in the conversation.  A [permission request](permissions.md#requests) can, with its own notification.
 
 In *Setup*, under *Notifications*:
 
@@ -65,7 +65,7 @@ For your own messages it shows how they went: other units don't say which copies
 
 ## Their display
 
-The **Terminal button** (`>_`) at the top of a conversation puts words on their unit's display, on its [Terminal](../features/terminal.md), in blocky green letters.  To a channel, it goes to everyone in it.
+**Terminal**, in the **Control button**'s menu (a remote) at the top of a conversation, puts words on their unit's display, on its [Terminal](../features/terminal.md), in blocky green letters.  To a channel, it goes to everyone in it.
 
 <img src="../images/app/text_terminal.png" width="300" alt="Their display: the words, the letter size, Add a line or Replace, Clear their display, and Switch to it">
 
@@ -78,37 +78,22 @@ It shows just as you type it, with no name added, and the same choices as typing
 
 It only shows if they [allow you](#who-can-put-words-on-your-display).  The display has plain capital letters, numbers and punctuation: anything else, like emoji, shows as `?`.
 
-No name is shown, but it isn't anonymous: their unit knows who sent it, as it has to in order to check they allow you, and shows the last sender on its *Hive Messages* page.  Their app notes it in your conversation too.
+No name is shown, but it isn't anonymous: their unit knows who sent it, as it has to in order to check they allow you, and shows the last sender on its *Hive Messages* page.  Their app notes it in your conversation, and in their [command log](permissions.md#command-log).
 
 ## Their toys
 
-The **Control button** at the top of a conversation opens [Control](control.md), for the toys of the person, or of everyone in the channel.
+**Lovense**, in the **Control button**'s menu at the top of a conversation, opens [Control](control.md), for the toys of the person, or of everyone in the channel.
 
 ## What a conversation shows
 
 Texts, yours on the right in pink and theirs on the left in green, with who sent each in a channel.
 
-Between them, in grey, are the commands for the display and the toys, sent each way: *You put "WE ARE THE HIVE" on their display*, or *RubberCat2 set your vibrate to 8*.  One your unit didn't do is in red, *not done*, so you can see who's trying.  It may not be allowed, or your unit may be set to ignore ones sent to everyone or to the whole channel.  Tap *change them* under it to go to those settings, in the [Remote](remote.md) tab.  Dragging a slider makes one line, not one for every step.
+Between them, in grey, are the commands for the display and the toys, sent each way: *You put "WE ARE THE HIVE" on their display*, or *RubberCat2 set your vibrate to 8*.  One your unit didn't do is in red, *not done*, so you can see who's trying.  It may not be allowed, or your unit may be set to ignore ones sent to everyone or to the whole channel.  Tap *change them* under it to go to [Permissions](permissions.md), whose [log](permissions.md#command-log) says why.  Dragging a slider makes one line, not one for every step.
 
 Someone you've muted (*Mute for me*, in their details) is muted here too: their texts and commands are ignored, and your unit doesn't do their commands, whoever they're for.
 
 ## Who can put words on your display
 
-You choose who can put words on your display, with **Off**, **Ask** or **Accept**, as for your [toys](control.md#who-can-control-your-toys).  It's on your unit, on the Terminal feature's second page, *Hive Messages*, and in the app's [Remote](remote.md) tab, under the Terminal tab's *From others*, with the list of who's sent you something:
+You choose who can put words on your display in [Permissions](permissions.md), as for your [toys](control.md#who-can-control-your-toys), with a list of its own.  It's **Allowed** to start with: the first time someone sends you words, nothing shows, and it comes in as a [request](permissions.md#requests) for you to accept or decline.
 
-- **Ask**, to start with: only people you've allowed.  The first time someone sends you words, they're added to your unit's list, **not allowed**, and nothing shows.  Tap them to allow them, and their words show from then on (tap again to stop; on the display, hold them to take them off the list).
-- **Accept**: anyone's words show, allowed or not.  New people are still added to the list, so you can see who's been sending, and allow them for when you go back to Ask.
-- **Off**: nobody's words show, and nobody's added.
-
-Two more choices, under it (on the unit, on the page after *Hive Messages*), ignore some commands whoever they're from, allowed or not:
-
-- **Ignore broadcasts**: those sent to everyone who can hear the sender, from their *Broadcast*.  Those sent to the channel over the open direct channel count too, as anyone nearby can hear that.
-- **Ignore channel-wide**: those sent to a whole channel, server or direct.
-
-So with both on, only commands sent to you alone get through.
-
-Someone's known by their identity, not their name: their app signs each command with a key only it has, and the list shows the first few characters of that key beside their name.  So it's one entry whether they reach you over the server or direct, and someone else can't pass as them by using their name.  Someone new who uses a name already on the list is marked ⚠: it's someone else.
-
-It's a separate list from the one for your toys, so someone can put words on your display without being allowed near your toys.  Texts don't need either: they only reach your app.
-
-Words for the display, and commands for the toys, need a Mumble server from version 1.4 on.  Texts work on any.
+Someone's known by their identity, not their name: their app signs each command with a key only it has.  So it's one entry whether they reach you over the server or direct, and someone else can't pass as them by using their name.  Someone new who uses a name already on the list is marked ⚠: it's someone else.
