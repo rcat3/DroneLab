@@ -2,8 +2,8 @@
 **Companion App:** 
   - **Android**: Open the downloaded file and allow your browser or Files app to install unknown apps.  See [Installing a release](https://github.com/rcat3/DroneLab/blob/master/docs/app/installing.md#installing-a-release) for more information.
       - **_For most Android phones:_** [`DroneLab.apk`](https://github.com/rcat3/DroneLab/releases/download/@TAG@/DroneLab.apk)
-      - **_For older 32-bit Android phones:_** [`DroneLab-armv7.apk`](https://github.com/rcat3/DroneLab/releases/download/@TAG@/DroneLab-armv7.apk). 
-  - **Linux:**  See [On a Linux computer.](https://github.com/rcat3/DroneLab/blob/master/docs/app/installing.md#on-a-linux-computer) for more information.
+      - **_For older 32-bit Android phones:_** [`DroneLab-armv7.apk`](https://github.com/rcat3/DroneLab/releases/download/@TAG@/DroneLab-armv7.apk)
+  - **Linux:**  See [On a Linux computer](https://github.com/rcat3/DroneLab/blob/master/docs/app/installing.md#on-a-linux-computer) for more information.
     - **_For a PC:_** [`DroneLab-linux-x64.tar.gz`](https://github.com/rcat3/DroneLab/releases/download/@TAG@/DroneLab-linux-x64.tar.gz) 
     - **_For Raspberry Pi 4 or 5:_** [`DroneLab-linux-arm64.tar.gz`](https://github.com/rcat3/DroneLab/releases/download/@TAG@/DroneLab-linux-arm64.tar.gz)  
      
