@@ -28,5 +28,6 @@ Forward TCP and UDP port 64738 on the router to the host, and give people the ro
 - `MUMBLE_CONFIG_USERS`: how many people can be on at once.
 - `MUMBLE_CONFIG_OPUSTHRESHOLD`: `0` makes everyone use Opus.
 - `MUMBLE_CONFIG_REGISTERNAME`: the server's name, shown on its top channel.
+- `MUMBLE_CONFIG_USERNAME`: which names it takes, as a regular expression.  `.+` takes any, ⬡ and accented letters included; Mumble's own default takes plain ASCII only, and the app says so when a server turns a name away.
 
 Any other server setting can be given as `MUMBLE_CONFIG_` and its name.  To make channels or change permissions, log in from a Mumble app as `SuperUser` with the admin password.

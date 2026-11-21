@@ -18,3 +18,5 @@ services:
       MUMBLE_CONFIG_WELCOMETEXT: "DroneLab comm channel"
       MUMBLE_CONFIG_USERS: "20"
       MUMBLE_CONFIG_OPUSTHRESHOLD: "0"
+      # Any name, symbols like the HexDrones' hexagon included; the default takes plain ASCII only
+      MUMBLE_CONFIG_USERNAME: ".+"
