@@ -926,6 +926,19 @@ void others_allow(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN], bool al
     }
 }
 
+void others_allow_new(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN], const char *name, bool allow)
+{
+    if (list == NULL || kind >= OTHERS_KIND_COUNT)
+    {
+        return;
+    }
+    if (find(key) == NULL && (!allow || add(key, name != NULL && name[0] ? name : "?", 0) == NULL))
+    {
+        return;
+    }
+    others_allow(kind, key, allow);
+}
+
 void others_forget(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN])
 {
     if (list == NULL || kind >= OTHERS_KIND_COUNT)

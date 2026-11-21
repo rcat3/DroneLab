@@ -24,7 +24,7 @@
  *     POST /api/stop                  everything, as the Stop button
 *     POST /api/others?kind=<0 Lovense, 1 Terminal>[&accept=<1 or 0>][&permission=<0 off, 1 ask, 2 accept>]
 *                       [&ignore=<OTHERS_IGNORE_* together>]
-*                       [&name=<who>&via=<0 server, 1 direct>&allow=<1 or 0>][&forget=1]
+*                       [&id=<key's id>|&key=<whole key, hex>&name=<who>][&allow=<1 or 0>][&forget=1]
 *                                     commands from others in the comm channel
 *                                     (app/others.h): who they're taken from
 *                                     (accept=1 is ask), what's ignored, and
@@ -992,30 +992,50 @@ static bool run_command(const char *name, const char *query, const char *body, s
         {
             others_set_ignoring((others_kind_t)kind, (uint8_t)ignore);
         }
-        // Someone in the list, by their key's id
-        char want[2 * OTHERS_ID_LEN + 1];
-        if (query_str(query, "id", want, sizeof(want)))
+        // Someone by their whole key (key=64 hex digits, and name=), added
+        // to the list if they're allowed and aren't in it; or someone in
+        // the list, for any kind, by their key's id
+        char hex[2 * OTHERS_KEY_LEN + 1], want[2 * OTHERS_ID_LEN + 1];
+        uint8_t key[OTHERS_KEY_LEN];
+        bool found = false;
+        if (query_str(query, "key", hex, sizeof(hex)) && strlen(hex) == 2 * OTHERS_KEY_LEN)
         {
-            others_sender_t senders[OTHERS_PEOPLE_MAX];
-            int n = others_senders((others_kind_t)kind, senders, OTHERS_PEOPLE_MAX);
-            for (int i = 0; i < n && i < OTHERS_PEOPLE_MAX; i++)
+            found = true;
+            for (int i = 0; i < OTHERS_KEY_LEN && found; i++)
             {
-                char id[2 * OTHERS_ID_LEN + 1];
-                key_id(senders[i].key, id);
-                if (strcmp(id, want) != 0)
-                {
-                    continue;
-                }
-                if (query_int(query, "forget", 0))
-                {
-                    others_forget((others_kind_t)kind, senders[i].key);
-                }
-                else
-                {
-                    others_allow((others_kind_t)kind, senders[i].key, query_int(query, "allow", 0) != 0);
-                }
-                break;
+                char b[3] = { hex[2 * i], hex[2 * i + 1], '\0' };
+                char *end;
+                key[i] = (uint8_t)strtol(b, &end, 16);
+                found = *end == '\0';
             }
+        }
+        else if (query_str(query, "id", want, sizeof(want)))
+        {
+            for (int k = 0; k < OTHERS_KIND_COUNT && !found; k++)
+            {
+                others_sender_t senders[OTHERS_PEOPLE_MAX];
+                int n = others_senders((others_kind_t)k, senders, OTHERS_PEOPLE_MAX);
+                for (int i = 0; i < n && i < OTHERS_PEOPLE_MAX && !found; i++)
+                {
+                    char id[2 * OTHERS_ID_LEN + 1];
+                    key_id(senders[i].key, id);
+                    if (strcmp(id, want) == 0)
+                    {
+                        memcpy(key, senders[i].key, OTHERS_KEY_LEN);
+                        found = true;
+                    }
+                }
+            }
+        }
+        if (found && query_int(query, "forget", 0))
+        {
+            others_forget((others_kind_t)kind, key);
+        }
+        else if (found)
+        {
+            char who[COMM_NAME_MAX] = "";
+            query_str(query, "name", who, sizeof(who));
+            others_allow_new((others_kind_t)kind, key, who, query_int(query, "allow", 0) != 0);
         }
     }
     else if (strcmp(name, "show") == 0)

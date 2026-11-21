@@ -231,6 +231,11 @@ int others_senders(others_kind_t kind, others_sender_t *out, int max);
 void others_allow(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN], bool allow);
 void others_forget(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN]);
 
+/* As others_allow(), but someone not in the list is added to it first, by
+ * the name given, when they're allowed: from the app, for someone who
+ * hasn't sent that kind, or who's dropped out of the list. */
+void others_allow_new(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN], const char *name, bool allow);
+
 /* Who sent the last command of a kind that was done, and how long ago, in
  * ms; NULL if none has been. */
 const char *others_last(others_kind_t kind, uint32_t now_ms, uint32_t *age_ms);
