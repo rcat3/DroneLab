@@ -17,8 +17,8 @@ Back to the [Build Guide](README.md).
 | Part | How many | Notes |
 |---|---|---|
 | [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75) | 1 | The **bare board**, not the -B version in its own case |
-| Speaker module | 1 | [This one](https://www.amazon.com/dp/B0F3CY5ZD2) or the same size: a sealed box 35 x 25 x 6.5 mm with an oval cone on the front, 4 ohm, with an MX1.25 2-pin plug (or one crimped on).  **Not the speaker that comes with the board:** it's smaller than the pod is made for, and won't work in it.  Set it aside |
-| LiPo battery, 103450 size | 1 | 3.7 V, 2000 mAh, no bigger than 50.5 x 34 x 9.9 mm, with an MX1.25 2-pin plug |
+| Speaker module | 1 | [This one](https://www.amazon.com/dp/B0F3CY5ZD2) or the same size: a sealed box 35 x 25 x 6.5 mm with an oval cone on the front, 4 ohm, with an MX1.25 2-pin plug (or one crimped on).  The same speaker is on eBay and AliExpress too, but check the measurements before you order.  **Not the speaker that comes with the board:** it's smaller than the pod is made for, and won't work in it.  Set it aside |
+| LiPo battery, 103450 size | 1 | 3.7 V, 2000 mAh, no bigger than 50.5 x 34 x 9.9 mm, with an MX1.25 2-pin plug.  [These](https://www.amazon.com/dp/B0GHYG2SMQ) are the recommended ones: they seem to come with the right plug, wired the right way round, but check anyway (below) |
 | M2 x 4 countersunk screws | 3 | Hold the board in |
 | M2 x 8 socket head screws | 8 | Four hold the chin on, four hold the back on |
 | M2 x 6 socket head screws | 4 | Hold the washer that keeps the collar on |

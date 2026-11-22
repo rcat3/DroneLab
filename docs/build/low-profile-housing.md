@@ -19,7 +19,7 @@ Back to the [Build Guide](README.md).
 | Part | How many | Notes |
 |---|---|---|
 | [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75) | 1 | The **bare board**, not the -B version in its own case.  The speaker that comes with it isn't used |
-| LiPo battery, 603040 size | 1 | 3.7 V, about 700-850 mAh, no bigger than 41 x 30.5 x 6.3 mm, with an MX1.25 2-pin plug |
+| LiPo battery, 603040 size | 1 | 3.7 V, about 700-850 mAh, no bigger than 41 x 30.5 x 6.3 mm, with an MX1.25 2-pin plug.  The first one was built with [this one](https://www.amazon.com/dp/B09YQ2C1KR).  Check its polarity (below) |
 | M2 x 4 countersunk screws | 3 | Hold the board in |
 | M2 x 8 socket head screws | 4 | Hold the back on |
 | Double-sided foam tape | A few cm | About 0.8 mm thick, to hold the battery |
