@@ -15,7 +15,8 @@
 //  - chin: closes the back of the pod, and slopes from it back to the body,
 //    over the filter mount. Four M2 x 8 socket head screws hold it on.
 //  - back: closes the chamber. The battery is taped to it, standing upright,
-//    and the voice port is open beside it, behind the microphones.
+//    in an outline engraved on its front, and the voice port is open beside
+//    it, behind the microphones.
 //  - collar, washer and gasket: the voice port thread, which turns freely on
 //    the back, so the housing can be held level while only the collar is
 //    screwed in. They're in hardware/masks/msa_millennium/turning_collar.scad.
@@ -86,6 +87,8 @@ battery_rot = 90;           // standing upright, so the voice port is open besid
 battery_clear = 0.5;
 battery_gap = 4.0;          // in front of the battery, for the plugs in the board's speaker and
                             // battery sockets, which go in from behind, and their wires
+battery_outline = [0.8, 0.4];   // an outline engraved on the front of the back, showing where to tape
+                                // the battery: line width, depth
 
 /* [Layout] */
 board_rot = 90;             // USB-C to the right, buttons and micro SD to the left
@@ -343,6 +346,12 @@ module back()
         translate([0, 0, z_back]) linear_extrude(cover_t) offset(delta = -0.2) rebate_2d();
         translate([0, 0, z_back - 1]) linear_extrude(cover_t + 2) mic_opening_2d();
         for (s = cover_screws) translate(s) screw_cut();
+        // Where the battery goes
+        translate([0, 0, z_back + cover_t - battery_outline[1]]) linear_extrude(battery_outline[1] + 1) difference()
+        {
+            battery_2d(-battery_clear);
+            battery_2d(-battery_clear - battery_outline[0]);
+        }
     }
     collar_posts();
 }
