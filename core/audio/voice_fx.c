@@ -959,6 +959,13 @@ static chain_t comm_chain = { .preset = -1 };
 static volatile int wanted_preset;          // set by the UI loop
 static volatile int wanted_comm_preset = -1;    // -1 for the speaker's
 static volatile bool listen_to_speaker;         // the listener gets the speaker's effect, not the comm one
+// The seal test's feedback check (voice_fx_feedback_test): Natural, without
+// its gate, at test_gain, until it trips
+static volatile bool feedback_test;
+static volatile float test_gain;
+static volatile bool test_tripped;
+static uint64_t test_sum_sq;
+static uint32_t test_n;
 
 static void free_chain(chain_t *c)
 {
@@ -1095,7 +1102,10 @@ static void run_chain(chain_t *c, float *x, int n)
                 }
                 break;
             case FX_GATE:
-                gate_process(&s->u.gate, x, n);
+                if (!feedback_test)
+                {
+                    gate_process(&s->u.gate, x, n);
+                }
                 break;
             case FX_HIGHPASS:
             case FX_LOWPASS:
@@ -1141,16 +1151,40 @@ static uint32_t speaker_read;
 static volatile bool speaker_on;
 static volatile float speaker_gain = 3.16f;    // set by voice_fx_set_volume
 
+// The feedback check stops by itself once the speaker's this loud for this
+// long: a howl, past the tanh. A knock or a voice in the room is shorter.
+#define TRIP_LEVEL      0.1f    // mean square: -10 dBFS
+#define TRIP_MS         300
+
 static void speaker_push(const float *x, int n, float trim_db)
 {
+    static int loud_samples;
     uint32_t w = speaker_write;
-    float gain = speaker_gain * powf(10.0f, trim_db / 20.0f);
+    bool test = feedback_test;
+    float gain = test ? (test_tripped ? 0.0f : test_gain) : speaker_gain * powf(10.0f, trim_db / 20.0f);
+    uint64_t sum = 0;
     for (int i = 0; i < n; i++)
     {
         // tanh rounds off peaks instead of clipping them.
-        speaker_buf[w++ & (SPEAKER_BUF - 1)] = (int16_t)(tanhf(x[i] * gain) * 32767.0f);
+        int16_t v = (int16_t)(tanhf(x[i] * gain) * 32767.0f);
+        speaker_buf[w++ & (SPEAKER_BUF - 1)] = v;
+        sum += (uint32_t)((int32_t)v * v);
     }
     __atomic_store_n(&speaker_write, w, __ATOMIC_RELEASE);
+    if (test && n > 0)
+    {
+        __atomic_add_fetch(&test_sum_sq, sum, __ATOMIC_RELAXED);
+        __atomic_add_fetch(&test_n, (uint32_t)n, __ATOMIC_RELAXED);
+        loud_samples = (float)sum / (float)n / (32768.0f * 32768.0f) > TRIP_LEVEL ? loud_samples + n : 0;
+        if (loud_samples >= FS * TRIP_MS / 1000)
+        {
+            test_tripped = true;
+        }
+    }
+    else
+    {
+        loud_samples = 0;
+    }
 }
 
 #define SPEAKER_MIN_FRAMES  RS_HOP
@@ -1245,7 +1279,7 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
         }
         return;
     }
-    int preset = wanted_preset;
+    int preset = feedback_test ? 0 : wanted_preset;
     if (preset != speaker_chain.preset)
     {
         build_chain(&speaker_chain, preset);
@@ -1397,9 +1431,72 @@ void voice_fx_set_speaker(bool on)
     speaker_on = on;
 }
 
+static float volume_db(float percent)
+{
+    return 10.0f + (percent - 50) * 0.5f;
+}
+
 void voice_fx_set_volume(uint8_t percent)
 {
-    speaker_gain = percent == 0 ? 0.0f : powf(10.0f, (10.0f + (percent - 50) * 0.5f) / 20.0f);
+    speaker_gain = percent == 0 ? 0.0f : powf(10.0f, volume_db(percent) / 20.0f);
+}
+
+void voice_fx_feedback_test(bool on)
+{
+    if (on)
+    {
+        test_gain = 0.0f;
+        test_tripped = false;
+        __atomic_store_n(&test_sum_sq, 0, __ATOMIC_RELAXED);
+        __atomic_store_n(&test_n, 0, __ATOMIC_RELAXED);
+    }
+    feedback_test = on;
+}
+
+void voice_fx_feedback_test_gain(float db_over_full)
+{
+    test_gain = powf(10.0f, (volume_db(100) + presets[0].speaker_db + db_over_full) / 20.0f);
+}
+
+bool voice_fx_feedback_tripped(void)
+{
+    return test_tripped;
+}
+
+float voice_fx_feedback_take_level(void)
+{
+    uint64_t sum = __atomic_exchange_n(&test_sum_sq, 0, __ATOMIC_RELAXED);
+    uint32_t n = __atomic_exchange_n(&test_n, 0, __ATOMIC_RELAXED);
+    return n == 0 ? 0.0f : (float)((double)sum / n / (32768.0 * 32768.0));
+}
+
+float voice_fx_natural_full_db(float hz)
+{
+    // Natural is a high-pass and a low-pass, both second order Butterworth,
+    // and its speaker trim, at 100%
+    float hp = 0, lp = 0;
+    const fx_preset_t *p = &presets[0];
+    for (int i = 0; i < p->count; i++)
+    {
+        if (p->steps[i].type == FX_HIGHPASS)
+        {
+            hp = p->steps[i].p[0];
+        }
+        else if (p->steps[i].type == FX_LOWPASS)
+        {
+            lp = p->steps[i].p[0];
+        }
+    }
+    float db = volume_db(100) + p->speaker_db;
+    if (hp > 0)
+    {
+        db -= 10.0f * log10f(1.0f + powf(hp / hz, 4));
+    }
+    if (lp > 0)
+    {
+        db -= 10.0f * log10f(1.0f + powf(hz / lp, 4));
+    }
+    return db;
 }
 
 bool voice_fx_speaker_on(void)

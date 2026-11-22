@@ -21,6 +21,15 @@ void speaker_set_muted(bool muted);
  * the microphones. Call it from any task. */
 void speaker_set_test_noise(bool on);
 
+/* What the test noise is: pink across the speaker's range (band_hz 0), or
+ * about half an octave around band_hz, at level (RMS, of full scale). Pink
+ * at 0.1 (-20 dBFS) until it's changed. */
+void speaker_set_test_noise_shape(float band_hz, float level);
+
+/* The mean square of the test noise played since the last call, as a
+ * fraction of full scale squared, or 0 if none was. */
+float speaker_take_test_noise_level(void);
+
 /* A short beep, for lining recordings up with video (see voice_lab.h). It
  * plays over whatever the speaker is playing, after SPEAKER_BEEP_LEAD_MS of
  * silence so the amplifier is on in time. Call it from any task. */

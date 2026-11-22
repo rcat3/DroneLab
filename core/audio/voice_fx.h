@@ -43,6 +43,23 @@ void voice_fx_listen_to_speaker(bool speaker);
  * microphone, and each step 0.5 dB more or less, with a limiter. 0 is silent. */
 void voice_fx_set_volume(uint8_t percent);
 
+/* The seal test's feedback check: while on, the speaker plays Natural without
+ * its gate, so the microphones' own hiss goes round the loop, at
+ * voice_fx_feedback_test_gain (silent until it's set), whatever the preset
+ * and Effect Volume. Once the speaker stays loud (a howl) it goes silent by
+ * itself, and voice_fx_feedback_tripped says so, until it's switched on
+ * again. The speaker still has to be switched on (voice_fx_set_speaker). */
+void voice_fx_feedback_test(bool on);
+void voice_fx_feedback_test_gain(float db_over_full);  // dB over Natural at 100%
+bool voice_fx_feedback_tripped(void);
+
+/* The mean square of what the feedback check played since the last call, as
+ * a fraction of full scale squared. */
+float voice_fx_feedback_take_level(void);
+
+/* Natural's gain from the microphones to the speaker at 100%, at hz, in dB */
+float voice_fx_natural_full_db(float hz);
+
 /* Play the processed voice on the speaker instead of the sound player. */
 void voice_fx_set_speaker(bool on);
 bool voice_fx_speaker_on(void);

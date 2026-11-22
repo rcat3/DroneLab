@@ -285,14 +285,24 @@ static lv_obj_t *seal_page;
 static lv_obj_t *seal_status_label;
 static lv_obj_t *seal_big_label;
 static lv_obj_t *seal_button_label;
+static lv_obj_t *seal_mode_label;
+static seal_mode_t seal_mode;
+static bool seal_results_up;    // the last test's results are showing, until Done
 
 static void seal_show(seal_phase_t phase, int seconds_left)
 {
+    if (phase == SEAL_DONE && !seal_results_up)
+    {
+        phase = SEAL_IDLE;      // back to choosing a test
+    }
     switch (phase)
     {
     // While it runs, big and short, to read in a mirror with the mask on
     case SEAL_QUIET:
     case SEAL_NOISE:
+    case SEAL_BANDS:
+    case SEAL_LOUD:
+    case SEAL_FEEDBACK:
         lv_label_set_text(seal_big_label, "Quiet");
         lv_obj_set_style_text_color(seal_big_label, lv_color_white(), 0);
         lv_label_set_text_fmt(seal_status_label, "%d", seconds_left);
@@ -318,23 +328,61 @@ static void seal_show(seal_phase_t phase, int seconds_left)
         {
             lv_label_set_text(seal_status_label, r->advice);
         }
+        else if (r->mode == SEAL_TEST_FULL)
+        {
+            // The spare's what's graded: the leak and echo are there to
+            // compare. The bands are in the serial log and the phone
+            // remote's API.
+            char text[240];
+            char where[24] = "";
+            if (r->worst_band >= 0)
+            {
+                snprintf(where, sizeof(where), " (%.1f kHz)", r->bands[r->worst_band].hz / 1000.0f);
+            }
+            snprintf(text, sizeof(text), "Spare %+.0f dB %s%s\nLeak %+.0f dB (%+.0f..%+.0f)\nEcho %+.0f dB (%+.0f..%+.0f)\n"
+                     "Loud %+.0f dB %s\nMics %s\n\n%s",
+                     r->spare_db, seal_test_grade_name(r->spare), where, r->leak_db, r->leak_min, r->leak_max,
+                     r->cancelled_db, r->cancelled_min, r->cancelled_max, r->loud_cancelled_db,
+                     seal_test_grade_name(r->loud), balance, r->advice);
+            lv_label_set_text(seal_status_label, text);
+        }
         else
         {
             // LVGL's own formatting has no floats
             char text[200];
-            snprintf(text, sizeof(text), "Leak %+.0f dB %s\nEcho %+.0f dB %s\nMics %s\n\n%s", r->leak_db,
-                     seal_test_grade_name(r->leak), r->cancelled_db, seal_test_grade_name(r->cancelled), balance,
-                     r->advice);
+            snprintf(text, sizeof(text), "Spare %+.0f dB %s\nLeak %+.0f dB\nEcho %+.0f dB\nMics %s\n\n%s", r->spare_db,
+                     seal_test_grade_name(r->spare), r->leak_db, r->cancelled_db, balance, r->advice);
             lv_label_set_text(seal_status_label, text);
         }
         break;
     }
     default:
-        lv_label_set_text(seal_status_label, "Checks the speaker is\nsealed off from the\nmicrophones. Put the\nmask somewhere quiet.");
+        switch (seal_mode)
+        {
+        case SEAL_TEST_FULL:
+            lv_label_set_text(seal_status_label, "Five times over, band by\nband, then loud: about a\nminute. Put the mask on\nsomewhere quiet.");
+            break;
+        case SEAL_TEST_FEEDBACK:
+            lv_label_set_text(seal_status_label, "Turns Natural up until\nit feeds back, then stops.\nIt squeals briefly.\nStay quiet.");
+            break;
+        default:
+            lv_label_set_text(seal_status_label, "Checks the speaker is\nsealed off from the\nmicrophones. Put the\nmask somewhere quiet.");
+            break;
+        }
         break;
     }
+    if (phase == SEAL_FEEDBACK)
+    {
+        lv_label_set_text_fmt(seal_status_label, "%+d dB", (int)seal_test_feedback_gain_db());
+    }
     bool running = phase != SEAL_IDLE && phase != SEAL_DONE;
-    lv_label_set_text(seal_button_label, running ? "Stop" : "Start");
+    lv_label_set_text(seal_button_label, running ? "Stop" : phase == SEAL_DONE ? "Done" : "Start");
+    // Tap the line under the title for the other tests. The results have
+    // the screen to themselves.
+    char mode[48];
+    snprintf(mode, sizeof(mode), running ? "%s" : "< %s >", seal_test_mode_name(running ? seal_test_result()->mode : seal_mode));
+    lv_label_set_text(seal_mode_label, mode);
+    lv_obj_set_hidden(lv_obj_get_parent(seal_mode_label), phase == SEAL_DONE);
     // While it runs, the countdown's as big as the instruction above it
     if (running)
     {
@@ -360,12 +408,17 @@ static void seal_show(seal_phase_t phase, int seconds_left)
 static void seal_timer_cb(lv_timer_t *t)
 {
     static seal_phase_t shown = SEAL_IDLE;
+    static int shown_left = -1;
+    static float shown_gain;
     int left;
     seal_phase_t phase = seal_test_tick(&left);
-    if (phase == shown && (phase == SEAL_DONE || phase == SEAL_IDLE))
+    if (phase == shown && (phase == SEAL_DONE || phase == SEAL_IDLE ||
+                           (left == shown_left && (phase != SEAL_FEEDBACK || seal_test_feedback_gain_db() == shown_gain))))
     {
         return;
     }
+    shown_left = left;
+    shown_gain = seal_test_feedback_gain_db();
     if (phase == SEAL_DONE || phase == SEAL_IDLE)
     {
         sync_timer_cb(NULL);    // the speaker switch is back as it was
@@ -374,6 +427,10 @@ static void seal_timer_cb(lv_timer_t *t)
     {
         ui_show_page(seal_page);    // started by the phone remote: show it
     }
+    if (phase != SEAL_IDLE)
+    {
+        seal_results_up = true;     // however it was started
+    }
     shown = phase;
     seal_show(phase, left);
 }
@@ -381,9 +438,14 @@ static void seal_timer_cb(lv_timer_t *t)
 static void seal_button_event_cb(lv_event_t *e)
 {
     seal_phase_t phase = seal_test_phase();
-    if (phase == SEAL_IDLE || phase == SEAL_DONE)
+    if (phase == SEAL_DONE && seal_results_up)
     {
-        seal_test_start();
+        seal_results_up = false;    // Done: back to choosing a test
+    }
+    else if (phase == SEAL_IDLE || phase == SEAL_DONE)
+    {
+        seal_test_start(seal_mode);
+        seal_results_up = true;
     }
     else
     {
@@ -391,6 +453,16 @@ static void seal_button_event_cb(lv_event_t *e)
         sync_timer_cb(NULL);
     }
     seal_show(seal_test_phase(), seal_test_seconds_left());
+}
+
+static void seal_mode_event_cb(lv_event_t *e)
+{
+    seal_phase_t phase = seal_test_phase();
+    if (phase == SEAL_IDLE || (phase == SEAL_DONE && !seal_results_up))
+    {
+        seal_mode = (seal_mode + 1) % SEAL_TEST_MODES;
+        seal_show(SEAL_IDLE, 0);
+    }
 }
 
 static void add_seal_page(ui_feature_t *feature)
@@ -401,6 +473,17 @@ static void add_seal_page(ui_feature_t *feature)
     lv_obj_t *title = lv_label_create(page);
     lv_label_set_text(title, "Seal Test");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(32));
+
+    // Which test: tap to change. A big target, for a finger.
+    lv_obj_t *mode = lv_obj_create(page);
+    lv_obj_remove_style_all(mode);
+    lv_obj_set_size(mode, ui_px(160), ui_px(30));
+    lv_obj_align(mode, LV_ALIGN_TOP_MID, 0, ui_px(52));
+    lv_obj_set_clickable(mode, true);
+    lv_obj_add_event_cb(mode, seal_mode_event_cb, LV_EVENT_CLICKED, NULL);
+    seal_mode_label = lv_label_create(mode);
+    lv_obj_set_style_text_color(seal_mode_label, lv_palette_main(LV_PALETTE_PINK), 0);
+    lv_obj_center(seal_mode_label);
 
     seal_status_label = lv_label_create(page);
     lv_label_set_long_mode(seal_status_label, LV_LABEL_LONG_MODE_WRAP);
@@ -428,7 +511,7 @@ static void add_seal_page(ui_feature_t *feature)
     seal_button_label = lv_label_create(button);
     lv_obj_center(seal_button_label);
 
-    lv_timer_create(seal_timer_cb, 1000, NULL);
+    lv_timer_create(seal_timer_cb, SEAL_TICK_MS, NULL);
     seal_show(SEAL_IDLE, 0);
 }
 

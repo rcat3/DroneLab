@@ -95,35 +95,97 @@ static size_t mix_beep(int16_t *frames, size_t count, size_t max_frames, uint32_
 
 /* The seal test's noise: pink, like speech and music have more low than high,
  * with the lows the small speaker can't play taken out, at a steady level.
- * Pink from white by Paul Kellet's filter, white from a xorshift. */
+ * Pink from white by Paul Kellet's filter, white from a xorshift. Or, for
+ * one band at a time, white through two band-passes, kept at the level by a
+ * slow automatic gain. */
 #define TEST_NOISE_RATE     32000
-#define TEST_NOISE_LEVEL    0.1f    // RMS, of full scale: -20 dBFS
 #define TEST_NOISE_HP_HZ    200.0f
+#define TEST_BAND_Q         2.0f    // each of the two: together about half an octave wide
+#define TEST_BAND_AGC_S     0.05f
+
+static volatile float test_band_hz;             // 0 for pink
+static volatile float test_level = 0.1f;        // RMS, of full scale
+static uint64_t test_sum_sq;                    // what it played, for the seal test
+static uint32_t test_n;
+
+typedef struct
+{
+    float b0, b1, b2, a1, a2, x1, x2, y1, y2;
+} band_t;
+
+static void band_init(band_t *f, float hz)
+{
+    // RBJ's band-pass, 0 dB at the centre
+    float w = 2.0f * (float)M_PI * hz / TEST_NOISE_RATE;
+    float alpha = sinf(w) / (2.0f * TEST_BAND_Q);
+    float a0 = 1 + alpha;
+    *f = (band_t){ .b0 = alpha / a0, .b1 = 0, .b2 = -alpha / a0, .a1 = -2 * cosf(w) / a0, .a2 = (1 - alpha) / a0 };
+}
+
+static float band_run(band_t *f, float x)
+{
+    float y = f->b0 * x + f->b1 * f->x1 + f->b2 * f->x2 - f->a1 * f->y1 - f->a2 * f->y2;
+    f->x2 = f->x1;
+    f->x1 = x;
+    f->y2 = f->y1;
+    f->y1 = y;
+    return y;
+}
 
 static size_t fill_test_noise(int16_t *frames, size_t max_frames, uint32_t *sample_rate)
 {
     static uint32_t seed = 0x2545F491;
     static float b0, b1, b2, hp_in, hp_out;
+    static float band_now = -1;
+    static band_t band1, band2;
+    static float band_ms;
     const float hp = 1.0f / (1.0f + 2.0f * (float)M_PI * TEST_NOISE_HP_HZ / TEST_NOISE_RATE);
+    const float agc = 1.0f / (TEST_BAND_AGC_S * TEST_NOISE_RATE);
+    float band_hz = test_band_hz;
+    float level = test_level;
+    if (band_hz != band_now)
+    {
+        band_now = band_hz;
+        if (band_hz > 0)
+        {
+            band_init(&band1, band_hz);
+            band_init(&band2, band_hz);
+            band_ms = 1e-4f;
+        }
+    }
     *sample_rate = TEST_NOISE_RATE;
+    uint64_t sum = 0;
     for (size_t i = 0; i < max_frames; i++)
     {
         seed ^= seed << 13;
         seed ^= seed >> 17;
         seed ^= seed << 5;
         float white = (float)(int32_t)seed / 2147483648.0f;      // -1 to 1, RMS 0.58
-        b0 = 0.99765f * b0 + white * 0.0990f;
-        b1 = 0.96300f * b1 + white * 0.2965f;
-        b2 = 0.57000f * b2 + white * 1.0526f;
-        float pink = b0 + b1 + b2 + white * 0.1848f;
-        // A one-pole high-pass
-        hp_out = hp * (hp_out + pink - hp_in);
-        hp_in = pink;
-        float v = hp_out * (TEST_NOISE_LEVEL / 1.19f) * 32767.0f;     // the filtered noise has an RMS of 1.19
+        float v;
+        if (band_hz > 0)
+        {
+            float y = band_run(&band2, band_run(&band1, white));
+            band_ms += agc * (y * y - band_ms);
+            v = y * level / sqrtf(band_ms + 1e-12f) * 32767.0f;
+        }
+        else
+        {
+            b0 = 0.99765f * b0 + white * 0.0990f;
+            b1 = 0.96300f * b1 + white * 0.2965f;
+            b2 = 0.57000f * b2 + white * 1.0526f;
+            float pink = b0 + b1 + b2 + white * 0.1848f;
+            // A one-pole high-pass
+            hp_out = hp * (hp_out + pink - hp_in);
+            hp_in = pink;
+            v = hp_out * (level / 1.19f) * 32767.0f;     // the filtered noise has an RMS of 1.19
+        }
         int16_t s = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
         frames[2 * i] = s;
         frames[2 * i + 1] = s;
+        sum += (uint32_t)((int32_t)s * s);
     }
+    __atomic_add_fetch(&test_sum_sq, sum, __ATOMIC_RELAXED);
+    __atomic_add_fetch(&test_n, (uint32_t)max_frames, __ATOMIC_RELAXED);
     return max_frames;
 }
 
@@ -173,6 +235,19 @@ void speaker_set_test_noise(bool on)
     {
         test_noise = on;
     }
+}
+
+void speaker_set_test_noise_shape(float band_hz, float level)
+{
+    test_band_hz = band_hz;
+    test_level = level;
+}
+
+float speaker_take_test_noise_level(void)
+{
+    uint64_t sum = __atomic_exchange_n(&test_sum_sq, 0, __ATOMIC_RELAXED);
+    uint32_t n = __atomic_exchange_n(&test_n, 0, __ATOMIC_RELAXED);
+    return n == 0 ? 0.0f : (float)((double)sum / n / (32768.0 * 32768.0));
 }
 
 void speaker_beep(void)

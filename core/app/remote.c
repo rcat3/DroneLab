@@ -480,11 +480,48 @@ static void write_state(json_t *j)
     {
         const seal_result_t *r = seal_test_result();
         jprintf(j, ",\"seal\":{\"phase\":%d,\"left\":%d", (int)seal_test_phase(), seal_test_seconds_left());
+        if (seal_test_phase() == SEAL_FEEDBACK)
+        {
+            jprintf(j, ",\"gain\":%.0f", seal_test_feedback_gain_db());
+        }
         if (seal_test_phase() == SEAL_DONE)
         {
-            jprintf(j, ",\"room\":%.1f,\"leak\":%.1f,\"echo\":%.1f,\"mics\":%.1f,\"grades\":[%d,%d,%d],\"advice\":",
-                    r->room_db, r->leak_db, r->cancelled_db, isnan(r->balance_db) ? 0.0f : r->balance_db,
-                    (int)r->leak, (int)r->cancelled, (int)r->balance);
+            jprintf(j, ",\"mode\":%d", (int)r->mode);
+            if (r->mode == SEAL_TEST_FEEDBACK)
+            {
+                // null: it didn't feed back by the top
+                if (isnan(r->feedback_db))
+                {
+                    jprintf(j, ",\"feedback\":null");
+                }
+                else
+                {
+                    jprintf(j, ",\"feedback\":%.0f", r->feedback_db);
+                }
+            }
+            else
+            {
+                // grades: leak, echo, mics, spare
+                jprintf(j, ",\"room\":%.1f,\"leak\":%.1f,\"echo\":%.1f,\"mics\":%.1f,\"spare\":%.1f,"
+                           "\"grades\":[%d,%d,%d,%d]",
+                        r->room_db, r->leak_db, r->cancelled_db, isnan(r->balance_db) ? 0.0f : r->balance_db,
+                        r->spare_db, (int)r->leak, (int)r->cancelled, (int)r->balance, (int)r->spare);
+            }
+            if (r->mode == SEAL_TEST_FULL)
+            {
+                jprintf(j, ",\"leak_range\":[%.1f,%.1f],\"echo_range\":[%.1f,%.1f],\"loud\":{\"leak\":%.1f,"
+                           "\"echo\":%.1f,\"grade\":%d},\"broadband_spare\":%.1f,\"bands\":[",
+                        r->leak_min, r->leak_max, r->cancelled_min, r->cancelled_max, r->loud_leak_db,
+                        r->loud_cancelled_db, (int)r->loud, r->broadband_spare_db);
+                for (int i = 0; i < SEAL_BAND_COUNT; i++)
+                {
+                    const seal_band_t *b = &r->bands[i];
+                    jprintf(j, "%s{\"hz\":%.0f,\"leak\":%.1f,\"echo\":%.1f,\"spare\":%.1f,\"noisy\":%d}",
+                            i ? "," : "", b->hz, b->leak_db, b->cancelled_db, b->spare_db, b->noisy ? 1 : 0);
+                }
+                jprintf(j, "]");
+            }
+            jprintf(j, ",\"advice\":");
             jstring(j, r->advice);
         }
         jprintf(j, "}");
@@ -1169,10 +1206,12 @@ static bool run_command(const char *name, const char *query, const char *body, s
     }
     else if (strcmp(name, "seal") == 0 && seal_test_available())
     {
-        // start=1 runs the seal test, start=0 stops it
-        if (query_int(query, "start", -1) == 1)
+        // start=1 runs the quick seal test, 2 the full one and 3 the
+        // feedback check; start=0 stops it
+        int start = query_int(query, "start", -1);
+        if (start >= 1 && start <= SEAL_TEST_MODES)
         {
-            seal_test_start();
+            seal_test_start((seal_mode_t)(start - 1));
         }
         else if (query_int(query, "start", -1) == 0)
         {
