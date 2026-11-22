@@ -43,6 +43,11 @@
  *                                     it on screen
  *     GET  /api/tracks    the sound player's tracks, which don't change
  *     GET  /api/chime     whether a sound for something's playing (POST /api/sound?chime=)
+ *     GET  /api/hotspot   (the app only, over Bluetooth) the hotspot: on,
+ *                                     its name, password and join text,
+ *                                     phones joined, start at power-up
+ *     POST /api/hotspot?[on=<1 or 0>][&new=1][&auto=<1 or 0>]   switch it
+ *                                     on or off, a new password, at power-up
  *     GET  /api/about     the board: firmware, build, MAC addresses, housing,
  *                                     uptime and battery, for the app's About page
  *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>][&loud=<0 off, 1 to 4>]
@@ -1330,6 +1335,49 @@ static void respond_json(client_t *c, void (*write)(json_t *))
     respond(c, "200 OK", "application/json", c->json, j.len, NULL);
 }
 
+/* The hotspot itself, for the app (over Bluetooth only: a phone on the
+ * hotspot can't switch it off under itself): whether it's on, its name and
+ * password, what a phone's camera needs to join it, how many phones have,
+ * and whether it starts at power-up. hotspot_failed: the last start didn't. */
+static bool hotspot_failed;
+
+static void write_hotspot(json_t *j)
+{
+    jprintf(j, "{\"on\":%d,\"failed\":%d,\"phones\":%d,\"auto\":%u,\"ssid\":", remote_running() ? 1 : 0,
+            hotspot_failed ? 1 : 0, remote_phones(), settings_get()->remote_autostart);
+    jstring(j, remote_ssid());
+    jprintf(j, ",\"password\":");
+    jstring(j, remote_password());
+    jprintf(j, ",\"join\":");
+    jstring(j, remote_join_text());
+    jprintf(j, "}");
+}
+
+/* POST /api/hotspot?[on=<1 or 0>][&new=1][&auto=<1 or 0>]: as the WiFi
+ * Hotspot Remote page's switch, New password and At power-up. */
+static void set_hotspot(const char *query)
+{
+    int autostart = query_int(query, "auto", -1);
+    if (autostart >= 0)
+    {
+        settings_set_remote_autostart(autostart != 0);
+    }
+    if (query_int(query, "new", 0) == 1)
+    {
+        remote_new_password();
+    }
+    int on = query_int(query, "on", -1);
+    if (on == 1)
+    {
+        hotspot_failed = !remote_start();
+    }
+    else if (on == 0)
+    {
+        remote_stop();
+        hotspot_failed = false;
+    }
+}
+
 const char *remote_page_html(size_t *len)
 {
     *len = remote_page_len;
@@ -1365,6 +1413,14 @@ int remote_api(const char *method, const char *target, const char *body, size_t 
     else if (strcmp(path, "/api/chime") == 0)
     {
         write = write_chime;
+    }
+    else if (strcmp(path, "/api/hotspot") == 0)
+    {
+        if (strcmp(method, "POST") == 0)
+        {
+            set_hotspot(query);
+        }
+        write = write_hotspot;
     }
     else if (strcmp(path, "/api/comm") == 0)
     {
