@@ -23,7 +23,7 @@ The page is the unit's own, so it always matches the unit's firmware.  It has fi
 - **Toys**: your own [Lovense](../features/lovense.md) toys: a slider for each motor, the patterns, the reactions, the devices, and a big **STOP**.  *From others* is the list of who can [control your toys](control.md#who-can-control-your-toys), also in [Permissions](permissions.md).
 - **Sound**: the voice effect and its volume, the voice ring, and the sound player.  A low-profile unit has no speaker, so its voice effect isn't here: pick it as *HiveMind voice* in Setup, or on the unit.
 - **Terminal**: type a message onto your own display.  *From others* is who can [put words on it](text.md#who-can-put-words-on-your-display), *Off*, *Ask* or *Accept*, and the list of who's tried, also in [Permissions](permissions.md).
-- **Setup**: the display's settings: brightness, rotation, what it shows at startup, and the battery.
+- **Setup**: the display's settings: brightness, rotation, what it shows at startup, and the battery.  The same settings are in the app's own Setup too, under [Display unit](#setup-display-unit).
 
 Each tab is described in full in [WiFi Hotspot Remote](../features/phone-remote.md), which is the same page.  The display and the phone control the same things, so each shows what the other does.
 
@@ -42,3 +42,18 @@ There are two ways to reach the same page:
 With the app, use the Remote tab: it keeps the phone online, so HiveMind's server link keeps working.  For an iPhone, or to let a friend's phone in without the app, use the [WiFi Hotspot Remote](../features/phone-remote.md).
 
 If the Remote tab says the unit isn't connected, it needs the app linked to the unit first: see [Connecting](connecting.md).
+
+## Setup: display unit
+
+Setup's **Display unit**, under *Unit*, has the display's settings without opening the Remote: its **brightness**, **rotation** and what it shows **at startup**.  They're the unit's own, the same as on its display's Settings and the Remote's Setup tab, so a change in any of them shows in the others.  A link at the top jumps to the Remote tab for everything else.  It's there while the app's connected to the unit.
+
+Its *WiFi hotspot remote* section runs the unit's [WiFi Hotspot Remote](../features/phone-remote.md), as the display's own page does:
+
+- **Hotspot** switches it on or off, and says how many phones have joined.
+- While it's on, its **QR code**: a phone's camera turns it into "join this network".
+- The **network** name and **password**, with a button to copy the password.
+- **Join on this phone** (Android) or **Join on this computer** (Linux) joins the hotspot from the device the app's on.  Android asks to save the network, then shows WiFi to connect to it; on Linux, NetworkManager joins it.  The device's WiFi then has no internet, so the server link may drop.
+- **New password** makes up a new one; phones that joined with the old one are dropped, and have to join again.
+- **Start at power-up** switches the hotspot on as the display starts.
+
+Switching it on and the password need the unit's firmware from this release on; on older firmware, only *Start at power-up* is here.

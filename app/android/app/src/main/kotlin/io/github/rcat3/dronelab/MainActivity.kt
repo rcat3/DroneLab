@@ -4,9 +4,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
+import android.net.wifi.WifiNetworkSuggestion
 import android.os.Build
+import android.provider.Settings
 import android.view.KeyEvent
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -96,6 +100,49 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/wifi").setMethodCallHandler { call, result ->
+            if (call.method == "join") {
+                try {
+                    joinWifi(call.argument<String>("ssid") ?: "", call.argument<String>("password") ?: "")
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.error("join", e.message, null)
+                }
+            } else {
+                result.notImplemented()
+            }
+        }
+    }
+
+    /**
+     * Join the unit's WiFi hotspot remote on this phone. From Android 11, the
+     * system's own "save this network?" dialog, then its WiFi panel, where
+     * the phone connects to it; before that, WiFi settings, with the
+     * password on the clipboard to paste. The iPhone's equivalent would be
+     * NEHotspotConfiguration.
+     */
+    private fun joinWifi(ssid: String, password: String) {
+        if (Build.VERSION.SDK_INT >= 30) {
+            val network = WifiNetworkSuggestion.Builder().setSsid(ssid).setWpa2Passphrase(password).build()
+            val intent = Intent(Settings.ACTION_WIFI_ADD_NETWORKS)
+                .putParcelableArrayListExtra(Settings.EXTRA_WIFI_NETWORK_LIST, arrayListOf(network))
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, ADD_WIFI)
+        } else {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("WiFi password", password))
+            startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        // Saved: the WiFi panel, to connect to it now
+        if (requestCode == ADD_WIFI && resultCode == RESULT_OK && Build.VERSION.SDK_INT >= 29) {
+            startActivity(Intent(Settings.Panel.ACTION_WIFI))
+        }
     }
 
     private fun press(keyCode: Int) {
@@ -152,5 +199,9 @@ class MainActivity : FlutterActivity() {
         dev?.let { unregisterReceiver(it) }
         dev = null
         super.onDestroy()
+    }
+
+    companion object {
+        private const val ADD_WIFI = 4711
     }
 }

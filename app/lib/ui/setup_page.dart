@@ -9,6 +9,7 @@ import '../comm/notifier.dart';
 import '../comm/virtual_unit.dart';
 import 'about_page.dart';
 import 'developer_page.dart';
+import 'display_unit_page.dart';
 import 'identity_page.dart';
 import 'permissions_page.dart';
 import 'unit_sounds_page.dart';
@@ -172,18 +173,27 @@ class SetupPage extends StatelessWidget {
                     ]),
                   ),
                 ]),
-              // Speaker units only: the low-profile one has none to play them on
-              if (boardUp && (settings?.hasSpeaker ?? false)) ...[
+              if (boardUp) ...[
                 const SectionHeader('Unit'),
                 Panel(children: [
                   PanelRow(
-                    leading: const Icon(Icons.music_note_outlined, color: Kc.muted),
-                    title: 'Unit sounds',
-                    subtitle: 'Sounds the unit plays for calls, texts, commands and units nearby',
+                    leading: const Icon(Icons.brightness_6_outlined, color: Kc.muted),
+                    title: 'Display unit',
+                    subtitle: 'Brightness, rotation, what it shows at startup, the WiFi remote',
                     trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
                     onTap: () =>
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => UnitSoundsPage(comm: comm))),
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => DisplayUnitPage(comm: comm))),
                   ),
+                  // Speaker units only: the low-profile one has none to play them on
+                  if (settings?.hasSpeaker ?? false)
+                    PanelRow(
+                      leading: const Icon(Icons.music_note_outlined, color: Kc.muted),
+                      title: 'Unit sounds',
+                      subtitle: 'Sounds the unit plays for calls, texts, commands and units nearby',
+                      trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
+                      onTap: () =>
+                          Navigator.of(context).push(MaterialPageRoute(builder: (_) => UnitSoundsPage(comm: comm))),
+                    ),
                 ]),
               ],
               const SectionHeader('Headphones'),
