@@ -24,6 +24,7 @@ import 'board_protocol.dart';
 import 'calls.dart';
 import 'capabilities.dart';
 import 'invites.dart';
+import 'server_invites.dart';
 import 'conversations.dart';
 import 'notifier.dart';
 import 'permissions.dart';
@@ -1493,6 +1494,53 @@ class CommController extends ChangeNotifier {
     _invitations.add(Invitation(who.id, who.name, name, passphrase, channel, longRange));
   }
 
+  // ----- Invitations to the server (server_invites.dart) -----
+
+  /// Ours, to send: the server set up here, or null if there's none.
+  ServerInvite? get serverInvite =>
+      server.host.isEmpty ? null : ServerInvite(server.host, server.port, server.password);
+
+  /// Whether a conversation can be sent an invitation to our server: any,
+  /// over direct comms or the server, with a server set up here.
+  bool canInviteToServer(Conversation c) => serverInvite != null;
+
+  /// Whether what goes to a conversation can be read by anyone nearby: the
+  /// open direct channel, which nothing's encrypted on, and one person
+  /// reached over it (as a text goes both ways, over the server too).
+  bool readableNearby(Conversation c) {
+    final d = boardSettings?.direct;
+    if (d == null || d.keyed) return false;
+    return switch (c.kind) {
+      ConversationKind.direct || ConversationKind.everyone => _directUp,
+      ConversationKind.person => directBoard(personOf(c)) != null,
+      ConversationKind.server => false,
+    };
+  }
+
+  /// Send them an invitation to our server, as a text. False if it
+  /// couldn't go.
+  bool inviteToServer(Conversation c) {
+    final i = serverInvite;
+    if (i == null || !canInviteToServer(c)) return false;
+    return sendText(c, i.text, typed: false);
+  }
+
+  /// Whether we're on [i]'s server already, or joining it.
+  bool joinedServer(ServerInvite i) =>
+      _serverWanted && server.host == i.host && server.port == i.port && server.password == i.password;
+
+  /// Join the server [i] is for: set up for it, in place of the one before,
+  /// and connected. Returns why not, or null once it's connecting.
+  Future<String?> joinServer(ServerInvite i) async {
+    if (server.username.isEmpty) return 'Give yourself a name first, in Setup → Identity';
+    if (joinedServer(i)) return null;
+    final changed = server.host != i.host || server.port != i.port || server.password != i.password;
+    await saveServer(ServerSettings(host: i.host, port: i.port, username: server.username, password: i.password), bufferMs);
+    if (changed && _serverWanted) await disconnectServer(forGood: false);
+    await connectServer();
+    return null;
+  }
+
   void _onCallSignal(KnownPerson who, Uint8List data) {
     if (data.length < 5) return;
     final op = data[0];
@@ -2535,15 +2583,22 @@ class CommController extends ChangeNotifier {
     conversations.changed();
   }
 
-  /// Texts lately, by who and what, so one sent to everyone who can hear
-  /// them, which comes both over the server and directly, shows once.
-  final Map<String, int> _recentTexts = {};
-  static const _sameTextFor = 10000;   // ms
+  /// Texts lately, so one that comes both over the server and directly
+  /// shows once: by its id ([id], messageRef), the same whichever way it
+  /// came, so the same words sent twice show twice; or for one with none,
+  /// from a Mumble app, by who and what it says.
+  final Map<String, int> _recentTexts = {};     // till when, ms
+  static const _sameTextFor = 10000;   // ms, by its words
+  static const _sameIdFor = 90000;     // ms, by its id: a long text's parts can come 30 s behind
 
-  bool _seenText(String from, String text) {
+  bool _seenText(String from, String text, {String? id}) {
     final now = DateTime.now().millisecondsSinceEpoch;
-    _recentTexts.removeWhere((_, at) => now - at > _sameTextFor);
-    return _recentTexts.putIfAbsent('$from\n$text', () => now) != now;
+    _recentTexts.removeWhere((_, until) => now > until);
+    final byId = id != null && id.isNotEmpty;
+    final key = byId ? 'id:$id' : '$from\n$text';
+    if (_recentTexts.containsKey(key)) return true;
+    _recentTexts[key] = now + (byId ? _sameIdFor : _sameTextFor);
+    return false;
   }
 
   /// A text's come in: a notification, unless its conversation's on screen.
@@ -2561,7 +2616,10 @@ class CommController extends ChangeNotifier {
     final last = texts.length > 6 ? texts.sublist(texts.length - 6) : texts;
     final group = c.kind != ConversationKind.person;
     notifier.showTexts(c.key, c.title,
-        [for (final e in last) (fromLabel(e), e.kind == ConversationEntry.photo ? '📷 Photo' : e.body, e.time, _avatarByName(e.from))],
+        [
+          for (final e in last)
+            (fromLabel(e), e.kind == ConversationEntry.photo ? '📷 Photo' : ServerInvite.preview(e.body), e.time, _avatarByName(e.from))
+        ],
         group: group);
   }
 
@@ -2620,7 +2678,7 @@ class CommController extends ChangeNotifier {
         : t.message.contains(_everyoneMark)
             ? OthersCommand.scopeEveryone
             : OthersCommand.scopeChannel;
-    if (photos.isEmpty && _seenText(who.id, text)) {
+    if (photos.isEmpty && _seenText(who.id, text, id: mark != null ? refOf('', '') : null)) {
       _addRoute(refOf('', 'text:$text'), route);
       return;
     }
@@ -2740,7 +2798,7 @@ class CommController extends ChangeNotifier {
         : h.direct
             ? _directRoute(h)
             : MessageRoute(MessageRoute.server, DateTime.now().millisecondsSinceEpoch, bytes: h.data.length);
-    if (h.what == Heard.text && _seenText(who.id, h.textOf)) {
+    if (h.what == Heard.text && _seenText(who.id, h.textOf, id: h.counter == null ? null : ref)) {
       _addRoute(ref, route!);
       return;
     }

@@ -45,11 +45,19 @@ The button by each (sliders) opens Android's own settings for it: its sound, whe
 Type in the box at the foot of a conversation and tap send.  Anyone can text you, and you anyone: texts don't need anyone's permission, as they only go to the app, never to the display.
 
 - **Over the server**, texts are Mumble's own text messages: those in a channel's conversation go to the channel, and those to one person go to them alone.  So people in Mumble's own apps, on a computer, see them too, and can text you back.
-- **Over direct mode**, your unit carries them to the others nearby: a long one goes in up to six parts, about 600 letters in all.
-- **To one person**, a text goes both ways they can be reached, over the server and directly, and they see it once.  Words for their display and commands for their toys go both ways too: their unit does each once, by whichever way it allows, so allowing them for either is enough.
+- **Over direct mode**, your unit carries them to the others nearby: a long one goes in up to six parts, 654 bytes in all. That's 654 plain letters, fewer with accented letters (2 bytes each) or emoji (4). The box stops there, and counts down the last 100.
+- **To one person**, a text goes both ways they can be reached, over the server and directly, and they see it once.  The app knows the two copies by the message's id, so the same words sent twice on purpose show twice.  Words for their display and commands for their toys go both ways too: their unit does each once, by whichever way it allows, so allowing them for either is enough.
 - **Broadcast** goes both ways at once.  Someone who hears you both ways sees it once, under their Broadcast.  (One from a Mumble app to the channel shows in the channel's conversation.)
 
 You need a link to send: someone who can't be reached just now says so in place of the box.
+
+## Inviting someone to your server
+
+To bring someone onto the server you use, open a conversation with them (one person, a direct channel or Broadcast), tap **⋮** and pick **Invite to your server**.  It goes as a text, over direct mode or the server, the same way any text there does.  It carries the server's address, port and password from your *Setup → Server*.
+
+The text shows as an invitation with a **Join server** button.  One tap sets up their app for that server in *Setup → Server*, keeping their own name, and connects.  If they had a different server set up, the app checks with them first, since the new one replaces it.  Once they're on it, the button shows *Joined*.  An app too old to know invitations shows the text as it is, with everything needed to join by hand.  The list of conversations and notifications show *Invitation to the server …* and never the password.
+
+Anyone the text reaches can read the password.  On a direct channel with a passphrase, that's only its members.  On the open direct channel, it's anyone nearby, and the app warns you before you send.
 
 ## Message details
 
@@ -61,7 +69,7 @@ You need a link to send: someone who can't be reached just now says so in place 
   - **Direct**: the channel, with an (i) for its frequency, Long Range, access and id as they were then; how many packets went on the air, their size, and that each is sent three times.  Then how many of those sends your unit heard (green all, amber half or more, red fewer), how many copies were relayed by another unit, the signal's range in dBm, and how long the copies were spread over.
 - **Each packet**: every copy heard, with its signal, whether it came directly or relayed, and how long after the first.  A part that never came is marked *Never came*.
 
-For your own messages it shows how they went: other units don't say which copies they heard.  Copies that come while Details is open are added as they come.  Messages from before the app kept details say so, as do commands, which keep none.  Signal strength on a relayed copy is from the unit that relayed it.
+For your own messages it shows how they went: other units don't say which copies they heard.  Copies that come while Details is open are added as they come.  Messages from before the app kept details say so, as do commands, which keep none.  Signal strength on a relayed copy is from the unit that relayed it.  When a long text comes with a crowd of copies, the unit passes the text itself to the phone first, so Details may count fewer copies than really came.
 
 ## Their display
 

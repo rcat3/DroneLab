@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
+import '../comm/server_invites.dart';
 import 'capabilities_ui.dart';
 import 'permissions_page.dart';
 import 'message_details.dart';
@@ -16,6 +17,7 @@ import 'people.dart';
 import 'person_sheet.dart';
 import 'setup_page.dart';
 import 'theme.dart';
+import 'utf8_limit.dart';
 import 'widgets.dart';
 
 /// HiveMind by text: a conversation for everyone who can hear us, for each
@@ -148,7 +150,7 @@ class _Row extends StatelessWidget {
         ? null
         : last.kind == ConversationEntry.text || last.kind == ConversationEntry.photo
             ? '${last.mine ? 'You: ' : c.kind == ConversationKind.person ? '' : '${comm.fromLabel(last)}: '}'
-                '${last.kind == ConversationEntry.photo ? '📷 Photo' : last.body}'
+                '${last.kind == ConversationEntry.photo ? '📷 Photo' : ServerInvite.preview(last.body)}'
             : '${last.mine ? 'You' : comm.fromLabel(last)} ${last.body}';
     return InkWell(
       onTap: () => openConversation(context, comm, c),
@@ -358,6 +360,33 @@ class _ConversationPageState extends State<ConversationPage> {
     }
   }
 
+  /// Send them an invitation to our server, once it's said what goes with
+  /// it: the address, and the password, which anyone nearby can read on the
+  /// open direct channel.
+  Future<void> _inviteToServer(Conversation c) async {
+    final i = comm.serverInvite;
+    if (i == null) return;
+    final open = comm.readableNearby(c) && i.password.isNotEmpty;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Invite to your server?'),
+        content: Text('${c.kind == ConversationKind.person ? c.title : 'Everyone in ${c.title}'} gets a text '
+            'with a button to join ${i.address}${i.password.isEmpty ? '' : ', its password and all'}.'
+            '${open ? '\n\nOn the open direct channel, anyone nearby can read the password.' : ''}'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialog, true), child: const Text('Invite')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (!comm.inviteToServer(c)) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Couldn't send it: ${c.title} can't be reached just now")));
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -432,13 +461,17 @@ class _ConversationPageState extends State<ConversationPage> {
                 },
               ),
               PopupMenuButton<String>(
-                onSelected: (v) => v != 'details'
-                    ? deleteConversation(context, comm, c, leave: true)
-                    : group
-                        ? showChannelDetails(context, comm, c)
-                        : showPerson(context, comm, id: CommController.personOf(c), inConversation: true),
+                onSelected: (v) => switch (v) {
+                  'details' => group
+                      ? showChannelDetails(context, comm, c)
+                      : showPerson(context, comm, id: CommController.personOf(c), inConversation: true),
+                  'invite' => _inviteToServer(c),
+                  _ => deleteConversation(context, comm, c, leave: true),
+                },
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'details', child: Text('Details')),
+                  if (comm.canInviteToServer(c))
+                    PopupMenuItem(value: 'invite', enabled: online, child: const Text('Invite to your server')),
                   const PopupMenuItem(value: 'delete', child: Text('Delete conversation')),
                 ],
               ),
@@ -501,10 +534,21 @@ class _ConversationPageState extends State<ConversationPage> {
                           minLines: 1,
                           maxLines: 4,
                           textCapitalization: TextCapitalization.sentences,
-                          maxLength: c.kind == ConversationKind.server ? null : OthersCommand.longTextMax,
+                          // Over direct comms, a text's limited in bytes: how
+                          // many are left shows near the end
+                          inputFormatters: c.kind == ConversationKind.server
+                              ? null
+                              : [Utf8LengthLimit(OthersCommand.longTextBytes)],
+                          buildCounter: (context, {required currentLength, required isFocused, maxLength}) {
+                            if (c.kind == ConversationKind.server) return null;
+                            final left = OthersCommand.longTextBytes - Utf8LengthLimit.bytes(_text.text);
+                            return left > 100
+                                ? null
+                                : Text(left == 0 ? 'Full' : '$left left',
+                                    style: TextStyle(color: left < 20 ? Kc.softRed : Kc.muted, fontSize: 11));
+                          },
                           decoration: InputDecoration(
                               hintText: 'Text ${c.kind == ConversationKind.everyone ? 'everyone' : c.title}',
-                              counterText: '',
                               isDense: true),
                         ),
                       ),
@@ -598,7 +642,10 @@ class _Entry extends StatelessWidget {
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             if (named && !e.mine) Text(from, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
-            Text(e.body, style: const TextStyle(fontSize: 15)),
+            if (ServerInvite.parse(e.body) case final i?)
+              _ServerInviteCard(comm, i, mine: e.mine)
+            else
+              Text(e.body, style: const TextStyle(fontSize: 15)),
             const SizedBox(height: 2),
             Text(time, style: const TextStyle(color: Kc.dim, fontSize: 11)),
           ]),
@@ -652,6 +699,84 @@ extension on _Entry {
         ]),
       ),
     );
+  }
+}
+
+/// An invitation to a server, in its text's bubble: where, and for theirs,
+/// a button that sets the app up for it and connects.
+class _ServerInviteCard extends StatefulWidget {
+  final CommController comm;
+  final ServerInvite i;
+  final bool mine;
+  const _ServerInviteCard(this.comm, this.i, {required this.mine});
+
+  @override
+  State<_ServerInviteCard> createState() => _ServerInviteCardState();
+}
+
+class _ServerInviteCardState extends State<_ServerInviteCard> {
+  bool _joining = false;
+
+  Future<void> _join() async {
+    final comm = widget.comm, i = widget.i;
+    // In place of another server set up here: said first
+    if (comm.server.host.isNotEmpty && (comm.server.host != i.host || comm.server.port != i.port)) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: Text('Join ${i.address}?'),
+          content: Text('It takes the place of ${ServerInvite(comm.server.host, comm.server.port, '').address} '
+              'in Setup → Server.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialog, true), child: const Text('Join')),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _joining = true);
+    try {
+      final why = await comm.joinServer(i);
+      messenger.showSnackBar(SnackBar(content: Text(why ?? 'Connecting to ${i.address}')));
+    } finally {
+      if (mounted) setState(() => _joining = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final i = widget.i;
+    final joined = widget.comm.joinedServer(i);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.cloud_outlined, size: 18, color: Kc.green),
+        const SizedBox(width: 6),
+        Text(widget.mine ? 'You sent an invitation' : 'Invitation to a server',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+      ]),
+      const SizedBox(height: 4),
+      Text(i.address, style: const TextStyle(fontSize: 15)),
+      Text(i.password.isEmpty ? 'No password' : 'Password included',
+          style: const TextStyle(color: Kc.muted, fontSize: 13)),
+      if (!widget.mine) ...[
+        const SizedBox(height: 8),
+        joined
+            ? const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.check, size: 16, color: Kc.green),
+                SizedBox(width: 4),
+                Text('Joined', style: TextStyle(color: Kc.green)),
+              ])
+            : FilledButton.icon(
+                onPressed: _joining ? null : _join,
+                icon: _joining
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.login),
+                label: const Text('Join server'),
+              ),
+      ],
+    ]);
   }
 }
 

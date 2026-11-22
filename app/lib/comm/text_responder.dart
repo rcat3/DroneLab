@@ -63,7 +63,7 @@ class TextResponder {
   /// A reply, in texts short enough to go direct (a few parts each), split
   /// at lines.
   void _reply(Conversation c, String reply) {
-    const most = 480;     // bytes, within OthersCommand.longTextMax's parts
+    const most = 480;     // bytes, within OthersCommand.longTextBytes
     final texts = <String>[];
     var now = StringBuffer();
     for (final line in reply.split('\n')) {

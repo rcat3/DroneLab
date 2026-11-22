@@ -581,9 +581,10 @@ class OthersCommand {
   static const partMax = whatMax - 5;
   static const partsMax = 6;
 
-  /// The longest a text can be typed, in characters: past [partsMax] parts'
-  /// worth of bytes, it's cut.
-  static const longTextMax = 600;
+  /// The longest a text can be typed, in bytes of UTF-8: what's sure to go
+  /// in [partsMax] parts, as a part's never cut in the middle of a
+  /// character, which can leave up to 3 bytes of one unused.
+  static const longTextBytes = partsMax * (partMax - 3);
 
   static const keyLength = 32, signatureLength = 64;
   static const headerLength = 40;     // OTHERS_HEADER_LEN
