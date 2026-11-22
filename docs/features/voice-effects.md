@@ -23,7 +23,20 @@ The *Voice Effect* page, in the Voice feature, runs your voice through an effect
 
 The effect goes to the [Voice Lab](voice-lab.md) stream (`voice_monitor.py --listen effect` plays it) and, with *Play on speaker* switched on, to the board's speaker.  While it's on the speaker, the [sound player](sound.md) waits.
 
-The *Effect Volume* page, next to it, sets how loud the effect is on the speaker, separately from the sound player's volume.  50% is about 10 dB louder than the microphone picks it up, and 100% about 35 dB, with a limiter that rounds off the peaks.  Each preset is set a little louder or quieter on the speaker than that, so that they all start to feed back at about the same setting: just above 100% on the ESP32-S3-Touch-AMOLED-1.75 in its housing.  On that board, every preset holds at 100% even with a mirror held in front of the mask.  Somewhere that reflects more of the sound back, like a corner, brings it down.  If it feeds back, turn it down.
+The *Effect Volume* page, next to it, sets how loud the effect is on the speaker, separately from the sound player's volume.  50% is about 10 dB louder than the microphone picks it up, and 100% about 35 dB, with a limiter that rounds off the peaks.  Each preset is set a little louder or quieter on the speaker than that, so that they'd all start to feed back at about the same setting.  On the ESP32-S3-Touch-AMOLED-1.75 in its housing, every preset holds at 100% with room to spare (the [Seal Test](../build/seal-test.md) says how much), even with a mirror held in front of the mask.  Somewhere that reflects more of the sound back, like a corner, brings it down.  If it feeds back, turn it down.
+
+*Loud room*, on the same page, is for loud places: *Off*, or *1* to *Max*, for how strongly it keeps the room out.  Every preset has a gate that keeps the speaker quiet between words, which normally opens at anything above the microphones' own hiss, so in a loud room the room's noise holds it open and comes through.  With *Loud room* on, the gate only opens for something much louder: your voice, which is far louder in the microphones from inside the mask than the room is through it.  It opens at a fixed level, which each step raises by 4 dB, or 12 dB above the room's steady noise if that's higher (the quietest moments in the last 3 seconds, as speech always pauses in that time).  So the room doesn't come through between words, on the speaker or to HiveMind.  Start at *2*, and go up a step if the room still comes through, or down one if your words get cut.
+
+Measured worn, with music played loud nearby:
+
+| Loud room | Music that got through | Your voice | Your quiet words |
+|---|---|---|---|
+| 1 | 7% | 100% | 97% |
+| 2 | none | 99.5% | 94% |
+| 3 | none | 98% | 83% |
+| Max | none | 94% | 71% |
+
+Louder music, or a quieter voice, moves those along a step.  It takes a few seconds to catch up when a steady noise changes, so leave it off where it's quiet.  It's saved, unlike *Play on speaker*.
 
 The board's **BOOT** button switches *Play on speaker* off and on, to stop feedback quickly.  (BOOT only matters at startup: held while the board starts, it waits for new firmware over USB.)  The [WiFi Hotspot Remote](phone-remote.md) has all of these too, with the volume in exact steps.
 

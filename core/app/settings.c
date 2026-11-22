@@ -124,6 +124,10 @@ static bool load(settings_t *out)
     {
         out->voice_volume = SETTINGS_DEFAULT_VOICE_VOLUME;
     }
+    if (out->voice_loud_room > 4)     // VOICE_FX_LOUD_LEVELS
+    {
+        out->voice_loud_room = 0;
+    }
     out->lovense_release_to_zero = out->lovense_release_to_zero ? 1 : 0;
     out->remote_autostart = out->remote_autostart ? 1 : 0;
     // visualizer is checked against the list of styles by the UI
@@ -286,6 +290,12 @@ void settings_set_voice_effect(uint8_t preset)
 void settings_set_voice_volume(uint8_t percent)
 {
     current.voice_volume = percent;
+    schedule_save();
+}
+
+void settings_set_voice_loud_room(uint8_t level)
+{
+    current.voice_loud_room = level;
     schedule_save();
 }
 

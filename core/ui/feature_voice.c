@@ -42,6 +42,7 @@ static lv_obj_t *volume_value_label;
 static lv_obj_t *effect_roller;
 static lv_obj_t *speaker_switch;
 static lv_obj_t *volume_slider;
+static lv_obj_t *loud_buttons;
 
 #define LAB_POLL_MS 250
 #define SYNC_MS     250     // how often the effect pages catch up with the phone remote
@@ -181,11 +182,22 @@ static void volume_slider_event_cb(lv_event_t *e)
     settings_set_voice_volume(volume);
 }
 
+static void loud_buttons_event_cb(lv_event_t *e)
+{
+    uint32_t level = lv_buttonmatrix_get_selected_button(loud_buttons);
+    if (level <= VOICE_FX_LOUD_LEVELS)
+    {
+        voice_fx_set_loud_room((int)level);
+        settings_set_voice_loud_room((uint8_t)level);
+    }
+}
+
 static void add_volume_page(ui_feature_t *feature)
 {
     lv_obj_t *page = ui_feature_add_page(feature, "Effect Volume", false);
     uint8_t volume = settings_get()->voice_volume;
     voice_fx_set_volume(volume);
+    voice_fx_set_loud_room(settings_get()->voice_loud_room);
 
     lv_obj_t *title = lv_label_create(page);
     lv_label_set_text(title, "Effect Volume");
@@ -196,18 +208,22 @@ static void add_volume_page(ui_feature_t *feature)
     lv_obj_set_size(slider, ui_px(160), ui_px(20));
     lv_slider_set_range(slider, 0, 100);
     lv_slider_set_value(slider, volume, LV_ANIM_OFF);
-    lv_obj_align(slider, LV_ALIGN_CENTER, 0, ui_px(-10));
+    lv_obj_align(slider, LV_ALIGN_CENTER, 0, ui_px(-30));
     lv_obj_add_event_cb(slider, volume_slider_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     volume_value_label = lv_label_create(page);
     lv_label_set_text_fmt(volume_value_label, "%d%%", volume);
-    lv_obj_align(volume_value_label, LV_ALIGN_CENTER, 0, ui_px(16));
+    lv_obj_align(volume_value_label, LV_ALIGN_CENTER, 0, ui_px(-4));
 
-    lv_obj_t *help = lv_label_create(page);
-    lv_label_set_text(help, "Turn it down\nif it feeds back");
-    lv_obj_set_style_text_align(help, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(help, lv_palette_main(LV_PALETTE_GREY), 0);
-    lv_obj_align(help, LV_ALIGN_CENTER, 0, ui_px(56));
+    // Keeps a loud room's noise out between words (voice_fx_set_loud_room):
+    // off, or how loud a room
+    lv_obj_t *loud_label = lv_label_create(page);
+    lv_label_set_text(loud_label, "Loud room");
+    lv_obj_align(loud_label, LV_ALIGN_CENTER, 0, ui_px(30));
+    static const char *const levels[] = { "Off", "1", "2", "3", "Max", "" };
+    loud_buttons = ui_add_choices(page, levels, ui_px(164), ui_px(36), ui_px(62));
+    ui_check_choice(loud_buttons, settings_get()->voice_loud_room);
+    lv_obj_add_event_cb(loud_buttons, loud_buttons_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 }
 
 /* Show what the phone remote changed, leaving alone anything that's being
@@ -259,6 +275,10 @@ static void sync_timer_cb(lv_timer_t *t)
         {
             lv_obj_remove_state(speaker_switch, LV_STATE_CHECKED);
         }
+    }
+    if (loud_buttons != NULL)
+    {
+        ui_check_choice(loud_buttons, s->voice_loud_room);     // the phone remote can change it too
     }
     if (volume_slider != NULL && !lv_slider_is_dragged(volume_slider)
         && lv_slider_get_value(volume_slider) != s->voice_volume)

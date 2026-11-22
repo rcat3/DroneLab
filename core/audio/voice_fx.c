@@ -116,7 +116,65 @@ typedef struct
 {
     float threshold_db;
     float gain;
+    float over_s;       // Loud room: how long it's been over the threshold
 } gate_t;
+
+/* Loud room (voice_fx_set_loud_room): the gate opens only well above the
+ * room's noise, not just above the microphones' own hiss. The voice, from
+ * inside the mask, is much louder in the microphones than the room through
+ * it: worn on the 1.75", a voice was -17 to -25 dBFS and quiet words -25 to
+ * -31, and music played loud nearby -36.6 at its loudest 10 ms, though
+ * mostly -45 to -59. So the gate opens at loud_min_db, its level's
+ * loud_levels_db (the louder the room, the higher), or LOUD_MARGIN_DB
+ * over the room's noise if that's higher, for a steady noise louder still.
+ * The noise floor is the quietest NOISE_SEG_S of the microphones in the last
+ * NOISE_SEGS of those, which speech always has a pause in, so it follows the
+ * room, not the voice. Music swings too far for that alone: its loud moments
+ * are 20 dB over its quiet ones. To keep a burst of noise from opening it, it
+ * opens after LOUD_ATTACK_S over, and once open it stays open to LOUD_HOLD_DB
+ * under, so it doesn't stutter on the quieter parts of words. On that
+ * recording, it was open for these much of the music, the voice and the
+ * quiet words: level 1 7%, 100%, 97%; level 2 0%, 99.5%, 94%; level 3 0%,
+ * 98%, 83%; level 4 0%, 94%, 71%. */
+static const float loud_levels_db[VOICE_FX_LOUD_LEVELS] = { -40.0f, -36.0f, -32.0f, -28.0f };
+#define LOUD_MARGIN_DB      12.0f
+#define LOUD_ATTACK_S       0.02f
+#define LOUD_HOLD_DB        10.0f
+#define NOISE_SEG_S         0.1f
+#define NOISE_SEGS          30      // 3 seconds of them
+
+static volatile bool loud_room;
+static volatile float loud_min_db;
+static volatile float noise_floor_db = -120.0f;
+
+/* Keep noise_floor_db up to date, from the voice before any effect */
+static void track_noise(const float *x, int n)
+{
+    static float seg_sum;
+    static int seg_n;
+    static float segs[NOISE_SEGS];
+    static int seg_next, seg_count;
+    for (int i = 0; i < n; i++)
+    {
+        seg_sum += x[i] * x[i];
+    }
+    seg_n += n;
+    if (seg_n < (int)(NOISE_SEG_S * FS))
+    {
+        return;
+    }
+    segs[seg_next] = 10.0f * log10f(seg_sum / seg_n + 1e-12f);
+    seg_next = (seg_next + 1) % NOISE_SEGS;
+    seg_count = seg_count < NOISE_SEGS ? seg_count + 1 : NOISE_SEGS;
+    seg_sum = 0;
+    seg_n = 0;
+    float floor_db = segs[0];
+    for (int i = 1; i < seg_count; i++)
+    {
+        floor_db = fminf(floor_db, segs[i]);
+    }
+    noise_floor_db = floor_db;
+}
 
 static void gate_process(gate_t *g, float *x, int n)
 {
@@ -126,7 +184,18 @@ static void gate_process(gate_t *g, float *x, int n)
         sum += x[i] * x[i];
     }
     float db = 10.0f * log10f(sum / n + 1e-12f);
-    float target = (db > g->threshold_db) ? 1.0f : 0.0f;
+    float target;
+    if (loud_room)
+    {
+        float threshold = fmaxf(loud_min_db, noise_floor_db + LOUD_MARGIN_DB);
+        bool open = g->gain > 0.5f;
+        g->over_s = db > threshold ? g->over_s + (float)n / FS : 0;
+        target = (open ? db > threshold - LOUD_HOLD_DB : g->over_s >= LOUD_ATTACK_S) ? 1.0f : 0.0f;
+    }
+    else
+    {
+        target = (db > g->threshold_db) ? 1.0f : 0.0f;
+    }
     // Open in about 5 ms, close over about 150 ms.
     float rate = (float)n / FS / ((target > g->gain) ? 0.005f : 0.15f);
     float new_gain = g->gain + fmaxf(-rate, fminf(rate, target - g->gain));
@@ -1332,6 +1401,7 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     }
     // Keep the last few samples for the next block's filter.
     memmove(h, h + count, (DECIMATE_TAPS - 1) * sizeof(float));
+    track_noise(x, n);
 
     // One effect or the other: the comm channel's while it sends its own,
     // with the speaker quiet, or else the speaker's
@@ -1422,6 +1492,20 @@ void voice_fx_listen_to_speaker(bool speaker)
 void voice_fx_set_comm_preset(int index)
 {
     wanted_comm_preset = (index >= 0 && (size_t)index < PRESET_COUNT) ? index : -1;
+}
+
+void voice_fx_set_loud_room(int level)
+{
+    if (level > 0)
+    {
+        loud_min_db = loud_levels_db[(level > VOICE_FX_LOUD_LEVELS ? VOICE_FX_LOUD_LEVELS : level) - 1];
+    }
+    loud_room = level > 0;
+}
+
+float voice_fx_noise_floor_db(void)
+{
+    return noise_floor_db;
 }
 
 void voice_fx_set_comm_sending(bool on)

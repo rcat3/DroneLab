@@ -38,6 +38,19 @@ void voice_fx_set_preset(size_t index);
  * the time both get the speaker's. */
 void voice_fx_set_comm_preset(int index);
 
+/* Loud room, 0 off or 1 to VOICE_FX_LOUD_LEVELS: every effect's gate, which
+ * keeps it quiet between words, opens only well above the room's noise,
+ * rather than just above the microphones' own hiss, so the room doesn't come
+ * through the speaker or the comm channel between words. Each level keeps a
+ * louder room out, and cuts more of quiet speech and the ends of words, so
+ * it's for loud places only. */
+#define VOICE_FX_LOUD_LEVELS 4
+void voice_fx_set_loud_room(int level);
+
+/* The room's noise in the microphones, as Loud room measures it, in dB of
+ * full scale */
+float voice_fx_noise_floor_db(void);
+
 /* Whether the comm channel's sending, for voice_fx_set_comm_preset */
 void voice_fx_set_comm_sending(bool on);
 

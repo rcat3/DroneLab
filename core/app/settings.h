@@ -70,6 +70,7 @@ typedef struct
     uint8_t direct_channel;                 // direct comms' group's channel: 1, 6 or 11; 0 for 6
     uint8_t direct_long_range;              // 1 if the group sends in Long Range mode
     uint8_t speaker;                        // SETTINGS_SPEAKER_*: whether the housing has a speaker
+    uint8_t voice_loud_room;                // the voice effect's Loud room level, 0 off (voice_fx_set_loud_room)
 } settings_t;
 
 /* speaker: on boards whose speaker plugs in, whether the housing has one
@@ -117,6 +118,7 @@ void settings_set_sound_autoplay(uint8_t enabled);
 void settings_set_sound_track(const char *name);
 void settings_set_voice_effect(uint8_t preset);
 void settings_set_voice_volume(uint8_t percent);
+void settings_set_voice_loud_room(uint8_t level);
 void settings_set_lovense_release_to_zero(uint8_t enabled);
 void settings_set_remote(const char *ssid, const char *password);
 void settings_set_remote_autostart(uint8_t enabled);

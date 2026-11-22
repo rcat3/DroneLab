@@ -202,6 +202,11 @@ transition: opacity .2s; pointer-events: none; white-space: nowrap; z-index: 4; 
 </div>
 </div>
 <div class="muted" style="font-size:13px">If it feeds back, turn it down.</div>
+<div id="loud-box" hidden>
+<div class="row" style="margin-top:8px"><span>Loud room</span></div>
+<div class="chips" id="loud"></div>
+<div class="muted" style="font-size:13px">Keeps a loud room's noise out between words.  The stronger, the louder the room it keeps out, and the more of quiet speech it cuts, so only for loud places.</div>
+</div>
 </div>
 <div class="grid" id="presets"></div>
 </div>
@@ -650,6 +655,12 @@ volume("fx-vol", "fx-vol-text", "data-fx-step", "voice");
 volume("snd-vol", "snd-vol-text", "data-snd-step", "sound");
 volume("bright", "bright-text", "data-bright-step", "display", "b");
 $("speaker").onclick = () => state && state.voice && command("voice", { speaker: state.voice.speaker ? 0 : 1 });
+["Off", "1", "2", "3", "Max"].forEach((name, loud) => {
+const b = el("button", "", name);
+b.dataset.l = loud;
+b.onclick = () => command("voice", { loud });
+$("loud").append(b);
+});
 $("sound-play").onclick = () => state && state.sound && command("sound", { play: state.sound.playing ? 0 : 1 });
 $("sound-prev").onclick = () => command("sound", { skip: -1 });
 $("sound-next").onclick = () => command("sound", { skip: 1 });
@@ -728,6 +739,9 @@ $("speaker").classList.toggle("on", !!fx.speaker);
 $("speaker").textContent = fx.speaker ? "✓ Playing on speaker" : "Play on speaker";
 for (const b of $("presets").children) b.classList.toggle("on", +b.dataset.p === fx.preset);
 showVolume("fx-vol", "fx-vol-text", fx.volume);
+// Not on firmware from before Loud room
+$("loud-box").hidden = fx.loud === undefined;
+for (const b of $("loud").children) b.classList.toggle("on", +b.dataset.l === fx.loud);
 }
 if (s) {
 $("track").textContent = tracks[s.track] || (tracks.length ? "" : "No sound files on the SD card");

@@ -45,8 +45,9 @@
  *     GET  /api/chime     whether a sound for something's playing (POST /api/sound?chime=)
  *     GET  /api/about     the board: firmware, build, MAC addresses, housing,
  *                                     uptime and battery, for the app's About page
- *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>]   the voice
- *                                     effect, Play on speaker and Effect Volume
+ *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>][&loud=<0 off, 1 to 4>]
+ *                                     the voice effect, Play on speaker, Effect
+ *                                     Volume and Loud room
  *     POST /api/sound?[play=<1 or 0>][&skip=<1 or -1>][&t=<track>][&seek=<ms>][&chime=<track>][&chimestop=1]
  *                     [&v=<percent>][&r=<audio_repeat_t>][&auto=<1 or 0>]   the
  *                                     sound player: play or pause, the next or
@@ -473,8 +474,10 @@ static void write_state(json_t *j)
     }
     if (voice_fx_available())
     {
-        jprintf(j, ",\"voice\":{\"preset\":%u,\"speaker\":%d,\"volume\":%u,\"fitted\":%d}", s->voice_effect,
-                voice_fx_speaker_on() ? 1 : 0, s->voice_volume, speaker_start() ? 1 : 0);
+        // noise: the room in the microphones, as Loud room measures it
+        jprintf(j, ",\"voice\":{\"preset\":%u,\"speaker\":%d,\"volume\":%u,\"fitted\":%d,\"loud\":%u,\"noise\":%.0f}",
+                s->voice_effect, voice_fx_speaker_on() ? 1 : 0, s->voice_volume, speaker_start() ? 1 : 0,
+                s->voice_loud_room, voice_fx_noise_floor_db());
     }
     if (seal_test_available())
     {
@@ -1205,6 +1208,12 @@ static bool run_command(const char *name, const char *query, const char *body, s
             volume = volume > 100 ? 100 : volume;
             voice_fx_set_volume((uint8_t)volume);
             settings_set_voice_volume((uint8_t)volume);
+        }
+        int loud = query_int(query, "loud", -1);
+        if (loud >= 0 && loud <= VOICE_FX_LOUD_LEVELS)
+        {
+            voice_fx_set_loud_room(loud);
+            settings_set_voice_loud_room((uint8_t)loud);
         }
     }
     else if (strcmp(name, "seal") == 0 && seal_test_available())
