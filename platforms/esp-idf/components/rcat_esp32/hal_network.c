@@ -266,6 +266,9 @@ bool rcat_hal_hotspot_start(const char *ssid, const char *password)
         ESP_LOGE(TAG, "Hotspot: bad settings (%s)", esp_err_to_name(err));
         return false;
     }
+    // The AP defaults to 40 MHz. A setup page and a phone or two don't need
+    // that, and 20 MHz takes half the band and copes better with neighbours.
+    esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
     err = esp_wifi_start();
     if (err != ESP_OK)
     {
