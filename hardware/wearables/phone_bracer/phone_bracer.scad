@@ -83,22 +83,30 @@ mount_x = 93;               // where the mount sits, in the preview: 17 short of
 
 /* [Talk button: an AB Shutter3 remote, in a compartment on the thumb side] */
 ptt = true;
+// The remote's sizes are from a scan of one. Its positions below are from
+// its far end, the one away from the strap loop.
 ptt_size = [52, 33, 10.5];  // its length, width and thickness, with the strap loop
+ptt_body = 46.5;            // its length without the loop
+ptt_loop_w = 13.5;          // the loop's width
+ptt_buttons = [[16, 15],    // its buttons: how far along, and how wide. The big
+               [33, 10.5]]; // (iOS) one, and the small (Android) one; either talks
+ptt_press = 0;              // which one the lid's flap is over
+ptt_switch = [21, 12];      // its power switch, on its right side seen face up with
+                            // the loop towards you: how far along, and how long
+                            // a window to leave for it. The remote lies with the
+                            // switch towards the arm's edge, so its loop's towards
+                            // the elbow on the left arm and the wrist on the right.
 ptt_x = 47;                 // where its middle is, from the wrist bone
 ptt_angle = 72;             // how far round from the top, in degrees
-ptt_clr = 0.4;
+ptt_clr = 0.5;
 ptt_wall = 3.2;             // the compartment's long walls
 ptt_floor = 1.5;
 ptt_chamfer = 9;            // the compartment's corners
 lid_t = 2.4;
 lid_dv = 1.2;               // how far the lid's edges reach under the walls
-ptt_button = [-4, 0, 16];   // the remote's button: where it is from the remote's middle
-                            // (towards the elbow, towards the arm's edge) and its size
-ptt_nub = 0;                // a press pad under the lid's flap, down to the button, if the
-                            // button sits lower than the remote's edges (it'd need the lid
-                            // printed upside down)
-ptt_switch = [0, 1, 14];    // a window for the power switch: where along, which wall
-                            // (1 the one nearer the arm's edge, -1 the other) and how long
+ptt_nub = 0;                // a press pad under the lid's flap, down to the button. The
+                            // AB Shutter3's buttons are its highest point, so it needs
+                            // none (and one would need the lid printed upside down)
 
 /* [Twist lock] */
 r_neck = 14;                // the plug's neck
@@ -290,7 +298,25 @@ ptt_lid_z = ptt_floor + ptt_size[2] + ptt_clr;      // the lid's underside
 ptt_top = ptt_lid_z + lid_t;
 ptt_out = [ptt_cav[0] + 2 * 2.4, ptt_cav[1] + 2 * ptt_wall];
 lid_x0 = -ptt_cav[0] / 2;                           // the lid's wrist end
-module ptt_outline(grow) { stadium([ptt_size[0] + 2 * grow, ptt_size[1] + 2 * grow]); }
+
+// Along the compartment, from the remote's far end. The bracer is mirrored
+// for the right arm, so the remote's turned end for end before that, to keep
+// its switch towards the arm's edge.
+ptt_dir = arm == "right" ? -1 : 1;
+function ptt_at(d) = ptt_dir * (d - ptt_size[0] / 2);
+ptt_bx = ptt_at(ptt_buttons[ptt_press][0]);         // the button under the flap
+ptt_bd = ptt_buttons[ptt_press][1];
+
+// The remote's outline: a stadium, and its loop
+module ptt_outline(grow)
+{
+    mirror([ptt_dir < 0 ? 1 : 0, 0]) translate([-ptt_size[0] / 2, 0])
+    {
+        translate([ptt_body / 2, 0]) stadium([ptt_body + 2 * grow, ptt_size[1] + 2 * grow]);
+        translate([ptt_body - 8, 0]) offset(r = 1.5) offset(delta = -1.5)
+            translate([0, -ptt_loop_w / 2 - grow]) square([ptt_size[0] - ptt_body + 8 + grow, ptt_loop_w + 2 * grow]);
+    }
+}
 
 module ptt_box()
 {
@@ -306,7 +332,12 @@ module lid_section(grow)
 
 module lid_space()
 {
-    translate([lid_x0, 0, ptt_lid_z]) rotate([90, 0, 90]) linear_extrude(100) lid_section(0.25);
+    translate([lid_x0, 0, ptt_lid_z]) rotate([90, 0, 90]) linear_extrude(100)
+    {
+        lid_section(0.25);
+        // on out through the top, so it doesn't end level with it
+        translate([-ptt_cav[1] / 2 - 0.25, lid_t - 0.1]) square([ptt_cav[1] + 0.5, 5]);
+    }
 }
 
 module ptt_cavity()
@@ -319,9 +350,9 @@ module ptt_cavity()
         translate([ptt_out[0] / 2 - 1.6, 0, ptt_lid_z]) rotate([90, 0, 0])
             cylinder(r = 0.6, h = ptt_cav[1], center = true, $fn = 16);
         // The power switch's window
-        if (ptt_switch[2] > 0)
-            translate([ptt_switch[0] - ptt_switch[2] / 2, ptt_switch[1] > 0 ? 0 : -20, ptt_floor + 2])
-                cube([ptt_switch[2], 20, ptt_size[2] - 3]);
+        if (ptt_switch[1] > 0)
+            translate([ptt_at(ptt_switch[0]) - ptt_switch[1] / 2, 0, ptt_floor + 2])
+                cube([ptt_switch[1], 20, ptt_size[2] - 3]);
     }
 }
 
@@ -335,19 +366,21 @@ module octagon2(size, ch)
 
 // The lid, with its underside at z = 0 and the wrist end at x = 0
 lid_len = ptt_out[0] / 2 - lid_x0;
-flap_w = ptt_button[2] + 4;
-flap_x0 = ptt_button[0] - ptt_button[2] / 2 - 2 - lid_x0;  // the flap's free end
-flap_x1 = ptt_button[0] + ptt_button[2] / 2 + 10 - lid_x0; // where it's joined on
+// The flap's joined on at the end nearer the lid's middle, clear of the grip
+flap_w = ptt_bd + 4;
+flap_s = ptt_bx < 0 ? 1 : -1;                               // which way it's joined on
+flap_x0 = ptt_bx - flap_s * (ptt_bd / 2 + 2) - lid_x0;      // its free end
+flap_x1 = ptt_bx + flap_s * (ptt_bd / 2 + 10) - lid_x0;     // where it's joined on
 module ptt_lid()
 {
-    by = ptt_button[1];
+    by = 0;
     difference()
     {
         union()
         {
             rotate([90, 0, 90]) linear_extrude(lid_len) lid_section(0);
             // The press pad under the flap, and a raised hexagon on it to find by feel
-            translate([ptt_button[0] - lid_x0, by, 0])
+            translate([ptt_bx - lid_x0, by, 0])
             {
                 if (ptt_nub > 0) translate([0, 0, -ptt_nub]) cylinder(d = 10, h = ptt_nub + eps);
                 translate([0, 0, lid_t - eps]) cylinder(d = 13, h = 1.2, $fn = 6);
@@ -357,11 +390,13 @@ module ptt_lid()
                 translate([lid_len - 2 - i * 2.2, -ptt_cav[1] / 2 + 3, lid_t - eps]) cube([1, ptt_cav[1] - 6, 0.8]);
         }
         // The flap: cut free on three sides
-        translate([flap_x0, by, -1]) linear_extrude(lid_t + 3) difference()
-        {
-            translate([-0.8, -flap_w / 2 - 0.8]) square([flap_x1 - flap_x0 + 0.8, flap_w + 1.6]);
-            translate([0, -flap_w / 2]) square([flap_x1 - flap_x0 + 1, flap_w]);
-        }
+        translate([flap_x0, by, -1]) mirror([flap_s < 0 ? 1 : 0, 0, 0])
+            linear_extrude(lid_t + 3) difference()
+            {
+                fl = abs(flap_x1 - flap_x0);
+                translate([-0.8, -flap_w / 2 - 0.8]) square([fl + 0.8, flap_w + 1.6]);
+                translate([0, -flap_w / 2]) square([fl + 1, flap_w]);
+            }
     }
     // The click's bump
     translate([lid_len - 1.6, 0, 0]) rotate([90, 0, 0])
@@ -718,7 +753,11 @@ module ptt_model()
     on_side()
     {
         translate([0, 0, ptt_floor]) color("#e8e8ec") linear_extrude(ptt_size[2] - 0.8) ptt_outline(0);
-        translate([ptt_button[0], ptt_button[1], ptt_floor + ptt_size[2] - 0.8]) color("#2a6cff") cylinder(d = ptt_button[2], h = 0.8);
+        for (b = ptt_buttons)
+            translate([ptt_at(b[0]), 0, ptt_floor + ptt_size[2] - 0.8]) color("#2a6cff") cylinder(d = b[1], h = 0.8);
+        // The power switch
+        translate([ptt_at(ptt_switch[0]), ptt_size[1] / 2, ptt_floor + ptt_size[2] / 2])
+            color("#2a6cff") cube([4, 3, 3], center = true);
         translate([lid_x0, 0, ptt_lid_z + explode * 0.4]) color("#7a7a86") ptt_lid();
     }
 }
