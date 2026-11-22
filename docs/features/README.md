@@ -46,7 +46,7 @@ Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp
 <p>Link every drone in the hive into one mind.  Push to talk, or just speak, and your voice, through the effect of your choice, goes into every other drone's headphones.  The display shows who's transmitting, with their avatar.  Messages for the Terminal and commands for Lovense toys travel the same link, if the drone receiving them has allowed it.  A cheap Bluetooth camera remote makes a talk button.</p>
 <ul>
 <li><b>Cloud mode:</b> through the wearer's phone to the hive's <a href="https://www.mumble.info">Mumble</a> server, so distance doesn't matter, and people without a mask join from any Mumble app.</li>
-<li><b>Direct mode</b> <i>(in development)</i>: unit to unit over the radio, with no server, internet or phone signal.  Encrypted channels, Long Range, and relaying through the drones in between.</li>
+<li><b>Direct mode</b> <i>(experimental)</i>: unit to unit over the radio, with no server, internet or phone signal.  For demos, scenes and drones close together, across a room at most: the board's small built-in antenna doesn't reach far (<a href="../hardware/direct-mode-range.md">why</a>).  Encrypted channels, and relaying through the drones in between.</li>
 </ul>
 <p><a href="comms.md">HiveMind (Comms) →</a></p>
 </td>

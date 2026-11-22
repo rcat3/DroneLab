@@ -13,11 +13,11 @@ The hive can reach you two ways, and the app brings both together on one screen:
 | | **Server** (cloud) | **Direct** |
 |---|---|---|
 | How it travels | Your unit → your phone → the internet → the hive's [Mumble](https://www.mumble.info) server → everyone else | Your unit → the radio → units nearby, with no phone signal, internet or server |
-| Reach | Anywhere with a phone signal or WiFi | A few tens of metres through people and walls, more in the open |
+| Reach | Anywhere with a phone signal or WiFi | Across a room at most: direct mode is experimental (see [Direct Mode Range](../hardware/direct-mode-range.md)) |
 | Needs | The hive's server, set up in [Connecting](connecting.md#2-join-a-server-optional) | *Direct* switched on, and the others on the same [direct channel](#direct-channels) |
 | Who's there | Everyone on the server's channel, including people in a Mumble app without a unit | Units nearby on your direct channel |
 
-Use either, or both at once: at an event, direct mode keeps the drones in the room together with no signal, while the server reaches those at home.
+Use either, or both at once: direct mode links drones in the same room with no server, handy for a demo or a scene, while the server reaches everyone else, wherever they are.
 
 ```mermaid
 flowchart LR

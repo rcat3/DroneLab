@@ -2,7 +2,7 @@
 
 Hidden at first, as Android's are: on the *About* page (Setup, (i) top right), **tap the version ten times**.  The last few taps count down, then **Developer options** shows in Setup, under *Developer*.  Its *Show developer options* switch hides them again, and turns the responders off.
 
-They're for testing direct mode's range and relaying with only one person: leave a unit and its phone at base with a responder on, and take the other unit out.  The phone at base answers as if someone were there, using the app's own ways of talking and texting.
+They're for testing direct mode's range and relaying with only one person: leave a unit and its phone at base with a responder on, and take the other unit out.  The phone at base answers as if someone were there, using the app's own ways of talking and texting.  What these tests have found so far is in [Direct Mode Range](../hardware/direct-mode-range.md).
 
 Back to [the app](README.md).
 

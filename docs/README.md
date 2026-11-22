@@ -29,6 +29,7 @@ New here?  Start with the [project page](../README.md).
 ## Under the hood
 
 - [The board](hardware/waveshare_esp32s3_touch_amoled_1_75.md): technical notes on the ESP32-S3-Touch-AMOLED-1.75.
+  - [Direct Mode Range](hardware/direct-mode-range.md): why direct mode reaches across a room at most, and what might take it further.
 - [Hardware designs](../hardware/README.md): the housings' OpenSCAD designs.
 - [Developing](development/README.md): how the firmware is put together, [adding a feature](development/adding-a-feature.md), [the hardware abstraction layer](development/hardware-abstraction.md), [adding a board](development/adding-a-board.md) and [contributing](development/contributing.md).
 - [The app's source](../app/README.md): building the app yourself.

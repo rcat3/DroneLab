@@ -1,6 +1,6 @@
 # HiveMind (Comms)
 
-*The ESP32-S3-Touch-AMOLED-1.75, with the DroneLab app on an Android phone.  New: cloud mode works end to end and is still being tried out; direct mode is in development.*
+*The ESP32-S3-Touch-AMOLED-1.75, with the DroneLab app on an Android phone.  Cloud mode works end to end; direct mode is experimental, and reaches across a room at most.*
 
 HiveMind links every drone in the hive into one mind: they talk to each other, like a radio.  On the unit it's the *HiveMind* feature; in the app it's the *HiveMind* tab too.  Each unit sends its wearer's voice, through the [voice effect](voice-effects.md), and the others' voices come back to the wearer's headphones, through their phone.  The display shows who's talking, with their avatar.  The unit only sends while the wearer talks: with *Push to talk*, while the talk button is held, and in *Voice* mode, whenever it hears them speak.
 
@@ -9,12 +9,12 @@ It has two modes, which can be on together:
 | | Cloud | Direct |
 |---|---|---|
 | How the voice travels | Over Bluetooth to the wearer's phone, and on over the internet to a [Mumble](https://www.mumble.info) server the hive shares | Unit to unit over the radio (ESP-NOW, on the WiFi radio) |
-| Range | Anywhere with a phone signal or WiFi | A few tens of metres through people and walls, more in the open |
+| Range | Anywhere with a phone signal or WiFi | Across a room at most (see [Direct Mode Range](../hardware/direct-mode-range.md)) |
 | Needs | A Mumble server, and a phone with internet | Nothing else: no server, internet or phone signal.  A phone is still needed to listen |
 | Who can join | Anyone on the server, including people without a unit, from a Mumble app: [Mumla](https://mumla-app.gitlab.io/) on Android, or Mumble on a computer | Other DroneLab units nearby, on the same channel |
 | Privacy | Whoever runs the server, and anyone it lets in | Channels with a passphrase are encrypted end to end |
 | Shown on the unit and in the app as | *Server* | *Direct* |
-| Status | Works, still being tried out | In development: not yet tried with two units that can both talk |
+| Status | Works | Experimental: for demos, scenes and drones close together |
 
 ```mermaid
 flowchart LR
@@ -122,9 +122,9 @@ The app trusts the server's certificate the first time it connects, and if the c
 
 ## Direct mode
 
-*In development: not yet tried with two units that can both talk.*
+*Experimental.  As built, direct mode is best for demos, scenes and drones close together, across a room at most, without the fuss of setting up a server on the internet.  The board's built-in antenna is tiny, and the display and the battery right next to it soak up most of the signal, so walls and people soon stop it.  [Direct Mode Range](../hardware/direct-mode-range.md) has what was measured, and what might make it reach further.*
 
-Direct mode carries the hive's voices unit to unit over the radio, with no internet, server or phone signal in between: for halls, basements and the middle of nowhere.  Each unit broadcasts its wearer's voice, through the voice effect, to the units in range, and passes what it hears from the others to its phone, which plays it to your headphones.  So a phone is still needed to listen, but it doesn't need any signal.
+Direct mode carries the hive's voices unit to unit over the radio, with no internet, server or phone signal in between.  Each unit broadcasts its wearer's voice, through the voice effect, to the units in range, and passes what it hears from the others to its phone, which plays it to your headphones.  So a phone is still needed to listen, but it doesn't need any signal.
 
 The unit's *Direct* page, in the HiveMind feature, switches it on, and lists the units it hears, strongest first, with bars for how well.  It talks the same way as in cloud mode: the talk button, holding the avatar on the status screen, voice mode, or the app's Hold to talk.
 
@@ -144,7 +144,7 @@ The app's status strip shows a grey arrow when someone's talking on another chan
 
 ### Frequencies and Long Range
 
-Each channel has a radio frequency, 1, 6 or 11 (the three WiFi channels that don't overlap), and can use **Long Range**, Espressif's own slower mode (500 kb/s): it reaches further, but fewer units can share the channel, as each packet takes about twice as long to send.  Both are chosen when the channel's made, and come with it to everyone who joins.  The open channel is on frequency 6, in Long Range.  Every unit hears both ordinary and Long Range broadcasts, so it doesn't matter which a unit on the channel sends.  The open channel is on 6, so a new channel is best on 1 or 11, where it doesn't share the air with it.
+Each channel has a radio frequency, 1, 6 or 11 (the three WiFi channels that don't overlap), and can use **Long Range**, Espressif's name for its own slower mode (500 kb/s).  Despite the name, it only holds on a little better at the edge of direct mode's short range, and fewer units can share the channel, as each packet takes about twice as long to send.  Both are chosen when the channel's made, and come with it to everyone who joins.  The open channel is on frequency 6, in Long Range.  Every unit hears both ordinary and Long Range broadcasts, so it doesn't matter which a unit on the channel sends.  The open channel is on 6, so a new channel is best on 1 or 11, where it doesn't share the air with it.
 
 A unit only hears its own frequency, so opening the app's *Direct Channels* screen has it listen on each of the three for a couple of seconds, to find the channels on the others; what's said on its own meanwhile is missed.  It can't while the hotspot's on.  The hotspot moves to the channel's frequency, if it's on.
 
@@ -154,7 +154,7 @@ A unit that hears one of its channel's broadcasts only weakly, as from the edge 
 
 ### Range and battery
 
-The radio has to listen the whole time direct mode is on, which costs about 80 mA more than with it off.  Range is a few tens of metres through people and walls, more in the open, and more again with Long Range or an antenna outside the mask.  Joining a network on another channel, for the Voice Lab, takes the unit off its direct channel's frequency while it lasts.
+The radio has to listen the whole time direct mode is on, which costs about 80 mA more than with it off.  Range is across a room at most: the board's built-in antenna loses most of the signal to the display and the battery beside it, and walls and people take the rest.  A unit in between relaying helps texts more than voice, as each text is sent three times.  See [Direct Mode Range](../hardware/direct-mode-range.md) for the measurements, and an external antenna or a LoRa radio as possible ways further.  Joining a network on another channel, for the Voice Lab, takes the unit off its direct channel's frequency while it lasts.
 
 ## The app
 
