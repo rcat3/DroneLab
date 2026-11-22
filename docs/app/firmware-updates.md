@@ -73,9 +73,9 @@ Updating over USB keeps your settings too, as long as you leave *Erase device* u
 ## Units on different versions
 
 <p align="center">
-<img src="../images/app/warning_header.png" width="300" alt="A yellow warning sign by the channel's name">
+<img src="../images/app/warning_header.png" width="300" alt="A yellow warning sign by the Channels heading">
 &nbsp;
 <img src="../images/app/warning_dialog.png" width="260" alt="Incompatible firmware detected nearby. Make sure all users are running the latest release.">
 </p>
 
-A **yellow warning sign** by the channel's name on the Voice tab means your unit is hearing units nearby whose direct mode is a different version: they can't hear you, and you can't hear them.  Tap it for a reminder.  It goes once they're gone, or everyone's on the same release: whoever's behind updates their app, and lets it update their unit.  It doesn't affect the server link, which works across versions.
+A **yellow warning sign** by the *Channels* heading on the Voice tab means your unit is hearing units nearby whose direct mode is a different version: they can't hear you, and you can't hear them.  Tap it for a reminder.  It goes once they're gone, or everyone's on the same release: whoever's behind updates their app, and lets it update their unit.  It doesn't affect the server link, which works across versions.
