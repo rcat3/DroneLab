@@ -35,6 +35,7 @@
 #include "audio/speaker.h"
 #include "audio/voice_fx.h"
 #include "hal.h"
+#include "lvgl.h"
 
 // 1 to print how long encoding takes, how loud the voice is, and what was
 // sent, every few seconds.
@@ -177,6 +178,11 @@
 #define TASK_BUSY_MS        5
 #define SEND_RETRIES        5
 #define SEND_RETRY_MS       2
+// What others sent, for the app: kept until the link takes it, as a long
+// text's parts come with a crowd of copies, which can fill the link's
+// buffers for a while; dropped if it still hasn't gone after this long
+#define HEARD_QUEUE         16
+#define HEARD_KEEP_MS       3000
 
 #define MS_TO_SAMPLES(ms)   ((uint32_t)(ms) * (FS / 1000))
 
@@ -976,6 +982,64 @@ bool comm_phone_connected(void)
     return running && rcat_hal_ble_peer_connected();
 }
 
+/* What others sent, waiting for the link to the phone (UI loop only). */
+typedef struct
+{
+    uint32_t at_ms;
+    uint8_t len;
+    uint8_t msg[RCAT_HAL_BLE_PEER_MSG_MAX];
+} heard_out_t;
+
+static heard_out_t *heard_out;      // HEARD_QUEUE of them, in PSRAM
+static uint32_t heard_out_read, heard_out_write;
+static uint32_t heard_out_dropped;
+
+/* As many as the link takes now, oldest first; the rest are tried again
+ * from comm_poll. Those kept too long, or with no phone to take them, go. */
+static void send_heard(void)
+{
+    uint32_t now = rcat_hal_millis();
+    while (heard_out_read != heard_out_write)
+    {
+        heard_out_t *h = &heard_out[heard_out_read % HEARD_QUEUE];
+        if (!comm_phone_connected() || now - h->at_ms > HEARD_KEEP_MS)
+        {
+            heard_out_dropped++;
+            printf("comm: something heard not passed on to the phone (%lu so far)\n", (unsigned long)heard_out_dropped);
+        }
+        else if (!rcat_hal_ble_peer_send(h->msg, h->len))
+        {
+            return;     // the link's full: next time
+        }
+        heard_out_read++;
+    }
+}
+
+static void queue_heard(const uint8_t *msg, size_t len)
+{
+    if (heard_out == NULL)
+    {
+        heard_out = lv_malloc(HEARD_QUEUE * sizeof(heard_out_t));
+        if (heard_out == NULL)
+        {
+            send_retrying(msg, len);
+            return;
+        }
+    }
+    if (heard_out_write - heard_out_read >= HEARD_QUEUE)
+    {
+        heard_out_read++;   // full: the oldest goes
+        heard_out_dropped++;
+        printf("comm: heard queue full, oldest dropped (%lu so far)\n", (unsigned long)heard_out_dropped);
+    }
+    heard_out_t *h = &heard_out[heard_out_write % HEARD_QUEUE];
+    h->at_ms = rcat_hal_millis();
+    h->len = (uint8_t)len;
+    memcpy(h->msg, msg, len);
+    heard_out_write++;
+    send_heard();
+}
+
 void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *key, uint64_t counter,
                          comm_heard_t what, uint8_t scope, bool done, const uint8_t *data, size_t len)
 {
@@ -1001,7 +1065,7 @@ void comm_heard_to_phone(comm_transport_t via, const char *from, const uint8_t *
     }
     len = len < sizeof(msg) - at ? len : sizeof(msg) - at;
     memcpy(msg + at, data, len);
-    send_retrying(msg, at + len);
+    queue_heard(msg, at + len);
 }
 
 void comm_copy_to_phone(const uint8_t *key, uint64_t counter, uint32_t broadcast, int8_t rssi, uint8_t hops,
@@ -1027,7 +1091,12 @@ void comm_copy_to_phone(const uint8_t *key, uint64_t counter, uint32_t broadcast
     msg[at++] = (uint8_t)rssi;
     msg[at++] = hops;
     msg[at++] = len;
-    send_retrying(msg, at);
+    // Only for a text's details: tried once, and only when nothing heard is
+    // waiting, so copies never crowd out the texts themselves
+    if (heard_out_read == heard_out_write)
+    {
+        rcat_hal_ble_peer_send(msg, at);
+    }
 }
 
 bool comm_sending(void)
@@ -1855,6 +1924,7 @@ static void receive_update(const uint8_t *msg, size_t len)
 void comm_poll(uint32_t now_ms)
 {
     others_poll(now_ms);
+    send_heard();
 
     // Shut pairing when its time's up, or once a phone's paired with a code
     static bool code_shown;
