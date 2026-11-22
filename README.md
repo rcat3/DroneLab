@@ -99,7 +99,7 @@ Each unit is built around one off-the-shelf board, the [Waveshare ESP32-S3-Touch
 | | |
 |---|---|
 | [![The speaker model](docs/images/speaker_housing_1_75.png)](docs/build/speaker-housing.md) | **The speaker model** is the full upgrade: every feature, with a speaker facing out below the display for voice changing effects and sound, and a 2000 mAh battery for about 13.5 hours.  The display is held level by a turning collar while it's screwed in.  It stands about 33 mm out of the mask, and its sloped chin clears the filter mount below the port.  **Status: built, worn and working.** |
-| [![The low-profile model](docs/images/low_profile_housing_1_75.png)](docs/build/low-profile-housing.md) | **The low-profile model** is the entry-level unit: no speaker, so no voice effects or sound, but everything else, in a slim round housing that stands only about 23 mm out of the mask.  Fewer parts, a smaller battery for about 4.5-5.5 hours, and the quickest build.  **Status: printed, waiting on parts for validation testing.** |
+| [![The low-profile model](docs/images/low_profile_housing_1_75.png)](docs/build/low-profile-housing.md) | **The low-profile model** is the entry-level unit: no speaker, so no voice effects or sound, but everything else, in a slim round housing that stands only about 23 mm out of the mask.  Fewer parts, a smaller battery for about 4.5-5.5 hours, and the quickest build.  **Status: built and fitted in a mask.** |
 
 ### Specifications
 

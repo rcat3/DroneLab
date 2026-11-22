@@ -31,7 +31,7 @@ DroneLab units aren't sold.  They're built by their owners, from a Waveshare dis
 | Stands out of the mask | About 33 mm | About 23 mm |
 | Levelling | A turning collar: hold the display level and screw the collar in | The whole housing screws in; set once in the design |
 | Printed parts | 7, one of them in TPU, and an optional USB port cover | 3, and an optional USB port cover |
-| Status | Built, worn and working | Printed, waiting on parts for its first assembly |
+| Status | Built, worn and working | Built and fitted in a mask |
 
 **Pick the speaker model** if you want the voice effects: they're the headline feature, and the comms send your voice through them.  **Pick the low-profile model** for a slimmer, simpler, cheaper unit that still shows images, lights up as you talk, and does comms and device control.  (Comms on the low-profile model still works: your voice goes to the others through the effect, you just don't hear it out loud.)
 

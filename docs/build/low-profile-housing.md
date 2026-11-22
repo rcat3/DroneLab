@@ -2,7 +2,7 @@
 
 <a href="../../README.md#about-katcorp"><img src="../images/katcorp_mark.png" width="72" align="left" alt="KatCorp"></a>
 
-**KatCorp Drone Systems**<br>DroneLab Low-Profile Model: Owner Assembly Instructions<br>Status: Printed, waiting on parts for its first assembly
+**KatCorp Drone Systems**<br>DroneLab Low-Profile Model: Owner Assembly Instructions<br>Status: Built and fitted in a mask
 
 <br clear="left">
 
@@ -10,13 +10,11 @@
 
 The entry-level unit: the display in a slim round housing that stands only about 23 mm out of the mask, with a flat battery behind it for about 4.5-5.5 hours.  There's no speaker, so no [voice effects](../features/voice-effects.md) or [sound](../features/sound.md), but everything else works: images, the visualizers, the voice ring, [comms](../features/comms.md), [Lovense](../features/lovense.md) control, the terminal and the remote.  The thread is part of the back, so the whole housing screws in, with fewer parts and screws than the speaker model.
 
-It shares the display's pocket, the openings, the plungers and the microphones' sleeves with the [speaker model](speaker-housing.md), which have been checked with a print.  The battery's place, the thread and the back are new: they've been printed, but not yet assembled with a battery and tried in a mask.
+It shares the display's pocket, the openings, the plungers and the microphones' sleeves with the [speaker model](speaker-housing.md), which have been checked with a print.  The battery's place, the thread and the back are new, and the first one's been built and screwed into a mask.
 
 Back to the [Build Guide](README.md).
 
 ## 1. Order the parts
-
-> **Photo to come:** all the parts for the low-profile model laid out.
 
 | Part | How many | Notes |
 |---|---|---|
@@ -25,7 +23,6 @@ Back to the [Build Guide](README.md).
 | M2 x 4 countersunk screws | 3 | Hold the board in |
 | M2 x 8 socket head screws | 4 | Hold the back on |
 | Double-sided foam tape | A few cm | About 0.8 mm thick, to hold the battery |
-| Soft foam sheet | A scrap | About 2 mm thick, such as craft foam |
 
 > [!WARNING]
 > ⚠️ **Check the battery's polarity before plugging it in.**  MX1.25 batteries aren't all wired the same way round, and a battery plugged in backwards can damage the board.  Check its red wire goes to the positive side of the board's battery socket, as Waveshare's documentation for the board shows it, and swap the pins in the plug if it doesn't.
@@ -59,19 +56,19 @@ Front to back: the board drops into the front of the body, then the battery, tap
 
 ![The low-profile model, pulled apart in the order it goes together](../images/low_profile_housing_1_75_exploded.png)
 
-1. **Seal the microphones.**  Cut two small squares of the soft foam sheet, about 8 mm across, and poke a hole through the middle of each with a toothpick.  Inside the display's pocket, two small round sleeves stand up from the body's floor, on the right towards the USB-C opening: one around each microphone's hole.  Stretch a square over the end of each sleeve, with its hole lined up with the sleeve's hole.
-2. **Fit the plungers.**  Push the two plungers into their holes in the side of the body, from inside the display's pocket.
-3. **Fit the board.**  Lay it in the pocket, glass forward, with its USB-C port towards the side opening on the right, and screw it to the body's floor from behind, from the chamber side, with the three M2 x 4 countersunk screws.
-4. **Tape the battery to the back.**  Stick it to the front of the back with the foam tape, inside the outline engraved there, with its leads towards the opening beside it.
-   > **Photo to come:** the battery taped inside the outline on the back.
+1. **Fit the plungers.**  Push the two plungers into their holes in the side of the body, from inside the display's pocket.
+2. **Fit the board.**  Lay it in the pocket, glass forward, with its USB-C port towards the side opening on the right, and screw it to the body's floor from behind, from the chamber side, with the three M2 x 4 countersunk screws.
+3. **Tape the battery to the back.**  Stick it to the front of the back with the foam tape, inside the outline engraved there, with its leads towards the opening beside it.
+4. **Plug in the battery.**  ⚠️ [Check its polarity first](#1-order-the-parts), and plug it into the socket marked with a battery, through the opening in the body's floor below the middle of the board.  The socket beside it, marked with a speaker, stays empty.  Tuck the wires in beside the battery, below it.
 
-5. **Plug in the battery.**  ⚠️ [Check its polarity first](#1-order-the-parts), and plug it into the socket marked with a battery, through the opening in the body's floor below the middle of the board.  The socket beside it, marked with a speaker, stays empty.  Tuck the wires in beside the battery, below it.
-6. **Close the back.**  Screw it on with the four M2 x 8 screws.  It only goes on one way round.
-7. **Fit the USB plug** (optional).  If you printed it, push it into the port's pocket on the right side.
+   ![The battery taped inside the outline on the back, plugged into the board's battery socket in the body, before the back goes on](../images/low_profile_housing_1_75_battery.jpg)
+
+5. **Close the back.**  Screw it on with the four M2 x 8 screws.  It only goes on one way round.
+6. **Fit the USB plug** (optional).  If you printed it, push it into the port's pocket on the right side.
 
 ## 4. Into the mask
 
-> **Photo to come:** the finished low-profile model screwed into a mask.
+<p align="center"><img src="../images/low_profile_housing_1_75_in_mask.jpg" width="420" alt="The finished low-profile model screwed into a mask's voice port, seen close up from the side"></p>
 
 If anything is screwed into the mask's voice port, other than its metal adapter, take it out first.  Leave the adapter in: the housing screws into it.  Then screw the housing in by the ridges around its back.  It should end up level, with the USB-C port on the right.
 
