@@ -53,19 +53,17 @@ static const float band_hz[SEAL_BAND_COUNT] = { 250, 354, 500, 707, 1000, 1414, 
 #define BROADBAND_PEAK_DB   3.0f
 #define BROADBAND_HZ        1000.0f     // where Natural's gain is taken, for the whole noise
 
-// A well sealed housing, measured with this test's noise on the first two
-// speaker models built, with plasticine behind the speaker, around its wire
-// and around the chamber, and open-cell foam in the microphones' cell, with
-// the mask worn, as it is for the voice check: the leak was +1.3 to +2.1 dB
+// A good build, measured with this test's noise on the first two speaker
+// models built, which were sealed inside with plasticine (the same board
+// read the same without it: docs/build/seal-test.md), with the mask worn,
+// as it is for the voice check: the leak was +1.3 to +2.1 dB
 // and +3.3 dB, and after echo cancelling -21.2 to -21.4 dB and -22.3 dB. On
 // a desk, the leak was about 1.5 dB higher (the face takes in some of the
 // sound), and what's left after echo cancelling about the same.
 #define SEAL_REF_LEAK_DB        2.5f
 #define SEAL_REF_CANCELLED_DB   -21.8f
 
-// How far worse than that is still good, and still fair. A housing with no
-// plasticine leaked about 4 dB more, and after echo cancelling about 10 dB
-// more, which is what matters for feedback.
+// How far worse than that is still good, and still fair
 #define LEAK_GOOD_DB        2.5f
 #define LEAK_FAIR_DB        5.0f
 #define CANCELLED_GOOD_DB   3.0f
@@ -77,9 +75,9 @@ static const float band_hz[SEAL_BAND_COUNT] = { 250, 354, 500, 707, 1000, 1414, 
 #define LOUD_GOOD_DB        3.0f
 #define LOUD_FAIR_DB        6.0f
 
-// The two microphones on the voice, worn: with both sealed to the board with
-// foam they heard it within 1.8 dB of each other, and with one left unsealed,
-// 5.1 dB apart
+// The two microphones on the voice, worn: within 1.2 to 2.1 dB of each
+// other, with both or neither sealed to the board with foam, and with only
+// one sealed, 5.1 dB apart
 #define BALANCE_GOOD_DB     3.0f
 #define BALANCE_FAIR_DB     4.0f
 
@@ -439,7 +437,7 @@ static void finish(void)
     {
         // Feeds back below full volume: say what's most likely why
         r->advice = r->loud == SEAL_CHECK   ? "Feeds back below full volume.\nCheck the screws and battery."
-                    : r->leak == SEAL_CHECK ? "Feeds back below full volume.\nCheck the plasticine."
+                    : r->leak == SEAL_CHECK ? "Feeds back below full volume.\nCheck the speaker and chin."
                                             : "Feeds back below full volume.\nSee the build guide.";
     }
     else if (r->loud == SEAL_CHECK)
@@ -448,7 +446,7 @@ static void finish(void)
     }
     else if (r->balance == SEAL_CHECK)
     {
-        r->advice = "The microphones don't match.\nCheck their foam squares.";
+        r->advice = "The microphones don't match.\nCheck foam wind screen\nin mic chamber.";
     }
     else if (r->spare == SEAL_FAIR || r->balance == SEAL_FAIR || r->loud == SEAL_FAIR)
     {
@@ -456,11 +454,11 @@ static void finish(void)
     }
     else if (r->balance == SEAL_SKIPPED)
     {
-        r->advice = "Sealed well. No voice heard,\nso the microphones weren't checked.";
+        r->advice = "All good. No voice heard,\nso the microphones weren't checked.";
     }
     else
     {
-        r->advice = "Sealed well.";
+        r->advice = "All good.";
     }
     print_result();
 }

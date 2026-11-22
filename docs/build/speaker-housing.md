@@ -23,11 +23,10 @@ Back to the [Build Guide](README.md).
 | M2 x 8 socket head screws | 8 | Four hold the chin on, four hold the back on |
 | M2 x 6 socket head screws | 4 | Hold the washer that keeps the collar on |
 | M2 flat washers | 4 | Under those screws' heads, so they don't dig into the printed washer |
-| Plasticine | About 20 g | Modelling clay that never hardens, a lump about the size of a walnut.  It seals the speaker off from the microphones, and holds the battery.  **Don't leave it out:** without it, the voice effects feed back |
 | Double-sided foam tape | A small piece | About 1 mm thick, to hold the battery to the back |
 | Kapton tape | A few cm | Or any thin tape, to hold the battery's wires against its side |
-| Soft foam sheet | A scrap | About 2 mm thick, such as craft foam |
-| Open-cell foam | A small block | Soft and spongy, that air passes through, as used behind speaker grilles.  A block about 25 x 11 x 15 mm fills the microphones' cell |
+| Soft foam sheet | A scrap | About 2 mm thick, such as craft foam, to cushion the battery |
+| Open-cell foam | A small block | Soft and spongy, that air passes through, as used behind speaker grilles.  A block about 25 x 11 x 15 mm fills the microphones' cell, as a windscreen |
 
 > [!WARNING]
 > ⚠️ **Check the battery's polarity before plugging it in.**  MX1.25 batteries aren't all wired the same way round, and a battery plugged in backwards can damage the board.  Check its red wire goes to the positive side of the board's battery socket, as Waveshare's documentation for the board shows it, and swap the pins in the plug if it doesn't.
@@ -71,53 +70,45 @@ Here's how the parts go together, front to back: the board drops into the front 
 
 ![The speaker model, pulled apart in the order it goes together](../images/speaker_housing_1_75_exploded.png)
 
-> [!IMPORTANT]
-> **Don't skip the plasticine.**  The speaker and the microphones share one small housing, and the plasticine is what keeps the speaker's sound away from the microphones.  Without it, the [voice effects](../features/voice-effects.md) howl with feedback, even at low volume and even with the echo cancelling.  It goes in three places: behind the speaker (step 6), around the speaker's wire where it enters the chamber (step 9), and around the chamber's wall (step 10).  Press it in firmly, with no gaps.
+The speaker and the microphones share one small housing, but nothing needs sealing between them: the board's echo canceller takes out what of the speaker reaches the microphones (see [The Seal Test](seal-test.md#whats-been-measured) for how that was measured).
 
 ### The board
 
-1. **Seal the microphones.**  Cut two small squares of the soft foam sheet, about 8 mm across, and poke a hole through the middle of each with a toothpick.  Inside the display's pocket, two small round sleeves stand up from the body's floor, on the right towards the USB-C opening: one around each microphone's hole.  Stretch a square over the end of each sleeve, with its hole lined up with the sleeve's hole.  They seal the microphones against the board, so they only hear the voice port.
+1. **Fit the plungers.**  Push the two plungers into their holes in the side of the body, from inside the display's pocket.  The marks beside them on the outside are a power symbol for `PWR` and an arrow for `BOOT`.
 
-   ![The inside of the display's pocket, with a foam square on each microphone sleeve, before the board goes in](../images/speaker_housing_1_75_mic_foam.jpg)
+   ![The inside of the display's pocket, before the board goes in](../images/speaker_housing_1_75_pocket.jpg)
 
-2. **Fit the plungers.**  Push the two plungers into their holes in the side of the body, from inside the display's pocket.  The marks beside them on the outside are a power symbol for `PWR` and an arrow for `BOOT`.
-3. **Fit the board.**  Lay it in the pocket, glass forward, with its USB-C port towards the side opening on the right, and screw it to the body's floor from behind, from the chamber side, with the three M2 x 4 countersunk screws.
+2. **Fit the board.**  Lay it in the pocket, glass forward, with its USB-C port towards the side opening on the right, and screw it to the body's floor from behind, from the chamber side, with the three M2 x 4 countersunk screws.
 
 ### The speaker
 
-4. **Feed the speaker's plug through.**  Push the speaker's plug through the opening at the inner end of the speaker's pocket, into the chamber behind the board.
+3. **Feed the speaker's plug through.**  Push the speaker's plug through the opening at the inner end of the speaker's pocket, into the chamber behind the board.
 
    ![The speaker's plug pushed through the opening at the inner end of its pocket, into the chamber behind the board](../images/speaker_housing_1_75_speaker_plug.jpg)
 
-5. **Fit the speaker.**  Peel the backing off the adhesive on the speaker's front face, and stick it into its pocket from the back of the pod, cone facing out through the grille, pressed firmly against the grille all round, with its wire in the notch in the side of the pocket, and run the wire behind the speaker to the opening.
-6. **Pad it with plasticine** (don't skip it).  Spread a thin layer of plasticine over the back of the speaker, so it fills the space between the speaker and the chin.
-
-   ![The speaker in its pod from behind, covered with plasticine, before the chin goes on](../images/speaker_housing_1_75_speaker_clay.jpg)
-
-7. **Close the pod.**  Screw the chin on with four M2 x 8 screws, from its sloped underside.
+4. **Fit the speaker.**  Peel the backing off the adhesive on the speaker's front face, and stick it into its pocket from the back of the pod, cone facing out through the grille, pressed firmly against the grille all round, with its wire in the notch in the side of the pocket, and run the wire behind the speaker to the opening.
+5. **Close the pod.**  Screw the chin on with four M2 x 8 screws, from its sloped underside.
 
 ### The chamber
 
-8. **Plug in the speaker.**  Plug it into the board's speaker socket, through the opening in the body's floor marked with a speaker.
-9. **Seal the speaker off** (don't skip it).  Press plasticine into the opening between the speaker's pocket and the chamber, all round the wire.  The microphones listen into the chamber, so the less of the speaker that reaches it, the louder the voice effect can go before it feeds back.  Keep plasticine off the board and out of its sockets.
-10. **Line the chamber with plasticine** (don't skip it).  Press a thin layer of plasticine onto the inside of the chamber's wall, all the way round, including the outer wall of the microphones' cell, in a band about as deep as the battery.  It deadens the speaker's sound echoing around the chamber, and helps hold the battery.  Keep it thin: too thick, and the battery won't fit.  Keep it off the sockets, the openings in the body's floor and the screw holes.
-11. **Fill the microphones' cell.**  The cell is the narrow space on the USB-C side, walled off by the ribs.  Cut a block of the open-cell foam to fit it, roughly 25 x 11 x 15 mm, trimmed to the curve of the wall, and drop it in.  It must sit loosely, not packed in or squashed: the microphones hear you through it, so it has to be open-cell foam, which sound passes through.
+6. **Plug in the speaker.**  Plug it into the board's speaker socket, through the opening in the body's floor marked with a speaker, and lay its wire around the inside of the chamber, clear of the screw holes.
+7. **Fill the microphones' cell.**  The cell is the narrow space on the USB-C side, walled off by the ribs, where your voice comes in from the mask.  Cut a block of the open-cell foam to fit it, roughly 25 x 11 x 15 mm, trimmed to the curve of the wall, and drop it in.  It's a windscreen: your breath comes in with your voice, and the foam takes the puffs of air on hard sounds like "p", and the damp in it, before they reach the microphones.  It must sit loosely, not packed in or squashed: the microphones hear you through it, so it has to be open-cell foam, which sound passes through.
 
-    ![The chamber from the back, with the battery out: a thin layer of plasticine around the wall, and a loose block of open-cell foam in the microphones' cell](../images/speaker_housing_1_75_chamber.jpg)
+   ![The chamber from the back, with the battery out: the speaker plugged in, and a loose block of open-cell foam in the microphones' cell](../images/speaker_housing_1_75_chamber.jpg)
 
 ### The back and the collar
 
-12. **Tape the battery to the back.**  Stick a small piece of the double-sided foam tape on one flat face of the battery, and stick the battery to the inside of the back with it, lined up so it'll drop into the chamber inside the ring of plasticine, with its wires towards the battery socket.  The battery goes in with the back, so it's taped on first.  Keep it clear of the opening in the back beside it: that's where your voice comes in from the mask to the microphones' cell, and the battery mustn't cover any of it.  Then tape the battery's wires flat along its side with a strip of Kapton tape, so they stay out of the way of the back's screw holes when it goes on.  Last, lay a thin strip of the soft foam sheet on the battery's other flat face, to cushion it against the chamber's floor.  Don't use the foam tape here, or leave its backing on: with the battery stuck on both sides, the back is hard to take off again.
-13. **Close the back.**  ⚠️ [Check the battery's polarity first](#1-order-the-parts), and plug it into the socket marked with a battery.  Then lower the back into place, with the battery going in inside the ring of plasticine, its side against the ribs, and the wires tucked in beside it.  Screw the back on with four M2 x 8 screws.  They cut their own thread in the body.  ⚠️ **Don't over-tighten them:** stop as soon as the back sits flat.  Any tighter, and the back squeezes the battery.
-14. **Fit the gasket and collar.**  Put the gasket over the four posts on the back, then the collar, grip first, so its thread points away from the housing.
+8. **Tape the battery to the back.**  Stick a small piece of the double-sided foam tape on one flat face of the battery, and stick the battery to the inside of the back with it, lined up so it'll drop into the chamber, with its wires towards the battery socket.  The battery goes in with the back, so it's taped on first.  Keep it clear of the opening in the back beside it: that's where your voice comes in from the mask to the microphones' cell, and the battery mustn't cover any of it.  Then tape the battery's wires flat along its side with a strip of Kapton tape, so they stay out of the way of the back's screw holes when it goes on.  Last, lay a thin strip of the soft foam sheet on the battery's other flat face, to cushion it against the chamber's floor.  Don't use the foam tape here, or leave its backing on: with the battery stuck on both sides, the back is hard to take off again.
+9. **Close the back.**  ⚠️ [Check the battery's polarity first](#1-order-the-parts), and plug it into the socket marked with a battery.  Then lower the back into place, with the battery going into the chamber, its side against the ribs, and the wires tucked in beside it.  Screw the back on with four M2 x 8 screws.  They cut their own thread in the body.  ⚠️ **Don't over-tighten them:** stop as soon as the back sits flat.  Any tighter, and the back squeezes the battery.
+10. **Fit the gasket and collar.**  Put the gasket over the four posts on the back, then the collar, grip first, so its thread points away from the housing.
 
     ![The back with the gasket and collar on, and the two halves of the washer beside it, with their screws](../images/speaker_housing_1_75_collar.jpg)
 
-15. **Fit the washer.**  Drop each half of the washer into the collar through its threaded end, line its holes up with two of the posts, and screw it down with two M2 x 6 screws, each with an M2 flat washer under its head.  Tighten them evenly, and stop when the collar turns firmly but smoothly: the gasket's friction is what keeps the housing from turning by itself once it's in the mask.  If the collar won't turn, loosen the washer's screws a little.  If the screws won't start in the holes in the ends of the posts, open the holes up a little with a small drill bit, about 1.8 mm, turned by hand.
+11. **Fit the washer.**  Drop each half of the washer into the collar through its threaded end, line its holes up with two of the posts, and screw it down with two M2 x 6 screws, each with an M2 flat washer under its head.  Tighten them evenly, and stop when the collar turns firmly but smoothly: the gasket's friction is what keeps the housing from turning by itself once it's in the mask.  If the collar won't turn, loosen the washer's screws a little.  If the screws won't start in the holes in the ends of the posts, open the holes up a little with a small drill bit, about 1.8 mm, turned by hand.
 
     ![The finished housing from the back: the washer halves screwed down inside the collar](../images/speaker_housing_1_75_back_done.jpg)
 
-16. **Fit the USB plug** (optional).  If you printed it, push it into the port's pocket on the right side.  The notch at its top edge is for a fingernail to pull it out again.
+12. **Fit the USB plug** (optional).  If you printed it, push it into the port's pocket on the right side.  The notch at its top edge is for a fingernail to pull it out again.
 
 ## 4. Into the mask
 
@@ -129,4 +120,4 @@ The thread screws into a metal adapter in the mask, which itself screws into the
 
 ## Next
 
-[Install the firmware](../building-firmware.md), if you haven't already, then [set it up](first-start.md).  Its [Seal Test](seal-test.md) checks the plasticine and foam went in well.
+[Install the firmware](../building-firmware.md), if you haven't already, then [set it up](first-start.md).  Its [Seal Test](seal-test.md) checks it went together well.

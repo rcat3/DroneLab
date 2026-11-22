@@ -366,7 +366,7 @@ static void seal_show(seal_phase_t phase, int seconds_left)
             lv_label_set_text(seal_status_label, "Turns Natural up until\nit feeds back, then stops.\nIt squeals briefly.\nStay quiet.");
             break;
         default:
-            lv_label_set_text(seal_status_label, "Checks the speaker is\nsealed off from the\nmicrophones. Put the\nmask somewhere quiet.");
+            lv_label_set_text(seal_status_label, "How loud it can go\nbefore it feeds back.\nPut the mask on\nsomewhere quiet.");
             break;
         }
         break;

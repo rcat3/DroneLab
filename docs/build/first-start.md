@@ -51,9 +51,9 @@ Screw the unit into the mask, put the mask on (or set it upright on a head form)
 
 <a href="seal-test.md"><img src="../images/screens/seal_test_result.png" width="180" align="right" alt="The Seal Test's results"></a>
 
-The speaker and the microphones share one small housing, so how well the plasticine and foam seal them off decides how loud the voice effects can go.  The **Seal Test** page, the last in the **Voice** feature, checks it in about 20 seconds.
+The speaker and the microphones share one small housing, so how much of the speaker gets back into the microphones decides how loud the voice effects can go before they feed back.  The **Seal Test** page, the last in the **Voice** feature, checks it in about 20 seconds.
 
-Screw the unit into the mask, put the mask on, somewhere quiet, and tap **Start**.  Keep quiet and still while the screen says **Quiet**, then after the beep, say **"aaah"** steadily until it finishes.  It shows three results, **Leak**, **Echo** and **Mics**, each *good*, *fair* or *check*, and what to look at if one isn't good.
+Screw the unit into the mask, put the mask on, somewhere quiet, and tap **Start**.  Keep quiet and still while the screen says **Quiet**, then after the beep, say **"aaah"** steadily until it finishes.  It shows how far over full volume the voice effects can go before they feed back, as **Spare**, and whether the two microphones match, as **Mics**, each *good*, *fair* or *check*, and what to look at if one isn't good.
 
 See [The Seal Test](seal-test.md) for what each result measures, the numbers behind the grades, and what to check for each.
 
