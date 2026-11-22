@@ -74,12 +74,12 @@ The status screen can be picked to show when the display turns on, in [Settings]
 ### HiveMind Setup
 
 - *Push to talk* or *Voice*: in *Push to talk*, the unit sends while the talk button (or the app's, or the avatar) is held, and in *Voice*, whenever it hears you speak.
-- *Speaker off while talking*: the speaker goes quiet while the unit's sending, voice effect and sound files alike, so those nearby don't hear what goes to the hive.  Not on the low-profile unit, which has no speaker.
+- *Speaker off while talking*: the speaker goes quiet while the unit's sending, voice effect and sound files alike, so those nearby don't hear what goes to the hive.  Always on, and greyed out, while the [HiveMind voice effect](#hivemind-voice) differs from the speaker's (your choice comes back when it's the same again).  Not on the low-profile unit, which has no speaker.
 - *Show HiveMind while*: *Talk*, *Hear* or *Both* comes to the status screen by itself while the unit's sending, while someone else is talking, or both, and goes back to the page you were on two seconds after it stops.  If you swipe somewhere else in the meantime, it stays where you went.  It waits while you're touching the screen.
 
 ### HiveMind Voice
 
-Titled *HiveMind Voice Effect* on the screen: the voice effect for what the hive hears: *Same as speaker*, or any of the [voice effects](voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.  With two different effects the voice runs through both, which takes more of the unit's processor: the heaviest two together take about 70% of one of its cores.
+Titled *HiveMind Voice Effect* on the screen: the voice effect for what the hive hears: *Same as speaker*, or any of the [voice effects](voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.  The unit runs one voice effect at a time, as two of the heavier ones together are more than its processor can keep up with.  So with a different effect, the speaker goes quiet while you talk to the hive, and HiveMind's effect takes over until you stop, then the speaker's comes back.  In voice mode, a transmission then starts as the unit hears you, not a moment before as it otherwise does, so the very start of the first word can be clipped.  With *Same as speaker*, the speaker can carry on while you talk, and you're heard with the one effect both out loud and by the hive.
 
 ### Talk to
 

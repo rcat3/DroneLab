@@ -130,12 +130,22 @@ class SetupPage extends StatelessWidget {
                   // The low-profile housing has no speaker to mute
                   if (settings.hasSpeaker)
                     Explained(
-                      help: 'Mute speaker when speaking to hive.',
+                      help: settings.muteForced
+                          ? 'Mute speaker when speaking to hive. Always on while the HiveMind voice differs from '
+                              "the speaker's: the unit runs one voice effect at a time, so the speaker goes quiet "
+                              'while you talk to the hive, and comes back when you stop. Set HiveMind voice to '
+                              'Same as speaker to choose.'
+                          : 'Mute speaker when speaking to hive.',
                       builder: (context, info) => PanelRow(
                         title: 'Mute speaker on Tx',
                         trailing: [
                           info,
-                          Switch(value: settings.muteSpeaker, onChanged: (on) => comm.setBoardSettings(muteSpeaker: on)),
+                          // On and greyed out while it's forced; the choice is kept for after
+                          Switch(
+                              value: settings.muteSpeaker || settings.muteForced,
+                              onChanged: settings.muteForced
+                                  ? null
+                                  : (on) => comm.setBoardSettings(muteSpeaker: on)),
                         ],
                       ),
                     ),

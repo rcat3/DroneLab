@@ -31,9 +31,19 @@ const char *voice_fx_preset_name(size_t index);
 void voice_fx_set_preset(size_t index);
 
 /* The comm channel's own preset, for what it sends (the listener), or -1 for
- * the same as the speaker's. While it's different and there's a listener,
- * the voice runs through both, which takes more of the processor. */
+ * the same as the speaker's. The voice goes through one effect at a time, as
+ * the processor hasn't time for two of the heavier ones: while it's
+ * different, and the comm channel sends (voice_fx_set_comm_sending), the
+ * listener gets the comm channel's and the speaker goes quiet; the rest of
+ * the time both get the speaker's. */
 void voice_fx_set_comm_preset(int index);
+
+/* Whether the comm channel's sending, for voice_fx_set_comm_preset */
+void voice_fx_set_comm_sending(bool on);
+
+/* Whether the comm channel has an effect of its own, different from the
+ * speaker's, so the speaker goes quiet while it sends */
+bool voice_fx_comm_has_own(void);
 
 /* Hand the listener the speaker's effect instead of the comm channel's own,
  * as for recording what the speaker plays. */

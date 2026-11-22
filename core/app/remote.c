@@ -639,9 +639,12 @@ static void write_about(json_t *j)
 static void write_comm(json_t *j)
 {
     const settings_t *s = settings_get();
-    jprintf(j, "{\"available\":%d,\"mode\":%d,\"mute\":%u,\"show\":%u,\"voice\":%d,\"talk\":%d,\"talk_now\":%d,"
-               "\"housing\":\"%s\",\"voices\":[",
-            comm_available() ? 1 : 0, (int)comm_mode(), s->comm_mute_speaker, s->comm_auto_show,
+    // mute_forced: the speaker goes quiet while it sends whatever mute says,
+    // as HiveMind has an effect of its own (voice_fx_comm_has_own)
+    jprintf(j, "{\"available\":%d,\"mode\":%d,\"mute\":%u,\"mute_forced\":%d,\"show\":%u,\"voice\":%d,"
+               "\"talk\":%d,\"talk_now\":%d,\"housing\":\"%s\",\"voices\":[",
+            comm_available() ? 1 : 0, (int)comm_mode(), s->comm_mute_speaker,
+            settings_speaker_fitted() && voice_fx_comm_has_own() ? 1 : 0, s->comm_auto_show,
             // Without a speaker, HiveMind's effect is the Voice page's, the only one
             settings_speaker_fitted() ? comm_voice_effect() : (int)s->voice_effect,
             (int)comm_talk_to(), (int)comm_talk_now(), housing_name());

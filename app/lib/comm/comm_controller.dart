@@ -90,8 +90,12 @@ class BoardCommSettings {
   final List<String> voices;      // the voice effects
   final int talkOn;               // before commVersion 11: the channel talked on, 0 the server's, 1 direct
   final String? housing;          // 'speaker' or 'low-profile'; null from older firmware
+  // The speaker's off while it sends whatever muteSpeaker says, as the comm
+  // channel has a voice effect of its own, different from the speaker's:
+  // the unit runs one at a time
+  final bool muteForced;
   const BoardCommSettings(this.muteSpeaker, this.show, this.direct, this.voice, this.voices, this.talkOn,
-      [this.housing]);
+      [this.housing, this.muteForced = false]);
 
   /// Whether the housing has a speaker: not the low-profile model. Older
   /// firmware doesn't say, and is taken to have one, showing everything.
@@ -488,7 +492,8 @@ class CommController extends ChangeNotifier {
           (v['voice'] as num?)?.toInt() ?? -1,
           [for (final n in (v['voices'] as List<dynamic>? ?? const [])) n as String],
           (v['talk'] as num?)?.toInt() ?? 0,
-          v['housing'] as String?);
+          v['housing'] as String?,
+          v['mute_forced'] == 1);
       _checkJoined();
       _checkDirectSince();
       notifyListeners();

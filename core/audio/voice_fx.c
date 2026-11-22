@@ -959,6 +959,7 @@ static chain_t comm_chain = { .preset = -1 };
 static volatile int wanted_preset;          // set by the UI loop
 static volatile int wanted_comm_preset = -1;    // -1 for the speaker's
 static volatile bool listen_to_speaker;         // the listener gets the speaker's effect, not the comm one
+static volatile bool comm_sending;              // the comm channel's sending (voice_fx_set_comm_sending)
 // The seal test's feedback check (voice_fx_feedback_test): Natural, without
 // its gate, at test_gain, until it trips
 static volatile bool feedback_test;
@@ -1284,15 +1285,19 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     {
         build_chain(&speaker_chain, preset);
     }
-    // The comm channel's own effect, if it has one and something's listening
+    // The comm channel's own effect, if it has one and something's listening.
+    // It's kept ready, but runs only while the comm channel sends, and then
+    // instead of the speaker's, which goes quiet: the processor hasn't time
+    // for two of the heavier effects at once.
     int comm_preset = wanted_comm_preset;
-    bool own_comm = comm_preset >= 0 && comm_preset != preset && !listen_to_speaker &&
+    bool has_comm = comm_preset >= 0 && comm_preset != preset && !listen_to_speaker &&
                     __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE) != NULL;
-    if (own_comm && comm_preset != comm_chain.preset)
+    bool own_comm = has_comm && comm_sending;
+    if (has_comm && comm_preset != comm_chain.preset)
     {
         build_chain(&comm_chain, comm_preset);
     }
-    else if (!own_comm && comm_chain.preset >= 0)
+    else if (!has_comm && comm_chain.preset >= 0)
     {
         free_chain(&comm_chain);
         comm_chain.preset = -1;
@@ -1328,24 +1333,26 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     // Keep the last few samples for the next block's filter.
     memmove(h, h + count, (DECIMATE_TAPS - 1) * sizeof(float));
 
-    // The comm channel's effect first, on its own copy of the voice
+    // One effect or the other: the comm channel's while it sends its own,
+    // with the speaker quiet, or else the speaker's
     int16_t out[MAX_BLOCK];
-    int16_t comm_out[MAX_BLOCK];
     if (own_comm)
     {
-        float y[MAX_BLOCK];
-        memcpy(y, x, (size_t)n * sizeof(float));
-        run_chain(&comm_chain, y, n);
-        to_pcm(y, comm_out, n);
+        run_chain(&comm_chain, x, n);
+        to_pcm(x, out, n);
+        memset(x, 0, (size_t)n * sizeof(float));
     }
-    run_chain(&speaker_chain, x, n);
-    to_pcm(x, out, n);
+    else
+    {
+        run_chain(&speaker_chain, x, n);
+        to_pcm(x, out, n);
+    }
 
     voice_lab_send(VOICE_LAB_KIND_EFFECT, FS, out, n);
     voice_fx_listener_t cb = __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE);
     if (cb != NULL)
     {
-        cb(own_comm ? comm_out : out, n, listener_user_data);
+        cb(out, n, listener_user_data);
     }
     if (speaker_on)
     {
@@ -1358,8 +1365,8 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     processed += n;
     if (++blocks == DEBUG_BLOCKS)
     {
-        printf("voice fx: %s%s%s takes %.1f%% of a core\n", presets[preset].name, own_comm ? " + comm " : "",
-               own_comm ? presets[comm_preset].name : "",
+        printf("voice fx: %s%s takes %.1f%% of a core\n", own_comm ? "comm " : "",
+               presets[own_comm ? comm_preset : preset].name,
                100.0 * busy / CLOCKS_PER_SEC / ((float)processed / FS));
         processed = 0;
         busy = 0;
@@ -1415,6 +1422,17 @@ void voice_fx_listen_to_speaker(bool speaker)
 void voice_fx_set_comm_preset(int index)
 {
     wanted_comm_preset = (index >= 0 && (size_t)index < PRESET_COUNT) ? index : -1;
+}
+
+void voice_fx_set_comm_sending(bool on)
+{
+    comm_sending = on;
+}
+
+bool voice_fx_comm_has_own(void)
+{
+    int comm_preset = wanted_comm_preset;
+    return comm_preset >= 0 && comm_preset != wanted_preset && !listen_to_speaker;
 }
 
 void voice_fx_set_speaker(bool on)

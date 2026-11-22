@@ -673,7 +673,11 @@ static void show_setup(void)
     ui_check_choice(show_buttons, s->comm_auto_show);
     if (mute_switch != NULL)
     {
-        lv_obj_set_state(mute_switch, LV_STATE_CHECKED, s->comm_mute_speaker);
+        // With an effect of its own, HiveMind takes the voice effect over
+        // while it sends, so the speaker's quiet then whatever's chosen
+        bool forced = voice_fx_comm_has_own();
+        lv_obj_set_state(mute_switch, LV_STATE_CHECKED, forced || s->comm_mute_speaker);
+        lv_obj_set_state(mute_switch, LV_STATE_DISABLED, forced);
     }
 }
 
@@ -694,8 +698,9 @@ static void options_event_cb(lv_event_t *e)
     {
         show = settings_get()->comm_auto_show;
     }
-    bool mute = mute_switch != NULL ? lv_obj_has_state(mute_switch, LV_STATE_CHECKED)
-                                    : settings_get()->comm_mute_speaker;
+    // Kept as chosen while HiveMind's own effect forces it on
+    bool mute = mute_switch != NULL && !voice_fx_comm_has_own() ? lv_obj_has_state(mute_switch, LV_STATE_CHECKED)
+                                                                : settings_get()->comm_mute_speaker;
     settings_set_comm_options(mute, (uint8_t)show);
 }
 

@@ -159,7 +159,8 @@
 // closing, which reached -52 dB in the mask, and speech is around -30 dB. It keeps talking for
 // VOX_HANG_MS after the voice stops, so it doesn't cut out between words,
 // and starts VOX_PREROLL_MS before it heard the voice, so the start of the
-// first word isn't lost.
+// first word isn't lost: but not with a comm effect of its own, as the voice
+// before it started sending went through the speaker's effect.
 #define VOX_DB              -46.0f
 #define VOX_ATTACK          2
 #define VOX_HANG_MS         800
@@ -249,6 +250,14 @@ static volatile comm_mode_t mode;
 static volatile bool screen_talk;
 static volatile bool phone_talk;
 static volatile bool sending;
+
+/* The voice effect runs the comm channel's own effect, if it has one, only
+ * while it sends */
+static void set_sending(bool on)
+{
+    sending = on;
+    voice_fx_set_comm_sending(on);
+}
 
 // Voice from the phone for direct comms (0x16), from the UI loop to the
 // encoder task, which sends it as its own while the wearer isn't talking
@@ -531,7 +540,7 @@ static void encoder_task(void *arg)
         if (!phone && !direct)
         {
             connected = false;
-            sending = false;
+            set_sending(false);
             releasing = false;
             rcat_hal_delay_ms(TASK_IDLE_MS);
             continue;
@@ -575,7 +584,9 @@ static void encoder_task(void *arg)
 
         if (!sending && talk)
         {
-            uint32_t pre = mode == COMM_VOICE && !rec ? MS_TO_SAMPLES(VOX_PREROLL_MS) + VOX_ATTACK * FRAME : 0;
+            uint32_t pre = mode == COMM_VOICE && !rec && !voice_fx_comm_has_own()
+                               ? MS_TO_SAMPLES(VOX_PREROLL_MS) + VOX_ATTACK * FRAME
+                               : 0;
             if (pre > w)
             {
                 pre = w;
@@ -589,7 +600,7 @@ static void encoder_task(void *arg)
             {
                 send_talked(TALKED_STARTED, tx_flags);
             }
-            sending = true;
+            set_sending(true);
             releasing = false;
             first = true;
             opus_encoder_ctl(enc, OPUS_RESET_STATE);
@@ -680,7 +691,7 @@ static void encoder_task(void *arg)
             {
                 send_talked(TALKED_ENDED, tx_flags);
             }
-            sending = false;
+            set_sending(false);
             releasing = false;
         }
 
@@ -1860,8 +1871,9 @@ void comm_poll(uint32_t now_ms)
     {
         code_shown = false;
     }
-    // Quiet while it sends, if that's chosen
-    bool mute = running && sending && settings_get()->comm_mute_speaker;
+    // Quiet while it sends, if that's chosen, or the comm channel has an
+    // effect of its own, which the speaker's makes way for
+    bool mute = running && sending && (settings_get()->comm_mute_speaker || voice_fx_comm_has_own());
     if (mute != speaker_muted)
     {
         speaker_muted = mute;

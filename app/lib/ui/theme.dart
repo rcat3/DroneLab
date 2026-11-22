@@ -135,7 +135,12 @@ abstract final class Kc {
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? bg : muted),
-        trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? pink : line),
+        // Dimmed when it can't be changed, as Mute speaker on Tx while it's forced
+        trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled)
+            ? (s.contains(WidgetState.selected) ? pink.withValues(alpha: 0.35) : line.withValues(alpha: 0.5))
+            : s.contains(WidgetState.selected)
+                ? pink
+                : line),
         trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
       ),
       checkboxTheme: CheckboxThemeData(

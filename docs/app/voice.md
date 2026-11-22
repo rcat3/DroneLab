@@ -140,8 +140,8 @@ The status strip's grey down arrow means someone's talking on *another* direct c
 In Setup, behind the gear, while the unit's connected:
 
 - **Talk with**: *PUSH TO TALK*, while a button's held, or *VOICE*, whenever the unit hears you speak (see [Ways to talk](#ways-to-talk)).
-- **HiveMind voice**: the voice effect the hive hears: *Same as speaker*, or any of the [voice effects](../features/voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.  A low-profile unit has no speaker, so it has one effect, set here or on the unit's *HiveMind Voice Effect* page, which stay the same.
-- **Mute speaker on Tx**: the unit's speaker goes quiet while you're talking to the hive, so those around you don't hear what goes to it.  Not shown for a low-profile unit, which has no speaker.
+- **HiveMind voice**: the voice effect the hive hears: *Same as speaker*, or any of the [voice effects](../features/voice-effects.md), so you can sound natural on comms and like a robot out loud, or the other way round.  The unit runs one effect at a time, so with a different one the speaker goes quiet while you talk to the hive, and comes back when you stop.  A low-profile unit has no speaker, so it has one effect, set here or on the unit's *HiveMind Voice Effect* page, which stay the same.
+- **Mute speaker on Tx**: the unit's speaker goes quiet while you're talking to the hive, so those around you don't hear what goes to it.  Always on, and greyed out, while the *HiveMind voice* differs from the speaker's; set it to *Same as speaker* to choose.  Not shown for a low-profile unit, which has no speaker.
 - **Talk tones**: two short notes up in your headphones as push to talk starts, and two down as it ends, so you know it took.  Not in voice mode, which starts at every word.  The low buzz for [nobody hearing you](#where-your-voice-goes) sounds either way.
 - **Show HiveMind on the board while**: the unit's display switches to its HiveMind screen by itself when you *TALK*, when you *HEAR* someone, or *BOTH*, and goes back to what it was showing after.  *NEVER* leaves the display alone.
 
