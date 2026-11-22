@@ -168,7 +168,11 @@ static const char *TAG = "board";
 // peaks about -22 dBFS, as on the 1.46" board, without clipping. Much lower
 // and the voice effect's gate (-45 dBFS) cuts most of the speech.
 #define MIC_GAIN_DB         30.0f
-#define SPK_VOLUME          80      // the ES8311's volume, 0 to 100
+// The ES8311's volume, 0 to 100: -50 to 0 dB. At 86 (-7 dB) the loudest
+// voice at 100% Effect Volume is about as loud as the NS4150B amplifier goes
+// without distorting; at 100 it distorts badly. Natural still has about 12 dB
+// before it feeds back (the Seal Test's feedback check).
+#define SPK_VOLUME          86
 #define SPK_BLOCK_FRAMES    256
 #define SPK_MAX_RATIO       6       // up to this many frames out for each frame in (5.3 kHz)
 #define SPK_DMA_DESC_NUM    4       // 16 ms: live sound waits a whole lap of these, so it's kept short
