@@ -398,6 +398,7 @@ module layout()
         color("magenta") for (m = mic_xy) translate(m) circle(d = 2);
         color("green") for (b = [spk_conn_box, bat_conn_box]) translate(b[0]) square(box_size(b));
         color("yellow") translate(header_box[0]) square(box_size(header_box));
+        color("black") translate(antenna_box[0]) square(box_size(antenna_box));
     }
     color("purple")
     {

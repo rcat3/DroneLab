@@ -284,6 +284,7 @@ module layout()
         color("magenta") for (m = mic_xy) translate(m) circle(d = 2);
         color("green") for (b = [spk_conn_box, bat_conn_box]) translate(b[0]) square(box_size(b));
         color("yellow") translate(header_box[0]) square(box_size(header_box));
+        color("black") translate(antenna_box[0]) square(box_size(antenna_box));
     }
     color("purple") for (c = cover_screws) translate(c) circle(d = screw_head[0]);
     color("dimgray", 0.4) circle(r = cup_ir);

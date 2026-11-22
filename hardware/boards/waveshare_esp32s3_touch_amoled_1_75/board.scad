@@ -44,6 +44,11 @@ sd_shift = [0, 0];                  // move the slot by this much (across, towar
 button_angles = [56, 124];          // side buttons, 34 degrees either side of the top: BOOT, then PWR
 button_z = [-8.70, -6.50];
 button_reach_r = 22.81;             // how far out the button actuators reach
+// The 2.4 GHz chip antenna (J2), on the back of the board at the top edge,
+// between the side buttons. Measured from Waveshare's PCB layout, not the
+// STEP model. A battery behind it costs about 6-8 dB of signal (measured
+// 2026-11-22), so keep batteries and other metal clear of it.
+antenna_box = [[-3.3, 20.4], [2.0, 22.8]];
 
 /* [Housing] */
 clearance = 0.2;                    // around the glass
