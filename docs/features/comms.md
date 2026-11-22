@@ -179,15 +179,15 @@ python3 tools/comm_bridge.py --mumble 192.168.1.10 --password secret --user Pup
 
 The computer has to pair with the unit first, as the app does: `tools/ble_pair.py`, or in `bluetoothctl`, `agent on`, `pair` and the unit's address, and type in the code the unit shows.  See the top of the script for more.  It needs `pip install bleak`, and for `--play`, `numpy` and `sounddevice`.
 
-### Direct mode with one unit
+### Direct mode on your own
 
-A unit built with `-DRCAT_DIRECT_ECHO=1` only echoes back what it hears, as a unit called `ECHO-` and four letters, so one unit that can talk, with its phone, hears itself come back.  Once it's had a whole avatar, it takes that on as its own, so the avatar comes back too.  It's on a channel called *Echo Test*, with the passphrase `dronelab`, which shows up as heard nearby, for trying joining one:
+The [voice and text responders](../app/developer-options.md) in the app's Developer options stand in for a second person: leave one unit and its phone at base with them on, take the other unit out, and what you say or text comes back.  It's how the [range tests](../hardware/direct-mode-range.md) were done, relaying included.
+
+With only one phone, a second unit built with `-DRCAT_DIRECT_ECHO=1` echoes back what it hears instead, on a channel called *Echo Test* with the passphrase `dronelab`.  It can't relay or link to a phone of its own:
 
 ```
 idf.py -C platforms/esp-idf -B build-s3-175-echo -DRCAT_DIRECT_ECHO=1 build flash
 ```
-
-It takes a second board: the echo unit can't talk or link to a phone of its own.
 
 ## How it works
 
