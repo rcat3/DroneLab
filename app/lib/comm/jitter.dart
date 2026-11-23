@@ -32,14 +32,35 @@ class Speaker {
   final int session;
   final int sampleRate;
   final VoiceDecoder _decoder;
-  final int targetSamples;
-  final int maxSamples;
+  /// What it holds back before playing, and the most before it drops some
+  /// to catch up. It adapts: a packet come too late (its sound already
+  /// made up) holds back [growMs] more, up to [mostExtraMs] over
+  /// [baseSamples]; steady for [steadyMs], it comes back down by [shrinkMs]
+  /// as a transmission starts, so the delay never jumps mid-word. Voices
+  /// that come evenly (the phone's mic) stay at the least; a unit's, which
+  /// come in bursts (its encoder and Bluetooth), get what they need.
+  final int baseSamples;
+  int targetSamples;
+  final int _extraSamples;
+  int get maxSamples => targetSamples + _extraSamples;
+  int get heldMs => targetSamples * 1000 ~/ sampleRate;
+
+  static const growMs = 20;
+  static const shrinkMs = 10;
+  static const mostExtraMs = 160;
+  static const steadyMs = 15000;
+  // When one last came late, and it last grew and shrank: long ago at first
+  static const _longAgo = -1 << 40;
+  int _lateAtMs = _longAgo;
+  int _grewAtMs = _longAgo;
+  int _shrankAtMs = _longAgo;
 
   final List<Int16List> _chunks = [];
   int _offset = 0;        // into _chunks.first
   int queued = 0;         // samples waiting
 
   int? _expectedSeq;      // in 10 ms frames
+  int _newestSeq = -1;    // the newest come, to tell late from repeated
   bool _ended = true;     // the last transmission has finished arriving
   bool _playing = false;
   int _lastPacketMs = 0;
@@ -51,6 +72,7 @@ class Speaker {
   int underruns = 0;
   int dropped = 0;        // samples dropped to keep the delay down
   int concealed = 0;      // 10 ms frames made up while it ran dry
+  int late = 0;           // packets come after their sound was made up, and left out
 
   /// How long Opus makes up sound for while nothing comes, before it stops
   /// and waits for the buffer to fill again.
@@ -58,8 +80,25 @@ class Speaker {
   int _concealRun = 0;    // ms made up since the last real packet
 
   Speaker(this.session, this.sampleRate, this._decoder, {int targetMs = 60, int maxExtraMs = 120})
-      : targetSamples = sampleRate * targetMs ~/ 1000,
-        maxSamples = sampleRate * (targetMs + maxExtraMs) ~/ 1000;
+      : baseSamples = sampleRate * targetMs ~/ 1000,
+        targetSamples = sampleRate * targetMs ~/ 1000,
+        _extraSamples = sampleRate * maxExtraMs ~/ 1000;
+
+  /// A packet came too late: hold back more, once for each stall.
+  void _grow(int nowMs) {
+    _lateAtMs = nowMs;
+    if (nowMs - _grewAtMs < 500) return;
+    _grewAtMs = nowMs;
+    final most = baseSamples + sampleRate * mostExtraMs ~/ 1000;
+    targetSamples = math.min(most, targetSamples + sampleRate * growMs ~/ 1000);
+  }
+
+  /// As a transmission starts: steady a while, hold back a little less.
+  void _maybeShrink(int nowMs) {
+    if (targetSamples <= baseSamples || nowMs - _lateAtMs < steadyMs || nowMs - _shrankAtMs < steadyMs) return;
+    _shrankAtMs = nowMs;
+    targetSamples = math.max(baseSamples, targetSamples - sampleRate * shrinkMs ~/ 1000);
+  }
 
   int get _samplesPerSeq => sampleRate ~/ 100;
 
@@ -69,12 +108,22 @@ class Speaker {
     _lastPacketMs = nowMs;
     if (fresh) {
       _expectedSeq = seq;
+      _newestSeq = seq - 1;
       _ended = false;
+      _maybeShrink(nowMs);
     }
     final expected = _expectedSeq!;
     if (!fresh && seq < expected) {
-      return; // late or repeated
+      // Late (its time's been made up already) or repeated (direct sends
+      // each twice): only the late are counted, as the newest seen came before
+      if (seq > _newestSeq) {
+        late++;
+        _grow(nowMs);
+      }
+      _newestSeq = math.max(_newestSeq, seq);
+      return;
     }
+    _newestSeq = math.max(_newestSeq, seq);
     if (opus.isNotEmpty) {
       packets++;
       final gap = seq - expected;
@@ -253,10 +302,21 @@ class Mixer {
   /// [extraMs] waits that much longer for this speaker's voice, for one that
   /// comes less evenly (direct comms' repeats can come 40 ms late).
   void receive(int session, int seq, Uint8List opus, bool last, int nowMs, {int extraMs = 0}) {
-    final s = speakers.putIfAbsent(
-        session, () => Speaker(session, sampleRate, newDecoder(), targetMs: targetMs + extraMs));
+    final s = speakers.putIfAbsent(session, () {
+      final sp = Speaker(session, sampleRate, newDecoder(), targetMs: targetMs + extraMs);
+      // What it learned last time, so a bursty voice doesn't break up
+      // again at the start of each conversation
+      final held = _learned[session];
+      if (held != null) {
+        sp.targetSamples = held.clamp(sp.baseSamples, sp.baseSamples + sampleRate * Speaker.mostExtraMs ~/ 1000);
+      }
+      return sp;
+    });
     s.receive(seq, opus, last, nowMs);
   }
+
+  /// How much each voice held back, kept after its speaker goes idle.
+  final Map<int, int> _learned = {};
 
   void remove(int session) => speakers.remove(session)?.dispose();
 
@@ -296,7 +356,10 @@ class Mixer {
     }
     speakers.removeWhere((_, s) {
       final gone = s.idle(nowMs);
-      if (gone) s.dispose();
+      if (gone) {
+        _learned[s.session] = s.targetSamples;
+        s.dispose();
+      }
       return gone;
     });
     return out;

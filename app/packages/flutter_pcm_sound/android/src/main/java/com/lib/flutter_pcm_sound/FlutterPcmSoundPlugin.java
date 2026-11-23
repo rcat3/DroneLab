@@ -190,6 +190,12 @@ public class FlutterPcmSoundPlugin implements
                     result.success(true);
                     break;
                 }
+                case "underruns": {
+                    // DroneLab: the player's own count of running dry
+                    AudioTrack t = mAudioTrack;
+                    result.success(t != null && Build.VERSION.SDK_INT >= 24 ? t.getUnderrunCount() : 0);
+                    break;
+                }
                 case "release": {
                     cleanup();
                     result.success(true);

@@ -88,6 +88,10 @@ class FlutterPcmSound {
     }
   }
 
+  /// DroneLab: how many times Android's player has run dry since setup
+  /// (AudioTrack.getUnderrunCount), 0 elsewhere
+  static Future<int> underruns() async => (await _invokeMethod<int>('underruns')) ?? 0;
+
   /// release all audio resources
   static Future<void> release() async {
     // DroneLab: set up again after this, start() has to feed again, or the

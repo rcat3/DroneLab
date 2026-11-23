@@ -216,6 +216,8 @@ class CommController extends ChangeNotifier {
   late final AudioOut _audio = AudioOut(mixer);
 
   /// How the sound out's kept up, for the developer commands (a computer's).
+  Future<int> phoneUnderruns() => _audio.phoneUnderruns();
+
   String get audioOutHealth =>
       'Sound out: ${_audio.underruns} underruns, timer held up ${_audio.longestTickMs} ms at most, '
       'the card takes up to ${_audio.burstMs} ms at once, kept ${_audio.aheadMs} ms ahead';
@@ -2409,7 +2411,8 @@ class CommController extends ChangeNotifier {
     if (!_phoneHeld) return;        // let go while asking
     _phoneSendingRoute = route;
     _phoneFirst = true;
-    final opened = await _phoneMic.start();
+    final opened = await _phoneMic.start(
+        bitrate: route == TalkRoute.direct ? PhoneMic.directBitrate : PhoneMic.serverBitrate);
     if (!_phoneHeld || !opened) {
       if (!opened && _phoneMic.error != null) {
         phoneMicError = _phoneMic.error;

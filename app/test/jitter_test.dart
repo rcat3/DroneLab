@@ -90,4 +90,37 @@ void main() {
     }
     expect(heard, 14, reason: '140 ms of tone, in 10 ms blocks');
   });
+
+  test('a packet come too late holds back more, and steady talk brings it back', () {
+    final s = Speaker(1, 48000, _MakesUp(), targetMs: 60);
+    final out = Int32List(960);     // 20 ms a pull
+    expect(s.heldMs, 60);
+    // Three packets, played; then nothing for a while, so it makes up
+    // sound, and the next packet comes after its time
+    for (var i = 0; i < 3; i++) {
+      s.receive(i * 2, p(i + 1), false, i * 20);
+    }
+    for (var t = 60; t <= 140; t += 20) {
+      out.fillRange(0, out.length, 0);
+      s.mixInto(out, t);
+    }
+    expect(s.concealed, greaterThan(0));
+    s.receive(6, p(4), false, 160);     // its sound was made up already
+    expect(s.late, 1);
+    expect(s.heldMs, 80);
+    // Another in the same stall doesn't grow it again
+    s.receive(8, p(5), false, 170);
+    expect(s.heldMs, 80);
+    // Steady for a while: the next transmission holds back a little less
+    s.receive(10, p(6), true, 200);
+    s.receive(100, p(7), false, 200 + Speaker.steadyMs + 2000);
+    expect(s.heldMs, 70);
+  });
+}
+
+/// As FakeDecoder, but makes up silence when nothing came.
+class _MakesUp extends FakeDecoder {
+  @override
+  Int16List decode(Uint8List? packet, {bool fec = false, int? lossMs}) =>
+      packet == null && !fec ? Int16List(48 * (lossMs ?? 20)) : super.decode(packet, fec: fec, lossMs: lossMs);
 }

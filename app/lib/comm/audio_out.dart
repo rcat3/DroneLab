@@ -131,6 +131,10 @@ class AudioOut {
     FlutterPcmSound.start();
   }
 
+  /// Times Android's player ran dry since it started (its own count), as
+  /// the app was held up feeding it: on a computer, [underruns].
+  Future<int> phoneUnderruns() async => _native != null || !_running ? 0 : await FlutterPcmSound.underruns();
+
   void _feed(int remaining) {
     if (!_running) return;
     final want = outputRate * _queuedMs ~/ 1000 - remaining;
