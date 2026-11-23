@@ -27,6 +27,7 @@ import 'package:opus_codec_dart/wrappers/opus_defines.dart' as od;
 import 'package:record/record.dart';
 
 import 'audio_out.dart' show loadOpus;
+import 'voice_fx.dart';
 
 /// What the app runs on, for what's said about its mic: "phone" or
 /// "computer".
@@ -44,6 +45,9 @@ class PhoneMic {
   AudioRecorder? _recorder;
   StreamSubscription<Uint8List>? _sub;
   BufferedOpusEncoder? _encoder;
+  BufferedOpusEncoder? _encoder16;      // the effect's voice, at its 16 kHz
+  VoiceFx? _fx;
+  bool _fxUsed = false;                 // this transmission went through the effect
   final BytesBuilder _pending = BytesBuilder(copy: false);
   bool _open = false;         // the recorder's open, or opening
   bool _sending = false;      // talking: packets go out
@@ -61,6 +65,11 @@ class PhoneMic {
   /// tablets come out low even with their own level control. Loud parts
   /// are eased down to fit rather than clipped.
   int gainDb = 0;
+
+  /// The board's voice effect on it (voice_fx.dart), by preset from 0, or
+  /// -1 for none: as a unit would sound. The boost comes first, as the
+  /// effect's gate goes by the level; the meter shows what comes out.
+  int voicePreset = -1;
   static const maxGainDb = 18;
 
   /// How loud it is, as others get it: the peak of each 20 ms after the
@@ -86,6 +95,7 @@ class PhoneMic {
     if (_sending) return true;
     _sending = true;
     _sentAny = false;
+    _fxUsed = false;
     final ok = await _openMic();
     if (!ok) _sending = false;
     if (ok && !_sending && !_metering) await _closeMic();     // let go while it opened
@@ -97,8 +107,17 @@ class PhoneMic {
   Future<void> stop() async {
     if (!_sending) return;
     _sending = false;
-    // What's left, made up to a packet with silence, as the last
+    // What's left, made up to a packet with silence, as the last: silence
+    // alone after the effect, which holds on to a little of the voice anyway
     final rest = _pending.takeBytes();
+    final enc16 = _encoder16;
+    if (_fxUsed && enc16 != null && _sentAny) {
+      enc16.inputBuffer.fillRange(0, _frame16 * 2, 0);
+      enc16.inputBufferIndex = _frame16 * 2;
+      onPacket(enc16.encode(), last: true);
+      if (!_metering) await _closeMic();
+      return;
+    }
     final enc = _encoder;
     if (enc != null && _sentAny) {
       final buf = enc.inputBuffer;
@@ -146,8 +165,9 @@ class PhoneMic {
         return false;
       }
       if (gen != _generation) return false;      // closed while asking
-      _encoder ??= _newEncoder();
+      _encoder ??= _newEncoder(_rate);
       _pending.clear();
+      _startFx();
       final stream = await r.startStream(const RecordConfig(
         encoder: AudioEncoder.pcm16bits,
         sampleRate: _rate,
@@ -199,15 +219,32 @@ class PhoneMic {
     final all = _pending.takeBytes();
     final enc = _encoder!;
     final samples = enc.inputBuffer.buffer.asInt16List(enc.inputBuffer.offsetInBytes, _frame);
+    if ((_fx?.preset ?? -1) != voicePreset) _startFx();     // changed in Setup meanwhile
+    final fx = voicePreset >= 0 ? _fx : null;
     var i = 0;
     for (; i + _frameBytes <= all.length; i += _frameBytes) {
       enc.inputBuffer.setRange(0, _frameBytes, all, i);
       if (gainDb > 0) _boost(samples);
+      if (fx != null) {
+        // Through the effect, and coded at its 16 kHz, as the board does
+        final voice = fx.process(samples);
+        _measure(voice);
+        final e16 = _encoder16 ??= _newEncoder(voiceFxRate);
+        if (_sending && voice.length == _frame16) {
+          e16.inputBuffer.buffer.asInt16List(e16.inputBuffer.offsetInBytes, _frame16).setAll(0, voice);
+          e16.inputBufferIndex = _frame16 * 2;
+          onPacket(e16.encode(), last: false);
+          _sentAny = true;
+          _fxUsed = true;
+        }
+        continue;
+      }
       _measure(samples);
       if (_sending) {
         enc.inputBufferIndex = _frameBytes;
         onPacket(enc.encode(), last: false);
         _sentAny = true;
+        _fxUsed = false;
       }
     }
     if (i < all.length) _pending.add(Uint8List.sublistView(all, i));
@@ -246,8 +283,21 @@ class PhoneMic {
     }
   }
 
-  static BufferedOpusEncoder _newEncoder() {
-    final e = BufferedOpusEncoder(sampleRate: _rate, channels: 1, application: Application.voip);
+  static const _frame16 = voiceFxRate * 20 ~/ 1000;
+
+  /// The effect, built afresh as the mic opens (each transmission, as the
+  /// board does) or the preset's changed; none if this platform hasn't it.
+  void _startFx() {
+    if (voicePreset < 0) {
+      _fx?.setPreset(-1);
+      return;
+    }
+    _fx ??= VoiceFx.create();
+    _fx?.setPreset(voicePreset);
+  }
+
+  static BufferedOpusEncoder _newEncoder(int rate) {
+    final e = BufferedOpusEncoder(sampleRate: rate, channels: 1, application: Application.voip);
     e.encoderCtl(request: od.OPUS_SET_BITRATE_REQUEST, value: 24000);
     e.encoderCtl(request: od.OPUS_SET_COMPLEXITY_REQUEST, value: 5);
     e.encoderCtl(request: od.OPUS_SET_SIGNAL_REQUEST, value: od.OPUS_SIGNAL_VOICE);
@@ -261,6 +311,10 @@ class PhoneMic {
     await stopMeter();
     _encoder?.destroy();
     _encoder = null;
+    _encoder16?.destroy();
+    _encoder16 = null;
+    _fx?.dispose();
+    _fx = null;
     await _recorder?.dispose();
     _recorder = null;
   }

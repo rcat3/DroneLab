@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../comm/board_link.dart';
 import '../comm/comm_controller.dart';
 import '../comm/phone_mic.dart';
+import '../comm/voice_fx.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -95,6 +96,40 @@ class PhoneMicRow extends StatelessWidget {
                 "or through the unit to its direct channel. No voice effect."
           : "Push to talk: hold the talk button, or press the headphones' play/pause button. Connect a "
                 'display unit for voice mode, its voice effects and Direct.',
+    );
+  }
+}
+
+/// The board's voice effects on the phone's mic: the hive hears it as from
+/// a unit.
+class PhoneVoiceRow extends StatelessWidget {
+  final CommController comm;
+  const PhoneVoiceRow({super.key, required this.comm});
+
+  @override
+  Widget build(BuildContext context) {
+    final names = VoiceFx.presets;
+    final picked = names.contains(comm.phoneVoice) ? comm.phoneVoice : null;
+    return Explained(
+      help: "The voice heard by the hive: the unit's voice effects, on the $thisDevice's microphone, so you "
+          'sound as from a unit. Tuned for a mic in a mask, so the gate may cut quiet words: add Mic boost, '
+          'and try it with the meter.',
+      builder: (context, info) => PanelRow(
+        title: 'HiveMind voice',
+        trailing: [
+          info,
+          DropdownButton<String?>(
+            value: picked,
+            underline: const SizedBox.shrink(),
+            dropdownColor: Kc.raised,
+            onChanged: comm.setPhoneVoice,
+            items: [
+              const DropdownMenuItem<String?>(value: null, child: Text('None')),
+              for (final n in names) DropdownMenuItem<String?>(value: n, child: Text(n)),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

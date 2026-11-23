@@ -29,6 +29,7 @@ import 'conversations.dart';
 import 'notifier.dart';
 import 'permissions.dart';
 import 'phone_mic.dart';
+import 'voice_fx.dart';
 import 'photos.dart';
 import 'unit_sounds.dart';
 import 'firmware_update.dart';
@@ -306,6 +307,8 @@ class CommController extends ChangeNotifier {
     micSource = MicSource.values.asNameMap()[p.getString('micSource')] ??
         ((p.getBool('headsetMic') ?? false) ? MicSource.headset : MicSource.unit);
     _unitVoiceKept = p.getBool('unitVoiceKept') ?? false;
+    phoneVoice = p.getString('phoneVoice');
+    _phoneMic.voicePreset = phoneVoice == null ? -1 : VoiceFx.presets.indexOf(phoneVoice!);
     textTone = p.getBool('textTone') ?? true;
     attentionTone = p.getBool('attentionTone') ?? true;
     permissions.load(p);
@@ -2269,6 +2272,21 @@ class CommController extends ChangeNotifier {
   /// Where the phone mic's talking goes, while it does.
   TalkRoute? _phoneSendingRoute;
   bool _phoneFirst = false;
+
+  /// The board's voice effect on the phone's mic, by preset name (as the
+  /// board names them), or null for none. Kept for next time.
+  String? phoneVoice;
+
+  Future<void> setPhoneVoice(String? name) async {
+    phoneVoice = name;
+    _phoneMic.voicePreset = name == null ? -1 : VoiceFx.presets.indexOf(name);
+    if (name == null) {
+      await _prefs?.remove('phoneVoice');
+    } else {
+      await _prefs?.setString('phoneVoice', name);
+    }
+    notifyListeners();
+  }
 
   /// The phone mic's boost, in dB. Kept for next time, on each phone.
   int get phoneMicGainDb => _phoneMic.gainDb;

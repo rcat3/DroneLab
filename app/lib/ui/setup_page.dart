@@ -13,6 +13,7 @@ import 'display_unit_page.dart';
 import 'identity_page.dart';
 import 'permissions_page.dart';
 import 'phone_mic_ui.dart';
+import '../comm/voice_fx.dart';
 import 'unit_sounds_page.dart';
 import 'firmware_ui.dart';
 import 'server_page.dart';
@@ -130,7 +131,10 @@ class SetupPage extends StatelessWidget {
               if (settings != null || comm.phoneMicTalks) ...[
                 const SizedBox(height: 12),
                 Panel(children: [
-                  if (settings != null && settings.voices.isNotEmpty)
+                  // The voice heard by the hive: the unit's effect, or the
+                  // same effects on the phone's mic, in the same place
+                  if (comm.phoneMicTalks && VoiceFx.available) PhoneVoiceRow(comm: comm),
+                  if (settings != null && settings.voices.isNotEmpty && !comm.phoneMicTalks)
                     Explained(
                       help: settings.hasSpeaker
                           ? 'The voice effect heard by the hive.'
@@ -156,7 +160,7 @@ class SetupPage extends StatelessWidget {
                       ),
                     ),
                   // The low-profile housing has no speaker to mute
-                  if (settings != null && settings.hasSpeaker)
+                  if (settings != null && settings.hasSpeaker && !comm.phoneMicTalks)
                     Explained(
                       help: settings.muteForced
                           ? 'Mute speaker when speaking to hive. Always on while the HiveMind voice differs from '

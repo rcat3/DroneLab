@@ -40,6 +40,13 @@ android {
         manifestPlaceholders["appLabel"] = "DroneLab"
     }
 
+    // The board's voice effects, for the phone's microphone (native/Android.mk)
+    externalNativeBuild {
+        ndkBuild {
+            path = file("../../native/Android.mk")
+        }
+    }
+
     // The release key is kept out of the repo: android/key.properties names it.
     // Without that file the release build is signed with the debug key.
     signingConfigs {
