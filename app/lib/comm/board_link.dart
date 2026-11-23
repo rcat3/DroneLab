@@ -217,6 +217,7 @@ class BoardLink extends ChangeNotifier {
       await t.open(id, onMessage: _onValue, onDropped: dropped, overtaken: overtaken);
       if (overtaken()) return;
       state = BoardState.connected;
+      _watchSignal();
       notifyListeners();
     } on PairingDeclined {
       if (overtaken()) return;
@@ -251,10 +252,35 @@ class BoardLink extends ChangeNotifier {
     return _transport.readRssi();
   }
 
+  /// The link's signal in dBm, read every few seconds while it's up, for the
+  /// status strip and the Links sheet; null while it's down, for a virtual
+  /// unit, or where it can't be read.
+  final signal = ValueNotifier<int?>(null);
+  Timer? _signalTimer;
+
+  void _watchSignal() {
+    _signalTimer?.cancel();
+    if (local) return;
+    Future<void> read() async {
+      final r = await readRssi();
+      if (state == BoardState.connected) signal.value = r;
+    }
+
+    read();
+    _signalTimer = Timer.periodic(const Duration(seconds: 5), (_) => read());
+  }
+
+  void _stopSignal() {
+    _signalTimer?.cancel();
+    _signalTimer = null;
+    signal.value = null;
+  }
+
   void _lost(String why) {
     state = _wanted ? BoardState.connecting : BoardState.off;
     error = why;
     status = null;
+    _stopSignal();
     firmware = model = null;
     canUpdate = false;
     msgMax = boardMaxWriteV3;
@@ -412,6 +438,7 @@ class BoardLink extends ChangeNotifier {
     await _transport.close();
     state = BoardState.off;
     status = null;
+    _stopSignal();
     firmware = model = null;
     canUpdate = false;
     msgMax = boardMaxWriteV3;

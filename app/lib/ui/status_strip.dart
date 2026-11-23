@@ -23,10 +23,11 @@ class StatusStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([comm, comm.permissions]),
+      listenable: Listenable.merge([comm, comm.permissions, comm.board.signal]),
       builder: (context, _) {
         final l = Links.of(comm);
         final st = comm.board.status;
+        final rssi = l.board ? comm.board.signal.value : null;
         // Each link an icon, lit while it's up
         Widget item(bool ok, IconData icon, [String? count]) => Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(icon,
@@ -41,7 +42,7 @@ class StatusStrip extends StatelessWidget {
         final requests = comm.permissions.requests.length;
         return Semantics(
           button: true,
-          label: 'Links: ${l.summary}${requests > 0 ? ', $requests permission requests waiting' : ''}. '
+          label: 'Links: ${l.summary}${rssi != null ? ', board signal $rssi dBm' : ''}${requests > 0 ? ', $requests permission requests waiting' : ''}. '
               'Tap to connect or disconnect',
           excludeSemantics: true,
           child: Material(
@@ -59,6 +60,10 @@ class StatusStrip extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: Row(children: [
                         item(l.board, boardIcon),
+                        if (rssi != null) ...[
+                          const SizedBox(width: 5),
+                          SignalBars(rssi),
+                        ],
                         const SizedBox(width: 14),
                         item(l.server, serverIcon),
                         const SizedBox(width: 14),
@@ -242,10 +247,11 @@ Future<void> showTopSheet(BuildContext context, WidgetBuilder builder) => showGe
 Future<void> showLinks(BuildContext context, CommController comm) => showTopSheet(
       context,
       (sheet) => ListenableBuilder(
-        listenable: comm,
+        listenable: Listenable.merge([comm, comm.board.signal]),
         builder: (sheet, _) {
           final b = comm.board;
           final l = Links.of(comm);
+          final rssi = l.board ? b.signal.value : null;
           final s = comm.server;
           final direct = comm.boardSettings?.direct;
           final certChanged = (comm.serverError ?? '').contains('certificate');
@@ -269,7 +275,7 @@ Future<void> showLinks(BuildContext context, CommController comm) => showTopShee
                     PanelRow(
                       leading: _LinkIcon(l.board, boardIcon),
                       title: b.name ?? 'Board',
-                      subtitle: boardStatusText(comm),
+                      subtitle: [boardStatusText(comm), if (rssi != null) 'signal $rssi dBm'].join(' · '),
                       trailing: [
                         if (virtualUnitStopped(comm))
                           FilledButton(

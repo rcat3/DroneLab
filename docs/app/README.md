@@ -45,7 +45,7 @@ Four tabs along the bottom, and the status strip along the top of every one:
 
 | | Shows | |
 |---|---|---|
-| 1 | **Unit** (a circuit board) | Green while the app's connected to your unit over Bluetooth. |
+| 1 | **Unit** (a circuit board) | Green while the app's connected to your unit over Bluetooth, with four bars beside it for the Bluetooth signal (the dBm is on the links sheet). |
 | 2 | **Server** (a cloud) | Green while it's connected to the hive's server, for the [cloud link](voice.md#two-links-server-and-direct). |
 | 3 | **Direct** (an antenna) | Green while [direct mode](voice.md#two-links-server-and-direct) is on, with how many units it hears nearby. |
 | 4 | **Requests** (a raised hand) | Yellow, with how many, while someone's [asking to control](permissions.md#requests) something of yours.  Gone when there are none. |
