@@ -96,12 +96,15 @@ class SetupPage extends StatelessWidget {
               const SectionHeader('Permissions'),
               Panel(children: [PermissionsRow(comm: comm)]),
               const SectionHeader('Talking'),
-              if (settings == null && comm.phoneMicTalks)
-                PhoneMicPanel(comm: comm, tones: _talkTones(comm))
-              else if (settings == null)
-                const Panel(children: [PanelRow(title: 'Connect to the board to change these')])
-              else
-                Panel(children: [
+              // One order, whichever mic talks, rows coming and going in
+              // place: how you talk, then your voice, then the board's
+              // screen. The unit's rows show while it's connected, as its
+              // own talk button and voice mode talk through it whichever
+              // mic's picked.
+              Panel(children: [
+                if (MicSourceRow.shown(boardUp)) MicSourceRow(comm: comm, unitUp: boardUp),
+                if (comm.phoneMicTalks) PhoneMicRow(comm: comm),
+                if (settings != null)
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -118,7 +121,14 @@ class SetupPage extends StatelessWidget {
                       ),
                     ]),
                   ),
-                  if (settings.voices.isNotEmpty)
+                if (comm.phoneMicTalks || comm.boardTalksTo) _talkTones(comm),
+                if (settings == null && !comm.phoneMicTalks)
+                  const PanelRow(title: 'Connect to the board to change these'),
+              ]),
+              if (settings != null || comm.phoneMicTalks) ...[
+                const SizedBox(height: 12),
+                Panel(children: [
+                  if (settings != null && settings.voices.isNotEmpty)
                     Explained(
                       help: settings.hasSpeaker
                           ? 'The voice effect heard by the hive.'
@@ -144,7 +154,7 @@ class SetupPage extends StatelessWidget {
                       ),
                     ),
                   // The low-profile housing has no speaker to mute
-                  if (settings.hasSpeaker)
+                  if (settings != null && settings.hasSpeaker)
                     Explained(
                       help: settings.muteForced
                           ? 'Mute speaker when speaking to hive. Always on while the HiveMind voice differs from '
@@ -165,7 +175,15 @@ class SetupPage extends StatelessWidget {
                         ],
                       ),
                     ),
-                  if (comm.boardTalksTo) _talkTones(comm),
+                  if (comm.phoneMicTalks) ...[
+                    MicBoostRow(comm: comm),
+                    MicMeter(comm: comm),
+                  ],
+                ]),
+              ],
+              if (settings != null) ...[
+                const SizedBox(height: 12),
+                Panel(children: [
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -180,6 +198,7 @@ class SetupPage extends StatelessWidget {
                     ]),
                   ),
                 ]),
+              ],
               if (boardUp) ...[
                 const SectionHeader('Unit'),
                 Panel(children: [

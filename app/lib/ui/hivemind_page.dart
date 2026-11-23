@@ -484,18 +484,18 @@ class _Dock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final route = comm.talkRoute;
+    final route = comm.myTalkRoute;
     final to = comm.talkTo;
     final name = comm.talkToName;
     final person = to.kind == TalkTo.person && comm.canTalkToPerson;
     final phone = comm.phoneMicTalks;
-    final serverUp = comm.mumble?.state == MumbleState.connected;
-    // Talking goes through the unit, or without one from the phone's mic
-    final canTalk = boardUp || (phone && serverUp);
+    // Talking goes through the unit's mic, or from the phone's, to the
+    // server or through the unit to its direct channel
+    final canTalk = phone ? comm.phoneMicCanTalk : boardUp;
     final String note;
     if (!boardUp && !phone) {
       note = 'Connecting to the unit...';
-    } else if (phone && !serverUp) {
+    } else if (phone && !canTalk) {
       note = 'Connect to the server to talk';
     } else if (phone && comm.phoneMicError != null) {
       note = comm.phoneMicError!;
@@ -543,7 +543,9 @@ class _Dock extends StatelessWidget {
                     decoration: BoxDecoration(border: Border.all(color: Kc.darkGreen)),
                     child: Text(
                         phone
-                            ? '[ ${thisDevice.toUpperCase()} MIC ]'
+                            ? comm.headsetMicName != null
+                                ? '[ HEADSET MIC ]'
+                                : '[ ${thisDevice.toUpperCase()} MIC ]'
                             : mode == BoardMode.voice
                                 ? '[ VOICE ]'
                                 : '[ PTT ]',
