@@ -14,7 +14,7 @@
  * effect can play it), to a listener such as the comm channel, and, if
  * switched on, to the speaker.
  */
-#define VOICE_FX_SAMPLE_RATE 16000
+#include "audio/voice_fx_chain.h"    // VOICE_FX_SAMPLE_RATE, the presets
 
 /* Start listening to the microphone. Returns false without one, or on a
  * board built without voice effects (RCAT_VOICE_FX). */
