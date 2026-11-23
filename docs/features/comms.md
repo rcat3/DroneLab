@@ -11,7 +11,7 @@ It has two modes, which can be on together:
 | How the voice travels | Over Bluetooth to the wearer's phone, and on over the internet to a [Mumble](https://www.mumble.info) server the hive shares | Unit to unit over the radio (ESP-NOW, on the WiFi radio) |
 | Range | Anywhere with a phone signal or WiFi | Across a room at most (see [Direct Mode Range](../hardware/direct-mode-range.md)) |
 | Needs | A Mumble server, and a phone with internet | Nothing else: no server, internet or phone signal.  A phone is still needed to listen |
-| Who can join | Anyone on the server, including people without a unit, from a Mumble app: [Mumla](https://mumla-app.gitlab.io/) on Android, or Mumble on a computer | Other DroneLab units nearby, on the same channel |
+| Who can join | Anyone on the server, including people without a unit: the DroneLab app [on its own](../app/voice.md#without-a-display-unit), talking from the phone's microphone, or a Mumble app: [Mumla](https://mumla-app.gitlab.io/) on Android, or Mumble on a computer | Other DroneLab units nearby, on the same channel |
 | Privacy | Whoever runs the server, and anyone it lets in | Channels with a passphrase are encrypted end to end |
 | Shown on the unit and in the app as | *Server* | *Direct* |
 | Status | Works | Experimental: for demos, scenes and drones close together |

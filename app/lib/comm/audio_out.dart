@@ -93,6 +93,19 @@ class AudioOut {
 
   AudioOut(this.mixer);
 
+  /// Played as a call's voice, not media (Android): for a Bluetooth headset
+  /// in call mode, so the sound goes to it.
+  bool _voiceCall = false;
+
+  Future<void> setVoiceCall(bool on) async {
+    if (on == _voiceCall) return;
+    _voiceCall = on;
+    await _starting;
+    if (!_running || Platform.isLinux) return;
+    await stop();
+    await start();
+  }
+
   Future<void>? _starting;
 
   /// Start playing. Called again while it's starting, it waits for the same
@@ -110,7 +123,8 @@ class AudioOut {
         sampleRate: outputRate,
         channelCount: 1,
         iosAudioCategory: IosAudioCategory.playback,
-        iosAllowBackgroundAudio: true);
+        iosAllowBackgroundAudio: true,
+        androidVoiceCall: _voiceCall);
     await FlutterPcmSound.setFeedThreshold(outputRate * _thresholdMs ~/ 1000);
     FlutterPcmSound.setFeedCallback(_feed);
     _running = true;

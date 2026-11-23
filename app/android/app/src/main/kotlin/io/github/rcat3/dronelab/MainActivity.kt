@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.net.wifi.WifiNetworkSuggestion
@@ -87,6 +89,18 @@ class MainActivity : FlutterActivity() {
             registerReceiver(receiver, filter, android.Manifest.permission.DUMP, null)
         }
         dev = receiver
+        // A Bluetooth headset's mic, for talking without a unit (phone_mic.dart):
+        // "find" names the headset there is, "start" puts it in call mode,
+        // as the place for the call's voice both ways, "stop" back to media.
+        // Each answers the headset's name, or null for none.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/headset").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "find" -> result.success(headset()?.let { it.productName?.toString() ?: "Headset" })
+                "start" -> result.success(startHeadset())
+                "stop" -> { stopHeadset(); result.success(null) }
+                else -> result.notImplemented()
+            }
+        }
         // The phone, for the About page
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/device").setMethodCallHandler { call, result ->
             if (call.method == "info") {
@@ -149,6 +163,53 @@ class MainActivity : FlutterActivity() {
         channel?.invokeMethod("press", keyCode)
     }
 
+    private val audio by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    private var headsetOn = false
+
+    private fun isHeadset(d: AudioDeviceInfo) =
+        d.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+            (Build.VERSION.SDK_INT >= 31 && d.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+
+    /** The Bluetooth headset to talk through, if there's one. */
+    private fun headset(): AudioDeviceInfo? =
+        if (Build.VERSION.SDK_INT >= 31) {
+            audio.availableCommunicationDevices.firstOrNull { isHeadset(it) }
+        } else {
+            audio.getDevices(AudioManager.GET_DEVICES_INPUTS).firstOrNull { isHeadset(it) }
+        }
+
+    private fun startHeadset(): String? {
+        val d = headset() ?: return null
+        audio.mode = AudioManager.MODE_IN_COMMUNICATION
+        if (Build.VERSION.SDK_INT >= 31) {
+            if (!audio.setCommunicationDevice(d)) {
+                audio.mode = AudioManager.MODE_NORMAL
+                return null
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            audio.startBluetoothSco()
+            @Suppress("DEPRECATION")
+            audio.isBluetoothScoOn = true
+        }
+        headsetOn = true
+        return d.productName?.toString() ?: "Headset"
+    }
+
+    private fun stopHeadset() {
+        if (!headsetOn) return
+        headsetOn = false
+        if (Build.VERSION.SDK_INT >= 31) {
+            audio.clearCommunicationDevice()
+        } else {
+            @Suppress("DEPRECATION")
+            audio.isBluetoothScoOn = false
+            @Suppress("DEPRECATION")
+            audio.stopBluetoothSco()
+        }
+        audio.mode = AudioManager.MODE_NORMAL
+    }
+
     private fun startSession() {
         if (session != null) return
         val s = MediaSession(this, "DroneLab comm channel")
@@ -195,6 +256,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        stopHeadset()
         stopSession()
         dev?.let { unregisterReceiver(it) }
         dev = null
