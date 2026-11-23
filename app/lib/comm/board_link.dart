@@ -71,6 +71,8 @@ class BoardLink extends ChangeNotifier {
   Stream<HeardCopy> get copies => _copies.stream;
   final _talked = StreamController<Talked>.broadcast();
   Stream<Talked> get talked => _talked.stream;
+  final _talkHeld = StreamController<TalkHeld>.broadcast();
+  Stream<TalkHeld> get talkHeld => _talkHeld.stream;
   final _directAvatars = StreamController<DirectAvatarPiece>.broadcast();
   Stream<DirectAvatarPiece> get directAvatars => _directAvatars.stream;
   Stream<AvatarAck> get avatarAcks => _avatarAcks.stream;
@@ -319,6 +321,8 @@ class BoardLink extends ChangeNotifier {
       _copies.add(msg);
     } else if (msg is Talked) {
       _talked.add(msg);
+    } else if (msg is TalkHeld) {
+      _talkHeld.add(msg);
     } else if (msg is DirectGroupHeard) {
       _directGroups.add(msg);
     } else if (msg is RecordedSound) {

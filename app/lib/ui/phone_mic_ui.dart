@@ -39,8 +39,9 @@ class MicSourceRow extends StatelessWidget {
           "A headset's mic is nearer your mouth, but the headset goes into call mode while you're connected, "
           "like a phone call: what you hear comes through its narrower call sound, and so does any other "
           "app's. With the $thisDevice's or the headset's mic, the app's talk button and the headphones' "
-          "button talk from it, to the server, or through the unit to its direct channel; the unit's own "
-          'talk button and voice mode still talk through the unit. Without a unit, the unit choice '
+          "button talk from it, to the server, or through the unit to its direct channel, and so does the unit's "
+          "own talk button (with older firmware, that talks through the unit). The unit's voice mode is off till "
+          "you pick the unit's mic again, as it would send what it heard too. Without a unit, the unit choice "
           "goes away and the $thisDevice's mic talks.",
       // The label over the choices, as Talk with: three don't leave it
       // room beside them on a phone

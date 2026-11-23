@@ -140,6 +140,11 @@
 #define MSG_PAIRS           0x14    // from the phone: the pairs' keys, for talking to one alone over direct comms
 #define PAIRS_FIRST         0x01
 #define MSG_DIRECT_VOICE    0x16    // from the phone: voice for the board to send over direct comms
+#define MSG_MIC             0x18    // from the phone: which mic talks, the board's or the phone's
+#define MIC_PHONE           0x01
+#define MIC_SENDING         0x02    // the phone's mic is sending, for the screen
+#define MIC_REFUSED         0x04    // the phone's talking was refused just now, for the screen
+#define MSG_TALK_HELD       0x18    // to the phone: the wearer's talk button, or the screen, held or let go
 #define PHONE_VOICE_QUEUE   32      // of them, waiting for the encoder task: big enough to go in PSRAM
 #define PHONE_VOICE_MAX     160     // the longest Opus packet direct comms sends
 #define PAIR_ENTRY          (OTHERS_KEY_LEN + DIRECT_KEY_LEN)
@@ -255,6 +260,11 @@ static volatile bool running;
 static volatile comm_mode_t mode;
 static volatile bool screen_talk;
 static volatile bool phone_talk;
+// The phone's mic talks, as the app's set: the talk button and the screen
+// tell the phone (MSG_TALK_HELD) for it to talk, in place of talking here,
+// and there's no voice mode. Back to the board's own once the phone's gone.
+static volatile bool phone_mic;
+static volatile bool phone_mic_sending;
 static volatile bool sending;
 
 /* The voice effect runs the comm channel's own effect, if it has one, only
@@ -498,7 +508,8 @@ static void send_talked(uint8_t what, uint8_t flags)
 
 static bool talking(void)
 {
-    return recording || screen_talk || phone_talk || talk_button_held() || (mode == COMM_VOICE && voice_heard);
+    return recording || phone_talk ||
+           (!phone_mic && (screen_talk || talk_button_held() || (mode == COMM_VOICE && voice_heard)));
 }
 
 static void encoder_task(void *arg)
@@ -1101,7 +1112,8 @@ void comm_copy_to_phone(const uint8_t *key, uint64_t counter, uint32_t broadcast
 
 bool comm_sending(void)
 {
-    return sending;
+    // The phone's mic sending shows on the screen as the board's own does
+    return sending || phone_mic_sending;
 }
 
 bool comm_phone_talking(void)
@@ -1490,6 +1502,8 @@ static void forget_phone(void)
 {
     updater_app_cancel();   // an update from it that hasn't finished
     phone_talk = false;     // so a phone that's gone doesn't leave it talking
+    phone_mic = false;      // and the board's own mic talks again
+    phone_mic_sending = false;
     if (recording)
     {
         set_recording(false, false, false);     // nor recording
@@ -2016,12 +2030,33 @@ void comm_poll(uint32_t now_ms)
         {
             receive_direct_voice(msg, len);
         }
+        else if (msg[0] == MSG_MIC && len >= 2)
+        {
+            phone_mic = (msg[1] & MIC_PHONE) != 0;
+            phone_mic_sending = phone_mic && (msg[1] & MIC_SENDING) != 0;
+            if (phone_mic && (msg[1] & MIC_REFUSED))
+            {
+                __atomic_store_n(&refused_ms, rcat_hal_millis() | 1, __ATOMIC_RELEASE);
+            }
+        }
         else if (msg[0] == MSG_RECORD && len >= 3)
         {
             set_recording(msg[1] != 0, (msg[2] & RECORD_SPEAKER) != 0, (msg[2] & RECORD_BEEP) != 0);
         }
     }
     merge_hearing();
+    // The talk button or the screen, held or let go, for the phone's mic to
+    // talk: each change, and again every second while held, in case one's lost
+    static bool held_sent;
+    static uint32_t held_sent_ms;
+    bool held = phone_mic && (screen_talk || talk_button_held());
+    if (held != held_sent || (held && now_ms - held_sent_ms >= 1000))
+    {
+        uint8_t out[2] = { MSG_TALK_HELD, held ? 1 : 0 };
+        send_retrying(out, sizeof(out));
+        held_sent = held;
+        held_sent_ms = now_ms;
+    }
     update_result_t installed;
     if (updater_app_outcome(&installed))
     {

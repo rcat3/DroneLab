@@ -305,6 +305,7 @@ class CommController extends ChangeNotifier {
     _phoneMic.gainDb = (p.getInt('phoneMicGainDb') ?? 0).clamp(0, PhoneMic.maxGainDb);
     micSource = MicSource.values.asNameMap()[p.getString('micSource')] ??
         ((p.getBool('headsetMic') ?? false) ? MicSource.headset : MicSource.unit);
+    _unitVoiceKept = p.getBool('unitVoiceKept') ?? false;
     textTone = p.getBool('textTone') ?? true;
     attentionTone = p.getBool('attentionTone') ?? true;
     permissions.load(p);
@@ -345,6 +346,7 @@ class CommController extends ChangeNotifier {
     _heardSub = board.heard.listen(_onHeard);
     _copySub = board.copies.listen(_onCopy);
     _talkedSub = board.talked.listen(_onTalked);
+    _talkHeldSub = board.talkHeld.listen((t) => _onUnitTalkHeld(t.held));
     _callTimer = Timer.periodic(const Duration(seconds: 1), (_) => _callTick());
     await conversations.load();
     conversations.onSeen = notifier.clearTexts;
@@ -357,6 +359,10 @@ class CommController extends ChangeNotifier {
       _fixTalkTo();
       // The phone's mic, as links come and go (direct switched on or off)
       _checkPhoneTalk();
+      _checkUnitMode();
+      _sendMic();
+      // The unit went while its button was held: let go
+      if (_unitHeld && board.state != BoardState.connected) _onUnitTalkHeld(false);
       if (_headsetMicWanted != (Headset.active != null)) _updateHeadsetMic();
       nearby.removeWhere((_, b) => now - b.seenMs > _nearbyFor);
       // Groups on other channels are only heard while scanning: keep them a while
@@ -2172,8 +2178,11 @@ class CommController extends ChangeNotifier {
   Future<void> setMicSource(MicSource m) async {
     micSource = m;
     _headsetTriedMs = 0;
+    _modeSentMs = 0;
     await _prefs?.setString('micSource', m.name);
     _checkPhoneTalk();
+    _checkUnitMode();
+    _sendMic();
     notifyListeners();
     await _updateHeadsetMic();
   }
@@ -2185,6 +2194,69 @@ class CommController extends ChangeNotifier {
   /// talk: no unit connected, or the phone's picked. To the server, or
   /// with a unit, over direct comms through it.
   bool get phoneMicTalks => !unitMicTalks;
+
+  /// The unit was in voice mode as the phone's mic was picked, so it goes
+  /// back to it once the unit's mic is. Kept, as the unit keeps its mode.
+  bool _unitVoiceKept = false;
+  int _modeSentMs = 0;
+
+  /// No voice mode on the unit while the phone's mic talks: the unit would
+  /// send whatever it heard as well. Push to talk instead (its own talk
+  /// button still talks through it), and voice mode back after. Every
+  /// tenth of a second, as the unit's mode can be changed on it too.
+  void _checkUnitMode() {
+    if (board.state != BoardState.connected) return;
+    final mode = board.status?.mode;
+    if (mode == null) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _modeSentMs < 2000) return;       // till the unit's status says it took it
+    if (phoneMicTalks && mode == BoardMode.voice) {
+      _modeSentMs = now;
+      _unitVoiceKept = true;
+      _prefs?.setBool('unitVoiceKept', true);
+      board.setMode(BoardMode.pushToTalk);
+    } else if (unitMicTalks && _unitVoiceKept) {
+      _modeSentMs = now;
+      _unitVoiceKept = false;
+      _prefs?.setBool('unitVoiceKept', false);
+      if (mode != BoardMode.voice) board.setMode(BoardMode.voice);
+    }
+  }
+
+  StreamSubscription<TalkHeld>? _talkHeldSub;
+
+  /// The unit's talk button (or screen) is held, for the phone's mic.
+  bool _unitHeld = false;
+
+  /// Tell the unit which mic talks (commVersion 15), when it changes and
+  /// as it connects: with the phone's, its talk button talks from it.
+  /// And whether the phone's mic is sending, for the unit's screen to show
+  /// it as its own (TX, the ring), and a refusal to show once.
+  (bool, bool)? _sentPhoneMic;
+  bool _refusedToSend = false;
+
+  void _sendMic() {
+    if (board.state != BoardState.connected || (board.status?.version ?? 0) < commVersionPhoneMic) {
+      _sentPhoneMic = null;
+      _refusedToSend = false;
+      return;
+    }
+    final phone = phoneMicTalks;
+    final now = (phone, phone && phoneSending);
+    if (_sentPhoneMic == now && !_refusedToSend) return;
+    _sentPhoneMic = now;
+    board.send(micMessage(phone: phone, sending: now.$2, refused: _refusedToSend && phone));
+    _refusedToSend = false;
+  }
+
+  /// The unit's talk button or screen, held or let go, while the phone's
+  /// mic talks: as the app's own button. Sent again each second while held.
+  void _onUnitTalkHeld(bool held) {
+    if (held == _unitHeld) return;
+    _unitHeld = held;
+    if (!phoneMicTalks) return;
+    holdToTalk(held);
+  }
 
   /// The headset's picked for the phone's mic (Android).
   bool get headsetMic => micSource == MicSource.headset && Headset.supported;
@@ -2303,13 +2375,16 @@ class CommController extends ChangeNotifier {
       _sendingToServer = false;
       _onTalked(Talked(Talked.ended, false, direct, alone));
       notifyListeners();
+      _sendMic();
       return;
     }
     // Nobody would hear it (as the unit does it): the buzz, and no mic
     final route = phoneTalkRoute;
     if (route == null) {
       _phoneHeld = false;
+      _refusedToSend = true;
       _onTalked(Talked(Talked.refused, false, false, alone));
+      _sendMic();
       return;
     }
     final first = !(await _phoneMic.hasPermission());
@@ -2332,6 +2407,7 @@ class CommController extends ChangeNotifier {
     _sendingToServer = route == TalkRoute.server;
     _onTalked(Talked(Talked.started, false, route == TalkRoute.direct, alone));
     notifyListeners();
+    _sendMic();
     // Newly allowed: the background service takes the mic from now, for
     // talking with the screen off
     if (first) await _updateBackground();
@@ -3269,6 +3345,7 @@ class CommController extends ChangeNotifier {
     _heardSub?.cancel();
     _copySub?.cancel();
     _talkedSub?.cancel();
+    _talkHeldSub?.cancel();
     _directAvatarSub?.cancel();
     _directGroupSub?.cancel();
     _recordSub?.cancel();

@@ -104,7 +104,9 @@ class SetupPage extends StatelessWidget {
               Panel(children: [
                 if (MicSourceRow.shown(boardUp)) MicSourceRow(comm: comm, unitUp: boardUp),
                 if (comm.phoneMicTalks) PhoneMicRow(comm: comm),
-                if (settings != null)
+                // Voice mode's only for the unit's mic: with the phone's, the
+                // unit's in push to talk (CommController._checkUnitMode)
+                if (settings != null && !comm.phoneMicTalks)
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
