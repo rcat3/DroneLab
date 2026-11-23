@@ -54,6 +54,10 @@ float voice_fx_noise_floor_db(void);
 /* Whether the comm channel's sending, for voice_fx_set_comm_preset */
 void voice_fx_set_comm_sending(bool on);
 
+/* Nothing at all while paused, for a firmware update: the chains freed,
+ * nothing to the speaker, the voice lab or the comm channel. */
+void voice_fx_pause(bool pause);
+
 /* Whether the comm channel has an effect of its own, different from the
  * speaker's, so the speaker goes quiet while it sends */
 bool voice_fx_comm_has_own(void);

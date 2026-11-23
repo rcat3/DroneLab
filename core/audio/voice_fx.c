@@ -42,6 +42,7 @@ static volatile int wanted_preset;          // set by the UI loop
 static volatile int wanted_comm_preset = -1;    // -1 for the speaker's
 static volatile bool listen_to_speaker;         // the listener gets the speaker's effect, not the comm one
 static volatile bool comm_sending;              // the comm channel's sending (voice_fx_set_comm_sending)
+static volatile bool fx_paused;                 // for an update (voice_fx_pause)
 // The seal test's feedback check (voice_fx_feedback_test): Natural, without
 // its gate, at test_gain, until it trips
 static volatile bool feedback_test;
@@ -176,7 +177,7 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     // Only run while something's listening: the speaker, the voice lab or a
     // listener. Starting again builds the chain afresh, so nothing stale
     // comes out.
-    if (!speaker_on && !voice_lab_running() && __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE) == NULL)
+    if (fx_paused || (!speaker_on && !voice_lab_running() && __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE) == NULL))
     {
         if (voice_fx_chain_preset(speaker_chain) >= 0)
         {
@@ -353,6 +354,11 @@ void voice_fx_set_loud_room(int level)
 float voice_fx_noise_floor_db(void)
 {
     return voice_fx_chain_noise_floor_db();
+}
+
+void voice_fx_pause(bool pause)
+{
+    fx_paused = pause;
 }
 
 void voice_fx_set_comm_sending(bool on)

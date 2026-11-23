@@ -244,6 +244,10 @@ class CommController extends ChangeNotifier {
   BundledFirmware? bundledFirmware;
   late final FirmwareUpdate firmwareUpdate = FirmwareUpdate(board);
 
+  /// An update's going to the unit: nothing else is sent to it meanwhile,
+  /// so the update has the link to itself.
+  bool get _updating => firmwareUpdate.busy;
+
   /// How the board's firmware stands against the app's, once it's said.
   FirmwareStanding get firmwareStanding {
     final status = board.status;
@@ -492,6 +496,7 @@ class CommController extends ChangeNotifier {
     if (_settingsTimer == null) {
       var ticks = 0;
       _settingsTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (_updating) return;      // nothing but the update, meanwhile
         _boardSettingsRequest('GET', '');
         if (++ticks % _askStateEvery == 0) _askBoardState();
       });
@@ -1967,8 +1972,11 @@ class CommController extends ChangeNotifier {
   /// changes, and all of it when the board's newly there. Avatars go as
   /// they're needed: ours and those talking first, then everyone else's.
   void _updateBoardScreen() {
-    _boardAvatars.update();
     _updateWhisper();
+    // Nothing for the unit's screen while it's updating: it's out of
+    // service, and all it sends then is the update. Sent afresh after.
+    if (_updating) return;
+    _boardAvatars.update();
     if (board.state != BoardState.connected || board.status == null) {
       _sentServer = _sentHearing = _sentMuted = _sentTalkTo = null;
       _sentTalkOn = null;
@@ -2210,7 +2218,7 @@ class CommController extends ChangeNotifier {
   /// button still talks through it), and voice mode back after. Every
   /// tenth of a second, as the unit's mode can be changed on it too.
   void _checkUnitMode() {
-    if (board.state != BoardState.connected) return;
+    if (board.state != BoardState.connected || _updating) return;
     final mode = board.status?.mode;
     if (mode == null) return;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -2241,6 +2249,7 @@ class CommController extends ChangeNotifier {
   bool _refusedToSend = false;
 
   void _sendMic() {
+    if (_updating) return;
     if (board.state != BoardState.connected || (board.status?.version ?? 0) < commVersionPhoneMic) {
       _sentPhoneMic = null;
       _refusedToSend = false;

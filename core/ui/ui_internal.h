@@ -48,6 +48,10 @@ lv_obj_t *ui_feature_add_page(ui_feature_t *feature, const char *name, bool blac
 bool ui_feature_is_current(const ui_feature_t *feature);
 lv_obj_t *ui_current_page(void);
 
+/* The timer the comm channel's polled from, which an update comes in
+ * through: kept running while everything else is paused for it. */
+lv_timer_t *feature_settings_comm_timer(void);
+
 /* Show a page, as if it had been swiped to. Returns false if it isn't one. */
 bool ui_show_page(lv_obj_t *page);
 
