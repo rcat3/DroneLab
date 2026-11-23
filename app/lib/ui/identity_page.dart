@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../comm/comm_controller.dart';
+import 'avatar_crop.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -144,8 +145,17 @@ class _AvatarPanelState extends State<_AvatarPanel> {
     setState(() => _picking = true);
     try {
       final file = await ImagePicker().pickImage(source: ImageSource.gallery);
-      if (file == null) return;
-      final ok = await widget.comm.setAvatar(await file.readAsBytes());
+      if (file == null || !mounted) return;
+      var ok = false;
+      try {
+        final bytes = await file.readAsBytes();
+        if (!mounted) return;
+        final picture = await cropAvatar(context, bytes);
+        if (picture == null) return;
+        ok = await widget.comm.setAvatar(picture);
+      } on FormatException {
+        // not a picture
+      }
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("That doesn't look like a picture")));
       }

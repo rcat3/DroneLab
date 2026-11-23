@@ -35,6 +35,36 @@ img.Image? _square(Uint8List picture, int size) {
   return scaled.hasAlpha ? img.compositeImage(img.Image(width: size, height: size), scaled) : scaled;
 }
 
+/// The largest a picture to crop is kept, on its longer side: plenty for
+/// the [avatarForMumble] it becomes, and quick to show and cut.
+const avatarCropMax = 2048;
+
+/// A picture to crop, upright as it was taken, RGBA, at most
+/// [avatarCropMax] on its longer side. Null if it isn't a picture.
+({int width, int height, Uint8List rgba})? avatarToCrop(Uint8List picture) {
+  var im = img.decodeImage(picture);
+  if (im == null) return null;
+  im = img.bakeOrientation(im);
+  if (math.max(im.width, im.height) > avatarCropMax) {
+    im = im.width >= im.height
+        ? img.copyResize(im, width: avatarCropMax, interpolation: img.Interpolation.average)
+        : img.copyResize(im, height: avatarCropMax, interpolation: img.Interpolation.average);
+  }
+  im = im.convert(format: img.Format.uint8, numChannels: 4, alpha: 255);
+  return (width: im.width, height: im.height, rgba: im.getBytes(order: img.ChannelOrder.rgba));
+}
+
+/// The square at [x], [y], [side] pixels cut from an [avatarToCrop]
+/// picture, scaled down to at most [size], as a PNG.
+Uint8List avatarCut(({int width, int height, Uint8List rgba, int x, int y, int side, int size}) job) {
+  final im = img.Image.fromBytes(width: job.width, height: job.height, bytes: job.rgba.buffer, bytesOffset: job.rgba.offsetInBytes, numChannels: 4);
+  var cut = img.copyCrop(im, x: job.x, y: job.y, width: job.side, height: job.side);
+  if (job.side > job.size) {
+    cut = img.copyResize(cut, width: job.size, height: job.size, interpolation: img.Interpolation.average);
+  }
+  return img.encodePng(cut);
+}
+
 /// A picture for the board: [size] pixels square, RGB565, little endian.
 Uint8List? avatarRgb565(Uint8List picture, int size) {
   final im = _square(picture, size);
