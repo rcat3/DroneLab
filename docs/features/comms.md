@@ -11,7 +11,7 @@ It has two modes, which can be on together:
 | How the voice travels | Over Bluetooth to the wearer's phone, and on over the internet to a [Mumble](https://www.mumble.info) server the hive shares | Unit to unit over the radio (ESP-NOW, on the WiFi radio) |
 | Range | Anywhere with a phone signal or WiFi | Across a room at most (see [Direct Mode Range](../hardware/direct-mode-range.md)) |
 | Needs | A Mumble server, and a phone with internet | Nothing else: no server, internet or phone signal.  A phone is still needed to listen |
-| Who can join | Anyone on the server, including people without a unit, from a Mumble app: [Mumla](https://mumla-app.gitlab.io/) on Android, or Mumble on a computer | Other DroneLab units nearby, on the same channel |
+| Who can join | Anyone on the server, including people without a unit: the DroneLab app [on its own](../app/voice.md#without-a-display-unit), talking from the phone's microphone, or a Mumble app: [Mumla](https://mumla-app.gitlab.io/) on Android, or Mumble on a computer | Other DroneLab units nearby, on the same channel |
 | Privacy | Whoever runs the server, and anyone it lets in | Channels with a passphrase are encrypted end to end |
 | Shown on the unit and in the app as | *Server* | *Direct* |
 | Status | Works | Experimental: for demos, scenes and drones close together |
@@ -191,7 +191,7 @@ idf.py -C platforms/esp-idf -B build-s3-175-echo -DRCAT_DIRECT_ECHO=1 build flas
 
 ## How it works
 
-The unit is a Bluetooth LE peripheral with one service.  It notifies the phone with the voice, as 20 ms Opus packets of 16 kHz mono at about 24 kb/s, and with its status.  The phone writes to it to talk, to change the mode, and to say how the server's doing and who's talking.  The messages are described at the top of [`core/app/comm.h`](../../core/app/comm.h).
+The unit is a Bluetooth LE peripheral with one service.  It notifies the phone with the voice, as 20 ms Opus packets of 16 kHz mono at about 32 kb/s for the server (24 kb/s over direct mode, where smaller packets spend less time on the air), and with its status.  The phone writes to it to talk, to change the mode, and to say how the server's doing and who's talking.  The messages are described at the top of [`core/app/comm.h`](../../core/app/comm.h).
 
 In cloud mode the Opus packets go on to Mumble as they are, so the phone doesn't need to decode or encode anything.  `comm_bridge.py` shows how: it logs in to Mumble and sends the packets inside its TCP connection.  In direct mode the unit broadcasts the same packets itself: see the top of [`core/app/direct.h`](../../core/app/direct.h) for what's broadcast, and `comm.h` (0x07 and 0x08) for how it reaches the phone.
 

@@ -109,6 +109,16 @@ target_link_libraries(dronelab_audio PRIVATE dl pthread m)
 install(TARGETS dronelab_audio LIBRARY DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# The board's voice effects on the computer's microphone (native/voice_fx_app.c
+# and core/audio/voice_fx_chain.c), for lib/comm/voice_fx.dart
+add_library(dronelab_fx SHARED "../native/voice_fx_app.c" "../../core/audio/voice_fx_chain.c"
+  "../../core/audio/fft.c")
+target_include_directories(dronelab_fx PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../core")
+target_compile_options(dronelab_fx PRIVATE -O2 -fvisibility=hidden)
+target_link_libraries(dronelab_fx PRIVATE m)
+install(TARGETS dronelab_fx LIBRARY DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
 # The virtual unit (platforms/host), beside the app, for it to start: built
 # first, into build-host at the top of the repository, as the release
 # workflow does. Left out when it hasn't been, and the app can't start one.

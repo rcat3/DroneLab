@@ -107,6 +107,14 @@
  *                  its own, paced by the phone, 20 ms a packet. Dropped
  *                  while the wearer talks. For the app's developer options:
  *                  its voice auto responder (from COMM_VERSION 13).
+ *     0x18 mic:    18, flags (bit 0 the phone's mic talks, bit 1 it's
+ *                  sending, bit 2 its talking was refused just now; bits 1
+ *                  and 2 for the screen, as the board's own): with bit 0, the
+ *                  talk button and the screen's hold don't talk from the
+ *                  board but say so to the phone (0x18 talk held), for the
+ *                  phone's mic, and there's no voice mode. Back to the
+ *                  board's own mic when the phone goes (from COMM_VERSION
+ *                  15).
  *     0x0E update: 0E, flags (bit 0 the start, bit 1 the end, bit 2 asks
  *                  for an ack), then for the start: the firmware's length
  *                  (4, little endian), the board it's for
@@ -139,6 +147,10 @@
  *                  mode started it, bit 1 it goes over direct comms, bit 2
  *                  to one person alone): for the app's tones (from
  *                  COMM_VERSION 11). Not for recording.
+ *     0x18 talk held: 18, 1 held or 0 let go: the talk button or the
+ *                  screen's hold, while the phone's mic talks (0x18 mic),
+ *                  for the phone to talk; each change, and again each
+ *                  second while held (from COMM_VERSION 15).
  *     0x08 direct peer: 08, a board's id (32), how strong it's heard (dBm,
  *                  signed), flags (bit 0 talking, bit 1 versions follow,
  *                  bit 2 its wearer's key follows), then, with bit 2, its
@@ -267,8 +279,10 @@
  *      (0x15), for the app's details of a text
  *  13  voice from the phone for direct comms (0x16), for the app's voice
  *      auto responder
- *  14  what other boards' wearers let others control (0x17) */
-#define COMM_VERSION            14
+ *  14  what other boards' wearers let others control (0x17)
+ *  15  the phone's mic in place of the board's (0x18 from the phone), and
+ *      the talk button or screen held for it (0x18 to the phone) */
+#define COMM_VERSION            15
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

@@ -14,7 +14,7 @@
  * effect can play it), to a listener such as the comm channel, and, if
  * switched on, to the speaker.
  */
-#define VOICE_FX_SAMPLE_RATE 16000
+#include "audio/voice_fx_chain.h"    // VOICE_FX_SAMPLE_RATE, the presets
 
 /* Start listening to the microphone. Returns false without one, or on a
  * board built without voice effects (RCAT_VOICE_FX). */
@@ -53,6 +53,10 @@ float voice_fx_noise_floor_db(void);
 
 /* Whether the comm channel's sending, for voice_fx_set_comm_preset */
 void voice_fx_set_comm_sending(bool on);
+
+/* Nothing at all while paused, for a firmware update: the chains freed,
+ * nothing to the speaker, the voice lab or the comm channel. */
+void voice_fx_pause(bool pause);
 
 /* Whether the comm channel has an effect of its own, different from the
  * speaker's, so the speaker goes quiet while it sends */

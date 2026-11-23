@@ -20,6 +20,10 @@
 
 #include "app/battery.h"
 #include "app/direct.h"
+#include "app/lovense.h"
+#include "app/remote.h"
+#include "audio/audio_player.h"
+#include "audio/voice_fx.h"
 #include "hal.h"
 #include "lvgl.h"
 
@@ -87,12 +91,60 @@ static void release_buffer(void)
     }
 }
 
+/* The unit's out of service while an update comes in and installs: the
+ * radio to Bluetooth alone (direct comms paused, and the WiFi remote, if
+ * it's on, and the search for toys stopped), and the voice effects and
+ * sounds stopped, so nothing slows it. The screen's paused too
+ * (update_screen.c). If the update stops, what was going goes again; if it
+ * works, the unit restarts. */
+static bool quieted, remote_was_on, player_was_on;
+
+static void quiet(bool on)
+{
+    if (on == quieted)
+    {
+        return;
+    }
+    quieted = on;
+    // Bluetooth shares the radio with direct comms' ESP-NOW, and an
+    // update's steady stream alongside broadcasts can drop the link
+    direct_pause(on);
+    voice_fx_pause(on);
+    if (on)
+    {
+        remote_was_on = remote_running();
+        if (remote_was_on)
+        {
+            remote_stop();
+        }
+        player_was_on = audio_player_is_playing();
+        if (player_was_on)
+        {
+            audio_player_pause();
+        }
+        audio_player_chime_stop();
+        lovense_stop_all();
+        lovense_scan_stop();
+    }
+    else
+    {
+        if (remote_was_on)
+        {
+            remote_start();
+        }
+        if (player_was_on)
+        {
+            audio_player_resume();
+        }
+    }
+}
+
 static void install_failed(void)
 {
     installing = false;
     rcat_hal_update_abort();
     release_buffer();
-    direct_pause(false);
+    quiet(false);
     set_status("The update was damaged");
     result = UPDATE_DAMAGED;
     result_ready = true;
@@ -132,11 +184,18 @@ static void poll_cb(lv_timer_t *t)
     restart_soon();
 }
 
+static lv_timer_t *confirm_timer, *poll_timer;
+
 void updater_init(void)
 {
-    lv_timer_t *confirm = lv_timer_create(confirm_cb, CONFIRM_MS, NULL);
-    lv_timer_set_repeat_count(confirm, 1);
-    lv_timer_create(poll_cb, POLL_MS, NULL);
+    confirm_timer = lv_timer_create(confirm_cb, CONFIRM_MS, NULL);
+    lv_timer_set_repeat_count(confirm_timer, 1);
+    poll_timer = lv_timer_create(poll_cb, POLL_MS, NULL);
+}
+
+bool updater_owns_timer(const lv_timer_t *t)
+{
+    return t != NULL && (t == confirm_timer || t == poll_timer);
 }
 
 bool updater_app_available(void)
@@ -182,7 +241,7 @@ update_result_t updater_app_begin(size_t length, const char *board, const char *
            buffer != NULL ? "kept until it's all here" : "written as it comes");
     // The radio to itself: Bluetooth shares it with direct comms' ESP-NOW,
     // and an update's steady stream alongside broadcasts can drop the link
-    direct_pause(true);
+    quiet(true);
     rcat_hal_ble_peer_fast(true);
     updating = true;
     expected = length;
@@ -284,7 +343,7 @@ update_result_t updater_app_finish(void)
     }
     if (!rcat_hal_update_finish())
     {
-        direct_pause(false);
+        quiet(false);
         set_status("The update was damaged");
         return UPDATE_DAMAGED;
     }
@@ -336,7 +395,7 @@ void updater_app_cancel(void)
         {
             rcat_hal_update_abort();
         }
-        direct_pause(false);
+        quiet(false);
         set_status("The update stopped part way");
     }
 }
@@ -347,6 +406,12 @@ void updater_init(void)
 {
     lv_timer_t *confirm = lv_timer_create(confirm_cb, CONFIRM_MS, NULL);
     lv_timer_set_repeat_count(confirm, 1);
+}
+
+bool updater_owns_timer(const lv_timer_t *t)
+{
+    (void)t;
+    return false;
 }
 
 bool updater_app_available(void) { return false; }

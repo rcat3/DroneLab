@@ -26,6 +26,8 @@ The DroneLab app is the phone's half of your unit.  It links your unit to the re
 2. **[Connect it](connecting.md)**: pair it with your unit, which is all it needs.  If your hive uses a server, join it too, and pick your avatar.
 3. **[Talk to the hive](voice.md#talking)**: hold the talk button and speak.
 
+**No unit yet?**  Join the server and skip the pairing: the app talks from the phone's own microphone, with texts, calls and commands as well.  See [Without a display unit](voice.md#without-a-display-unit).
+
 ## The screen
 
 Four tabs along the bottom, and the status strip along the top of every one:

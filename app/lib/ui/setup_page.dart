@@ -12,6 +12,8 @@ import 'developer_page.dart';
 import 'display_unit_page.dart';
 import 'identity_page.dart';
 import 'permissions_page.dart';
+import 'phone_mic_ui.dart';
+import '../comm/voice_fx.dart';
 import 'unit_sounds_page.dart';
 import 'firmware_ui.dart';
 import 'server_page.dart';
@@ -22,6 +24,15 @@ import 'widgets.dart';
 /// What's set once and left: getting connected (the board, the server, who
 /// you are), how the board talks, and who's muted. Direct comms are on the
 /// Text tab and the links' sheet.
+Widget _talkTones(CommController comm) => Explained(
+      help: 'Two short notes up in your headphones as push to talk starts, and down as it ends. '
+          'Not in voice mode. A low buzz when nobody would hear you sounds either way.',
+      builder: (context, info) => PanelRow(
+        title: 'Talk tones',
+        trailing: [info, Switch(value: comm.talkTones, onChanged: comm.setTalkTones)],
+      ),
+    );
+
 class SetupPage extends StatelessWidget {
   final CommController comm;
   const SetupPage({super.key, required this.comm});
@@ -52,10 +63,13 @@ class SetupPage extends StatelessWidget {
                 PanelRow(
                   leading: _Step(1, boardUp),
                   title: 'Pair the board',
+                  // Optional: without a unit, the phone's mic talks
                   subtitle: paired ? '${b.name ?? comm.lastBoardName ?? 'Board'} · ${boardStatusText(comm)}'
                       : VirtualUnits.available
-                          ? "Switch on the board's Phone App first, or start a virtual unit"
-                          : "Switch on the board's Phone App first",
+                          ? "If you have one: switch on its Phone App first. Or start a virtual unit, "
+                              "or talk from the computer's microphone"
+                          : "If you have one: switch on its Phone App first. Without one, you talk from "
+                              "the phone's microphone",
                   trailing: [
                     b.state == BoardState.off || b.state == BoardState.scanning
                         ? FilledButton(onPressed: () => pickBoard(context, comm), child: const Text('Find'))
@@ -83,10 +97,17 @@ class SetupPage extends StatelessWidget {
               const SectionHeader('Permissions'),
               Panel(children: [PermissionsRow(comm: comm)]),
               const SectionHeader('Talking'),
-              if (settings == null)
-                const Panel(children: [PanelRow(title: 'Connect to the board to change these')])
-              else
-                Panel(children: [
+              // One order, whichever mic talks, rows coming and going in
+              // place: how you talk, then your voice, then the board's
+              // screen. The unit's rows show while it's connected, as its
+              // own talk button and voice mode talk through it whichever
+              // mic's picked.
+              Panel(children: [
+                if (MicSourceRow.shown(boardUp)) MicSourceRow(comm: comm, unitUp: boardUp),
+                if (comm.phoneMicTalks) PhoneMicRow(comm: comm),
+                // Voice mode's only for the unit's mic: with the phone's, the
+                // unit's in push to talk (CommController._checkUnitMode)
+                if (settings != null && !comm.phoneMicTalks)
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -103,7 +124,17 @@ class SetupPage extends StatelessWidget {
                       ),
                     ]),
                   ),
-                  if (settings.voices.isNotEmpty)
+                if (comm.phoneMicTalks || comm.boardTalksTo) _talkTones(comm),
+                if (settings == null && !comm.phoneMicTalks)
+                  const PanelRow(title: 'Connect to the board to change these'),
+              ]),
+              if (settings != null || comm.phoneMicTalks) ...[
+                const SizedBox(height: 12),
+                Panel(children: [
+                  // The voice heard by the hive: the unit's effect, or the
+                  // same effects on the phone's mic, in the same place
+                  if (comm.phoneMicTalks && VoiceFx.available) PhoneVoiceRow(comm: comm),
+                  if (settings != null && settings.voices.isNotEmpty && !comm.phoneMicTalks)
                     Explained(
                       help: settings.hasSpeaker
                           ? 'The voice effect heard by the hive.'
@@ -129,7 +160,7 @@ class SetupPage extends StatelessWidget {
                       ),
                     ),
                   // The low-profile housing has no speaker to mute
-                  if (settings.hasSpeaker)
+                  if (settings != null && settings.hasSpeaker && !comm.phoneMicTalks)
                     Explained(
                       help: settings.muteForced
                           ? 'Mute speaker when speaking to hive. Always on while the HiveMind voice differs from '
@@ -150,15 +181,15 @@ class SetupPage extends StatelessWidget {
                         ],
                       ),
                     ),
-                  if (comm.boardTalksTo)
-                    Explained(
-                      help: 'Two short notes up in your headphones as push to talk starts, and down as it ends. '
-                          'Not in voice mode. A low buzz when nobody would hear you sounds either way.',
-                      builder: (context, info) => PanelRow(
-                        title: 'Talk tones',
-                        trailing: [info, Switch(value: comm.talkTones, onChanged: comm.setTalkTones)],
-                      ),
-                    ),
+                  if (comm.phoneMicTalks) ...[
+                    MicBoostRow(comm: comm),
+                    MicMeter(comm: comm),
+                  ],
+                ]),
+              ],
+              if (settings != null) ...[
+                const SizedBox(height: 12),
+                Panel(children: [
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -173,6 +204,7 @@ class SetupPage extends StatelessWidget {
                     ]),
                   ),
                 ]),
+              ],
               if (boardUp) ...[
                 const SectionHeader('Unit'),
                 Panel(children: [

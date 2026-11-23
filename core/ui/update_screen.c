@@ -12,6 +12,71 @@
 #include "ui/ui_internal.h"
 
 #define POLL_MS     200
+
+/* While an update's going, the unit's out of service: every other timer's
+ * paused (the screens, the visualizer, toys, the battery log...) and the
+ * page beneath hidden, so the loop spends its time on what comes in, and
+ * draws only this. Those it paused go again if the update stops; if it
+ * works, the unit restarts anyway. */
+#define MAX_PAUSED  64
+static lv_timer_t *own_timer;
+static lv_timer_t *paused[MAX_PAUSED];
+static size_t paused_count;
+static lv_obj_t *hidden_screen;
+
+static bool keep_running(lv_timer_t *t)
+{
+    if (t == own_timer || t == feature_settings_comm_timer() || updater_owns_timer(t))
+    {
+        return true;
+    }
+    for (lv_display_t *d = lv_display_get_next(NULL); d != NULL; d = lv_display_get_next(d))
+    {
+        if (t == lv_display_get_refr_timer(d))
+        {
+            return true;
+        }
+    }
+    for (lv_indev_t *i = lv_indev_get_next(NULL); i != NULL; i = lv_indev_get_next(i))
+    {
+        if (t == lv_indev_get_read_timer(i))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void quiet_ui(bool on)
+{
+    if (on)
+    {
+        paused_count = 0;
+        for (lv_timer_t *t = lv_timer_get_next(NULL); t != NULL; t = lv_timer_get_next(t))
+        {
+            if (!keep_running(t) && !lv_timer_get_paused(t) && paused_count < MAX_PAUSED)
+            {
+                lv_timer_pause(t);
+                paused[paused_count++] = t;
+            }
+        }
+        hidden_screen = lv_screen_active();
+        lv_obj_set_hidden(hidden_screen, true);
+    }
+    else
+    {
+        for (size_t i = 0; i < paused_count; i++)
+        {
+            lv_timer_resume(paused[i]);
+        }
+        paused_count = 0;
+        if (hidden_screen != NULL)
+        {
+            lv_obj_set_hidden(hidden_screen, false);
+            hidden_screen = NULL;
+        }
+    }
+}
 #define COLOR_MUTED lv_palette_main(LV_PALETTE_GREY)
 
 static lv_obj_t *panel;
@@ -86,12 +151,14 @@ static void poll_cb(lv_timer_t *t)
         {
             lv_obj_delete(panel);
             panel = NULL;
+            quiet_ui(false);
         }
         return;
     }
     if (panel == NULL)
     {
         create();
+        quiet_ui(true);
     }
     lv_label_set_text(title, p.show == UPDATE_SHOW_RECEIVING  ? "Downloading Firmware Update..."
                              : p.show == UPDATE_SHOW_INSTALLING ? "Installing Firmware Update..."
@@ -113,5 +180,5 @@ static void poll_cb(lv_timer_t *t)
 
 void update_screen_create(void)
 {
-    lv_timer_create(poll_cb, POLL_MS, NULL);
+    own_timer = lv_timer_create(poll_cb, POLL_MS, NULL);
 }

@@ -56,6 +56,12 @@ dependencies:
   cryptography: ^2.9.0
   flutter_secure_storage: ^11.2.0
   qr_flutter: ^4.1.0         # Setup, Display unit: the hotspot's QR code
+  record: ^7.2.0             # no unit: talking from the phone's microphone (phone_mic.dart)
+
+# flutter_pcm_sound with a change for headset mics: packages/flutter_pcm_sound/DRONELAB.md
+dependency_overrides:
+  flutter_pcm_sound:
+    path: packages/flutter_pcm_sound
 
 dev_dependencies:
   flutter_test:

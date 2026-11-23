@@ -842,7 +842,10 @@ static void show_pairing_code(void)
 }
 
 /* The channel answers the phone from here, whatever's on screen, and
- * pairing a talk button goes on. */
+ * pairing a talk button goes on. Left running through an update, which
+ * comes in through it (update_screen.c). */
+static lv_timer_t *comm_timer;
+
 static void comm_timer_cb(lv_timer_t *t)
 {
     comm_poll(lv_tick_get());
@@ -885,7 +888,12 @@ static void add_comm_page(ui_feature_t *feature)
     lv_obj_align(comm_name_label, LV_ALIGN_CENTER, 0, ui_px(56));
 
     show_comm();
-    lv_timer_create(comm_timer_cb, COMM_POLL_MS, NULL);
+    comm_timer = lv_timer_create(comm_timer_cb, COMM_POLL_MS, NULL);
+}
+
+lv_timer_t *feature_settings_comm_timer(void)
+{
+    return comm_timer;
 }
 
 /* ----- The phones paired with the app's Bluetooth link ----- */

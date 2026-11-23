@@ -93,7 +93,33 @@ class TextResponder {
 /direct  the direct channels kept on this phone
 /direct <name>  move to one (Open for the open channel)
 /voice on|off  the voice responder
-/echo on|off  echoing texts''';
+/echo on|off  echoing texts
+/heard [reset]  how each voice heard has come: packets, lost, ran dry''';
+
+  /// Each voice heard, server and direct, since it was first heard or the
+  /// last reset: for telling voice lost on the way from voice late in
+  /// clumps (it runs dry with nothing lost).
+  Future<String> _heard({required bool reset}) async {
+    final speakers = comm.mixer.speakers.values.toList();
+    final phoneRuns = await comm.phoneUnderruns();
+    if (speakers.isEmpty) return 'Nobody heard yet';
+    final lines = [
+      Platform.isLinux ? comm.audioOutHealth : "The phone's player ran dry $phoneRuns times since it started",
+      'Buffer ${comm.bufferMs} ms',
+      for (final sp in speakers)
+        '${comm.talkerName(sp.session)}${CommController.isDirectSession(sp.session) ? ' (direct)' : ''}: '
+            '${sp.packets} packets, ${sp.lost} lost, ${sp.late} late (left out), ran dry ${sp.underruns} times, '
+            '${sp.concealed * 10} ms made up, ${sp.dropped * 1000 ~/ sp.sampleRate} ms dropped to catch up, '
+            'holding back ${sp.heldMs} ms',
+    ];
+    if (reset) {
+      for (final sp in speakers) {
+        sp.packets = sp.lost = sp.late = sp.underruns = sp.dropped = sp.concealed = 0;
+      }
+      lines.add('(counts reset)');
+    }
+    return lines.join('\n');
+  }
 
   /// A command's answer. [command] is the text it came in, if it did.
   Future<String> run(String line, {ConversationEntry? command}) async {
@@ -111,6 +137,8 @@ class TextResponder {
         return _status();
       case '/nearby':
         return _nearby();
+      case '/heard':
+        return _heard(reset: arg.toLowerCase() == 'reset');
       case '/details':
         final n = (int.tryParse(arg) ?? 5).clamp(1, 20);
         return _details(n, skip: command);

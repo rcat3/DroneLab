@@ -15,7 +15,7 @@ The hive can reach you two ways, and the app brings both together on one screen:
 | How it travels | Your unit → your phone → the internet → the hive's [Mumble](https://www.mumble.info) server → everyone else | Your unit → the radio → units nearby, with no phone signal, internet or server |
 | Reach | Anywhere with a phone signal or WiFi | Across a room at most: direct mode is experimental (see [Direct Mode Range](../hardware/direct-mode-range.md)) |
 | Needs | The hive's server, set up in [Connecting](connecting.md#2-join-a-server-optional) | *Direct* switched on, and the others on the same [direct channel](#direct-channels) |
-| Who's there | Everyone on the server's channel, including people in a Mumble app without a unit | Units nearby on your direct channel |
+| Who's there | Everyone on the server's channel, including people on the app or a Mumble app without a unit | Units nearby on your direct channel |
 
 Use either, or both at once: direct mode links drones in the same room with no server, handy for a demo or a scene, while the server reaches everyone else, wherever they are.
 
@@ -98,6 +98,19 @@ Pick whichever suits you.  They all talk to whoever you've picked.
 | **Voice mode** | Set *Talk with* to *VOICE* in Setup: the unit sends whenever it hears you speak, and stops a moment after you stop. | No buttons at all.  It sends anything loud enough, so it suits a quiet place. |
 
 The box under the talk button says which mode the unit's in: **[ PTT ]** (push to talk: one of the buttons) or **[ VOICE ]**.  While you're talking, *TX* shows at the top, the button glows pink, and the status strip's up arrow lights.
+
+### Without a display unit
+
+You don't need a unit to join the hive over the server.  With no unit connected, the app talks from the **phone's own microphone**, and the box under the talk button says **[ PHONE MIC ]** (*[ COMPUTER MIC ]* in the Linux app).  Join the server in Setup as usual and leave *Pair the board* undone.
+
+- **Push to talk only**: hold the app's talk button, or press the headphones' play/pause button, as above.  The first press asks for the microphone permission.  The mic is only open while you talk.
+- **What you get**: talking and hearing on your server channel, [calls](#calls), [texts](text.md) and [commands](control.md) to others' units, all as with a unit.
+- **What needs a unit**: voice mode, your voice effect, [Direct](#two-links-server-and-direct) (it uses the unit's radio), the talk button remote, [Record](record.md) and [Remote](remote.md).
+- **Which mic**: in Setup, *Talking*, *Mic* picks **UNIT** (shown while a unit's connected), **PHONE** or **HEADSET**.  The phone's mic leaves your Bluetooth headphones on media sound, so what you hear stays clear, and picks up your voice with the phone's echo and noise cancelling on; keep the phone near your mouth.  A headset's mic is nearer your mouth, but the headset goes into call mode while you're connected, like a phone call: what you hear comes through its narrower call sound too, and so does any other app's.  With no headset connected, the phone's mic talks.  Without a unit, a unit picked falls back to the phone's mic.
+- **The phone's mic with a unit connected**: pick *PHONE* or *HEADSET* with the unit connected, for when the unit's mic isn't in the mask, say.  The app's talk button and the headphones' button then talk from that mic, with no voice effect: to the server, or through the unit to its direct channel.  A call over direct goes over the server instead, as the unit can only send the phone's voice to the whole channel.  The unit's own talk button (and holding its screen) talks from the mic you picked too, with this release's firmware; older firmware talks through the unit's mic.  Once the app's gone, the unit talks from its own mic again.  Voice mode is off meanwhile, and *Talk with* is hidden, as the unit would send whatever it heard as well: the unit goes to push to talk, and back to voice mode once you pick *UNIT* again, if it was in voice mode before.
+- **HiveMind voice**: the phone's mic can go through the same voice effects as a unit's, so you sound as if from one: pick it under *HiveMind voice* in Setup, *Talking*, with *None* for your own voice.  The effects were tuned for a mic inside a mask, so with the phone's mic the gate can cut off quiet words: add some *Mic boost*, and check with the meter, which shows the level after the effect.
+- **Mic boost and level**: if others find you quiet, tap *Try it* under *Mic level* and talk as you would.  The bar shows your level as others get it, after the phone's own processing and the boost, and nothing is sent while trying.  Set *Mic boost* (up to +18 dB) so your peaks reach the green band; yellow means loud parts are being eased down, so take some off.  Each phone keeps its own.
+- **Once a unit connects**, its mic takes over, and the phone's mic goes back to unused.
 
 ### Hearing the hive
 

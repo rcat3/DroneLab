@@ -74,6 +74,7 @@ const commVersionTalkTo = 11;   // who talking goes to (0x13), pairs' keys (0x14
 const commVersionCopies = 12;
 const commVersionCaps = 14;     // what other boards' wearers let others control (0x17)   // each copy of a command heard over direct comms, and how it came (0x15)
 const commVersionDirectVoice = 13;  // voice from the phone for the board to send over direct comms (0x16)
+const commVersionPhoneMic = 15;  // the phone's mic in place of the board's (0x18), its talk button held (0x18)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -102,6 +103,8 @@ const _msgPairs = 0x14;
 const _msgCopy = 0x15;        // from the board: a copy of a command heard over direct comms
 const _msgDirectVoice = 0x16; // to it: voice for it to send over direct comms
 const _msgDirectCaps = 0x17;  // from it: what a board's wearer lets others control
+const _msgMic = 0x18;         // to it: which mic talks, its or the phone's
+const _msgTalkHeld = 0x18;    // from it: its talk button or screen held, for the phone's mic
 const _msgDirectAvatar = 0x0D;
 const _msgUpdate = 0x0E;
 
@@ -259,6 +262,7 @@ class AnswerPiece {
 /// A notification from the board: a [BoardSound], a [BoardStatus], an
 /// [AnswerPiece], an [AvatarAck], or null.
 Object? parseBoardMessage(Uint8List data) {
+  if (data.length == 2 && data[0] == _msgTalkHeld) return TalkHeld(data[1] != 0);
   if (data.length >= 3 && data[0] == _msgTalked) {
     return Talked(data[1], data[2] & 1 != 0, data[2] & 2 != 0, data[2] & 4 != 0);
   }
@@ -358,6 +362,21 @@ List<Uint8List> requestMessages(int id, Uint8List request, [int maxWrite = board
 }
 
 Uint8List talkMessage(bool talk) => Uint8List.fromList([_msgTalk, talk ? 1 : 0]);
+
+/// Which mic talks (commVersion 15): with the phone's, the board's talk
+/// button and screen say so ([TalkHeld]) in place of talking, and there's
+/// no voice mode. The board goes back to its own when the phone goes.
+/// [sending] and [refused] (just now) are the phone mic's, for the
+/// board's screen to show as its own.
+Uint8List micMessage({required bool phone, bool sending = false, bool refused = false}) =>
+    Uint8List.fromList([_msgMic, (phone ? 1 : 0) | (sending ? 2 : 0) | (refused ? 4 : 0)]);
+
+/// The board's talk button or screen held, or let go, while the phone's mic
+/// talks: sent again each second while held.
+class TalkHeld {
+  final bool held;
+  const TalkHeld(this.held);
+}
 
 /// A packet of voice for the board to send over direct comms as its own
 /// (commVersion 13), paced by us: for the developer options' voice auto

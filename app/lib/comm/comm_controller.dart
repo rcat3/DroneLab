@@ -28,6 +28,8 @@ import 'server_invites.dart';
 import 'conversations.dart';
 import 'notifier.dart';
 import 'permissions.dart';
+import 'phone_mic.dart';
+import 'voice_fx.dart';
 import 'photos.dart';
 import 'unit_sounds.dart';
 import 'firmware_update.dart';
@@ -68,6 +70,10 @@ class TalkTarget {
   @override
   int get hashCode => Object.hash(kind, personId);
 }
+
+/// Which mic talks (Setup's Talking, Mic): the unit's, while it's
+/// connected; the phone's (or computer's); or a Bluetooth headset's.
+enum MicSource { unit, phone, headset }
 
 /// How talking would go now.
 enum TalkRoute { server, direct }
@@ -210,6 +216,8 @@ class CommController extends ChangeNotifier {
   late final AudioOut _audio = AudioOut(mixer);
 
   /// How the sound out's kept up, for the developer commands (a computer's).
+  Future<int> phoneUnderruns() => _audio.phoneUnderruns();
+
   String get audioOutHealth =>
       'Sound out: ${_audio.underruns} underruns, timer held up ${_audio.longestTickMs} ms at most, '
       'the card takes up to ${_audio.burstMs} ms at once, kept ${_audio.aheadMs} ms ahead';
@@ -235,6 +243,10 @@ class CommController extends ChangeNotifier {
   /// The firmware the app carries, if it does (see firmware_update.dart).
   BundledFirmware? bundledFirmware;
   late final FirmwareUpdate firmwareUpdate = FirmwareUpdate(board);
+
+  /// An update's going to the unit: nothing else is sent to it meanwhile,
+  /// so the update has the link to itself.
+  bool get _updating => firmwareUpdate.busy;
 
   /// How the board's firmware stands against the app's, once it's said.
   FirmwareStanding get firmwareStanding {
@@ -297,6 +309,12 @@ class CommController extends ChangeNotifier {
     textResponder.echo = p.getBool('textEcho') ?? true;
     DevRemote.listen(this);
     ringInHeadphones = p.getBool('ringInHeadphones') ?? true;
+    _phoneMic.gainDb = (p.getInt('phoneMicGainDb') ?? 0).clamp(0, PhoneMic.maxGainDb);
+    micSource = MicSource.values.asNameMap()[p.getString('micSource')] ??
+        ((p.getBool('headsetMic') ?? false) ? MicSource.headset : MicSource.unit);
+    _unitVoiceKept = p.getBool('unitVoiceKept') ?? false;
+    phoneVoice = p.getString('phoneVoice');
+    _phoneMic.voicePreset = phoneVoice == null ? -1 : VoiceFx.presets.indexOf(phoneVoice!);
     textTone = p.getBool('textTone') ?? true;
     attentionTone = p.getBool('attentionTone') ?? true;
     permissions.load(p);
@@ -337,6 +355,7 @@ class CommController extends ChangeNotifier {
     _heardSub = board.heard.listen(_onHeard);
     _copySub = board.copies.listen(_onCopy);
     _talkedSub = board.talked.listen(_onTalked);
+    _talkHeldSub = board.talkHeld.listen((t) => _onUnitTalkHeld(t.held));
     _callTimer = Timer.periodic(const Duration(seconds: 1), (_) => _callTick());
     await conversations.load();
     conversations.onSeen = notifier.clearTexts;
@@ -347,6 +366,13 @@ class CommController extends ChangeNotifier {
       final now = DateTime.now().millisecondsSinceEpoch;
       _updateTalking(now);
       _fixTalkTo();
+      // The phone's mic, as links come and go (direct switched on or off)
+      _checkPhoneTalk();
+      _checkUnitMode();
+      _sendMic();
+      // The unit went while its button was held: let go
+      if (_unitHeld && board.state != BoardState.connected) _onUnitTalkHeld(false);
+      if (_headsetMicWanted != (Headset.active != null)) _updateHeadsetMic();
       nearby.removeWhere((_, b) => now - b.seenMs > _nearbyFor);
       // Groups on other channels are only heard while scanning: keep them a while
       heardGroups.removeWhere((_, g) => now - g.seenMs > _heardGroupFor);
@@ -442,6 +468,8 @@ class CommController extends ChangeNotifier {
     if (board.state != BoardState.connected) _unitTracks = null;
     _checkBattery();
     _updateHeadset();
+    _checkPhoneTalk();
+    _updateHeadsetMic();
     _updateBoardScreen();
     _updateBoardSettings();
     notifyListeners();
@@ -468,6 +496,7 @@ class CommController extends ChangeNotifier {
     if (_settingsTimer == null) {
       var ticks = 0;
       _settingsTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (_updating) return;      // nothing but the update, meanwhile
         _boardSettingsRequest('GET', '');
         if (++ticks % _askStateEvery == 0) _askBoardState();
       });
@@ -847,6 +876,10 @@ class CommController extends ChangeNotifier {
   /// which channel, as "talk on" the server or direct comms.
   bool get boardTalksTo => (board.status?.version ?? 0) >= commVersionTalkTo;
 
+  /// Whether talking can go to one person alone: the unit's firmware takes
+  /// it, or there's no unit and the phone's mic talks.
+  bool get canTalkToPerson => phoneMicTalks || boardTalksTo;
+
   Future<void> setTalkTo(TalkTarget t) async {
     _talkTo = _picked = t;
     await _prefs?.setString('talkTo', t.pref);
@@ -935,7 +968,6 @@ class CommController extends ChangeNotifier {
     // refuses to talk
     final inCall = t.kind == TalkTo.person && (calls[t.personId!]?.connected ?? false);
     final u = inCall ? serverUser(t.personId!) : null;
-    mumble?.whisperTo(u == null ? null : [u.session]);
     if (!boardTalksTo) {
       // Older firmware: the channel, as talking on the server or direct
       final on = t.kind == TalkTo.direct ? 1 : 0;
@@ -955,6 +987,16 @@ class CommController extends ChangeNotifier {
       _sentTalkTo = msg;
       board.send(msg);
     }
+  }
+
+  /// The server's told who to whisper to, ahead of talking, as it's set
+  /// over TCP and the voice may go over UDP: one person once they've
+  /// answered, else our channel. With a unit or without.
+  void _updateWhisper() {
+    final t = talkTo;
+    final inCall = t.kind == TalkTo.person && (calls[t.personId!]?.connected ?? false);
+    final u = inCall ? serverUser(t.personId!) : null;
+    mumble?.whisperTo(u == null ? null : [u.session]);
   }
 
   // ----- Keys shared with one other, for talking to them alone directly -----
@@ -1930,6 +1972,10 @@ class CommController extends ChangeNotifier {
   /// changes, and all of it when the board's newly there. Avatars go as
   /// they're needed: ours and those talking first, then everyone else's.
   void _updateBoardScreen() {
+    _updateWhisper();
+    // Nothing for the unit's screen while it's updating: it's out of
+    // service, and all it sends then is the update. Sent afresh after.
+    if (_updating) return;
     _boardAvatars.update();
     if (board.state != BoardState.connected || board.status == null) {
       _sentServer = _sentHearing = _sentMuted = _sentTalkTo = null;
@@ -2056,7 +2102,8 @@ class CommController extends ChangeNotifier {
   /// The headphones' button works while there's a board to talk through and
   /// a server to talk to, and the app's playing.
   void _updateHeadset() {
-    final on = board.state == BoardState.connected && mumble?.state == MumbleState.connected;
+    // Something to talk on: the server, or the unit (direct comms)
+    final on = mumble?.state == MumbleState.connected || board.state == BoardState.connected;
     if (on) {
       _media.start();
     } else {
@@ -2070,16 +2117,25 @@ class CommController extends ChangeNotifier {
   /// starts afresh.
   void holdToTalk(bool held) {
     if (held) {
-      board.setTalk(true);
+      _talk(true);
     } else if (headsetTalking) {
       _setHeadsetTalking(false);    // sets the board's talk off too
     } else {
-      board.setTalk(false);
+      _talk(false);
+    }
+  }
+
+  /// Talk, or stop: through the unit when it's connected, else from the
+  /// phone's own mic.
+  void _talk(bool talk) {
+    if (phoneMicTalks) {
+      _setPhoneTalk(talk);
+    } else {
+      board.setTalk(talk);
     }
   }
 
   void _onHeadsetPress() {
-    if (board.state != BoardState.connected) return;
     // Headphones send a press, not a hold: each press starts or stops
     _setHeadsetTalking(!headsetTalking);
   }
@@ -2087,10 +2143,11 @@ class CommController extends ChangeNotifier {
   void _setHeadsetTalking(bool talk, {bool chirp = true}) {
     if (talk == headsetTalking) return;
     headsetTalking = talk;
-    board.setTalk(talk);
+    _talk(talk);
     // The board says when it starts and ends (and refuses), for the tones,
-    // from commVersion 11; before that, a chirp for each press
-    if (chirp && !boardTalksTo) mixer.playTone(mixer.chirp(rising: talk));
+    // from commVersion 11; before that, a chirp for each press. The phone's
+    // mic has its own.
+    if (chirp && !phoneMicTalks && !boardTalksTo) mixer.playTone(mixer.chirp(rising: talk));
     _headsetLimit?.cancel();
     if (talk) {
       // In case it's left on: it would keep sending everything
@@ -2100,6 +2157,8 @@ class CommController extends ChangeNotifier {
   }
 
   void _onBoardSound(BoardSound s) {
+    // The phone's mic is talking to the server: not both at once
+    if (phoneSending && _phoneSendingRoute == TalkRoute.server) return;
     final m = mumble;
     if (m == null || m.state != MumbleState.connected) {
       _lastBoardSeq = null;
@@ -2120,6 +2179,305 @@ class CommController extends ChangeNotifier {
   }
 
   bool get sendingToServer => _sendingToServer;
+
+  // ----- Which mic talks: the unit's, the phone's, or a headset's -----
+
+  late final PhoneMic _phoneMic = PhoneMic(_onPhonePacket);
+
+  /// The mic picked in Setup. Kept for next time. The unit's needs one
+  /// connected: without, the phone's talks.
+  MicSource micSource = MicSource.unit;
+
+  Future<void> setMicSource(MicSource m) async {
+    micSource = m;
+    _headsetTriedMs = 0;
+    _modeSentMs = 0;
+    await _prefs?.setString('micSource', m.name);
+    _checkPhoneTalk();
+    _checkUnitMode();
+    _sendMic();
+    notifyListeners();
+    await _updateHeadsetMic();
+  }
+
+  /// The unit's mic talks: it's picked and connected.
+  bool get unitMicTalks => board.state == BoardState.connected && micSource == MicSource.unit;
+
+  /// Talking goes from the phone's own mic (or the headset's), push to
+  /// talk: no unit connected, or the phone's picked. To the server, or
+  /// with a unit, over direct comms through it.
+  bool get phoneMicTalks => !unitMicTalks;
+
+  /// The unit was in voice mode as the phone's mic was picked, so it goes
+  /// back to it once the unit's mic is. Kept, as the unit keeps its mode.
+  bool _unitVoiceKept = false;
+  int _modeSentMs = 0;
+
+  /// No voice mode on the unit while the phone's mic talks: the unit would
+  /// send whatever it heard as well. Push to talk instead (its own talk
+  /// button still talks through it), and voice mode back after. Every
+  /// tenth of a second, as the unit's mode can be changed on it too.
+  void _checkUnitMode() {
+    if (board.state != BoardState.connected || _updating) return;
+    final mode = board.status?.mode;
+    if (mode == null) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _modeSentMs < 2000) return;       // till the unit's status says it took it
+    if (phoneMicTalks && mode == BoardMode.voice) {
+      _modeSentMs = now;
+      _unitVoiceKept = true;
+      _prefs?.setBool('unitVoiceKept', true);
+      board.setMode(BoardMode.pushToTalk);
+    } else if (unitMicTalks && _unitVoiceKept) {
+      _modeSentMs = now;
+      _unitVoiceKept = false;
+      _prefs?.setBool('unitVoiceKept', false);
+      if (mode != BoardMode.voice) board.setMode(BoardMode.voice);
+    }
+  }
+
+  StreamSubscription<TalkHeld>? _talkHeldSub;
+
+  /// The unit's talk button (or screen) is held, for the phone's mic.
+  bool _unitHeld = false;
+
+  /// Tell the unit which mic talks (commVersion 15), when it changes and
+  /// as it connects: with the phone's, its talk button talks from it.
+  /// And whether the phone's mic is sending, for the unit's screen to show
+  /// it as its own (TX, the ring), and a refusal to show once.
+  (bool, bool)? _sentPhoneMic;
+  bool _refusedToSend = false;
+
+  void _sendMic() {
+    if (_updating) return;
+    if (board.state != BoardState.connected || (board.status?.version ?? 0) < commVersionPhoneMic) {
+      _sentPhoneMic = null;
+      _refusedToSend = false;
+      return;
+    }
+    final phone = phoneMicTalks;
+    final now = (phone, phone && phoneSending);
+    if (_sentPhoneMic == now && !_refusedToSend) return;
+    _sentPhoneMic = now;
+    board.send(micMessage(phone: phone, sending: now.$2, refused: _refusedToSend && phone));
+    _refusedToSend = false;
+  }
+
+  /// The unit's talk button or screen, held or let go, while the phone's
+  /// mic talks: as the app's own button. Sent again each second while held.
+  void _onUnitTalkHeld(bool held) {
+    if (held == _unitHeld) return;
+    _unitHeld = held;
+    if (!phoneMicTalks) return;
+    holdToTalk(held);
+  }
+
+  /// The headset's picked for the phone's mic (Android).
+  bool get headsetMic => micSource == MicSource.headset && Headset.supported;
+
+  /// The talk button (or headphones' button) is held down for the phone's
+  /// mic; and whether the mic's open and sending.
+  bool _phoneHeld = false;
+  bool phoneSending = false;
+
+  /// Where the phone mic's talking goes, while it does.
+  TalkRoute? _phoneSendingRoute;
+  bool _phoneFirst = false;
+
+  /// The board's voice effect on the phone's mic, by preset name (as the
+  /// board names them), or null for none. Kept for next time.
+  String? phoneVoice;
+
+  Future<void> setPhoneVoice(String? name) async {
+    phoneVoice = name;
+    _phoneMic.voicePreset = name == null ? -1 : VoiceFx.presets.indexOf(name);
+    if (name == null) {
+      await _prefs?.remove('phoneVoice');
+    } else {
+      await _prefs?.setString('phoneVoice', name);
+    }
+    notifyListeners();
+  }
+
+  /// The phone mic's boost, in dB. Kept for next time, on each phone.
+  int get phoneMicGainDb => _phoneMic.gainDb;
+
+  Future<void> setPhoneMicGain(int db) async {
+    _phoneMic.gainDb = db.clamp(0, PhoneMic.maxGainDb);
+    await _prefs?.setInt('phoneMicGainDb', _phoneMic.gainDb);
+    notifyListeners();
+  }
+
+  /// The headset in call mode for its mic just now, by name.
+  String? get headsetMicName => Headset.active;
+
+  Future<void> _headsetMicBusy = Future.value();
+  int _headsetTriedMs = 0;
+
+  /// Put the headset in call mode while it's picked and there's a link to
+  /// talk on (or the level's being tried), else back to media: one change
+  /// at a time.
+  bool get _headsetMicWanted => headsetMic && phoneMicTalks && (phoneMicCanTalk || _phoneMic.metering);
+
+  Future<void> _updateHeadsetMic() => _headsetMicBusy = _headsetMicBusy.then((_) async {
+        final want = _headsetMicWanted;
+        if (want == (Headset.active != null)) return;
+        if (want) {
+          // None there: the phone's mic, trying again every few seconds
+          final now = DateTime.now().millisecondsSinceEpoch;
+          if (now - _headsetTriedMs < 5000) return;
+          _headsetTriedMs = now;
+          if (await Headset.start() == null) return;
+        } else {
+          await Headset.stop();
+        }
+        await _audio.setVoiceCall(want);
+        await _phoneMic.reopen();     // for the mic it's to use now
+        notifyListeners();
+      });
+
+  /// Try the phone mic's level in Setup: [micLevel] moves, nothing's sent.
+  Future<bool> startMicMeter() async {
+    final ok = await _phoneMic.startMeter();
+    phoneMicError = ok ? null : _phoneMic.error;
+    await _updateHeadsetMic();
+    if (ok && await _phoneMic.hasPermission()) await _updateBackground();
+    notifyListeners();
+    return ok;
+  }
+
+  Future<void> stopMicMeter() async {
+    await _phoneMic.stopMeter();
+    await _updateHeadsetMic();
+    notifyListeners();
+  }
+
+  ValueListenable<double> get micLevel => _phoneMic.level;
+
+  /// Why the phone's mic didn't talk last time, till it does.
+  String? phoneMicError;
+
+  /// Whether we're talking now: the phone's mic, or the unit's.
+  bool get sendingNow =>
+      phoneSending || (board.state == BoardState.connected && (board.status?.sending ?? false));
+
+  /// The unit takes the phone's voice to send over direct comms.
+  bool get _unitSendsPhoneVoice => boardTakesDirectVoice;
+
+  /// The phone's mic has a link to talk on: the server, or direct comms
+  /// through the unit.
+  bool get phoneMicCanTalk => _serverUp || _unitSendsPhoneVoice;
+
+  /// How the phone mic's talking would go now, null if nobody would hear
+  /// it. Over direct only to the channel: the unit sends the phone's voice
+  /// to everyone on it, so one person alone goes over the server, as a
+  /// whisper, even with their unit nearby.
+  TalkRoute? get phoneTalkRoute {
+    final t = talkTo;
+    switch (t.kind) {
+      case TalkTo.server:
+        return talkRoute;
+      case TalkTo.direct:
+        return talkRoute == TalkRoute.direct && _unitSendsPhoneVoice ? TalkRoute.direct : null;
+      case TalkTo.person:
+        if (!(calls[t.personId!]?.connected ?? false)) return null;
+        return _serverUp && serverUser(t.personId!) != null ? TalkRoute.server : null;
+    }
+  }
+
+  /// How talking would go now, with whichever mic talks.
+  TalkRoute? get myTalkRoute => phoneMicTalks ? phoneTalkRoute : talkRoute;
+
+  Future<void> _setPhoneTalk(bool talk) async {
+    if (talk == _phoneHeld) return;
+    _phoneHeld = talk;
+    final alone = talkTo.kind == TalkTo.person;
+    if (!talk) {
+      if (!phoneSending) {
+        await _phoneMic.stop();     // still opening: it lets go
+        return;
+      }
+      await _phoneMic.stop();       // sends the last packet
+      final direct = _phoneSendingRoute == TalkRoute.direct;
+      phoneSending = false;
+      _phoneSendingRoute = null;
+      _sendingToServer = false;
+      _onTalked(Talked(Talked.ended, false, direct, alone));
+      notifyListeners();
+      _sendMic();
+      return;
+    }
+    // Nobody would hear it (as the unit does it): the buzz, and no mic
+    final route = phoneTalkRoute;
+    if (route == null) {
+      _phoneHeld = false;
+      _refusedToSend = true;
+      _onTalked(Talked(Talked.refused, false, false, alone));
+      _sendMic();
+      return;
+    }
+    final first = !(await _phoneMic.hasPermission());
+    if (!_phoneHeld) return;        // let go while asking
+    _phoneSendingRoute = route;
+    _phoneFirst = true;
+    final opened = await _phoneMic.start(
+        bitrate: route == TalkRoute.direct ? PhoneMic.directBitrate : PhoneMic.serverBitrate);
+    if (!_phoneHeld || !opened) {
+      if (!opened && _phoneMic.error != null) {
+        phoneMicError = _phoneMic.error;
+        _phoneHeld = false;
+        _onTalked(Talked(Talked.refused, false, false, alone));
+        notifyListeners();
+      }
+      if (!phoneSending) _phoneSendingRoute = null;
+      return;
+    }
+    phoneMicError = null;
+    phoneSending = true;
+    _sendingToServer = route == TalkRoute.server;
+    _onTalked(Talked(Talked.started, false, route == TalkRoute.direct, alone));
+    notifyListeners();
+    _sendMic();
+    // Newly allowed: the background service takes the mic from now, for
+    // talking with the screen off
+    if (first) await _updateBackground();
+  }
+
+  void _onPhonePacket(Uint8List opus, {required bool last}) {
+    switch (_phoneSendingRoute) {
+      case TalkRoute.server:
+        final m = mumble;
+        if (m == null || m.state != MumbleState.connected) return;
+        _lastBoardSeq = null;
+        m.sendVoice(_seq, opus, last: last);
+        _seq += 2;      // 20 ms, in Mumble's 10 ms frames
+      case TalkRoute.direct:
+        if (!_unitSendsPhoneVoice || opus.length > directVoiceMax) return;
+        board.sendFast(directVoiceMessage(opus, first: _phoneFirst, last: last),
+            tries: 3, wait: const Duration(milliseconds: 5));
+        _phoneFirst = false;
+      case null:
+        return;
+    }
+  }
+
+  /// Stop the phone's mic when it can't talk any more: the unit's mic
+  /// took over, or the link it talks on went.
+  void _checkPhoneTalk() {
+    if (!_phoneHeld && !phoneSending) return;
+    final gone = switch (_phoneSendingRoute) {
+      TalkRoute.server => !_serverUp,
+      TalkRoute.direct => !_unitSendsPhoneVoice,
+      null => false,
+    };
+    if (!phoneMicTalks || gone) {
+      if (headsetTalking) {
+        _setHeadsetTalking(false, chirp: false);
+      } else {
+        _setPhoneTalk(false);
+      }
+    }
+  }
 
   // ----- Commands for others' boards (core/app/others.h) -----
 
@@ -2942,6 +3300,8 @@ class CommController extends ChangeNotifier {
       if (!isDirectSession(session) && !m.users.containsKey(session)) mixer.remove(session);
     }
     _updateHeadset();
+    _checkPhoneTalk();
+    _updateHeadsetMic();
     _updateBoardScreen();
     if (m.state == MumbleState.disconnected && _serverWanted) {
       serverError = m.error;
@@ -2975,6 +3335,8 @@ class CommController extends ChangeNotifier {
     _reconnect?.cancel();
     _closeMumble();
     _updateHeadset();
+    _checkPhoneTalk();
+    _updateHeadsetMic();
     talking = {};
     _heardAt.clear();
     _updateBoardScreen();
@@ -2995,7 +3357,8 @@ class CommController extends ChangeNotifier {
   Future<void> _updateBackground() async {
     final on = _serverWanted || board.state != BoardState.off;
     if (on) {
-      await startBackground();
+      // The mic too, once it's allowed, for talking without a unit
+      await startBackground(microphone: await _phoneMic.hasPermission());
     } else {
       await stopBackground();
     }
@@ -3012,10 +3375,13 @@ class CommController extends ChangeNotifier {
     _heardSub?.cancel();
     _copySub?.cancel();
     _talkedSub?.cancel();
+    _talkHeldSub?.cancel();
     _directAvatarSub?.cancel();
     _directGroupSub?.cancel();
     _recordSub?.cancel();
     _talkingTimer?.cancel();
+    _phoneMic.dispose();
+    Headset.stop();
     disconnectServer(forGood: false);
     board.disconnect();
     super.dispose();

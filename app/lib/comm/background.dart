@@ -43,10 +43,20 @@ class _IdleHandler extends TaskHandler {
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {}
 }
 
-Future<void> startBackground() async {
+/// [microphone]: talking from the phone's mic with the screen off, which
+/// Android (14) only lets a service do that says so as it starts, and only
+/// once the mic's allowed. A service already running without it is
+/// restarted with it.
+bool _withMicrophone = false;
+
+Future<void> startBackground({bool microphone = false}) async {
   if (defaultTargetPlatform != TargetPlatform.android) return;
   _init();
-  if (await FlutterForegroundTask.isRunningService) return;
+  if (await FlutterForegroundTask.isRunningService) {
+    if (!microphone || _withMicrophone) return;
+    await FlutterForegroundTask.stopService();
+  }
+  _withMicrophone = microphone;
   final permission = await FlutterForegroundTask.checkNotificationPermission();
   if (permission != NotificationPermission.granted) {
     await FlutterForegroundTask.requestNotificationPermission();
@@ -58,6 +68,7 @@ Future<void> startBackground() async {
     serviceTypes: [
       if (bluetooth) ForegroundServiceTypes.connectedDevice,
       ForegroundServiceTypes.mediaPlayback,
+      if (microphone) ForegroundServiceTypes.microphone,
     ],
     serviceId: 1,
     notificationTitle: 'HiveMind is on',
@@ -71,4 +82,5 @@ Future<void> stopBackground() async {
   if (await FlutterForegroundTask.isRunningService) {
     await FlutterForegroundTask.stopService();
   }
+  _withMicrophone = false;
 }

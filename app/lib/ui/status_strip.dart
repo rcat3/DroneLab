@@ -104,7 +104,7 @@ class Links {
     final direct = board && (comm.boardSettings?.direct?.on ?? false);
     final st = comm.board.status;
     final hearing = comm.talking.isNotEmpty || (direct && comm.nearby.values.any((b) => b.talking));
-    return Links(board, server, direct, direct ? comm.nearby.length : 0, board && (st?.sending ?? false), hearing,
+    return Links(board, server, direct, direct ? comm.nearby.length : 0, comm.sendingNow, hearing,
         direct && (st?.otherVoice ?? false));
   }
 

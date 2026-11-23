@@ -23,6 +23,11 @@
 /* Call once the UI is up. It confirms the firmware works a little later. */
 void updater_init(void);
 
+/* Whether an LVGL timer is the updater's own, to keep running while the
+ * rest are paused for an update (update_screen.c). */
+typedef struct _lv_timer_t lv_timer_t;
+bool updater_owns_timer(const lv_timer_t *t);
+
 typedef enum
 {
     UPDATE_OK = 0,

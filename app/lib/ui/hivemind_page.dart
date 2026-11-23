@@ -5,6 +5,7 @@ import '../comm/board_protocol.dart';
 import '../comm/calls.dart';
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
+import '../comm/phone_mic.dart' show thisDevice;
 import 'firmware_ui.dart';
 import 'channel_lists.dart';
 import 'people.dart';
@@ -33,7 +34,7 @@ class HiveMindPage extends StatelessWidget {
         final serverUp = m?.state == MumbleState.connected;
         final direct = boardUp ? comm.boardSettings?.direct : null;
         final directOn = direct?.on ?? false;
-        final sending = boardUp && (comm.board.status?.sending ?? false);
+        final sending = comm.sendingNow;
         final to = comm.talkTo;
         final people = peopleOnce(comm)
           ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -66,7 +67,8 @@ class HiveMindPage extends StatelessWidget {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   children: [
-                    if (!boardUp || (!serverUp && !directOn)) ...[
+                    // Without a unit, the server's enough: the phone's mic talks
+                    if (!serverUp && !directOn) ...[
                       const SizedBox(height: 4),
                       _Offline(comm: comm, boardUp: boardUp),
                       const SizedBox(height: 4),
@@ -101,7 +103,7 @@ class HiveMindPage extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
-                            comm.boardTalksTo
+                            comm.canTalkToPerson
                                 ? 'Tap a channel or someone to talk to them; their picture for more'
                                 : "Tap someone for more. To talk to one person alone, update the unit's firmware",
                             style: const TextStyle(color: Kc.muted, fontSize: 13)),
@@ -127,12 +129,23 @@ class _Offline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fresh = comm.lastBoardId == null || !comm.server.complete;
+    // A unit's optional: the server alone does, talking from the phone's mic
+    final fresh = !comm.server.complete;
+    final unit = comm.lastBoardId != null;
     final (title, text, button) = fresh
-        ? ('Not linked yet', 'Pair the board and add the server to join the hive.', 'Set up')
-        : !boardUp
-            ? ('Board offline', '${boardStatusText(comm)}.', 'Links')
-            : ('No link to the hive', 'Connect the server, or switch on Direct.', 'Links');
+        ? (
+            'Not linked yet',
+            unit
+                ? 'Add the server to join the hive.'
+                : "Add the server to join the hive, and pair your display unit if you have one. "
+                    "Without one, you talk from the $thisDevice's microphone.",
+            'Set up'
+          )
+        : boardUp
+            ? ('No link to the hive', 'Connect the server, or switch on Direct.', 'Links')
+            : unit
+                ? ('No link to the hive', 'Connect the server. Unit: ${boardStatusText(comm)}.', 'Links')
+                : ('No link to the hive', 'Connect the server.', 'Links');
     return Panel(children: [
       Padding(
         padding: const EdgeInsets.all(16),
@@ -383,7 +396,7 @@ class _PersonRow extends StatelessWidget {
                     : p.user?.muted ?? false
                         ? 'Muted · $ways'
                         : ways);
-    final canTalkTo = comm.boardTalksTo;
+    final canTalkTo = comm.canTalkToPerson;
     return _TalkRow(
       leading: GestureDetector(
         onTap: () => showPerson(context, comm, id: p.id),
@@ -471,13 +484,21 @@ class _Dock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final route = comm.talkRoute;
+    final route = comm.myTalkRoute;
     final to = comm.talkTo;
     final name = comm.talkToName;
-    final person = to.kind == TalkTo.person && comm.boardTalksTo;
+    final person = to.kind == TalkTo.person && comm.canTalkToPerson;
+    final phone = comm.phoneMicTalks;
+    // Talking goes through the unit's mic, or from the phone's, to the
+    // server or through the unit to its direct channel
+    final canTalk = phone ? comm.phoneMicCanTalk : boardUp;
     final String note;
-    if (!boardUp) {
-      note = 'Connect the unit to talk';
+    if (!boardUp && !phone) {
+      note = 'Connecting to the unit...';
+    } else if (phone && !canTalk) {
+      note = 'Connect to the server to talk';
+    } else if (phone && comm.phoneMicError != null) {
+      note = comm.phoneMicError!;
     } else if (person) {
       final how = route == TalkRoute.direct ? 'direct' : 'over the server';
       note = switch (comm.calls[to.personId!]?.state) {
@@ -500,11 +521,13 @@ class _Dock extends StatelessWidget {
         children: [
           Text(note,
               textAlign: TextAlign.center,
-              style: TextStyle(color: boardUp && route == null ? Kc.softRed : Kc.muted, fontSize: 13)),
+              style: TextStyle(
+                  color: canTalk && (route == null || (phone && comm.phoneMicError != null)) ? Kc.softRed : Kc.muted,
+                  fontSize: 13)),
           const SizedBox(height: 10),
           // Grey while nobody would hear; it still talks, for the board to
           // say no, and the tone with it
-          _TalkButton(comm: comm, enabled: boardUp, heard: route != null),
+          _TalkButton(comm: comm, enabled: canTalk, heard: route != null),
           Explained(
             help: comm.headsetTalking
                 ? "Talking from the headphones' button: press it again to stop."
@@ -514,11 +537,19 @@ class _Dock extends StatelessWidget {
             builder: (context, info) => Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (mode != null)
+                if (mode != null || phone)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(border: Border.all(color: Kc.darkGreen)),
-                    child: Text(mode == BoardMode.voice ? '[ VOICE ]' : '[ PTT ]', style: Kc.term(14, color: Kc.green)),
+                    child: Text(
+                        phone
+                            ? comm.headsetMicName != null
+                                ? '[ HEADSET MIC ]'
+                                : '[ ${thisDevice.toUpperCase()} MIC ]'
+                            : mode == BoardMode.voice
+                                ? '[ VOICE ]'
+                                : '[ PTT ]',
+                        style: Kc.term(14, color: Kc.green)),
                   ),
                 info,
               ],
@@ -532,7 +563,7 @@ class _Dock extends StatelessWidget {
 
 class _TalkButton extends StatefulWidget {
   final CommController comm;
-  final bool enabled;     // a board to talk through
+  final bool enabled;     // a board to talk through, or the phone's mic and the server
   final bool heard;       // and someone who'd hear
   const _TalkButton({required this.comm, required this.enabled, required this.heard});
 
@@ -553,7 +584,7 @@ class _TalkButtonState extends State<_TalkButton> {
   Widget build(BuildContext context) {
     final enabled = widget.enabled;
     final lit = enabled && widget.heard;
-    final sending = enabled && (widget.comm.board.status?.sending ?? false);
+    final sending = enabled && widget.comm.sendingNow;
     final fg = !lit
         ? Kc.off
         : sending
