@@ -1,8 +1,8 @@
 /// Talking from the phone's own microphone, for those without a display
 /// unit: push to talk only. The phone's (or computer's) mic, 48 kHz mono,
-/// coded to Opus as the unit does it (core/app/comm.c: 20 ms packets,
-/// 24 kbit/s, voice, error correction for 5% loss), each packet handed on
-/// for the server.
+/// coded to Opus as the unit does it (core/app/comm.c: 20 ms packets, 32
+/// kbit/s to the server and 24 over direct comms, voice, error correction
+/// for 5% loss), each packet handed on.
 ///
 /// The mic opens at each press and closes at its end, so it's only in use
 /// while talking, or while its level's being tried in Setup. On Android
@@ -91,9 +91,19 @@ class PhoneMic {
 
   /// Open the mic and send from it. False if it can't: no permission, or no
   /// mic ([error] says), or [stop] came first.
-  Future<bool> start() async {
+  /// Opus's bitrates, as the unit's: to the server, and over direct comms,
+  /// where smaller packets spend less time on the air.
+  static const serverBitrate = 32000;
+  static const directBitrate = 24000;
+  int _bitrate = directBitrate;
+
+  Future<bool> start({int bitrate = serverBitrate}) async {
     if (_sending) return true;
     _sending = true;
+    _bitrate = bitrate;
+    for (final e in [_encoder, _encoder16]) {
+      e?.encoderCtl(request: od.OPUS_SET_BITRATE_REQUEST, value: bitrate);
+    }
     _sentAny = false;
     _fxUsed = false;
     final ok = await _openMic();
@@ -165,7 +175,7 @@ class PhoneMic {
         return false;
       }
       if (gen != _generation) return false;      // closed while asking
-      _encoder ??= _newEncoder(_rate);
+      _encoder ??= _newEncoder(_rate, _bitrate);
       _pending.clear();
       _startFx();
       final stream = await r.startStream(const RecordConfig(
@@ -229,7 +239,7 @@ class PhoneMic {
         // Through the effect, and coded at its 16 kHz, as the board does
         final voice = fx.process(samples);
         _measure(voice);
-        final e16 = _encoder16 ??= _newEncoder(voiceFxRate);
+        final e16 = _encoder16 ??= _newEncoder(voiceFxRate, _bitrate);
         if (_sending && voice.length == _frame16) {
           e16.inputBuffer.buffer.asInt16List(e16.inputBuffer.offsetInBytes, _frame16).setAll(0, voice);
           e16.inputBufferIndex = _frame16 * 2;
@@ -296,9 +306,9 @@ class PhoneMic {
     _fx?.setPreset(voicePreset);
   }
 
-  static BufferedOpusEncoder _newEncoder(int rate) {
+  static BufferedOpusEncoder _newEncoder(int rate, int bitrate) {
     final e = BufferedOpusEncoder(sampleRate: rate, channels: 1, application: Application.voip);
-    e.encoderCtl(request: od.OPUS_SET_BITRATE_REQUEST, value: 24000);
+    e.encoderCtl(request: od.OPUS_SET_BITRATE_REQUEST, value: bitrate);
     e.encoderCtl(request: od.OPUS_SET_COMPLEXITY_REQUEST, value: 5);
     e.encoderCtl(request: od.OPUS_SET_SIGNAL_REQUEST, value: od.OPUS_SIGNAL_VOICE);
     e.encoderCtl(request: od.OPUS_SET_INBAND_FEC_REQUEST, value: 1);

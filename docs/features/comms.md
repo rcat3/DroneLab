@@ -191,7 +191,7 @@ idf.py -C platforms/esp-idf -B build-s3-175-echo -DRCAT_DIRECT_ECHO=1 build flas
 
 ## How it works
 
-The unit is a Bluetooth LE peripheral with one service.  It notifies the phone with the voice, as 20 ms Opus packets of 16 kHz mono at about 24 kb/s, and with its status.  The phone writes to it to talk, to change the mode, and to say how the server's doing and who's talking.  The messages are described at the top of [`core/app/comm.h`](../../core/app/comm.h).
+The unit is a Bluetooth LE peripheral with one service.  It notifies the phone with the voice, as 20 ms Opus packets of 16 kHz mono at about 32 kb/s for the server (24 kb/s over direct mode, where smaller packets spend less time on the air), and with its status.  The phone writes to it to talk, to change the mode, and to say how the server's doing and who's talking.  The messages are described at the top of [`core/app/comm.h`](../../core/app/comm.h).
 
 In cloud mode the Opus packets go on to Mumble as they are, so the phone doesn't need to decode or encode anything.  `comm_bridge.py` shows how: it logs in to Mumble and sends the packets inside its TCP connection.  In direct mode the unit broadcasts the same packets itself: see the top of [`core/app/direct.h`](../../core/app/direct.h) for what's broadcast, and `comm.h` (0x07 and 0x08) for how it reaches the phone.
 

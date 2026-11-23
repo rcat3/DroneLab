@@ -59,10 +59,11 @@
 #define AGC_UP_DB           0.06f   // per 20 ms frame: 3 dB/s
 #define AGC_DOWN_DB         1.0f    // per 20 ms frame, at most
 
-// Opus: speech, 24 kb/s, which sounds good at 16 kHz, and in-band error
-// correction for the internet's lost packets. Complexity 3 of 10 keeps it
-// quick, for little loss at this rate.
-#define OPUS_BITRATE        24000
+// Opus: speech, 24 kb/s over direct comms and 32 to the server, which sound
+// good at 16 kHz, and in-band error correction for the internet's lost
+// packets. Complexity 3 of 10 keeps it quick, for little loss at this rate.
+#define OPUS_BITRATE        24000   // over direct comms: smaller packets, less time on the air
+#define OPUS_SERVER_BITRATE 32000   // to the server, which isn't short of room: a little clearer
 #define OPUS_RECORD_BITRATE 48000   // for recording: no coding to hear, and room for it on Bluetooth
 #define OPUS_COMPLEXITY     3
 #define OPUS_LOSS_PERCENT   5
@@ -546,7 +547,8 @@ static void encoder_task(void *arg)
     uint8_t packet[HEADER_BYTES + MAX_OPUS_BYTES];
 #if COMM_DEBUG
     uint32_t debug_ms = 0, debug_frames = 0, debug_dropped = 0, debug_bytes = 0;
-    clock_t debug_encode = 0;
+    uint32_t debug_skips = 0, debug_behind = 0;     // skipped ahead; the most it was behind, in samples
+    clock_t debug_encode = 0, debug_send = 0;
 #endif
 
     for (;;)
@@ -621,7 +623,9 @@ static void encoder_task(void *arg)
             releasing = false;
             first = true;
             opus_encoder_ctl(enc, OPUS_RESET_STATE);
-            opus_encoder_ctl(enc, OPUS_SET_BITRATE(rec ? OPUS_RECORD_BITRATE : OPUS_BITRATE));
+            opus_encoder_ctl(enc, OPUS_SET_BITRATE(rec                     ? OPUS_RECORD_BITRATE
+                                                   : route == ROUTE_SERVER ? OPUS_SERVER_BITRATE
+                                                                           : OPUS_BITRATE));
         }
         if (sending && !talk && !releasing)
         {
@@ -632,8 +636,17 @@ static void encoder_task(void *arg)
         {
             releasing = false;      // pressed again before it finished
         }
+#if COMM_DEBUG
+        if (sending && w - read > debug_behind)
+        {
+            debug_behind = w - read;
+        }
+#endif
         if (sending && w - read > MS_TO_SAMPLES(MAX_BEHIND_MS))
         {
+#if COMM_DEBUG
+            debug_skips++;
+#endif
             read = w - FRAME;
         }
 
@@ -678,12 +691,18 @@ static void encoder_task(void *arg)
                 direct_send_voice((uint16_t)(seq - 1), packet[3], packet + HEADER_BYTES, (size_t)n,
                                   tx_alone ? tx_key : NULL);
             }
+#if COMM_DEBUG
+            clock_t s0 = clock();
+#endif
             if (phone && (tx_record || tx_transport == COMM_TALK_SERVER) && !send_retrying(packet, HEADER_BYTES + n))
             {
 #if COMM_DEBUG
                 debug_dropped++;
 #endif
             }
+#if COMM_DEBUG
+            debug_send += clock() - s0;
+#endif
 #if COMM_DEBUG
             debug_bytes += n;
 #endif
@@ -738,10 +757,15 @@ static void encoder_task(void *arg)
         debug_ms += TASK_BUSY_MS;
         if (debug_ms >= 2000)
         {
-            printf("comm: loudest %.0f dB, gain %.1f dB, peak %.2f, %lu frames (%lu dropped), %lu bytes, encoding %.1f%% of a core\n",
+            printf("comm: loudest %.0f dB, gain %.1f dB, peak %.2f, %lu frames (%lu dropped), %lu bytes, encoding %.1f%% "
+                   "of a core, sending %lu ms, behind %lu ms at most, %lu skips\n",
                    debug_level_db, agc_db, debug_peak, (unsigned long)debug_frames, (unsigned long)debug_dropped,
                    (unsigned long)debug_bytes,
-                   debug_frames ? 100.0 * debug_encode / CLOCKS_PER_SEC / (debug_frames * 0.020) : 0.0);
+                   debug_frames ? 100.0 * debug_encode / CLOCKS_PER_SEC / (debug_frames * 0.020) : 0.0,
+                   (unsigned long)(debug_send * 1000 / CLOCKS_PER_SEC), (unsigned long)(debug_behind * 1000 / FS),
+                   (unsigned long)debug_skips);
+            debug_skips = debug_behind = 0;
+            debug_send = 0;
             debug_peak = 0;
             debug_level_db = -120;
             debug_ms = debug_frames = debug_dropped = debug_bytes = 0;

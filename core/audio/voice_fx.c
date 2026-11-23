@@ -23,7 +23,10 @@
 #define MAX_IN_BLOCK        (MIC_SAMPLE_RATE / 100)     // up to 10 ms from the microphone
 #define FS                  VOICE_FX_SAMPLE_RATE
 #define MAX_BLOCK           (FS / 100)
-#define DECIMATE_TAPS       31
+// 63, as the app's (native/voice_fx_app.c): 31 let the top of the voice,
+// above 8 kHz, fold back down into it, and began cutting below 7 kHz.
+// About 1% of a core more, and half a millisecond.
+#define DECIMATE_TAPS       63
 
 // Set to 1 to print how much of the CPU the effect takes, every few seconds.
 #define VOICE_FX_DEBUG      0
@@ -214,7 +217,14 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
 #if VOICE_FX_DEBUG
     static clock_t busy;
     static int blocks;
+    static uint32_t last_ms, longest_gap_ms;   // between the microphone's blocks, 10 ms each
     clock_t start = clock();
+    uint32_t now_ms = rcat_hal_millis();
+    if (last_ms != 0 && now_ms - last_ms > longest_gap_ms)
+    {
+        longest_gap_ms = now_ms - last_ms;
+    }
+    last_ms = now_ms;
 #endif
 
     // Halve the sample rate.
@@ -271,9 +281,10 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     processed += n;
     if (++blocks == DEBUG_BLOCKS)
     {
-        printf("voice fx: %s%s takes %.1f%% of a core\n", own_comm ? "comm " : "",
+        printf("voice fx: %s%s takes %.1f%% of a core, blocks up to %lu ms apart\n", own_comm ? "comm " : "",
                voice_fx_preset_name((size_t)(own_comm ? comm_preset : preset)),
-               100.0 * busy / CLOCKS_PER_SEC / ((float)processed / FS));
+               100.0 * busy / CLOCKS_PER_SEC / ((float)processed / FS), (unsigned long)longest_gap_ms);
+        longest_gap_ms = 0;
         processed = 0;
         busy = 0;
         blocks = 0;
