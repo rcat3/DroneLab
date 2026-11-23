@@ -207,6 +207,17 @@ class FirmwarePanel extends StatelessWidget {
     final fw = b.firmware ?? 'not known yet';
     final carried = comm.bundledFirmware?.version;
     final (String subtitle, Widget? action) = switch (comm.firmwareStanding) {
+      // Developer options: the app's build of the same release put on
+      // anyway, for trying firmware out: a development build can say the
+      // same version as the one before it
+      FirmwareStanding.current when comm.developerOptions && carried != null && b.canUpdate => (
+          carried == b.firmware
+              ? 'The same version as this app\'s: reinstall it, for a development build'
+              : 'Same release as this app\'s $carried, not the same build',
+          OutlinedButton(
+              onPressed: () => offerFirmwareUpdate(context, comm),
+              child: Text(carried == b.firmware ? 'Reinstall' : 'Install')),
+        ),
       FirmwareStanding.current => ('Up to date${carried == null ? '' : ' with this app'}', null),
       FirmwareStanding.canUpdate => (
           'This app comes with $carried',
