@@ -312,6 +312,8 @@ class _ToysPageState extends State<ToysPage> {
   bool _unmapped(int c) => _theirs != 0 && _theirs & (1 << c) == 0;
 
   Widget _slider(String name, double value, int mask, {required bool canSend, bool dim = false}) {
+    // Nothing of theirs follows it: shown, but not to be moved
+    if (dim) canSend = false;
     final row = Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
       child: Row(children: [
@@ -389,7 +391,7 @@ class _ToysPageState extends State<ToysPage> {
               Expanded(
                 child: Text(
                     _theirs != 0
-                        ? 'Their toys follow ${channelNames(_theirs)}; greyed out: nothing on it'
+                        ? "Their toys follow ${channelNames(_theirs)}; greyed out: nothing on it, so it can't be moved"
                         : 'Each toy runs on the channels its owner chose',
                     style: small),
               ),
