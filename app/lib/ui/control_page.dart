@@ -87,10 +87,11 @@ class _ToysPageState extends State<ToysPage> {
   int _group = 0;                         // the group shown
   bool _stopped = false;
   final Map<int, Timer> _again = {};      // by group
+  final Map<int, Timer> _dragLater = {};  // a level held back while dragged, by the channels
 
   @override
   void dispose() {
-    for (final t in _again.values) {
+    for (final t in [..._again.values, ..._dragLater.values]) {
       t.cancel();
     }
     super.dispose();
@@ -182,12 +183,26 @@ class _ToysPageState extends State<ToysPage> {
       }
       _stopped = false;
     });
+    // While it's dragged, no more often than [_dragEvery], but whatever
+    // it's at when that's up goes then, held still or not
     final now = DateTime.now();
     final last = _sentAt[mask];
-    if (!done && last != null && now.difference(last) < _dragEvery) return;
-    _sentAt[mask] = now;
+    final wait = last == null ? Duration.zero : _dragEvery - now.difference(last);
+    _dragLater.remove(mask)?.cancel();
+    if (!done && wait > Duration.zero) {
+      _dragLater[mask] = Timer(wait, () {
+        _dragLater.remove(mask);
+        if (mounted) _sendLevels(mask, again: true);
+      });
+      return;
+    }
+    _sendLevels(mask, again: done);
+  }
+
+  void _sendLevels(int mask, {required bool again}) {
+    _sentAt[mask] = DateTime.now();
     for (final i in _groupsOf(mask).toList()) {
-      _sendGroup(i, again: done);
+      _sendGroup(i, again: again);
     }
   }
 
