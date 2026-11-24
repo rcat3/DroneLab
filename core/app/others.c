@@ -252,36 +252,45 @@ static seen_t *seen_entry(const uint8_t *key, uint64_t counter, bool *again)
 
 /* ----- What they do ----- */
 
-static void play(uint8_t channels, const uint8_t *name, size_t len)
+/* The channels, as a whole: see others.h. A pattern that isn't here yet,
+ * they wait for: a custom one's definition comes in its parts. */
+static void set_vibe(const uint8_t *arg, size_t len)
 {
-    int pattern = -1;
-    if (len > 0)
-    {
-        for (size_t i = 0; i < patterns_count() && pattern < 0; i++)
-        {
-            const char *p = patterns_name(i);
-            if (strlen(p) == len && memcmp(p, name, len) == 0)
-            {
-                pattern = (int)i;
-            }
-        }
-        if (pattern < 0)
-        {
-            return;     // not one this board has
-        }
-    }
-    toys_play(channels, pattern);
-}
-
-/* As the Toys feature's React page, or the remote's, on those channels:
- * each channel follows a reaction of its own. */
-static void react(uint8_t channels, uint8_t mode)
-{
+    uint8_t channels = arg[0] & TOYS_ALL_CHANNELS;
+    uint16_t speed = (uint16_t)(arg[2] | (arg[3] << 8));
+    speed = speed < TOYS_SPEED_MIN ? TOYS_SPEED_MIN : speed > TOYS_SPEED_MAX ? TOYS_SPEED_MAX : speed;
+    uint8_t mode = arg[4];
     if (mode >= REACTIVE_COUNT || !reactive_available((reactive_mode_t)mode))
     {
         mode = REACTIVE_OFF;
     }
-    toys_react(channels, mode);
+    static const uint8_t none[PATTERNS_HASH_LEN];
+    int pattern = -1;
+    const uint8_t *waiting = NULL;
+    if (arg[5] == OTHERS_PATTERN_BUILT_IN)
+    {
+        pattern = patterns_built_in(arg + 6, len - 6);
+        waiting = pattern < 0 ? none : NULL;    // one this board hasn't got: held
+    }
+    else if (arg[5] == OTHERS_PATTERN_CUSTOM)
+    {
+        pattern = patterns_find(arg + 6);
+        waiting = pattern < 0 ? arg + 6 : NULL;
+    }
+    toys_set(channels, arg[1], speed, mode, pattern, waiting);
+}
+
+/* A part of a custom pattern's definition: once they're all here, the
+ * channels waiting for it start it. */
+static void pattern_part(const uint8_t *arg, size_t len)
+{
+    const uint8_t *hash = arg;
+    int pattern = patterns_part(hash, arg[PATTERNS_HASH_LEN], arg[PATTERNS_HASH_LEN + 1], arg + PATTERNS_HASH_LEN + 2,
+                                len - PATTERNS_HASH_LEN - 2, rcat_hal_millis());
+    if (pattern >= 0)
+    {
+        toys_pattern_came(hash, pattern);
+    }
 }
 
 /* On the Terminal, as its own controls would put it: as it is, added on a
@@ -322,13 +331,19 @@ static int kind_of(const uint8_t *what, size_t len)
     {
     case OTHERS_VIBE_STOP:
         return OTHERS_VIBE;
-    case OTHERS_VIBE_PATTERN:
-        return len >= 2 ? OTHERS_VIBE : -1;
-    case OTHERS_VIBE_LEVEL:
-    case OTHERS_VIBE_REACT:
-        return len >= 3 ? OTHERS_VIBE : -1;
-    case OTHERS_VIBE_SPEED:
-        return len >= 4 ? OTHERS_VIBE : -1;
+    case OTHERS_VIBE_SET:
+        // what to do (1), channels, level, speed (2), reaction, the pattern's kind, then the pattern
+        return len == 7 || (len > 7 && what[6] == OTHERS_PATTERN_BUILT_IN && len <= 7 + PATTERNS_NAME_MAX)
+                       || (len == 7 + PATTERNS_HASH_LEN && what[6] == OTHERS_PATTERN_CUSTOM)
+                   ? OTHERS_VIBE
+                   : -1;
+    case OTHERS_VIBE_PART:
+        // what to do (1), the hash, which part, how many, then that part
+        return len > 3 + PATTERNS_HASH_LEN && what[1 + PATTERNS_HASH_LEN] < what[2 + PATTERNS_HASH_LEN]
+                       && what[2 + PATTERNS_HASH_LEN] <= PATTERNS_PARTS_MAX
+                       && len - 3 - PATTERNS_HASH_LEN <= PATTERNS_PART_MAX
+                   ? OTHERS_VIBE
+                   : -1;
     case OTHERS_MESSAGE:
         return len > 3 ? OTHERS_TERMINAL : -1;
     case OTHERS_CLEAR:
@@ -357,17 +372,11 @@ static void run(const uint8_t *what, size_t len)
     case OTHERS_VIBE_STOP:
         toys_stop_all();
         break;
-    case OTHERS_VIBE_LEVEL:
-        toys_set_level(arg[0] & TOYS_ALL_CHANNELS, arg[1]);
+    case OTHERS_VIBE_SET:
+        set_vibe(arg, len - 1);
         break;
-    case OTHERS_VIBE_PATTERN:
-        play(arg[0] & TOYS_ALL_CHANNELS, arg + 1, len - 2);
-        break;
-    case OTHERS_VIBE_SPEED:
-        toys_set_speed(arg[0] & TOYS_ALL_CHANNELS, (uint16_t)(arg[1] | (arg[2] << 8)));
-        break;
-    case OTHERS_VIBE_REACT:
-        react(arg[0] & TOYS_ALL_CHANNELS, arg[1]);
+    case OTHERS_VIBE_PART:
+        pattern_part(arg, len - 1);
         break;
     case OTHERS_MESSAGE:
         show_message(arg[0], arg[1], arg + 2, len - 3);
@@ -494,8 +503,10 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
     sender_t *sender = find(key);
     if (!again)
     {
-        // A text may come a little behind; anything else must be newer
-        bool text = which == OTHERS_KIND_COUNT;
+        // A text, or a pattern's part, may come a little behind (a part's
+        // checked by its hash, so one again does no harm); anything else
+        // must be newer
+        bool text = which == OTHERS_KIND_COUNT || what[0] == OTHERS_VIBE_PART;
         uint64_t last = sender != NULL ? sender->counter : 0;
         uint64_t oldest = text ? (last > OTHERS_TEXT_WINDOW_MS ? last - OTHERS_TEXT_WINDOW_MS : 0) : last;
         if (sender != NULL && counter <= oldest)

@@ -288,8 +288,10 @@
  *  15  the phone's mic in place of the board's (0x18 from the phone), and
  *      the talk button or screen held for it (0x18 to the phone)
  *  16  the wearer's rules from the app (0x10 rules, in place of who's
- *      muted), with /version's "rules" and "edited", and GET /api/rules */
-#define COMM_VERSION            16
+ *      muted), with /version's "rules" and "edited", and GET /api/rules
+ *  17  Vibe toys set as a whole (others.h 0x41), and custom patterns sent
+ *      in parts (0x45) */
+#define COMM_VERSION            17
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

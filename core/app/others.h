@@ -53,17 +53,26 @@
  *   E-stim and 0x60 to 0x6F Machines (those two to come). Channels are a
  *   byte with a bit for each, V1 the lowest (toys.h). For Vibe toys:
  *     40 stop:     stop every channel, as the Stop button, reactions too
- *     41 level:    41, the channels, the level (0 to 20, scaled to each
- *                  output's own range): the channels together, as one
- *     42 pattern:  42, the channels, then the pattern's name, in UTF-8:
- *                  played on them, in step, if this board has one by that
- *                  name; no name stops their patterns
- *     43 speed:    43, the channels, how fast their patterns play, in
- *                  percent (2 bytes, little endian, 25 to 300): each
- *                  channel has its own
- *     44 react:    44, the channels, the reaction (reactive_mode_t, 0 for
- *                  none): to this board's wearer, if it can sense it. There's
- *                  one reaction for every channel that follows it.
+ *     41 set:      41, the channels, the level (0 to 20, scaled to each
+ *                  output's own range), how fast their pattern plays, in
+ *                  percent (2 bytes, little endian, 25 to 300), the
+ *                  reaction (reactive_mode_t, 0 for none: to this board's
+ *                  wearer, if it can sense it), the pattern's kind
+ *                  (OTHERS_PATTERN_*), then the pattern: for a built-in one,
+ *                  its name, in UTF-8; for a custom one, its hash
+ *                  (patterns.h). The channels, as a whole, together: see
+ *                  toys_set(). A channel already playing the pattern keeps
+ *                  its place in it. One this board hasn't got, they hold
+ *                  at 0 for, till it comes.
+ *     45 pattern part: 45, a custom pattern's hash, which part it is
+ *                  (from 0), how many parts (up to 6), then that part of
+ *                  its definition (patterns.h), PATTERNS_PART_MAX bytes in
+ *                  each but the last. Its sender sends them before the
+ *                  set that plays it, and again now and then while it
+ *                  plays, for anyone who missed them; once they're all
+ *                  here, and come to the hash, it's kept, and the channels
+ *                  waiting for it start it. They're taken from whoever's
+ *                  allowed Vibe toys.
  *   For the Display unit's Terminal, as its own controls (and the remote's)
  *   do:
  *     10 message:  10, flags (bit 0 add it on a line of its own after
@@ -83,9 +92,9 @@
  * one was lost, is only done once: by its sender's key and counter. A
  * command whose counter is no more than the last done from someone listed
  * is a replay, and dropped. Texts (and their parts), which only go to the
- * app, may come out of order, as the copies of a long text's parts are
- * spread out: one is taken if it's no more than OTHERS_TEXT_WINDOW_MS older
- * than that, and hasn't been seen.
+ * app, and patterns' parts, may come out of order, as the copies of many
+ * parts are spread out: one is taken if it's no more than
+ * OTHERS_TEXT_WINDOW_MS older than that, and hasn't been seen.
  */
 
 #include <stdbool.h>
@@ -112,10 +121,11 @@
 #define OTHERS_INVITE           0x31    // an invitation to a direct channel, sealed for the app
 #define OTHERS_REACTION         0x32    // a reaction to a message, for the app: its id (8), an emoji
 #define OTHERS_VIBE_STOP        0x40    // Vibe toys
-#define OTHERS_VIBE_LEVEL       0x41
-#define OTHERS_VIBE_PATTERN     0x42
-#define OTHERS_VIBE_SPEED       0x43
-#define OTHERS_VIBE_REACT       0x44
+#define OTHERS_VIBE_SET         0x41
+#define OTHERS_VIBE_PART        0x45
+#define OTHERS_PATTERN_NONE     0       // a set's pattern's kind: none, a steady level
+#define OTHERS_PATTERN_BUILT_IN 1       // by its name
+#define OTHERS_PATTERN_CUSTOM   2       // by its hash
 #define OTHERS_MESSAGE_APPEND   0x01    // a message's flags: on a line of its own after what's there
 #define OTHERS_MESSAGE_SHOW     0x02    // and bring the Terminal on screen
 

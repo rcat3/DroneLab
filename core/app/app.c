@@ -214,7 +214,7 @@ void app_run(void)
     audio_level_start();                // does nothing on boards without a microphone
     audio_player_init(storage_path);    // or a speaker
     voice_lab_init(storage_path);
-    patterns_init(storage_path);        // for the toys
+    patterns_init();                    // for the toys
     toys_init();
     rules_init();                       // the wearer's rules, from their app: lays out the toys
     others_init();                      // commands from others, over the comm channel

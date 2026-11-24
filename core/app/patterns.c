@@ -1,59 +1,66 @@
 /*
- * Built-in patterns, and patterns loaded from the card (see patterns.h for
- * the file format).
+ * The patterns (see patterns.h): the built-in ones, worked out from the time
+ * as they play, and custom ones, from their definitions.
  *
- * The built-in ones are worked out from the time as they play, so they cost
- * no memory. Some run the even channels (V2, V4, V6) half a cycle behind the
- * odd ones, so a pattern played on two channels takes turns.
+ * The slots, and every custom pattern's levels, are out of internal RAM,
+ * which WiFi and Bluetooth need.
  */
 #include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-
-#if RCAT_HAVE_FILESYSTEM
-#include <dirent.h>
-#include <strings.h>
-#endif
 
 #include "app/patterns.h"
 #include "lvgl.h"
+#include "mbedtls/sha256.h"
 
-#define MAX_PATTERNS        32
-#define MAX_NAME            24
-#define MAX_BLOCKS          4       // separately repeating parts of one file
-#define MAX_TARGETS         6       // channels one part can drive
-#define MAX_STEPS           4096    // levels in one part
-#define MAX_FILE_BYTES      32768
 #define MIN_STEP_MS         100     // Lovense's own patterns go no faster
+#define MAX_STEP_MS         60000
+#define TOP                 20      // a step's highest level
+#define ASSEMBLING          2       // definitions coming in parts at once
+#define ASSEMBLY_MS         90000   // how long one's parts may take to come
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
-typedef float (*generator_t)(uint8_t channel, float seconds);
+typedef float (*generator_t)(uint8_t row, float seconds);
 
 typedef struct
 {
     uint16_t step_ms;
-    uint8_t target_count;   // 0 drives every channel
-    uint8_t targets[MAX_TARGETS];   // channels, 0 for V1, or ALL_CHANNELS
+    uint8_t rows;               // a bit for each, 0 for all of them
     uint16_t step_count;
-    uint8_t *steps;         // 0 to 20
+    const uint8_t *steps;       // 0 to TOP, in the pattern's levels
 } block_t;
 
 typedef struct
 {
-    char name[MAX_NAME];
-    generator_t generator;  // for a built-in one, otherwise NULL
+    char name[PATTERNS_NAME_MAX + 1];
+    generator_t generator;      // for a built-in one, otherwise NULL
+    bool used;
+    uint8_t hash[PATTERNS_HASH_LEN];
+    uint32_t played;            // when it was last found, for which to keep
     uint8_t block_count;
-    block_t blocks[MAX_BLOCKS];
+    block_t blocks[PATTERNS_ROWS];
+    uint8_t *levels;            // every block's steps
 } pattern_t;
 
-static pattern_t patterns[MAX_PATTERNS];
-static size_t pattern_count;
+typedef struct
+{
+    bool used;
+    uint8_t hash[PATTERNS_HASH_LEN];
+    uint8_t count;
+    uint8_t got;                // a bit for each part that's come
+    uint8_t lens[PATTERNS_PARTS_MAX];
+    uint32_t started;
+    uint8_t data[PATTERNS_DEF_MAX];
+} assembly_t;
 
-#define ALL_CHANNELS        0xFF
+static pattern_t *patterns;     // PATTERNS_SLOTS of them
+static assembly_t *assembly;    // ASSEMBLING of them
+static size_t favourite_count;
+static uint32_t changes;
+static uint32_t finds;          // counts finds, for which was played last
 
 /* ----- Built-in patterns, each 0 to 1 over time ----- */
 
@@ -62,24 +69,25 @@ static float wrap(float x, float period)
     return x - period * floorf(x / period);
 }
 
-/* Half a cycle later on the even channels, so two channels take turns. */
-static float offset(uint8_t channel, float period)
+/* Half a cycle later on the second, fourth and sixth rows, so two channels
+ * take turns. */
+static float offset(uint8_t row, float period)
 {
-    return (channel % 2) ? period / 2 : 0;
+    return (row % 2) ? period / 2 : 0;
 }
 
-static float gen_pulse(uint8_t channel, float s)
+static float gen_pulse(uint8_t row, float s)
 {
-    return wrap(s + offset(channel, 0.8f), 0.8f) < 0.4f ? 1.0f : 0.0f;
+    return wrap(s + offset(row, 0.8f), 0.8f) < 0.4f ? 1.0f : 0.0f;
 }
 
-static float gen_wave(uint8_t channel, float s)
+static float gen_wave(uint8_t row, float s)
 {
-    float p = wrap(s + offset(channel, 4.0f), 4.0f) / 4.0f;
+    float p = wrap(s + offset(row, 4.0f), 4.0f) / 4.0f;
     return 0.5f - 0.5f * cosf(2 * (float)M_PI * p);
 }
 
-static float gen_heartbeat(uint8_t channel, float s)
+static float gen_heartbeat(uint8_t row, float s)
 {
     // Two beats, the second softer, then a rest
     float p = wrap(s, 1.1f);
@@ -91,13 +99,13 @@ static float gen_heartbeat(uint8_t channel, float s)
     return beat > 1.0f ? 1.0f : beat;
 }
 
-static float gen_climb(uint8_t channel, float s)
+static float gen_climb(uint8_t row, float s)
 {
     // Up over eight seconds, then drop back
     return wrap(s, 8.0f) / 8.0f;
 }
 
-static float gen_surge(uint8_t channel, float s)
+static float gen_surge(uint8_t row, float s)
 {
     // Waves that grow for twenty seconds, then a short rest
     float p = wrap(s, 23.0f);
@@ -106,314 +114,338 @@ static float gen_surge(uint8_t channel, float s)
         return 0.0f;
     }
     float swell = 0.25f + 0.75f * p / 20.0f;
-    return swell * (0.55f + 0.45f * sinf(2 * (float)M_PI * (p + offset(channel, 1.5f)) / 1.5f));
+    return swell * (0.55f + 0.45f * sinf(2 * (float)M_PI * (p + offset(row, 1.5f)) / 1.5f));
 }
 
 /* Smooth noise: random levels a third of a second apart, eased between. */
-static float noise_at(uint32_t n, uint8_t channel)
+static float noise_at(uint32_t n, uint8_t row)
 {
-    uint32_t h = n * 2654435761u + channel * 40503u;
+    uint32_t h = n * 2654435761u + row * 40503u;
     h ^= h >> 15;
     h *= 2246822519u;
     h ^= h >> 13;
     return (h & 0xFFFF) / 65535.0f;
 }
 
-static float gen_wander(uint8_t channel, float s)
+static float gen_wander(uint8_t row, float s)
 {
     float x = s * 3.0f;
     uint32_t n = (uint32_t)x;
     float f = x - n;
     f = f * f * (3 - 2 * f);
-    return noise_at(n, channel) + (noise_at(n + 1, channel) - noise_at(n, channel)) * f;
+    return noise_at(n, row) + (noise_at(n + 1, row) - noise_at(n, row)) * f;
 }
 
-static void add_builtin(const char *name, generator_t generator)
+static const struct
 {
-    if (pattern_count < MAX_PATTERNS)
-    {
-        pattern_t *p = &patterns[pattern_count++];
-        memset(p, 0, sizeof(*p));
-        strncpy(p->name, name, MAX_NAME - 1);
-        p->generator = generator;
-    }
-}
+    const char *name;
+    generator_t generator;
+} built_in[PATTERNS_BUILT_IN] = {
+    { "Wave", gen_wave },
+    { "Pulse", gen_pulse },
+    { "Heartbeat", gen_heartbeat },
+    { "Climb", gen_climb },
+    { "Surge", gen_surge },
+    { "Wander", gen_wander },
+};
 
-/* ----- Pattern files ----- */
-
-#if RCAT_HAVE_FILESYSTEM
-
-/* One of F's motors, e.g. "v2": the number is the channel, V2, whatever
- * the letter; with none, it's every channel. The letter's only checked,
- * as channels can drive any kind of output. */
-static bool parse_target(const char *s, size_t len, uint8_t *channel)
+void patterns_init(void)
 {
-    if (len == 0 || strchr("vrptfo", s[0]) == NULL)
+    patterns = lv_malloc(PATTERNS_SLOTS * sizeof(pattern_t));
+    assembly = lv_malloc(ASSEMBLING * sizeof(assembly_t));
+    if (patterns == NULL || assembly == NULL)
     {
-        return false;   // s (suction) and d (depth): nothing here has them
-    }
-    int n = len > 1 ? atoi(s + 1) : 0;
-    if (n < 0 || n > TOYS_CHANNELS)
-    {
-        return false;
-    }
-    *channel = n == 0 ? ALL_CHANNELS : (uint8_t)(n - 1);
-    return true;
-}
-
-/* The header, e.g. "V:1;F:v,r;S:100". */
-static bool parse_header(const char *s, size_t len, block_t *b)
-{
-    b->step_ms = 1000;
-    b->target_count = 0;
-    bool any_target_listed = false;
-    size_t i = 0;
-    while (i < len)
-    {
-        size_t end = i;
-        while (end < len && s[end] != ';')
-        {
-            end++;
-        }
-        if (end - i >= 2 && s[i + 1] == ':')
-        {
-            const char *value = s + i + 2;
-            size_t value_len = end - i - 2;
-            switch (s[i])
-            {
-            case 'S':
-            case 's':
-                b->step_ms = (uint16_t)LV_CLAMP(MIN_STEP_MS, atoi(value), 60000);
-                break;
-            case 'F':
-            case 'f':
-                for (size_t j = 0; j < value_len;)
-                {
-                    size_t k = j;
-                    while (k < value_len && value[k] != ',')
-                    {
-                        k++;
-                    }
-                    any_target_listed |= k > j;
-                    if (b->target_count < MAX_TARGETS && parse_target(value + j, k - j, &b->targets[b->target_count]))
-                    {
-                        b->target_count++;
-                    }
-                    j = k + 1;
-                }
-                break;
-            default:
-                break;  // V, the version
-            }
-        }
-        i = end + 1;
-    }
-    // Only motors this doesn't support, e.g. suction: leave the part out.
-    return !(any_target_listed && b->target_count == 0);
-}
-
-static bool load_file(const char *path, const char *name)
-{
-    FILE *f = fopen(path, "rb");
-    if (f == NULL)
-    {
-        return false;
-    }
-    char *text = lv_malloc(MAX_FILE_BYTES + 1);
-    uint8_t *steps = lv_malloc(MAX_STEPS);
-    if (text == NULL || steps == NULL)
-    {
-        fclose(f);
-        lv_free(text);
-        lv_free(steps);
-        return false;
-    }
-    size_t len = fread(text, 1, MAX_FILE_BYTES, f);
-    fclose(f);
-    text[len] = '\0';
-
-    pattern_t *p = &patterns[pattern_count];
-    memset(p, 0, sizeof(*p));
-    snprintf(p->name, MAX_NAME, "%s", name);
-
-    // Each part: a header up to '#', then levels up to the next header.
-    const char *c = text;
-    while (*c != '\0' && p->block_count < MAX_BLOCKS)
-    {
-        const char *hash = strchr(c, '#');
-        if (hash == NULL)
-        {
-            break;
-        }
-        // The header starts at the last "V:" before the '#'.
-        const char *header = c;
-        for (const char *h = c; h < hash; h++)
-        {
-            if ((h[0] == 'V' || h[0] == 'v') && h[1] == ':')
-            {
-                header = h;
-            }
-        }
-        block_t b;
-        bool wanted = parse_header(header, (size_t)(hash - header), &b);
-
-        size_t count = 0;
-        c = hash + 1;
-        while (*c != '\0' && !((c[0] == 'V' || c[0] == 'v') && c[1] == ':'))
-        {
-            if (*c >= '0' && *c <= '9')
-            {
-                int value = (int)strtol(c, (char **)&c, 10);
-                if (count < MAX_STEPS)
-                {
-                    steps[count++] = (uint8_t)LV_CLAMP(0, value, 20);
-                }
-            }
-            else
-            {
-                c++;    // ';', spaces and line breaks
-            }
-        }
-        if (wanted && count > 0)
-        {
-            b.step_count = (uint16_t)count;
-            b.steps = lv_malloc(count);
-            if (b.steps != NULL)
-            {
-                memcpy(b.steps, steps, count);
-                p->blocks[p->block_count++] = b;
-            }
-        }
-    }
-    lv_free(text);
-    lv_free(steps);
-
-    if (p->block_count == 0)
-    {
-        printf("patterns: nothing to play in %s\n", path);
-        return false;
-    }
-    pattern_count++;
-    return true;
-}
-
-static int compare_names(const void *a, const void *b)
-{
-    return strcasecmp(*(const char *const *)a, *(const char *const *)b);
-}
-
-static void load_folder(const char *storage_path)
-{
-    char folder[128];
-    snprintf(folder, sizeof(folder), "%s/%s", storage_path, PATTERNS_FOLDER);
-    DIR *dir = opendir(folder);
-    if (dir == NULL)
-    {
+        lv_free(patterns);
+        lv_free(assembly);
+        patterns = NULL;
+        assembly = NULL;
+        printf("patterns: no memory for them\n");
         return;
     }
-    char *names[MAX_PATTERNS];
-    size_t name_count = 0;
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL && name_count < MAX_PATTERNS)
+    memset(patterns, 0, PATTERNS_SLOTS * sizeof(pattern_t));
+    memset(assembly, 0, ASSEMBLING * sizeof(assembly_t));
+    for (size_t i = 0; i < PATTERNS_BUILT_IN; i++)
     {
-        const char *dot = strrchr(entry->d_name, '.');
-        if (entry->d_name[0] != '.' && dot != NULL && (strcasecmp(dot, ".txt") == 0 || strcasecmp(dot, ".pat") == 0))
-        {
-            names[name_count++] = strdup(entry->d_name);
-        }
+        snprintf(patterns[i].name, sizeof(patterns[i].name), "%s", built_in[i].name);
+        patterns[i].generator = built_in[i].generator;
+        patterns[i].used = true;
     }
-    closedir(dir);
-    qsort(names, name_count, sizeof(names[0]), compare_names);
-
-    for (size_t i = 0; i < name_count; i++)
-    {
-        if (names[i] == NULL)
-        {
-            continue;
-        }
-        if (pattern_count < MAX_PATTERNS)
-        {
-            char path[192];
-            char name[MAX_NAME];
-            snprintf(path, sizeof(path), "%s/%s", folder, names[i]);
-            snprintf(name, sizeof(name), "%.*s", (int)(strrchr(names[i], '.') - names[i]), names[i]);
-            if (load_file(path, name))
-            {
-                printf("patterns: loaded %s\n", names[i]);
-            }
-        }
-        free(names[i]);
-    }
-}
-
-#endif  // RCAT_HAVE_FILESYSTEM
-
-void patterns_init(const char *storage_path)
-{
-    pattern_count = 0;
-    add_builtin("Wave", gen_wave);
-    add_builtin("Pulse", gen_pulse);
-    add_builtin("Heartbeat", gen_heartbeat);
-    add_builtin("Climb", gen_climb);
-    add_builtin("Surge", gen_surge);
-    add_builtin("Wander", gen_wander);
-#if RCAT_HAVE_FILESYSTEM
-    if (storage_path != NULL)
-    {
-        load_folder(storage_path);
-    }
-#else
-    (void)storage_path;
-#endif
 }
 
 size_t patterns_count(void)
 {
-    return pattern_count;
+    return patterns != NULL ? PATTERNS_BUILT_IN + favourite_count : 0;
 }
 
 const char *patterns_name(size_t index)
 {
-    return index < pattern_count ? patterns[index].name : "";
+    return patterns != NULL && index < PATTERNS_SLOTS && patterns[index].used ? patterns[index].name : "";
 }
 
-static bool block_drives(const block_t *b, uint8_t channel)
+int patterns_built_in(const uint8_t *name, size_t len)
 {
-    if (b->target_count == 0)
+    for (size_t i = 0; patterns != NULL && i < PATTERNS_BUILT_IN; i++)
     {
-        return true;
-    }
-    for (uint8_t i = 0; i < b->target_count; i++)
-    {
-        if (b->targets[i] == ALL_CHANNELS || b->targets[i] == channel)
+        if (strlen(patterns[i].name) == len && memcmp(patterns[i].name, name, len) == 0)
         {
-            return true;
+            return (int)i;
         }
     }
-    return false;
+    return -1;
 }
 
-float patterns_level(size_t index, uint8_t channel, uint32_t t_ms)
+int patterns_find(const uint8_t hash[PATTERNS_HASH_LEN])
 {
-    if (index >= pattern_count)
+    for (size_t i = PATTERNS_BUILT_IN; patterns != NULL && i < PATTERNS_SLOTS; i++)
+    {
+        if (patterns[i].used && memcmp(patterns[i].hash, hash, PATTERNS_HASH_LEN) == 0)
+        {
+            patterns[i].played = ++finds;
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+void patterns_hash(const uint8_t *def, size_t len, uint8_t out[PATTERNS_HASH_LEN])
+{
+    uint8_t full[32];
+    mbedtls_sha256(def, len, full, 0);
+    memcpy(out, full, PATTERNS_HASH_LEN);
+}
+
+uint32_t patterns_changes(void)
+{
+    return changes;
+}
+
+/* ----- Definitions ----- */
+
+static uint16_t le16(const uint8_t *p)
+{
+    return (uint16_t)(p[0] | (p[1] << 8));
+}
+
+/* A definition, into a slot: false if it's no good. */
+static bool decode(const uint8_t *d, size_t len, pattern_t *p)
+{
+    if (len < 3 || d[0] != PATTERNS_FORMAT || d[1] == 0 || d[1] > PATTERNS_NAME_MAX)
+    {
+        return false;
+    }
+    size_t at = 2 + d[1];
+    if (at >= len || d[at] == 0 || d[at] > PATTERNS_ROWS)
+    {
+        return false;
+    }
+    uint8_t block_count = d[at++];
+
+    // How many steps in all, checking it adds up to the end
+    size_t total = 0;
+    size_t scan = at;
+    for (uint8_t b = 0; b < block_count; b++)
+    {
+        if (scan + 5 > len)
+        {
+            return false;
+        }
+        uint16_t count = le16(d + scan + 3);
+        if (count == 0)
+        {
+            return false;
+        }
+        scan += 5 + (5u * count + 7) / 8;
+        total += count;
+    }
+    if (scan != len)
+    {
+        return false;
+    }
+
+    uint8_t *levels = lv_malloc(total);
+    if (levels == NULL)
+    {
+        return false;
+    }
+    memset(p, 0, sizeof(*p));
+    memcpy(p->name, d + 2, d[1]);
+    p->name[d[1]] = '\0';
+    p->levels = levels;
+    p->block_count = block_count;
+    size_t out = 0;
+    for (uint8_t b = 0; b < block_count; b++)
+    {
+        block_t *k = &p->blocks[b];
+        k->step_ms = (uint16_t)LV_CLAMP(MIN_STEP_MS, le16(d + at), MAX_STEP_MS);
+        k->rows = d[at + 2];
+        k->step_count = le16(d + at + 3);
+        k->steps = levels + out;
+        at += 5;
+        // 5 bits a level, the lowest first
+        uint32_t bits = 0;
+        int have = 0;
+        for (uint16_t s = 0; s < k->step_count; s++)
+        {
+            while (have < 5)
+            {
+                bits |= (uint32_t)d[at++] << have;
+                have += 8;
+            }
+            uint8_t v = bits & 0x1F;
+            bits >>= 5;
+            have -= 5;
+            levels[out++] = v > TOP ? TOP : v;
+        }
+    }
+    p->used = true;
+    return true;
+}
+
+static void free_slot(pattern_t *p)
+{
+    lv_free(p->levels);
+    memset(p, 0, sizeof(*p));
+}
+
+/* A slot for one received: an empty one, or the one played longest ago that
+ * isn't playing now. */
+static int received_slot(void)
+{
+    int best = -1;
+    for (int i = PATTERNS_RECEIVED_AT; i < PATTERNS_SLOTS; i++)
+    {
+        if (!patterns[i].used)
+        {
+            return i;
+        }
+        if (!toys_pattern_in_use(i) && (best < 0 || patterns[i].played < patterns[best].played))
+        {
+            best = i;
+        }
+    }
+    return best;
+}
+
+static int keep(const uint8_t hash[PATTERNS_HASH_LEN], const uint8_t *def, size_t len)
+{
+    int slot = received_slot();
+    if (slot < 0)
+    {
+        printf("patterns: no room for another\n");
+        return -1;
+    }
+    pattern_t decoded;
+    if (!decode(def, len, &decoded))
+    {
+        printf("patterns: one sent was no good\n");
+        return -1;
+    }
+    free_slot(&patterns[slot]);
+    patterns[slot] = decoded;
+    memcpy(patterns[slot].hash, hash, PATTERNS_HASH_LEN);
+    patterns[slot].played = ++finds;
+    printf("patterns: got \"%s\"\n", patterns[slot].name);
+    return slot;
+}
+
+int patterns_part(const uint8_t hash[PATTERNS_HASH_LEN], uint8_t part, uint8_t count, const uint8_t *data, size_t len,
+                  uint32_t now_ms)
+{
+    if (patterns == NULL || count == 0 || count > PATTERNS_PARTS_MAX || part >= count || len > PATTERNS_PART_MAX)
+    {
+        return -1;
+    }
+    int found = patterns_find(hash);
+    if (found >= 0)
+    {
+        return found;
+    }
+
+    // Its own, or an empty one, or one that's taken too long, or the oldest
+    assembly_t *a = NULL;
+    for (int i = 0; i < ASSEMBLING && a == NULL; i++)
+    {
+        if (assembly[i].used && memcmp(assembly[i].hash, hash, PATTERNS_HASH_LEN) == 0)
+        {
+            a = &assembly[i];
+        }
+    }
+    if (a == NULL)
+    {
+        a = &assembly[0];
+        for (int i = 0; i < ASSEMBLING; i++)
+        {
+            assembly_t *b = &assembly[i];
+            if (!b->used || now_ms - b->started > ASSEMBLY_MS)
+            {
+                a = b;
+                break;
+            }
+            if ((int32_t)(b->started - a->started) < 0)
+            {
+                a = b;
+            }
+        }
+        memset(a, 0, offsetof(assembly_t, data));
+        a->used = true;
+        memcpy(a->hash, hash, PATTERNS_HASH_LEN);
+        a->count = count;
+        a->started = now_ms;
+    }
+    if (a->count != count)
+    {
+        return -1;
+    }
+    memcpy(a->data + (size_t)part * PATTERNS_PART_MAX, data, len);
+    a->lens[part] = (uint8_t)len;
+    a->got |= 1u << part;
+    if (a->got != (1u << count) - 1)
+    {
+        return -1;
+    }
+
+    // All here: put it together, every part but the last full
+    a->used = false;
+    size_t total = 0;
+    for (uint8_t i = 0; i < count; i++)
+    {
+        if (i + 1 < count && a->lens[i] != PATTERNS_PART_MAX)
+        {
+            return -1;
+        }
+        total += a->lens[i];
+    }
+    uint8_t check[PATTERNS_HASH_LEN];
+    patterns_hash(a->data, total, check);
+    if (memcmp(check, hash, PATTERNS_HASH_LEN) != 0)
+    {
+        printf("patterns: one sent didn't come to its hash\n");
+        return -1;
+    }
+    return keep(hash, a->data, total);
+}
+
+/* ----- Playing ----- */
+
+float patterns_level(size_t index, uint8_t row, uint32_t t_ms)
+{
+    if (patterns == NULL || index >= PATTERNS_SLOTS || !patterns[index].used)
     {
         return -1;
     }
     const pattern_t *p = &patterns[index];
     if (p->generator != NULL)
     {
-        return p->generator(channel, t_ms / 1000.0f);
+        return p->generator(row, t_ms / 1000.0f);
     }
-
-    // The last part that drives this channel wins.
     float level = -1;
     for (uint8_t i = 0; i < p->block_count; i++)
     {
         const block_t *b = &p->blocks[i];
-        if (block_drives(b, channel))
+        if (b->rows == 0 || (b->rows & (1u << row)))
         {
             uint32_t step = (t_ms / b->step_ms) % b->step_count;
-            level = b->steps[step] / 20.0f;
+            level = b->steps[step] / (float)TOP;
         }
     }
     return level;

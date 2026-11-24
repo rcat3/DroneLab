@@ -38,6 +38,9 @@ typedef struct
 {
     toy_channel_t pub;
     uint32_t pattern_ms;            // how far into its pattern it is, at the pattern's own speed
+    uint8_t row;                    // the pattern's row it plays: its place among the channels it was played on
+    bool waiting;                   // for a pattern to come, held at 0 till then
+    uint8_t wait_for[PATTERNS_HASH_LEN];
 } channel_t;
 
 static slot_t slots[TOYS_MAX_DEVICES];
@@ -217,7 +220,19 @@ const toy_channel_t *toys_channel(uint8_t channel)
 
 bool toys_driven(uint8_t channel)
 {
-    return channel < TOYS_CHANNELS && (channels[channel].pub.pattern >= 0 || channels[channel].pub.react != 0);
+    return channel < TOYS_CHANNELS
+           && (channels[channel].pub.pattern >= 0 || channels[channel].pub.react != 0 || channels[channel].waiting);
+}
+
+/* A channel's place among [mask]'s: 0 for the lowest. */
+static uint8_t row_in(uint8_t mask, uint8_t channel)
+{
+    uint8_t row = 0;
+    for (uint8_t c = 0; c < channel; c++)
+    {
+        row += (mask >> c) & 1;
+    }
+    return row;
 }
 
 uint32_t toys_reactions(void)
@@ -283,6 +298,7 @@ void toys_play(uint8_t mask, int pattern)
         {
             continue;
         }
+        ch->waiting = false;
         if (pattern < 0)
         {
             // Stopped. Following a reaction, it carries on at its level.
@@ -299,7 +315,76 @@ void toys_play(uint8_t mask, int pattern)
         }
         ch->pub.pattern = pattern;
         ch->pattern_ms = 0;     // those played on together, in step
+        ch->row = row_in(mask, c);
     }
+}
+
+void toys_set(uint8_t mask, uint8_t level, uint16_t speed, uint8_t react, int pattern, const uint8_t *waiting)
+{
+    if (pattern >= PATTERNS_SLOTS || waiting != NULL)
+    {
+        pattern = -1;
+    }
+    mask &= TOYS_ALL_CHANNELS;
+    // Where the channels already playing it are, for those starting it
+    bool in_step = false;
+    uint32_t place = 0;
+    for (uint8_t c = 0; c < TOYS_CHANNELS && pattern >= 0 && !in_step; c++)
+    {
+        if ((mask & (1u << c)) && channels[c].pub.pattern == pattern)
+        {
+            in_step = true;
+            place = channels[c].pattern_ms;
+        }
+    }
+    toys_set_level(mask, level);
+    toys_set_speed(mask, speed);
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
+    {
+        channel_t *ch = &channels[c];
+        if (!(mask & (1u << c)))
+        {
+            continue;
+        }
+        ch->pub.react = react < REACTIVE_COUNT ? react : REACTIVE_OFF;
+        ch->row = row_in(mask, c);
+        ch->waiting = waiting != NULL;
+        if (waiting != NULL)
+        {
+            memcpy(ch->wait_for, waiting, PATTERNS_HASH_LEN);
+        }
+        if (pattern >= 0 && ch->pub.pattern != pattern)
+        {
+            ch->pattern_ms = in_step ? place : 0;
+        }
+        ch->pub.pattern = pattern;
+    }
+}
+
+void toys_pattern_came(const uint8_t *hash, int pattern)
+{
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
+    {
+        channel_t *ch = &channels[c];
+        if (ch->waiting && memcmp(ch->wait_for, hash, PATTERNS_HASH_LEN) == 0)
+        {
+            ch->waiting = false;
+            ch->pub.pattern = pattern;
+            ch->pattern_ms = 0;     // all that waited for it, in step
+        }
+    }
+}
+
+bool toys_pattern_in_use(int pattern)
+{
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
+    {
+        if (channels[c].pub.pattern == pattern)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 void toys_react(uint8_t mask, uint8_t mode)
@@ -359,6 +444,7 @@ void toys_stop_all(void)
         channels[c].pub.out = 0;
         channels[c].pub.pattern = -1;
         channels[c].pub.react = REACTIVE_OFF;
+        channels[c].waiting = false;
     }
 }
 
@@ -374,11 +460,16 @@ static void run_channels(uint32_t dt_ms)
             ch->pub.out = ch->pub.level;
             continue;
         }
+        if (ch->waiting)
+        {
+            ch->pub.out = 0;    // held till its pattern comes
+            continue;
+        }
         float v = 1;
         if (ch->pub.pattern >= 0)
         {
             ch->pattern_ms += dt_ms * ch->pub.speed / 100;
-            v = patterns_level((size_t)ch->pub.pattern, c, ch->pattern_ms);
+            v = patterns_level((size_t)ch->pub.pattern, ch->row, ch->pattern_ms);
         }
         if (ch->pub.react != 0)
         {
