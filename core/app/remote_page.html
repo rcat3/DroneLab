@@ -193,13 +193,6 @@ body:not(.toys) #stop { display: none; }
   <div class="list" id="devices"></div>
   <button id="search" style="width:100%">Search</button>
 
-  <div id="others0-box" hidden>
-    <h2>From others</h2>
-    <div class="chips" id="permission0"></div>
-    <div class="toggles" id="ignore0" style="margin-bottom:10px"></div>
-    <div class="list" id="others0"></div>
-    <div class="status" id="others0-status"></div>
-  </div>
 </section>
 
 <section class="tab" id="tab-sound">
@@ -280,13 +273,6 @@ body:not(.toys) #stop { display: none; }
   <div class="muted" id="size-note" style="margin-top:8px;font-size:13px"></div>
   <h2>Sent</h2>
   <div class="history" id="history"></div>
-  <div id="others1-box" hidden>
-    <h2>From others</h2>
-    <div class="chips" id="permission1"></div>
-    <div class="toggles" id="ignore1" style="margin-bottom:10px"></div>
-    <div class="list" id="others1"></div>
-    <div class="status" id="others1-status"></div>
-  </div>
 </section>
 
 <!-- Always the last tab -->
@@ -663,45 +649,6 @@ function showDevices() {
   $("search").classList.toggle("on", !!state.scan);
 }
 
-// Commands from others in the comm channel, for Vibe toys (kind 0, on the
-// Toys tab) and the Terminal (kind 1): who may send them
-const othersAbout = ["commands", "messages"];
-function showOthers(kind) {
-  const o = state.others && state.others[kind];
-  $("others" + kind + "-box").hidden = !o;
-  if (!o) return;
-  const box = $("others" + kind);
-  box.replaceChildren();
-  for (const p of o.senders) {
-    const b = el("button", p.allowed ? "ok" : "");
-    // Who they are is their key: its id, and a warning if they took the
-    // name of someone listed before them
-    b.append(el("span", "", (p.clash ? "⚠ " : "") + p.name),
-      el("span", "muted", p.id.slice(0, 8) + (p.allowed ? "  ✓" : "")));
-    if (p.clash) b.title = "Not the " + p.name + " listed before: someone else using the name";
-    b.onclick = () => command("others", { kind, id: p.id, allow: p.allowed ? 0 : 1 });
-    b.oncontextmenu = e => {
-      e.preventDefault();
-      if (confirm("Forget " + p.name + " (" + p.id.slice(0, 8) + ")?")) command("others", { kind, id: p.id, forget: 1 });
-    };
-    box.append(b);
-  }
-  if (o.senders.length === 0 && o.accept) {
-    box.append(el("div", "empty", "Anyone who sends you " + othersAbout[kind] + " from the DroneLab app shows up here"));
-  }
-  // Who's taken: nobody, those allowed below, or anyone
-  for (const x of $("permission" + kind).children) x.classList.toggle("on", +x.dataset.p === o.permission);
-  // What's ignored, whoever it's from
-  for (const x of $("ignore" + kind).children) {
-    const on = ((o.ignore || 0) & +x.dataset.bit) !== 0;
-    x.classList.toggle("on", on);
-    x.textContent = (on ? "✓ " : "") + x.dataset.name;
-  }
-  $("others" + kind + "-status").textContent = !o.accept ? "" : o.last && o.age < 60 ? o.last + ", " + o.age + "s ago"
-    : o.permission === 2 ? "Accepting everyone"
-    : o.senders.length ? "Tap someone to allow them; hold to forget them" : "";
-}
-
 /* ----- Sound ----- */
 
 function clock(ms) {
@@ -926,8 +873,6 @@ function show(s) {
   showPatterns();
   showModes();
   showDevices();
-  showOthers(0);
-  showOthers(1);
   showSound();
   showTerminal();
 }
@@ -964,25 +909,6 @@ function build() {
 $("slower").onclick = () => command("speed", { v: Math.max(25, state.speed - 25) });
 $("faster").onclick = () => command("speed", { v: Math.min(300, state.speed + 25) });
 $("search").onclick = () => command("scan", { on: 1 });
-for (const kind of [0, 1]) {
-  ["Off", "Ask", "Accept"].forEach((name, p) => {
-    const b = el("button", "", name);
-    b.dataset.p = p;
-    b.onclick = () => command("others", { kind, permission: p });
-    $("permission" + kind).append(b);
-  });
-  // Ignore broadcasts (2, the open direct channel's too) and channel-wide (4)
-  [["Ignore broadcasts", 2], ["Ignore channel-wide", 4]].forEach(([name, bit]) => {
-    const b = el("button", "", name);
-    b.dataset.bit = bit;
-    b.dataset.name = name;
-    b.onclick = () => {
-      const now = (state.others && state.others[kind].ignore) || 0;
-      command("others", { kind, ignore: now ^ bit });
-    };
-    $("ignore" + kind).append(b);
-  });
-}
 // Stop as soon as it's touched, not when the finger lifts
 $("stop").addEventListener("pointerdown", e => { e.preventDefault(); pending.clear(); command("stop"); });
 

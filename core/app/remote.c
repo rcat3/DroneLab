@@ -23,17 +23,7 @@
  *     POST /api/speed?v=<percent>
  *     POST /api/scan?on=<1 or 0>
  *     POST /api/connect?d=<slot>      connect, or disconnect if connected
- *     POST /api/map?d=<slot>&o=<output>&c=<channel, 0 for V1, or -1 for none>
- *     POST /api/controls?n=<count, 0 for one per mapped channel>&l0=<label>&c0=<channels>&l1=...
- *                                     the screen's controls
  *     POST /api/stop                  everything, as the Stop button
-*     POST /api/others?kind=<0 Vibe, 1 Terminal>[&accept=<1 or 0>][&permission=<0 off, 1 ask, 2 accept>]
-*                       [&ignore=<OTHERS_IGNORE_* together>]
-*                       [&id=<key's id>|&key=<whole key, hex>&name=<who>][&allow=<1 or 0>][&forget=1]
-*                                     commands from others in the comm channel
-*                                     (app/others.h): who they're taken from
-*                                     (accept=1 is ask), what's ignored, and
-*                                     who may send them
  *     POST /api/show?f=<feature>&p=<page>     bring a page on screen
  *     POST /api/message?append=<1 or 0>&show=<1 or 0>   the body (UTF-8) to
  *                                     the Terminal feature, and show it there
@@ -53,6 +43,10 @@
  *                                     phones joined, start at power-up
  *     POST /api/hotspot?[on=<1 or 0>][&new=1][&auto=<1 or 0>]   switch it
  *                                     on or off, a new password, at power-up
+ *     GET  /api/rules     (the app only, over Bluetooth) the wearer's rules
+ *                                     (rules.h): each class's policy, the
+ *                                     people, the toys' mappings and the
+ *                                     screen's controls, for the app to take on
  *     GET  /api/about     the board: firmware, build, MAC addresses, housing,
  *                                     uptime and battery, for the app's About page
  *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>][&loud=<0 off, 1 to 4>]
@@ -79,6 +73,7 @@
 #include "app/direct.h"
 #include "app/toys.h"
 #include "app/others.h"
+#include "app/rules.h"
 #include "app/message.h"
 #include "app/patterns.h"
 #include "app/reactive.h"
@@ -434,25 +429,16 @@ static const char *state_name(toy_state_t state)
     }
 }
 
-/* Someone's key's id, as the list's shown and changed by: its first bytes,
- * in hex. */
-static void key_id(const uint8_t *key, char out[2 * OTHERS_ID_LEN + 1])
-{
-    for (int i = 0; i < OTHERS_ID_LEN; i++)
-    {
-        snprintf(out + 2 * i, 3, "%02x", key[i]);
-    }
-}
-
 static void write_state(json_t *j)
 {
     char status[40] = "";
-    if (reactive_mode() != REACTIVE_OFF)
+    uint8_t reaction = toys_reaction();
+    if (reaction != REACTIVE_OFF)
     {
-        reactive_status(status, sizeof(status));
+        reactive_status((reactive_mode_t)reaction, status, sizeof(status));
     }
     jprintf(j, "{\"scan\":%d,\"speed\":%u,\"hold\":%d,\"react\":%d,\"status\":", toys_scanning() ? 1 : 0,
-            toys_speed(), settings_get()->toy_release_to_zero ? 0 : 1, (int)reactive_mode());
+            toys_speed(), settings_get()->toy_release_to_zero ? 0 : 1, (int)reaction);
     jstring(j, status);
     jprintf(j, ",\"notice\":");
     jstring(j, notice != NULL ? notice : "");
@@ -555,7 +541,7 @@ static void write_state(json_t *j)
     {
         const toy_channel_t *ch = toys_channel(c);
         jprintf(j, "%s{\"level\":%u,\"out\":%u,\"pattern\":%d,\"react\":%d,\"driven\":%d}", c ? "," : "",
-                ch->level, ch->out, ch->pattern, ch->react ? 1 : 0, toys_driven(c) ? 1 : 0);
+                ch->level, ch->out, ch->pattern, ch->react, toys_driven(c) ? 1 : 0);
     }
     toys_control_t controls[TOYS_SCREEN_CONTROLS];
     int control_count = toys_screen_controls(controls);
@@ -575,7 +561,8 @@ static void write_state(json_t *j)
         {
             continue;
         }
-        jprintf(j, "%s{\"slot\":%u,\"name\":", first ? "" : ",", (unsigned)i);
+        jprintf(j, "%s{\"slot\":%u,\"addr\":\"%02x%02x%02x%02x%02x%02x\",\"name\":", first ? "" : ",",
+                (unsigned)i, d->addr[0], d->addr[1], d->addr[2], d->addr[3], d->addr[4], d->addr[5]);
         first = false;
         jstring(j, d->name);
         jprintf(j, ",\"maker\":");
@@ -594,30 +581,19 @@ static void write_state(json_t *j)
     }
     jprintf(j, "]");
 
-    // Commands from others in the comm channel, a list for each kind
-    jprintf(j, ",\"others\":[");
+    // Commands from others in the comm channel, for each kind: the rules'
+    // policy, what's ignored, and who sent the last that was done
+    jprintf(j, ",\"rules\":\"%08lx\",\"edited\":%d,\"others\":[", (unsigned long)rules_hash(),
+            rules_edited() ? 1 : 0);
     for (int k = 0; k < OTHERS_KIND_COUNT; k++)
     {
         uint32_t age = 0;
         const char *last = others_last((others_kind_t)k, now, &age);
-        jprintf(j, "%s{\"accept\":%d,\"permission\":%d,\"ignore\":%d,", k ? "," : "",
-                others_accepting((others_kind_t)k) ? 1 : 0, (int)others_permission((others_kind_t)k),
+        jprintf(j, "%s{\"class\":%d,\"permission\":%d,\"ignore\":%d,\"last\":", k ? "," : "",
+                others_class((others_kind_t)k), (int)others_permission((others_kind_t)k),
                 (int)others_ignoring((others_kind_t)k));
-        jprintf(j, "\"last\":");
         jstring(j, last != NULL ? last : "");
-        jprintf(j, ",\"age\":%lu,\"senders\":[", (unsigned long)(age / 1000));
-        others_sender_t senders[OTHERS_PEOPLE_MAX];
-        int n = others_senders((others_kind_t)k, senders, OTHERS_PEOPLE_MAX);
-        for (int i = 0; i < n && i < OTHERS_PEOPLE_MAX; i++)
-        {
-            jprintf(j, "%s{\"name\":", i ? "," : "");
-            jstring(j, senders[i].name);
-            char id[2 * OTHERS_ID_LEN + 1];
-            key_id(senders[i].key, id);
-            jprintf(j, ",\"id\":\"%s\",\"allowed\":%d,\"clash\":%d}", id, senders[i].allowed ? 1 : 0,
-                    senders[i].clash ? 1 : 0);
-        }
-        jprintf(j, "]}");
+        jprintf(j, ",\"age\":%lu}", (unsigned long)(age / 1000));
     }
     jprintf(j, "]}");
 }
@@ -992,11 +968,7 @@ static bool run_command(const char *name, const char *query, const char *body, s
         {
             mode = REACTIVE_OFF;
         }
-        toys_react(query_channels(query), mode != REACTIVE_OFF);
-        if (mode != REACTIVE_OFF || !toys_reacting())
-        {
-            reactive_set_mode((reactive_mode_t)mode);
-        }
+        toys_react(query_channels(query), (uint8_t)mode);
     }
     else if (strcmp(name, "speed") == 0)
     {
@@ -1039,110 +1011,9 @@ static bool run_command(const char *name, const char *query, const char *body, s
             }
         }
     }
-    else if (strcmp(name, "map") == 0)
-    {
-        // d= the toy's slot, o= its output, c= the channel (0 for V1), or -1
-        // for none
-        int slot = query_int(query, "d", -1);
-        int output = query_int(query, "o", -1);
-        int channel = query_int(query, "c", -1);
-        if (slot >= 0 && output >= 0)
-        {
-            toys_set_channel((size_t)slot, (uint8_t)output,
-                             channel >= 0 && channel < TOYS_CHANNELS ? (uint8_t)channel : TOYS_NO_CHANNEL);
-        }
-    }
-    else if (strcmp(name, "controls") == 0)
-    {
-        // n= how many (0 for one for each mapped channel), then for each, l0=
-        // its label and c0= its channels, l1= and c1=, and so on
-        toys_control_t controls[TOYS_SCREEN_CONTROLS];
-        int count = LV_CLAMP(0, query_int(query, "n", 0), TOYS_SCREEN_CONTROLS);
-        for (int i = 0; i < count; i++)
-        {
-            char key[4];
-            snprintf(key, sizeof(key), "l%d", i);
-            if (!query_str(query, key, controls[i].label, sizeof(controls[i].label)))
-            {
-                controls[i].label[0] = '\0';
-            }
-            snprintf(key, sizeof(key), "c%d", i);
-            controls[i].channels = (uint8_t)(query_int(query, key, 0) & TOYS_ALL_CHANNELS);
-        }
-        toys_set_screen_controls(controls, count);
-    }
     else if (strcmp(name, "stop") == 0)
     {
         toys_stop_all();
-        reactive_set_mode(REACTIVE_OFF);
-    }
-    else if (strcmp(name, "others") == 0)
-    {
-        int kind = query_int(query, "kind", -1);
-        if (kind < 0 || kind >= OTHERS_KIND_COUNT)
-        {
-            return true;
-        }
-        int accept = query_int(query, "accept", -1);
-        if (accept >= 0)
-        {
-            others_set_accepting((others_kind_t)kind, accept != 0);
-        }
-        int permission = query_int(query, "permission", -1);
-        if (permission >= OTHERS_OFF && permission <= OTHERS_ACCEPT)
-        {
-            others_set_permission((others_kind_t)kind, (others_permission_t)permission);
-        }
-        int ignore = query_int(query, "ignore", -1);
-        if (ignore >= 0)
-        {
-            others_set_ignoring((others_kind_t)kind, (uint8_t)ignore);
-        }
-        // Someone by their whole key (key=64 hex digits, and name=), added
-        // to the list if they're allowed and aren't in it; or someone in
-        // the list, for any kind, by their key's id
-        char hex[2 * OTHERS_KEY_LEN + 1], want[2 * OTHERS_ID_LEN + 1];
-        uint8_t key[OTHERS_KEY_LEN];
-        bool found = false;
-        if (query_str(query, "key", hex, sizeof(hex)) && strlen(hex) == 2 * OTHERS_KEY_LEN)
-        {
-            found = true;
-            for (int i = 0; i < OTHERS_KEY_LEN && found; i++)
-            {
-                char b[3] = { hex[2 * i], hex[2 * i + 1], '\0' };
-                char *end;
-                key[i] = (uint8_t)strtol(b, &end, 16);
-                found = *end == '\0';
-            }
-        }
-        else if (query_str(query, "id", want, sizeof(want)))
-        {
-            for (int k = 0; k < OTHERS_KIND_COUNT && !found; k++)
-            {
-                others_sender_t senders[OTHERS_PEOPLE_MAX];
-                int n = others_senders((others_kind_t)k, senders, OTHERS_PEOPLE_MAX);
-                for (int i = 0; i < n && i < OTHERS_PEOPLE_MAX && !found; i++)
-                {
-                    char id[2 * OTHERS_ID_LEN + 1];
-                    key_id(senders[i].key, id);
-                    if (strcmp(id, want) == 0)
-                    {
-                        memcpy(key, senders[i].key, OTHERS_KEY_LEN);
-                        found = true;
-                    }
-                }
-            }
-        }
-        if (found && query_int(query, "forget", 0))
-        {
-            others_forget((others_kind_t)kind, key);
-        }
-        else if (found)
-        {
-            char who[COMM_NAME_MAX] = "";
-            query_str(query, "name", who, sizeof(who));
-            others_allow_new((others_kind_t)kind, key, who, query_int(query, "allow", 0) != 0);
-        }
     }
     else if (strcmp(name, "show") == 0)
     {
@@ -1391,6 +1262,59 @@ static void respond_json(client_t *c, void (*write)(json_t *))
     respond(c, "200 OK", "application/json", c->json, j.len, NULL);
 }
 
+/* The wearer's rules, as they are on the unit, for the app to take on (over
+ * Bluetooth only): each class's policy and what it ignores, and everyone in
+ * them, by their whole key. */
+static void write_rules(json_t *j)
+{
+    static const uint8_t classes[] = { RULES_CLASS_TERMINAL, RULES_CLASS_VIBE,     RULES_CLASS_ESTIM,
+                                       RULES_CLASS_MACHINE,  RULES_CLASS_PICTURES, RULES_CLASS_SOUNDS };
+    jprintf(j, "{\"hash\":\"%08lx\",\"edited\":%d,\"classes\":[", (unsigned long)rules_hash(),
+            rules_edited() ? 1 : 0);
+    for (size_t i = 0; i < sizeof(classes); i++)
+    {
+        jprintf(j, "%s{\"id\":%u,\"policy\":%u,\"ignore\":%u}", i ? "," : "", classes[i],
+                rules_policy(classes[i]), rules_ignoring(classes[i]));
+    }
+    jprintf(j, "],\"people\":[");
+    for (int i = 0; i < rules_people_count(); i++)
+    {
+        const rules_person_t *p = rules_person_at(i);
+        jprintf(j, "%s{\"key\":\"", i ? "," : "");
+        for (int b = 0; b < RULES_KEY_LEN; b++)
+        {
+            jprintf(j, "%02x", p->key[b]);
+        }
+        jprintf(j, "\",\"name\":");
+        jstring(j, p->name);
+        jprintf(j, ",\"flags\":%u,\"allowed\":%u}", p->flags, p->allowed);
+    }
+    const toys_map_t *maps;
+    int map_count = toys_maps(&maps);
+    jprintf(j, "],\"toys\":[");
+    for (int i = 0; i < map_count; i++)
+    {
+        const toys_map_t *m = &maps[i];
+        jprintf(j, "%s{\"addr\":\"%02x%02x%02x%02x%02x%02x\",\"channels\":[", i ? "," : "", m->addr[0], m->addr[1],
+                m->addr[2], m->addr[3], m->addr[4], m->addr[5]);
+        for (int o = 0; o < TOYS_MAX_OUTPUTS; o++)
+        {
+            jprintf(j, "%s%d", o ? "," : "", m->channels[o] < TOYS_CHANNELS ? m->channels[o] : -1);
+        }
+        jprintf(j, "]}");
+    }
+    toys_control_t controls[TOYS_SCREEN_CONTROLS];
+    int control_count = toys_custom_controls(controls);
+    jprintf(j, "],\"controls\":[");
+    for (int i = 0; i < control_count; i++)
+    {
+        jprintf(j, "%s{\"label\":", i ? "," : "");
+        jstring(j, controls[i].label);
+        jprintf(j, ",\"channels\":%u}", controls[i].channels);
+    }
+    jprintf(j, "]}");
+}
+
 /* The hotspot itself, for the app (over Bluetooth only: a phone on the
  * hotspot can't switch it off under itself): whether it's on, its name and
  * password, what a phone's camera needs to join it, how many phones have,
@@ -1469,6 +1393,10 @@ int remote_api(const char *method, const char *target, const char *body, size_t 
     else if (strcmp(path, "/api/chime") == 0)
     {
         write = write_chime;
+    }
+    else if (strcmp(path, "/api/rules") == 0)
+    {
+        write = write_rules;
     }
     else if (strcmp(path, "/api/hotspot") == 0)
     {

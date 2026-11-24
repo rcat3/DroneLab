@@ -252,9 +252,9 @@ static void show_control(void)
     int battery = lowest_battery();
     int pattern = controls_pattern();
     char status[40] = "";
-    if (toys_reacting())
+    if (toys_reaction() != REACTIVE_OFF)
     {
-        reactive_status(status, sizeof(status));
+        reactive_status((reactive_mode_t)toys_reaction(), status, sizeof(status));
     }
     bool changed = !shown_valid || layout != shown_layout || control_count != shown_count || battery != shown_battery
                    || connected != shown_connected || pattern != shown_pattern || strcmp(status, shown_status) != 0;
@@ -400,7 +400,6 @@ static void grip_event_cb(lv_event_t *e)
 static void stop_event_cb(lv_event_t *e)
 {
     toys_stop_all();
-    reactive_set_mode(REACTIVE_OFF);
     show_control();
 }
 
@@ -742,35 +741,38 @@ static lv_obj_t *react_page;
 static lv_obj_t *react_rows[REACTIVE_COUNT];
 static lv_obj_t *react_row_labels[REACTIVE_COUNT];
 static lv_obj_t *react_status;
-static int shown_react_mode = -1;
+static uint32_t shown_reactions = UINT32_MAX;
 static char shown_react_status[40];
 
+/* Each reaction that's followed is lit: different channels may follow
+ * different ones, from the app. */
 static void show_react(void)
 {
-    reactive_mode_t mode = reactive_mode();
-    if ((int)mode != shown_react_mode)
+    uint32_t modes = toys_reactions();
+    if (modes != shown_reactions)
     {
-        shown_react_mode = mode;
+        shown_reactions = modes;
         for (int i = 0; i < REACTIVE_COUNT; i++)
         {
             if (react_rows[i] == NULL)
             {
                 continue;
             }
-            bool on = i == (int)mode;
+            bool on = (modes & (1u << i)) != 0;
             lv_color_t color = lv_palette_main(LV_PALETTE_PINK);
             lv_obj_set_style_border_color(react_rows[i], on ? color : COLOR_OUTLINE, 0);
             lv_obj_set_style_text_color(react_row_labels[i], on ? color : lv_color_white(), 0);
         }
     }
     char status[40];
+    uint8_t mode = toys_reaction();
     if (mode == REACTIVE_OFF)
     {
         snprintf(status, sizeof(status), "%s", toys_connected_count() > 0 ? "" : "Connect a toy first");
     }
     else
     {
-        reactive_status(status, sizeof(status));
+        reactive_status((reactive_mode_t)mode, status, sizeof(status));
     }
     if (strcmp(status, shown_react_status) != 0)
     {
@@ -779,15 +781,26 @@ static void show_react(void)
     }
 }
 
+/* On every channel; tapping one that's followed stops it. */
 static void react_row_event_cb(lv_event_t *e)
 {
     reactive_mode_t mode = (reactive_mode_t)(intptr_t)lv_event_get_user_data(e);
-    if (mode == reactive_mode())
+    uint8_t followed = 0;
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
-        mode = REACTIVE_OFF;    // tapping the one that's on turns it off
+        if (toys_channel(c)->react == mode)
+        {
+            followed |= 1u << c;
+        }
     }
-    reactive_set_mode(mode);
-    toys_react(TOYS_ALL_CHANNELS, mode != REACTIVE_OFF);
+    if (followed != 0)
+    {
+        toys_react(followed, REACTIVE_OFF);
+    }
+    else
+    {
+        toys_react(TOYS_ALL_CHANNELS, mode);
+    }
     show_react();
 }
 
@@ -1009,10 +1022,7 @@ static void add_options_page(ui_feature_t *feature)
 static void poll_timer_cb(lv_timer_t *t)
 {
     uint32_t now = lv_tick_get();
-    if (reactive_mode() != REACTIVE_OFF)
-    {
-        toys_set_reactive_factor(reactive_poll(now));
-    }
+    reactive_poll(now, toys_reactions());
     toys_poll(now);
     lv_obj_t *page = ui_current_page();
     if (page == control_page)

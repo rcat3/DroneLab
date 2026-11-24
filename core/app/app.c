@@ -5,6 +5,7 @@
 #include "app/comm.h"
 #include "app/direct.h"
 #include "app/others.h"
+#include "app/rules.h"
 #include "app/patterns.h"
 #include "app/settings.h"
 #include "app/toys.h"
@@ -214,6 +215,7 @@ void app_run(void)
     voice_lab_init(storage_path);
     patterns_init(storage_path);        // for the toys
     toys_init();
+    rules_init();                       // the wearer's rules, from their app: lays out the toys
     others_init();                      // commands from others, over the comm channel
     comm_init();                        // before anything else starts Bluetooth
     direct_init();                      // board to board, over the radio

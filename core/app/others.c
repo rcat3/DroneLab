@@ -18,6 +18,7 @@
 #include "app/message.h"
 #include "app/patterns.h"
 #include "app/reactive.h"
+#include "app/rules.h"
 #include "app/settings.h"
 #include "app/toys.h"
 #include "crypto/monocypher-ed25519.h"
@@ -25,9 +26,9 @@
 #include "lvgl.h"
 #include "ui/ui.h"
 
-#define STORE_NAME          "oth_people"
+#define STORE_NAME          "oth_seen"
 #define OWNER_STORE_NAME    "oth_owner"
-#define STORE_VERSION       2
+#define STORE_VERSION       1
 #define SAVE_DELAY_MS       1000
 #define QUEUE_LEN           8           // from direct comms, waiting to be checked, and checked, waiting for the UI loop
 #define KNOWN_GOOD          6           // commands checked lately, whose copies needn't be again
@@ -39,30 +40,23 @@
 #define SCOPE_AT            39
 #define OP                  OTHERS_HEADER_LEN   // where what to do is
 #define TERMINAL_FEATURE    "Terminal"
-#define MUTED_MAX           24
 
 static const char signed_prefix[] = "dronelab-command\n";
 
-// Someone in the list, as they're stored
+// A sender's last command, as it's stored: so a recorded one can't be
+// played back
 typedef struct
 {
-    uint64_t counter;       // their last command's
-    uint8_t key[OTHERS_KEY_LEN];
-    char name[COMM_NAME_MAX];
-    uint8_t sent;           // a bit for each kind they've sent
-    uint8_t allowed;        // a bit for each kind they're allowed
-    uint8_t spare1;
-    uint32_t name_order;    // when they took the name they go by, in order: who had a name first
-    uint8_t spare[1];
-} person_t;
+    uint8_t id[OTHERS_ID_LEN];
+    uint64_t counter;
+    uint32_t order;         // when they last sent: the oldest goes first
+} sender_t;
 
 typedef struct
 {
     uint8_t version;
-    uint8_t permission[OTHERS_KIND_COUNT];  // others_permission_t
-    uint8_t options[OTHERS_KIND_COUNT];     // OTHERS_IGNORE_*
     uint8_t count;
-    person_t people[OTHERS_PEOPLE_MAX];
+    sender_t senders[OTHERS_SENDERS_KEPT];
 } stored_t;
 
 typedef struct
@@ -83,8 +77,6 @@ typedef struct
 // Out of internal RAM, which WiFi and Bluetooth need: made by others_init()
 static stored_t *list;
 static queued_t *queue;                 // QUEUE_LEN of them
-static uint8_t (*muted)[OTHERS_ID_LEN]; // MUTED_MAX of them, made as the first come
-static int muted_count;
 
 static bool unsaved;
 static uint32_t changed_ms;
@@ -123,7 +115,7 @@ static volatile uint32_t results_write; // only the checker moves it
 static volatile uint32_t results_read;  // only direct comms' task moves it
 static int known_next;
 
-static uint32_t name_order_next;        // one more than any name_order in the list
+static uint32_t order_next;             // one more than any sender's order
 
 static seen_t seen[SEEN_MAX];
 static int seen_count;
@@ -133,30 +125,17 @@ static void load(void)
 {
     memset(list, 0, sizeof(*list));
     size_t n = rcat_hal_store_read(STORE_NAME, list, sizeof(*list));
-    if (n < offsetof(stored_t, people) || list->version != STORE_VERSION || list->count > OTHERS_PEOPLE_MAX
-        || n < offsetof(stored_t, people) + list->count * sizeof(person_t))
+    if (n < offsetof(stored_t, senders) || list->version != STORE_VERSION || list->count > OTHERS_SENDERS_KEPT
+        || n < offsetof(stored_t, senders) + list->count * sizeof(sender_t))
     {
         memset(list, 0, sizeof(*list));
         list->version = STORE_VERSION;
-        for (int k = 0; k < OTHERS_KIND_COUNT; k++)
-        {
-            list->permission[k] = OTHERS_ASK;
-        }
-    }
-    for (int k = 0; k < OTHERS_KIND_COUNT; k++)
-    {
-        if (list->permission[k] > OTHERS_ACCEPT)
-        {
-            list->permission[k] = OTHERS_ASK;
-        }
-        list->options[k] &= OTHERS_IGNORE_EVERYONE | OTHERS_IGNORE_CHANNEL;
     }
     for (int i = 0; i < list->count; i++)
     {
-        list->people[i].name[COMM_NAME_MAX - 1] = '\0';
-        if (list->people[i].name_order >= name_order_next)
+        if (list->senders[i].order >= order_next)
         {
-            name_order_next = list->people[i].name_order + 1;
+            order_next = list->senders[i].order + 1;
         }
     }
     have_owner = rcat_hal_store_read(OWNER_STORE_NAME, owner, sizeof(owner)) == sizeof(owner);
@@ -211,92 +190,40 @@ static void changed(void)
     changes++;
 }
 
-static person_t *find(const uint8_t *key)
+static sender_t *find(const uint8_t *key)
 {
     for (int i = 0; i < list->count; i++)
     {
-        if (memcmp(list->people[i].key, key, OTHERS_KEY_LEN) == 0)
+        if (memcmp(list->senders[i].id, key, OTHERS_ID_LEN) == 0)
         {
-            return &list->people[i];
+            return &list->senders[i];
         }
     }
     return NULL;
 }
 
-static bool same_name(const char *a, const char *b)
+/* Someone new, in place of the one who sent longest ago if there's no room. */
+static sender_t *add(const uint8_t *key)
 {
-    for (; *a && *b; a++, b++)
+    sender_t *p;
+    if (list->count < OTHERS_SENDERS_KEPT)
     {
-        if (tolower((unsigned char)*a) != tolower((unsigned char)*b))
-        {
-            return false;
-        }
+        p = &list->senders[list->count++];
     }
-    return *a == *b;
-}
-
-/* Whether someone else listed took this person's name before they did:
- * they may be using it to pass as them. By when each took the name, so
- * someone listed a long while who takes a newer person's name is the one
- * marked, and it's gone once they change it back. */
-static bool clashes(const person_t *p)
-{
-    for (int i = 0; i < list->count; i++)
+    else
     {
-        const person_t *q = &list->people[i];
-        if (q != p && same_name(q->name, p->name) && q->name_order < p->name_order)
+        p = &list->senders[0];
+        for (int i = 1; i < list->count; i++)
         {
-            return true;
-        }
-    }
-    return false;
-}
-
-/* Add someone new, allowed for nothing. When the list's full, the first
- * who isn't allowed for anything makes room; if they all are, the new one
- * isn't added. */
-static person_t *add(const uint8_t *key, const char *name, uint64_t counter)
-{
-    if (list->count == OTHERS_PEOPLE_MAX)
-    {
-        int out = -1;
-        for (int i = 0; i < list->count && out < 0; i++)
-        {
-            if (!list->people[i].allowed)
+            if (list->senders[i].order < p->order)
             {
-                out = i;
+                p = &list->senders[i];
             }
         }
-        if (out < 0)
-        {
-            return NULL;
-        }
-        memmove(&list->people[out], &list->people[out + 1], (size_t)(list->count - out - 1) * sizeof(person_t));
-        list->count--;
     }
-    person_t *p = &list->people[list->count];
     memset(p, 0, sizeof(*p));
-    memcpy(p->key, key, OTHERS_KEY_LEN);
-    snprintf(p->name, sizeof(p->name), "%s", name);
-    p->counter = counter;
-    p->name_order = name_order_next++;
-    list->count++;
-    changed();
+    memcpy(p->id, key, OTHERS_ID_LEN);
     return p;
-}
-
-/* Their name, kept up to date: a label, not who they are. */
-static void rename_person(person_t *p, const char *name)
-{
-    if (strcmp(p->name, name) != 0)
-    {
-        if (!same_name(p->name, name))
-        {
-            p->name_order = name_order_next++;  // a new name, not a change of case
-        }
-        snprintf(p->name, sizeof(p->name), "%s", name);
-        changed();
-    }
 }
 
 // A command by its sender's key and counter: the one seen before, or a new one
@@ -347,22 +274,14 @@ static void play(uint8_t channels, const uint8_t *name, size_t len)
 }
 
 /* As the Toys feature's React page, or the remote's, on those channels:
- * there's one reaction, for every channel that follows it. */
+ * each channel follows a reaction of its own. */
 static void react(uint8_t channels, uint8_t mode)
 {
     if (mode >= REACTIVE_COUNT || !reactive_available((reactive_mode_t)mode))
     {
         mode = REACTIVE_OFF;
     }
-    toys_react(channels, mode != REACTIVE_OFF);
-    if (mode != REACTIVE_OFF)
-    {
-        reactive_set_mode((reactive_mode_t)mode);
-    }
-    else if (!toys_reacting())
-    {
-        reactive_set_mode(REACTIVE_OFF);
-    }
+    toys_react(channels, mode);
 }
 
 /* On the Terminal, as its own controls would put it: as it is, added on a
@@ -436,7 +355,6 @@ static void run(const uint8_t *what, size_t len)
     {
     case OTHERS_VIBE_STOP:
         toys_stop_all();
-        reactive_set_mode(REACTIVE_OFF);
         break;
     case OTHERS_VIBE_LEVEL:
         toys_set_level(arg[0] & TOYS_ALL_CHANNELS, arg[1]);
@@ -503,34 +421,8 @@ static bool signature_good(const uint8_t *cmd, size_t len)
 
 static bool is_muted(const uint8_t *key)
 {
-    for (int i = 0; i < muted_count; i++)
-    {
-        if (memcmp(muted[i], key, OTHERS_ID_LEN) == 0)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-void others_set_muted(bool first, const uint8_t *ids, size_t len)
-{
-    if (muted == NULL)
-    {
-        muted = lv_malloc(MUTED_MAX * OTHERS_ID_LEN);
-        if (muted == NULL)
-        {
-            return;
-        }
-    }
-    if (first)
-    {
-        muted_count = 0;
-    }
-    for (size_t at = 0; at + OTHERS_ID_LEN <= len && muted_count < MUTED_MAX; at += OTHERS_ID_LEN)
-    {
-        memcpy(muted[muted_count++], ids + at, OTHERS_ID_LEN);
-    }
+    const rules_person_t *p = rules_person(key);
+    return p != NULL && (p->flags & RULES_MUTED);
 }
 
 void others_set_owner(const uint8_t key[OTHERS_KEY_LEN])
@@ -598,24 +490,28 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
     {
         return;
     }
-    person_t *p = find(key);
-    if (p != NULL && !again)
+    sender_t *sender = find(key);
+    if (!again)
     {
         // A text may come a little behind; anything else must be newer
         bool text = which == OTHERS_KIND_COUNT;
-        uint64_t oldest = text ? (p->counter > OTHERS_TEXT_WINDOW_MS ? p->counter - OTHERS_TEXT_WINDOW_MS : 0)
-                               : p->counter;
-        if (counter <= oldest)
+        uint64_t last = sender != NULL ? sender->counter : 0;
+        uint64_t oldest = text ? (last > OTHERS_TEXT_WINDOW_MS ? last - OTHERS_TEXT_WINDOW_MS : 0) : last;
+        if (sender != NULL && counter <= oldest)
         {
             printf("others: an old command from %s again, dropped\n", from);
             return;
         }
         if (!text)
         {
-            p->counter = counter;
+            if (sender == NULL)
+            {
+                sender = add(key);
+            }
+            sender->counter = counter;
+            sender->order = order_next++;
             changed();  // the counter's to be saved
         }
-        rename_person(p, from);
     }
     uint8_t scope = cmd[SCOPE_AT];
     if (which == OTHERS_KIND_COUNT)
@@ -630,29 +526,24 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
         return;
     }
     comm_heard_t heard = which == OTHERS_VIBE ? COMM_HEARD_VIBE : COMM_HEARD_TERMINAL;
-    uint8_t bit = (uint8_t)(1u << which);
     bool done = false;
     // To everyone nearby, if it's to the channel in the open direct group
     bool open = via == COMM_TALK_DIRECT && !settings_get()->direct_keyed;
     bool everyone = scope == OTHERS_SCOPE_EVERYONE || (scope == OTHERS_SCOPE_CHANNEL && open);
-    uint8_t options = list->options[which];
+    uint8_t cls = others_class((others_kind_t)which);
+    uint8_t options = rules_ignoring(cls);
     bool ignored = is_muted(key) || (everyone && (options & OTHERS_IGNORE_EVERYONE))
                    || (scope == OTHERS_SCOPE_CHANNEL && (options & OTHERS_IGNORE_CHANNEL));
-    if (list->permission[which] != OTHERS_OFF && !ignored)
+    uint8_t policy = rules_policy(cls);
+    if (policy != RULES_OFF && !ignored)
     {
-        bool anyone = list->permission[which] == OTHERS_ACCEPT;
-        if (p == NULL)
+        const rules_person_t *p = rules_person(key);
+        done = policy == RULES_ANYONE || (p != NULL && (p->allowed & (1u << cls)));
+        if (!done)
         {
-            p = add(key, from, counter);    // listed either way, to say who's been sending
-            printf("others: %s commands from %s (%s), %s\n", which == OTHERS_VIBE ? "Vibe" : "Terminal", from,
-                   via == COMM_TALK_DIRECT ? "direct" : "server", anyone ? "accepted" : "not allowed yet");
+            printf("others: %s commands from %s (%s), not allowed\n", which == OTHERS_VIBE ? "Vibe" : "Terminal",
+                   from, via == COMM_TALK_DIRECT ? "direct" : "server");
         }
-        if (p != NULL && !(p->sent & bit))
-        {
-            p->sent |= bit;
-            changed();
-        }
-        done = anyone || (p != NULL && (p->allowed & bit));
     }
     if (!done && again)
     {
@@ -809,132 +700,27 @@ void others_queue(const char *from, const uint8_t *cmd, size_t len, const others
     __atomic_store_n(&queue_write, w + 1, __ATOMIC_RELEASE);
 }
 
-/* ----- The list ----- */
+/* ----- The rules ----- */
+
+uint8_t others_class(others_kind_t kind)
+{
+    return kind == OTHERS_VIBE ? RULES_CLASS_VIBE : kind == OTHERS_TERMINAL ? RULES_CLASS_TERMINAL : 0;
+}
 
 others_permission_t others_permission(others_kind_t kind)
 {
-    return list != NULL && kind < OTHERS_KIND_COUNT ? (others_permission_t)list->permission[kind] : OTHERS_OFF;
-}
-
-void others_set_permission(others_kind_t kind, others_permission_t permission)
-{
-    if (list != NULL && kind < OTHERS_KIND_COUNT && permission <= OTHERS_ACCEPT && list->permission[kind] != permission)
-    {
-        list->permission[kind] = (uint8_t)permission;
-        changed();
-    }
+    uint8_t p = rules_policy(others_class(kind));
+    return p == RULES_ANYONE ? OTHERS_ACCEPT : p == RULES_ASK ? OTHERS_ASK : OTHERS_OFF;
 }
 
 uint8_t others_ignoring(others_kind_t kind)
 {
-    return list != NULL && kind < OTHERS_KIND_COUNT ? list->options[kind] : 0;
-}
-
-void others_set_ignoring(others_kind_t kind, uint8_t ignore)
-{
-    ignore &= OTHERS_IGNORE_EVERYONE | OTHERS_IGNORE_CHANNEL;
-    if (list != NULL && kind < OTHERS_KIND_COUNT && list->options[kind] != ignore)
-    {
-        list->options[kind] = ignore;
-        changed();
-    }
-}
-
-bool others_accepting(others_kind_t kind)
-{
-    return others_permission(kind) != OTHERS_OFF;
-}
-
-void others_set_accepting(others_kind_t kind, bool on)
-{
-    if (on != others_accepting(kind))
-    {
-        others_set_permission(kind, on ? OTHERS_ASK : OTHERS_OFF);
-    }
-}
-
-int others_senders(others_kind_t kind, others_sender_t *out, int max)
-{
-    if (list == NULL || kind >= OTHERS_KIND_COUNT)
-    {
-        return 0;
-    }
-    uint8_t bit = (uint8_t)(1u << kind);
-    int n = 0;
-    for (int i = 0; i < list->count; i++)
-    {
-        const person_t *p = &list->people[i];
-        if (!((p->sent | p->allowed) & bit))
-        {
-            continue;
-        }
-        if (n < max)
-        {
-            memcpy(out[n].key, p->key, OTHERS_KEY_LEN);
-            snprintf(out[n].name, sizeof(out[n].name), "%s", p->name);
-            out[n].allowed = (p->allowed & bit) != 0;
-            out[n].clash = clashes(p);
-        }
-        n++;
-    }
-    return n;
-}
-
-void others_allow(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN], bool allow)
-{
-    if (list == NULL || kind >= OTHERS_KIND_COUNT)
-    {
-        return;
-    }
-    person_t *p = find(key);
-    uint8_t bit = (uint8_t)(1u << kind);
-    if (p != NULL && ((p->allowed & bit) != 0) != allow)
-    {
-        p->allowed = allow ? (p->allowed | bit) : (p->allowed & ~bit);
-        changed();
-    }
-}
-
-void others_allow_new(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN], const char *name, bool allow)
-{
-    if (list == NULL || kind >= OTHERS_KIND_COUNT)
-    {
-        return;
-    }
-    if (find(key) == NULL && (!allow || add(key, name != NULL && name[0] ? name : "?", 0) == NULL))
-    {
-        return;
-    }
-    others_allow(kind, key, allow);
-}
-
-void others_forget(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN])
-{
-    if (list == NULL || kind >= OTHERS_KIND_COUNT)
-    {
-        return;
-    }
-    person_t *p = find(key);
-    if (p == NULL)
-    {
-        return;
-    }
-    uint8_t bit = (uint8_t)(1u << kind);
-    p->sent &= ~bit;
-    p->allowed &= ~bit;
-    if (p->sent == 0 && p->allowed == 0)
-    {
-        // Nothing left for them: out of the list altogether
-        int i = (int)(p - list->people);
-        memmove(p, p + 1, (size_t)(list->count - i - 1) * sizeof(person_t));
-        list->count--;
-    }
-    changed();
+    return rules_ignoring(others_class(kind));
 }
 
 const char *others_last(others_kind_t kind, uint32_t now_ms, uint32_t *age_ms)
 {
-    if (list == NULL || kind >= OTHERS_KIND_COUNT || last_from[kind][0] == '\0')
+    if (kind >= OTHERS_KIND_COUNT || last_from[kind][0] == '\0')
     {
         return NULL;
     }
@@ -944,7 +730,7 @@ const char *others_last(others_kind_t kind, uint32_t now_ms, uint32_t *age_ms)
 
 uint32_t others_changes(void)
 {
-    return changes;
+    return changes + rules_changes();
 }
 
 /* The capabilities, for each kind: how it's open (OTHERS_CAP_*), 0 for not
@@ -1031,10 +817,10 @@ void others_poll(uint32_t now_ms)
     if (unsaved && now_ms - changed_ms >= SAVE_DELAY_MS)
     {
         unsaved = false;
-        size_t len = offsetof(stored_t, people) + list->count * sizeof(person_t);
+        size_t len = offsetof(stored_t, senders) + list->count * sizeof(sender_t);
         if (!rcat_hal_store_write(STORE_NAME, list, len))
         {
-            printf("others: couldn't save who may send commands\n");
+            printf("others: couldn't save the senders' counters\n");
         }
     }
 }

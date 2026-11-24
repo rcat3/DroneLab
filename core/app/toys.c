@@ -8,14 +8,11 @@
 #include <string.h>
 
 #include "app/patterns.h"
+#include "app/reactive.h"
 #include "app/toy_driver.h"
 #include "hal.h"
 
 #define STOP_SETTLE_MS      200     // time for the stop to go out before disconnecting
-#define STORE_NAME          "toys"
-#define STORE_VERSION       1
-#define SAVE_DELAY_MS       1000
-#define MAPS_KEPT           8       // toys whose mapping is remembered
 
 static const toy_driver_t *const drivers[] = {
     &toy_lovense,
@@ -43,36 +40,17 @@ typedef struct
     uint32_t pattern_ms;            // how far into its pattern it is, at the pattern's own speed
 } channel_t;
 
-// A toy's mapping, as it's remembered
-typedef struct
-{
-    uint8_t addr[6];
-    uint8_t channels[TOYS_MAX_OUTPUTS];
-    uint32_t order;                 // when it was last used: the oldest goes first
-} map_t;
-
-typedef struct
-{
-    uint8_t version;
-    uint8_t map_count;
-    uint8_t control_count;          // 0 for one for each mapped channel
-    uint8_t spare;
-    map_t maps[MAPS_KEPT];
-    toys_control_t controls[TOYS_SCREEN_CONTROLS];
-} stored_t;
-
 static slot_t slots[TOYS_MAX_DEVICES];
 static channel_t channels[TOYS_CHANNELS];
-static stored_t stored;
-static uint32_t map_order;
-static bool unsaved;
-static uint32_t changed_ms;
+static toys_map_t maps[TOYS_MAPS_MAX];
+static int map_count;
+static toys_control_t controls[TOYS_SCREEN_CONTROLS];
+static int control_count;           // 0 for one for each mapped channel
 static uint32_t layout_changes;
 static bool scanning;
 static uint32_t now;                // the time of the last poll
 static uint32_t last_poll;
 static uint16_t speed = 100;        // percent
-static float reactive_factor = 1;
 
 const char *toys_output_name(toy_output_kind_t kind)
 {
@@ -85,112 +63,55 @@ const char *toys_output_name(toy_output_kind_t kind)
     }
 }
 
-/* ----- What's remembered ----- */
+/* ----- The mapping and the screen's controls ----- */
 
 void toys_init(void)
 {
-    memset(&stored, 0, sizeof(stored));
-    size_t n = rcat_hal_store_read(STORE_NAME, &stored, sizeof(stored));
-    if (n != sizeof(stored) || stored.version != STORE_VERSION || stored.map_count > MAPS_KEPT
-        || stored.control_count > TOYS_SCREEN_CONTROLS)
-    {
-        memset(&stored, 0, sizeof(stored));
-        stored.version = STORE_VERSION;
-    }
-    for (int i = 0; i < stored.map_count; i++)
-    {
-        if (stored.maps[i].order >= map_order)
-        {
-            map_order = stored.maps[i].order + 1;
-        }
-    }
-    for (int i = 0; i < TOYS_SCREEN_CONTROLS; i++)
-    {
-        stored.controls[i].label[TOYS_LABEL_LEN - 1] = '\0';
-        stored.controls[i].channels &= TOYS_ALL_CHANNELS;
-    }
     for (int c = 0; c < TOYS_CHANNELS; c++)
     {
         channels[c].pub.pattern = -1;
     }
 }
 
-static void changed(void)
+static const toys_map_t *find_map(const uint8_t addr[6])
 {
-    unsaved = true;
-    changed_ms = now;
-    layout_changes++;
-}
-
-static map_t *find_map(const uint8_t addr[6])
-{
-    for (int i = 0; i < stored.map_count; i++)
+    for (int i = 0; i < map_count; i++)
     {
-        if (memcmp(stored.maps[i].addr, addr, 6) == 0)
+        if (memcmp(maps[i].addr, addr, 6) == 0)
         {
-            return &stored.maps[i];
+            return &maps[i];
         }
     }
     return NULL;
 }
 
-/* A toy's outputs take on its remembered mapping, or the usual one: its
- * first output V1, its second V2, and so on. */
+/* A toy's outputs take on its mapping, or the usual one: its first output
+ * V1, its second V2, and so on. */
 static void apply_map(slot_t *s)
 {
-    const map_t *m = find_map(s->pub.addr);
+    const toys_map_t *m = find_map(s->pub.addr);
     for (uint8_t i = 0; i < s->pub.output_count; i++)
     {
         uint8_t c = m != NULL ? m->channels[i] : (i < TOYS_CHANNELS ? i : TOYS_NO_CHANNEL);
         s->pub.outputs[i].channel = c < TOYS_CHANNELS ? c : TOYS_NO_CHANNEL;
-        s->pub.outputs[i].level = 0;
     }
 }
 
-void toys_set_channel(size_t slot, uint8_t output, uint8_t channel)
+void toys_set_maps(const toys_map_t *new_maps, int count)
 {
-    if (slot >= TOYS_MAX_DEVICES || !slots[slot].used || output >= slots[slot].pub.output_count)
+    map_count = count < 0 ? 0 : count > TOYS_MAPS_MAX ? TOYS_MAPS_MAX : count;
+    if (map_count > 0)
     {
-        return;
+        memcpy(maps, new_maps, (size_t)map_count * sizeof(toys_map_t));
     }
-    slot_t *s = &slots[slot];
-    if (channel >= TOYS_CHANNELS)
+    for (size_t i = 0; i < TOYS_MAX_DEVICES; i++)
     {
-        channel = TOYS_NO_CHANNEL;
-    }
-    if (s->pub.outputs[output].channel == channel)
-    {
-        return;
-    }
-    map_t *m = find_map(s->pub.addr);
-    if (m == NULL)
-    {
-        // A new one, in place of the one used longest ago if they're all taken
-        if (stored.map_count < MAPS_KEPT)
+        if (slots[i].used && slots[i].pub.output_count > 0)
         {
-            m = &stored.maps[stored.map_count++];
-        }
-        else
-        {
-            m = &stored.maps[0];
-            for (int i = 1; i < MAPS_KEPT; i++)
-            {
-                if (stored.maps[i].order < m->order)
-                {
-                    m = &stored.maps[i];
-                }
-            }
-        }
-        memcpy(m->addr, s->pub.addr, 6);
-        for (uint8_t i = 0; i < TOYS_MAX_OUTPUTS; i++)
-        {
-            m->channels[i] = i < s->pub.output_count ? s->pub.outputs[i].channel : TOYS_NO_CHANNEL;
+            apply_map(&slots[i]);
         }
     }
-    m->order = map_order++;
-    m->channels[output] = channel;
-    s->pub.outputs[output].channel = channel;
-    changed();
+    layout_changes++;
 }
 
 uint8_t toys_channels_mapped(void)
@@ -210,12 +131,24 @@ uint8_t toys_channels_mapped(void)
     return mask;
 }
 
+int toys_maps(const toys_map_t **out)
+{
+    *out = maps;
+    return map_count;
+}
+
+int toys_custom_controls(toys_control_t out[TOYS_SCREEN_CONTROLS])
+{
+    memcpy(out, controls, (size_t)control_count * sizeof(toys_control_t));
+    return control_count;
+}
+
 int toys_screen_controls(toys_control_t out[TOYS_SCREEN_CONTROLS])
 {
-    if (stored.control_count > 0)
+    if (control_count > 0)
     {
-        memcpy(out, stored.controls, stored.control_count * sizeof(toys_control_t));
-        return stored.control_count;
+        memcpy(out, controls, (size_t)control_count * sizeof(toys_control_t));
+        return control_count;
     }
     uint8_t mapped = toys_channels_mapped();
     int n = 0;
@@ -231,7 +164,7 @@ int toys_screen_controls(toys_control_t out[TOYS_SCREEN_CONTROLS])
     return n;
 }
 
-void toys_set_screen_controls(const toys_control_t *controls, int count)
+void toys_set_screen_controls(const toys_control_t *new_controls, int count)
 {
     if (count < 0)
     {
@@ -241,21 +174,21 @@ void toys_set_screen_controls(const toys_control_t *controls, int count)
     {
         count = TOYS_SCREEN_CONTROLS;
     }
-    memset(stored.controls, 0, sizeof(stored.controls));
+    memset(controls, 0, sizeof(controls));
     int n = 0;
     for (int i = 0; i < count; i++)
     {
-        if ((controls[i].channels & TOYS_ALL_CHANNELS) == 0)
+        if ((new_controls[i].channels & TOYS_ALL_CHANNELS) == 0)
         {
             continue;   // drives nothing
         }
-        stored.controls[n] = controls[i];
-        stored.controls[n].channels &= TOYS_ALL_CHANNELS;
-        stored.controls[n].label[TOYS_LABEL_LEN - 1] = '\0';
+        controls[n] = new_controls[i];
+        controls[n].channels &= TOYS_ALL_CHANNELS;
+        controls[n].label[TOYS_LABEL_LEN - 1] = '\0';
         n++;
     }
-    stored.control_count = (uint8_t)n;
-    changed();
+    control_count = n;
+    layout_changes++;
 }
 
 uint32_t toys_layout_changes(void)
@@ -272,19 +205,32 @@ const toy_channel_t *toys_channel(uint8_t channel)
 
 bool toys_driven(uint8_t channel)
 {
-    return channel < TOYS_CHANNELS && (channels[channel].pub.pattern >= 0 || channels[channel].pub.react);
+    return channel < TOYS_CHANNELS && (channels[channel].pub.pattern >= 0 || channels[channel].pub.react != 0);
 }
 
-bool toys_reacting(void)
+uint32_t toys_reactions(void)
+{
+    uint32_t modes = 0;
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
+    {
+        if (channels[c].pub.react != 0)
+        {
+            modes |= 1u << channels[c].pub.react;
+        }
+    }
+    return modes;
+}
+
+uint8_t toys_reaction(void)
 {
     for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
-        if (channels[c].pub.react)
+        if (channels[c].pub.react != 0)
         {
-            return true;
+            return channels[c].pub.react;
         }
     }
-    return false;
+    return 0;
 }
 
 /* Starting a pattern or reaction on a channel that's off: three quarters
@@ -344,26 +290,29 @@ void toys_play(uint8_t mask, int pattern)
     }
 }
 
-void toys_react(uint8_t mask, bool on)
+void toys_react(uint8_t mask, uint8_t mode)
 {
+    if (mode >= REACTIVE_COUNT)
+    {
+        mode = REACTIVE_OFF;
+    }
     for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
         channel_t *ch = &channels[c];
-        if (!(mask & (1u << c)) || ch->pub.react == on)
+        if (!(mask & (1u << c)) || ch->pub.react == mode)
         {
             continue;
         }
-        if (on && !toys_driven(c))
+        if (mode != REACTIVE_OFF && !toys_driven(c))
         {
             start_driving(ch);
         }
-        ch->pub.react = on;
+        else if (mode == REACTIVE_OFF && ch->pub.pattern < 0)
+        {
+            ch->pub.level = 0;  // stopped, as a pattern that's stopped is
+        }
+        ch->pub.react = mode;
     }
-}
-
-void toys_set_reactive_factor(float factor)
-{
-    reactive_factor = factor < 0 ? 0 : factor > 1 ? 1 : factor;
 }
 
 void toys_set_speed(uint16_t percent)
@@ -383,7 +332,7 @@ void toys_stop_all(void)
         channels[c].pub.level = 0;
         channels[c].pub.out = 0;
         channels[c].pub.pattern = -1;
-        channels[c].pub.react = false;
+        channels[c].pub.react = REACTIVE_OFF;
     }
 }
 
@@ -405,9 +354,9 @@ static void run_channels(uint32_t dt_ms)
             ch->pattern_ms += dt_ms * speed / 100;
             v = patterns_level((size_t)ch->pub.pattern, c, ch->pattern_ms);
         }
-        if (ch->pub.react)
+        if (ch->pub.react != 0)
         {
-            v *= reactive_factor;
+            v *= reactive_factor((reactive_mode_t)ch->pub.react);
         }
         ch->pub.out = v <= 0 ? 0 : (uint8_t)(v * ch->pub.level + 0.5f);
     }
@@ -671,14 +620,6 @@ void toys_poll(uint32_t now_ms)
         if (slots[i].used)
         {
             poll_toy(&slots[i]);
-        }
-    }
-    if (unsaved && now - changed_ms >= SAVE_DELAY_MS)
-    {
-        unsaved = false;
-        if (!rcat_hal_store_write(STORE_NAME, &stored, sizeof(stored)))
-        {
-            printf("toys: couldn't save the mapping\n");
         }
     }
 }

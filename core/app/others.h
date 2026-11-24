@@ -19,23 +19,16 @@
  * Names are only labels, so nobody can pass as someone else by taking
  * their name.
  *
- * Those who've sent commands are kept in one list of people, by key, each
- * with their name, whether they're allowed for each kind, and the counter
- * of the last command they sent (so a recorded one can't be played back).
- * Each kind (others_kind_t) has its own permission: Off,
- * nobody (and nobody's added to the list either); Ask, only those the
- * wearer has allowed for that kind; or Accept, anyone. Anyone new who sends
- * one is added to the list, not allowed, for the wearer to tick if they want
- * to, in Ask and Accept both, so the list says who's been sending. Someone
- * new who uses the name of someone already listed is marked (clash): it's
- * someone else using that name. Texts aren't anything to permit: anyone can
- * text anyone, though they're signed too.
- *
- * Each kind can also ignore commands sent to everyone who can hear the
- * sender (broadcasts, and those to the channel over the open direct comms
- * group, which anyone nearby can hear), and those sent to a whole channel,
- * whoever they're from; and commands from anyone the wearer has muted in
- * their app (others_set_muted) are ignored, whatever the permission.
+ * Who may send what is the wearer's rules (rules.h), which their app owns
+ * and gives this unit: each kind (others_kind_t) is a class there, with its
+ * own policy: Off, nobody; Ask, only those the wearer has allowed for it
+ * (their app asks them about anyone else who tries); or Anyone. Each kind
+ * can also ignore commands sent to everyone who can hear the sender
+ * (broadcasts, and those to the channel over the open direct comms group,
+ * which anyone nearby can hear), and those sent to a whole channel, whoever
+ * they're from; and commands from anyone the wearer has muted are ignored,
+ * whatever the policy. Texts aren't anything to permit: anyone can text
+ * anyone, though they're signed too.
  *
  * Whatever comes is passed on to the wearer's app, with whether it was done,
  * for its conversations (comm_heard_to_phone).
@@ -107,7 +100,7 @@
 #define OTHERS_HEADER_LEN       40      // version, key, counter, who it's for
 #define OTHERS_WHAT_MAX         117     // what to do and its arguments, at most
 #define OTHERS_CMD_MAX          (OTHERS_HEADER_LEN + OTHERS_WHAT_MAX + OTHERS_SIG_LEN)
-#define OTHERS_PEOPLE_MAX       16      // in the list
+#define OTHERS_SENDERS_KEPT     32      // senders whose last counter is kept
 #define OTHERS_TEXT_WINDOW_MS   10000   // how far a text may come behind (see above)
 
 #define OTHERS_MESSAGE          0x10    // the Display unit
@@ -130,9 +123,9 @@
 #define OTHERS_SCOPE_CHANNEL    1       // the channel it came on, server or direct
 #define OTHERS_SCOPE_ONE        2       // this board alone
 
-/* What can be controlled, each with its own permission. E-stim, Machines,
- * and the Display unit's pictures and sounds, are to come, E-stim Off to
- * start with, as it needs setting up first; the others start on Ask. */
+/* What can be controlled here, each a class in the rules (others_class).
+ * E-stim, Machines, and the Display unit's pictures and sounds, are to
+ * come. */
 typedef enum
 {
     OTHERS_VIBE,            // Vibe toys
@@ -140,15 +133,7 @@ typedef enum
     OTHERS_KIND_COUNT,
 } others_kind_t;
 
-typedef struct
-{
-    uint8_t key[OTHERS_KEY_LEN];
-    char name[COMM_NAME_MAX];
-    bool allowed;
-    bool clash;             // took the name of someone listed before them took it
-} others_sender_t;
-
-/* Set it up, and read the list. Call it once at startup, after LVGL and
+/* Set it up. Call it once at startup, after LVGL and the rules, and
  * before direct comms. */
 void others_init(void);
 
@@ -201,47 +186,22 @@ bool others_board_checked(uint32_t *id, uint8_t key[OTHERS_KEY_LEN], bool *good)
  * in its hello. */
 bool others_owner(uint8_t key[OTHERS_KEY_LEN], uint8_t sig[OTHERS_SIG_LEN]);
 
-/* Who a kind of command is taken from. Remembered. */
+/* A kind's class in the rules (RULES_CLASS_*). */
+uint8_t others_class(others_kind_t kind);
+
+/* Who a kind of command is taken from, by the rules. */
 typedef enum
 {
     OTHERS_OFF,         // nobody
-    OTHERS_ASK,         // those allowed for it in the list
+    OTHERS_ASK,         // those allowed for it
     OTHERS_ACCEPT,      // anyone
 } others_permission_t;
 others_permission_t others_permission(others_kind_t kind);
-void others_set_permission(others_kind_t kind, others_permission_t permission);
-
-/* Whether a kind of command is taken at all: its permission isn't Off.
- * Switching it on goes back to Ask. Remembered. */
-bool others_accepting(others_kind_t kind);
-void others_set_accepting(others_kind_t kind, bool on);
 
 /* What a kind ignores, whoever it's from: OTHERS_IGNORE_* together. */
 #define OTHERS_IGNORE_EVERYONE  0x02    // broadcasts, and the open direct group's channel
 #define OTHERS_IGNORE_CHANNEL   0x04    // those to a whole channel
 uint8_t others_ignoring(others_kind_t kind);
-void others_set_ignoring(others_kind_t kind, uint8_t ignore);
-
-/* Those the wearer's muted in their app, whose commands are ignored: the
- * first OTHERS_ID_LEN bytes of each one's key, one after another, [len]
- * bytes in all; [first] starts the list afresh, otherwise they're added to
- * it. Kept until the board restarts, as the app sends them each time it
- * connects. */
-void others_set_muted(bool first, const uint8_t *ids, size_t len);
-
-/* Those who've sent a kind of command, or are allowed for it, oldest
- * first. Returns how many there are. */
-int others_senders(others_kind_t kind, others_sender_t *out, int max);
-
-/* Allow someone for a kind, or not, or forget them for it, by their key.
- * Remembered. */
-void others_allow(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN], bool allow);
-void others_forget(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN]);
-
-/* As others_allow(), but someone not in the list is added to it first, by
- * the name given, when they're allowed: from the app, for someone who
- * hasn't sent that kind, or who's dropped out of the list. */
-void others_allow_new(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN], const char *name, bool allow);
 
 /* Who sent the last command of a kind that was done, and how long ago, in
  * ms; NULL if none has been. */
@@ -265,11 +225,12 @@ const char *others_last(others_kind_t kind, uint32_t now_ms, uint32_t *age_ms);
 #define OTHERS_CAPS_MAX         (1 + OTHERS_CAP_ENTRY * OTHERS_KIND_COUNT)
 size_t others_capabilities(uint8_t out[OTHERS_CAPS_MAX]);
 
-/* Goes up whenever any of the above changes, for screens to redraw. */
+/* Goes up whenever any of the above changes, or the rules do, for screens
+ * to redraw. */
 uint32_t others_changes(void);
 
-/* Check and do what's queued, and save the list once it's settled. Call it
- * every 50 ms or so, from the UI loop. */
+/* Check and do what's queued, and save the senders' counters once they've
+ * settled. Call it every 50 ms or so, from the UI loop. */
 void others_poll(uint32_t now_ms);
 
 #endif

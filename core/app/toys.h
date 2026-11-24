@@ -9,17 +9,18 @@
  * Vibe toys are run by channel, V1 to V6 (TOYS_CHANNELS), each with a level
  * from 0 to TOYS_LEVEL_TOP. Each of a toy's outputs (a vibrator, a
  * rotation, the Max's air pump, a thrusting motor) follows one channel, or
- * none, as its wearer maps it (toys_set_channel): by default a toy's first
+ * none, as its wearer maps it in their app (toys_set_maps): by default a toy's first
  * output follows V1, its second V2, and so on. An output runs at its
  * channel's level, scaled to its own range. Commands from others, the
  * screen's controls and the remote all set channels, so everyone in a
  * channel can have different toys, and still all take the same commands.
  *
  * A channel can play a pattern (patterns.h), or react to its wearer
- * (reactive.h), or both. While it does, it's "driven": its level is how high
- * the pattern or reaction takes it, and what it runs at (its "out") is
- * worked out from them as they go. Starting one on a channel that's off sets
- * its level three quarters of the way up.
+ * (reactive.h), or both, and each channel can have a pattern and a reaction
+ * of its own. While it does, it's "driven": its level is how high the
+ * pattern or reaction takes it, and what it runs at (its "out") is worked
+ * out from them as they go. Starting one on a channel that's off sets its
+ * level three quarters of the way up; once neither's left, it's off again.
  *
  * The screen shows a few controls (TOYS_SCREEN_CONTROLS), each driving one
  * or more channels together, as the wearer lays them out in their app
@@ -89,7 +90,7 @@ typedef struct
     uint8_t level;          // as it's set, 0 to TOYS_LEVEL_TOP; while driven, how high it goes
     uint8_t out;            // what it's running at now
     int pattern;            // the pattern it's playing (see patterns.h), or -1
-    bool react;             // following the reaction (reactive.h)
+    uint8_t react;          // the reaction it follows (reactive_mode_t, reactive.h), 0 for none
 } toy_channel_t;
 
 /* A control on the screen: the channels it drives, together. */
@@ -99,8 +100,7 @@ typedef struct
     uint8_t channels;       // a bit for each, V1 the lowest
 } toys_control_t;
 
-/* Read what's remembered: the mapping and the screen's controls. Call it
- * once at startup. */
+/* Set it up. Call it once at startup, before rules_init(). */
 void toys_init(void);
 
 /* Start or stop looking for toys. Starting forgets those that aren't
@@ -135,12 +135,16 @@ void toys_set_level(uint8_t channels, uint8_t level);
  * also stops those channels, unless they're reacting). */
 void toys_play(uint8_t channels, int pattern);
 
-/* Have the channels follow the reaction, or stop following it (they carry
- * on at their levels). reactive.h's mode says what it reacts to;
- * toys_set_reactive_factor() is how strongly, 0 to 1. */
-void toys_react(uint8_t channels, bool on);
-void toys_set_reactive_factor(float factor);
-bool toys_reacting(void);
+/* Have the channels follow a reaction (reactive_mode_t), or none
+ * (REACTIVE_OFF, 0). Each channel follows its own. */
+void toys_react(uint8_t channels, uint8_t mode);
+
+/* The reactions followed, a bit for each (1 << mode), for reactive_poll();
+ * 0 for none. */
+uint32_t toys_reactions(void);
+
+/* The reaction the lowest channel that reacts follows, or 0 for none. */
+uint8_t toys_reaction(void);
 
 /* How fast patterns play, in percent (100 is as written). */
 void toys_set_speed(uint16_t percent);
@@ -149,16 +153,32 @@ uint16_t toys_speed(void);
 /* Stop every pattern and reaction, and set every channel to 0. */
 void toys_stop_all(void);
 
-/* Map an output of a connected toy to a channel (0 for V1), or to none
- * with TOYS_NO_CHANNEL. Remembered for that toy, by its address. */
-void toys_set_channel(size_t slot, uint8_t output, uint8_t channel);
+/* A toy's mapping: the channel each of its outputs follows (0 for V1), or
+ * TOYS_NO_CHANNEL, by its address. */
+typedef struct
+{
+    uint8_t addr[6];
+    uint8_t channels[TOYS_MAX_OUTPUTS];
+} toys_map_t;
+
+/* The toys' mappings, from the wearer's rules (rules.h): connected toys take
+ * theirs at once, and any not given has the usual mapping. */
+#define TOYS_MAPS_MAX           16
+void toys_set_maps(const toys_map_t *maps, int count);
+
+/* The mappings given, and how many. */
+int toys_maps(const toys_map_t **maps);
+
+/* The screen's controls as laid out, and how many: 0 for one for each
+ * mapped channel. */
+int toys_custom_controls(toys_control_t out[TOYS_SCREEN_CONTROLS]);
 
 /* The screen's controls: as laid out, or one for each mapped channel until
  * they are. Returns how many. */
 int toys_screen_controls(toys_control_t out[TOYS_SCREEN_CONTROLS]);
 
-/* Lay out the screen's controls; none (count 0) goes back to one for each
- * mapped channel. Remembered. */
+/* Lay out the screen's controls, from the wearer's rules; none (count 0)
+ * goes back to one for each mapped channel. */
 void toys_set_screen_controls(const toys_control_t *controls, int count);
 
 /* Goes up whenever the mapping or screen controls change, for screens to
