@@ -57,6 +57,8 @@ To bring someone onto the server you use, open a conversation with them (one per
 
 The text shows as an invitation with a **Join server** button.  One tap sets up their app for that server in *Setup → Server*, keeping their own name, and connects.  If they had a different server set up, the app checks with them first, since the new one replaces it.  Once they're on it, the button shows *Joined*.  An app too old to know invitations shows the text as it is, with everything needed to join by hand.  The list of conversations and notifications show *Invitation to the server …* and never the password.
 
+To share one of your [Vibe patterns](patterns.md#sharing-one), tap **⋮** and pick **Share a pattern**.  It shows as the pattern's shape with a **Save** button.
+
 Anyone the text reaches can read the password.  On a direct channel with a passphrase, that's only its members.  On the open direct channel, it's anyone nearby, and the app warns you before you send.
 
 ## Message details

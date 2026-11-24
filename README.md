@@ -111,7 +111,7 @@ Each unit is built around one off-the-shelf board, the [Waveshare ESP32-S3-Touch
 | Audio | Two microphones with echo cancelling; speaker amplifier (speaker model) |
 | Wireless | WiFi, Bluetooth LE, ESP-NOW for direct-mode comms |
 | Sensors | Motion sensor, for the built-in spirit level and motion reactions |
-| Storage | Micro SD card for images, sounds and patterns |
+| Storage | Micro SD card for images and sounds |
 | Battery | 2000 mAh (speaker model, about 13.5 h) or 700-850 mAh (low-profile, about 4.5-5.5 h), charged over USB-C |
 | Fits | The voice port of compatible gas masks: made to fit the MSA Millennium's¹ |
 | Phone app | Android (iPhone users can use the WiFi hotspot remote) |

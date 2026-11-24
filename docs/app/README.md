@@ -15,6 +15,7 @@ The DroneLab app is the phone's half of your unit.  It links your unit to the re
 - **[Voice](voice.md)**: talk to other drones and hear them, like a radio, over the internet through a shared server, or unit to unit with no signal at all.  Your voice goes out through your voice effect; theirs comes to your headphones, through the phone.  [Call](voice.md#calls) one drone to talk alone.
 - **[Text](text.md)**: text one drone, a channel, or everyone who can hear you, in a conversation for each, with photos over the server and emoji reactions; and from any of them, put words on their displays, if they've allowed you.
 - **[HiveMind Control](control.md)**: run other drones' [toys](../features/toys.md) by channel, and put words on their displays, if they've allowed you, from a conversation; and set up which channel your own toys follow.
+- **[Vibe Patterns](patterns.md)**: make your own patterns, keep those sent you, and pick favourites for your unit.
 - **[Permissions](permissions.md)**: choose who can control your display and toys, accept or decline their requests, and see a log of every command that came.
 - **[Record](record.md)**: record your voice effect to the phone as WAV files, for videos, with a beep to line it up with the camera.
 - **[Remote](remote.md)**: everything on the unit's display, from the phone, so nobody has to reach the display in the mask.
@@ -39,7 +40,7 @@ Four tabs along the bottom, and the status strip along the top of every one:
 | **Record** | Recording your voice, and your recordings. |
 | **Remote** | The unit's own controls, as on its display. |
 
-**Setup**, behind the gear on the Voice tab, has what's set once: [connecting](connecting.md) the unit and the server, your [identity](connecting.md#3-identity) (name, avatar and key), how you [talk](voice.md#setup-talking), the [display unit's](remote.md#setup-display-unit) brightness, rotation, startup page and WiFi hotspot, the [unit's sounds](voice.md#setup-unit-sounds), your [toys' channels and screen controls](control.md#setup-toys), [permissions](permissions.md), the headphones' ring, text and attention tones, [notifications](text.md#notifications), and the [unit's firmware](firmware-updates.md).  Its (i), top right, opens **About**: the app's and phone's versions, and the unit's connection, signal, firmware, MAC addresses, enclosure, uptime and battery.  The (i) buttons throughout the app explain each setting.  Tapping the version on *About* ten times shows [developer options](developer-options.md) in Setup, for testing range and relays alone.
+**Setup**, behind the gear on the Voice tab, has what's set once: [connecting](connecting.md) the unit and the server, your [identity](connecting.md#3-identity) (name, avatar and key), how you [talk](voice.md#setup-talking), the [display unit's](remote.md#setup-general-setup) brightness, rotation, startup page and WiFi hotspot, the [unit's sounds](voice.md#setup-sounds), your [toys' pairing, channels and screen controls](control.md#setup-pairing-and-mapping), your [Vibe patterns](patterns.md), [permissions](permissions.md), the headphones' ring, text and attention tones, [notifications](text.md#notifications), and the [unit's firmware](firmware-updates.md).  Its (i), top right, opens **About**: the app's and phone's versions, and the unit's connection, signal, firmware, MAC addresses, enclosure, uptime and battery.  The (i) buttons throughout the app explain each setting.  Tapping the version on *About* ten times shows [developer options](developer-options.md) in Setup, for testing range and relays alone.
 
 ### The status strip
 
@@ -71,6 +72,6 @@ A grey icon is a link that's off, or not connected.  Tap the strip to pull down 
 
 - [Installing the App](installing.md), and what to do if the phone won't let you.
 - [Connecting](connecting.md): pairing, the server, your avatar.
-- [Voice](voice.md), [Text](text.md), [HiveMind Control](control.md), [Permissions](permissions.md), [Record](record.md), [Remote](remote.md).
+- [Voice](voice.md), [Text](text.md), [HiveMind Control](control.md), [Vibe Patterns](patterns.md), [Permissions](permissions.md), [Record](record.md), [Remote](remote.md).
 - [Updating the unit's firmware](firmware-updates.md).
 - [HiveMind (Comms)](../features/comms.md): the unit's side of HiveMind, setting up a server, and how it works underneath.

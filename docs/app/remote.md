@@ -23,7 +23,7 @@ The page is the unit's own, so it always matches the unit's firmware.  It has fi
 - **Toys**: your own [toys](../features/toys.md): a slider for each of the screen's controls, the patterns, the reactions, the toys with the channel each output follows, and a big **STOP**.
 - **Sound**: the voice effect and its volume, the voice ring, and the sound player.  A low-profile unit has no speaker, so its voice effect isn't here: pick it as *HiveMind voice* in Setup, or on the unit.
 - **Terminal**: type a message onto your own display.
-- **Setup**: the display's settings: brightness, rotation, what it shows at startup, and the battery.  The same settings are in the app's own Setup too, under [Display unit](#setup-display-unit).
+- **Setup**: the display's settings: brightness, rotation, what it shows at startup, and the battery.  The same settings are in the app's own Setup too, under [General Setup](#setup-general-setup).
 
 Each tab is described in full in [WiFi Hotspot Remote](../features/phone-remote.md), which is the same page.  The display and the phone control the same things, so each shows what the other does.
 
@@ -43,9 +43,9 @@ With the app, use the Remote tab: it keeps the phone online, so HiveMind's serve
 
 If the Remote tab says the unit isn't connected, it needs the app linked to the unit first: see [Connecting](connecting.md).
 
-## Setup: display unit
+## Setup: General Setup
 
-Setup's **Display unit**, under *Unit*, has the display's settings without opening the Remote: its **brightness**, **rotation** and what it shows **at startup**.  They're the unit's own, the same as on its display's Settings and the Remote's Setup tab, so a change in any of them shows in the others.  A link at the top jumps to the Remote tab for everything else.  It's there while the app's connected to the unit.
+Setup's **General Setup**, under *Display Unit*, has the display's settings without opening the Remote: its **brightness**, **rotation** and what it shows **at startup**.  They're the unit's own, the same as on its display's Settings and the Remote's Setup tab, so a change in any of them shows in the others.  A link at the top jumps to the Remote tab for everything else.  It's there while the app's connected to the unit.
 
 Its *WiFi hotspot remote* section runs the unit's [WiFi Hotspot Remote](../features/phone-remote.md), as the display's own page does:
 

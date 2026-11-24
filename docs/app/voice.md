@@ -160,9 +160,9 @@ In Setup, behind the gear, while the unit's connected:
 
 These are the unit's own settings, so they also show on its display, in the HiveMind feature.  Direct mode is switched on and off from the status strip at the top: tap it for the links.  It costs some battery, as the unit's radio listens the whole time.
 
-## Setup: unit sounds
+## Setup: Sounds
 
-On a unit with a speaker, Setup's **Unit sounds** picks a sound file from the unit's SD card (its `sounds` folder, the Sound player's) for each of these, or none:
+On a unit with a speaker, Setup's **Sounds**, under *Display Unit*, picks a sound file from the unit's SD card (its `sounds` folder, the Sound player's) for each of these, or none:
 
 - **Incoming call**: someone calling you.
 - **Text message**: a text or photo coming in.

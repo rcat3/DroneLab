@@ -79,7 +79,6 @@ Format a micro SD card as FAT32 (most come that way), and make these folders on 
 
 - `images` for pictures and animated GIFs (PNG, JPG, BMP or GIF).  A 240 x 240 image fills the screen; bigger artwork, up to 466 x 466, looks sharper.  See [Images on the SD card](../features/images.md#images-on-the-sd-card).
 - `sounds` for WAV, MP3 or FLAC files (speaker model).  See [Sound](../features/sound.md#sounds-on-the-sd-card).
-- `patterns` for your own toy patterns.  See [Toys](../features/toys.md#patterns-on-the-sd-card).
 
 Put the card in the slot on the left side and restart the unit: it reads the card while the logo shows.
 

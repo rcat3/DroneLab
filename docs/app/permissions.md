@@ -84,7 +84,7 @@ On someone's card ([Voice](voice.md#whos-there)), *Lets others control* shows an
 
 ## Your phone and your unit
 
-Your permissions, who you've muted, and how your toys are [set up](control.md#setup-toys) are kept in the app, and sent to your unit whenever they change and each time it connects.  The unit keeps the last it was given and goes by them on its own, so commands still work while your phone's away.  The line at the top of Permissions says whether your unit has them: *Your unit has these*, *Sending these to your unit*, or *Kept on your phone* while it isn't connected.
+Your permissions, who you've muted, and how your toys are [set up](control.md#setup-pairing-and-mapping) are kept in the app, and sent to your unit whenever they change and each time it connects.  The unit keeps the last it was given and goes by them on its own, so commands still work while your phone's away.  The line at the top of Permissions says whether your unit has them: *Your unit has these*, *Sending these to your unit*, or *Kept on your phone* while it isn't connected.
 
 On the unit itself, each feature's *Others* page (the Toys feature's *Hive Commands*, the Terminal's *Hive Messages*) shows its setting and who's allowed, but you change them here.  The one thing you can do on the unit is **Turn off**: it stops that feature taking anyone's commands straight away, without your phone.  The app picks that up as soon as it's connected, and you switch it back on here.
 

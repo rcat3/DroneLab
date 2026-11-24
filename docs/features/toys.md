@@ -25,7 +25,7 @@ Left to right:
 - **Toy Visualizer**: not the [Sound Visualizer](visualizer.md) of your voice and sound, but what each channel a connected toy follows has run at over the last few seconds, as a glowing line in its own color scrolling across the screen, with where it is now at the head on the right.  While a pattern or reaction drives a channel, a dotted line shows how high it can go.  Each channel's name and level are along the top, and **STOP**, under the lines, stops everything as soon as you touch it.  You can have the display start on it (see [Startup](settings.md#startup)).
 - **Control**: a ring around the edge for each of the screen's controls, with the level on its knob.  Drag a knob around its ring to set the level.  Only the knobs respond, so you can swipe from anywhere else.  To start with there's a ring for each channel a connected toy follows, up to three, labelled *V1*, *V2* and so on.  Your app can lay them out differently: fewer rings, your own labels, or one ring driving several channels together (see [Screen controls](#screen-controls)).  A control with no label is called by its channels, such as *V1+V2*.  The toy's name (or how many are connected) is in the middle.  **STOP** stops every toy, and any pattern or reaction, as soon as you touch it.
 - **Devices**: turn your toys on and they show up here while it's on screen.  Tap one to connect (it turns green), or tap it again to stop it and disconnect.  Bluetooth only starts the first time it's needed.
-- **Patterns**: tap a pattern to play it, and tap it again to stop it.  The arrows at the top pick where it plays: on every channel, or on one control's channels.  **-**/**+** at the bottom set the speed, of the channels picked: each channel has its own, so others can play patterns at different speeds on different channels.  While a pattern plays, each ring on the Control page sets how high its channels go, and a thin line inside the ring shows the level as it plays.  Six patterns are built in, and you can add your own (see [Patterns on the SD card](#patterns-on-the-sd-card)).
+- **Patterns**: tap a pattern to play it, and tap it again to stop it.  The arrows at the top pick where it plays: on every channel, or on one control's channels.  **-**/**+** at the bottom set the speed, of the channels picked: each channel has its own, so others can play patterns at different speeds on different channels.  While a pattern plays, each ring on the Control page sets how high its channels go, and a thin line inside the ring shows the level as it plays.  Your favourites from the app come first (see [Your own patterns](#your-own-patterns)), then the six built-in ones.
 - **React to**: drives every channel from your voice or how you move, on top of any pattern.  *Voice* follows how loud you talk.  *Moving* runs while you move and stops soon after you stop.  *Still* runs only once you've held still with the display upright for a second (set the display's [Rotation](settings.md#rotation) first, so upright is right).  *Motion* gets stronger the more you move, and *Tilt* the further you tilt from upright.  Tap the one that's on to turn it off: channels with no pattern then go back to 0.  Others can set different channels to different reactions from the app, and each one that's followed is lit.  The line under the list shows what it's sensing.  As with patterns, the rings on the Control page set how high each channel goes.  **STOP** turns the reaction off too.
 - **Options**: *Hold*: on, a control keeps its level when you let go of its knob; off, it springs back to 0.
 - **Others** (*Hive Commands*, the last): who may send commands to your toys over the [comms](comms.md) (see [Commands from others](#commands-from-others)), as your app has set it: *Off*, *Ask* (those you've allowed, listed with a tick) or *Anyone*, and what's ignored.  **Turn off** stops anyone's commands at once, without your phone; switch it back on in the app.  The line at the bottom says who sent the last command that was done.
@@ -38,7 +38,7 @@ The round screen only has room for a few rings, so what they do is set up in you
 
 *The ESP32-S3-Touch-AMOLED-1.75, with comms*
 
-Others in your hive can send commands to your toys with **HiveMind Control** in the DroneLab app (see [HiveMind Control](../app/control.md)): stop, set channels to a level (several at once, moving together), play a pattern on channels, change the patterns' speed on channels, or have channels react (*React to*) to your own voice or movement, as your board senses them.  Which channel each of your toys follows, and the screen's controls, are set in the app's [Setup: Toys](../app/control.md#setup-toys).  They come over the Mumble server, through your phone, or board to board over [direct mode](comms.md#direct-mode).  Your board does them as if you'd used its own controls, and they stay set until they're changed: **STOP**, on the Control page, stops them as it stops everything else, and a STOP sent by someone else stops reactions too.
+Others in your hive can send commands to your toys with **HiveMind Control** in the DroneLab app (see [HiveMind Control](../app/control.md)): stop, set channels to a level (several at once, moving together), play a pattern on channels, change the patterns' speed on channels, or have channels react (*React to*) to your own voice or movement, as your board senses them.  Which channel each of your toys follows, and the screen's controls, are set in the app's [Setup: Pairing and Mapping](../app/control.md#setup-pairing-and-mapping).  They come over the Mumble server, through your phone, or board to board over [direct mode](comms.md#direct-mode).  Your board does them as if you'd used its own controls, and they stay set until they're changed: **STOP**, on the Control page, stops them as it stops everything else, and a STOP sent by someone else stops reactions too.
 
 Whose commands are done is up to you, in the app's [Permissions](../app/permissions.md), as *Nobody*, *Allowed* or *Anyone*, with requests to accept or decline and a log of every command.  The app gives them to your board, which keeps the last it was given and goes by them while your phone's away (see [Your phone and your unit](../app/permissions.md#your-phone-and-your-unit)):
 
@@ -56,27 +56,10 @@ Someone's known by their identity, not their name: their DroneLab app makes a ke
 
 Your board also tells the others what you let them control: Vibe toys while they're on *Ask* or *Anyone* and a toy is connected, with which channels your toys follow, and the [Terminal](terminal.md#messages-from-others) while it isn't *Off*.  It's said in its hello over direct mode, and by your app over the server, for their apps to grey out what you don't allow (see [What others see](../app/permissions.md#what-others-see)).  It doesn't say who you've allowed.
 
-A pattern plays if your board has one by the same name: the six built-in ones always do, and patterns on the SD card only if yours has one with that name too.
+A pattern someone's made comes with the command that plays it, so you don't need it first: your board holds those channels at 0 until it's all there, then plays it.
 
-## Patterns on the SD card
+## Your own patterns
 
-Put pattern files in a folder called `patterns` on the SD card, as `.txt` or `.pat` files.  Each file shows up on the Patterns page, named after the file, after the six built-in patterns.
+Make your own in the app's [Vibe Patterns](../app/patterns.md), or import ones in Lovense's pattern format, and star the ones you want on your unit: they go to it, and it keeps them.  Up to 32 fit, in 16 KB.
 
-The files use Lovense's own pattern format, so patterns written for their developer tools work:
-
-```
-V:1;F:v;S:100#0;4;8;12;16;20;16;12;8;4
-```
-
-- `F` is the motors the levels drive, as Lovense's letters (`v` vibrate, `r` rotate, `p` the air pump, and `t`, `f` or `o` thrusting), separated by commas.  A number after the letter is the **channel**, whatever the letter: `v2` drives V2.  A letter without a number, or no `F` at all, drives every channel the pattern's played on.
-- `S` is how long each level lasts, in milliseconds.  It has to be at least 100, which is as fast as the toys take commands.
-- After the `#` come the levels, 0 to 20, separated by `;`.  They can run over several lines.  When they run out, the pattern starts again.
-
-A file can hold several of these one after another, each with its own `F` and `S`.  They play together, and each one repeats at its own length, so a short pattern on V1 can run against a long, slow one on V2.  For example:
-
-```
-V:1;F:v1;S:200#20;0;20;0;0;0
-V:1;F:v2;S:100#0;2;4;6;8;10;12;14;16;18;20
-```
-
-The levels are scaled to each output's own range (0 to 3 for the air pump), and then by how high each channel is set.  Some built-in patterns run V2, V4 and V6 half a cycle behind V1, V3 and V5, so two channels take turns.  Up to 32 patterns are listed, built-in ones included.
+The levels are scaled to each output's own range (0 to 3 for the air pump), and then by how high each channel is set.  A pattern with several rows plays its first row on the first channel it's played on, its second row on the next, and so on.  Some built-in patterns run the second, fourth and sixth channels half a cycle behind the others, so two channels take turns.  Patterns aren't read from the SD card any more.

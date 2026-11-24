@@ -4,7 +4,7 @@
 
 Settings that apply to the whole display.  Settings that belong to a single feature, like the [Voice Ring](voice-ring.md)'s color or the [Sound](sound.md) volume, are on that feature's own pages.
 
-The [WiFi Hotspot Remote](phone-remote.md)'s Setup tab can set the brightness, rotation and startup page too, and shows the battery and uptime.  So can the [app](../app/remote.md#setup-display-unit), in Setup's *Display unit*.
+The [WiFi Hotspot Remote](phone-remote.md)'s Setup tab can set the brightness, rotation and startup page too, and shows the battery and uptime.  So can the [app](../app/remote.md#setup-general-setup), in Setup's *General Setup*.
 
 Settings are saved about two seconds after you change them, and are restored when the display is powered back on.  They also survive flashing new firmware.
 
