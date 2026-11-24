@@ -119,6 +119,50 @@ void vis_fade(vis_canvas_t *c, int32_t side, int shift)
     }
 }
 
+void vis_fade_to(vis_canvas_t *c, int32_t side, int shift, const uint16_t *bg)
+{
+    static const uint16_t masks[4] = { 0, 0x7bef, 0x39e7, 0x18e3 };
+    shift = shift < 1 ? 1 : shift > 3 ? 3 : shift;
+    uint32_t mask2 = masks[shift] | ((uint32_t)masks[shift] << 16);
+
+    // What's been added over the background fades like vis_fade's pixels.
+    // Every channel is at least the background's (it's only ever added to),
+    // so taking the background off never borrows from the next channel.
+    int32_t x0, y0, x1, y1;
+    square(c, side, &x0, &y0, &x1, &y1);
+    for (int32_t y = y0; y < y1; y++)
+    {
+        uint16_t *p = &c->px[y * c->stride + x0];
+        uint16_t *end = &c->px[y * c->stride + x1];
+        const uint16_t *b = &bg[y * c->stride + x0];
+        if (((uintptr_t)p & 2) && p < end)
+        {
+            uint32_t d = (uint32_t)(*p - *b);
+            *p++ = (uint16_t)(*b++ + d - fade_step(d, shift, mask2));
+        }
+        if (((uintptr_t)b & 2) == 0)
+        {
+            // Both line up, two pixels at a time
+            uint32_t *p2 = (uint32_t *)p;
+            const uint32_t *b2 = (const uint32_t *)b;
+            uint32_t *end2 = (uint32_t *)(end - ((end - p) & 1));
+            while (p2 < end2)
+            {
+                uint32_t bv = *b2++;
+                uint32_t d = *p2 - bv;
+                *p2++ = bv + d - fade_step(d, shift, mask2);
+            }
+            p = (uint16_t *)p2;
+            b = (const uint16_t *)b2;
+        }
+        while (p < end)
+        {
+            uint32_t d = (uint32_t)(*p - *b);
+            *p++ = (uint16_t)(*b++ + d - fade_step(d, shift, mask2));
+        }
+    }
+}
+
 void vis_pixel(vis_canvas_t *c, int32_t x, int32_t y, uint16_t color)
 {
     if ((uint32_t)x < (uint32_t)c->w && (uint32_t)y < (uint32_t)c->h)

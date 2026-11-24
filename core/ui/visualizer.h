@@ -94,6 +94,11 @@ void vis_clear(vis_canvas_t *c, int32_t side);
  * (shift 2) or 7/8 (shift 3) of its brightness. */
 void vis_fade(vis_canvas_t *c, int32_t side, int shift);
 
+/* The same, but fading towards a background picture instead of black: bg is
+ * as big as the canvas, with its stride, and the canvas must only ever have
+ * been added to over it (vis_add and the like). */
+void vis_fade_to(vis_canvas_t *c, int32_t side, int shift, const uint16_t *bg);
+
 /* Plain drawing, clipped to the canvas. */
 void vis_pixel(vis_canvas_t *c, int32_t x, int32_t y, uint16_t color);
 void vis_fill(vis_canvas_t *c, int32_t x, int32_t y, int32_t w, int32_t h, uint16_t color);
