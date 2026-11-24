@@ -18,18 +18,18 @@ void main() {
     p.onNew = (_) => told++;
     p.refused(Capabilities.terminal, key, 'Ann', 'k:1', everyone: false, channel: false, what: 'hi');
     p.refused(Capabilities.terminal, key, 'Ann', 'k:1', everyone: false, channel: false, what: 'hi again');
-    p.refused(Capabilities.lovense, key, 'Ann', 'k:1', everyone: false, channel: false, what: 'vibrate 3');
+    p.refused(Capabilities.vibe, key, 'Ann', 'k:1', everyone: false, channel: false, what: 'vibrate 3');
     expect(p.requests.length, 1);
-    expect(p.requests.first.caps, {Capabilities.terminal, Capabilities.lovense});
+    expect(p.requests.first.caps, {Capabilities.terminal, Capabilities.vibe});
     expect(told, 2);
   });
 
   test('no request for Off, Anyone, what is ignored, or someone allowed', () {
     final p = make()..boardState(state(toys: 0, ignore: ignoreEveryone));
-    p.refused(Capabilities.lovense, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
+    p.refused(Capabilities.vibe, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
     expect(p.requests, isEmpty);
     p.boardState(state(toys: 1, ignore: ignoreEveryone));
-    p.refused(Capabilities.lovense, key, 'Ann', 'k:1', everyone: true, channel: false, what: '');
+    p.refused(Capabilities.vibe, key, 'Ann', 'k:1', everyone: true, channel: false, what: '');
     expect(p.requests, isEmpty);
     p.boardState(state(allowed: true));
     p.refused(Capabilities.terminal, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
@@ -43,7 +43,7 @@ void main() {
     p.refused(Capabilities.terminal, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
     expect(p.requests, isEmpty);
     expect(p.declined.length, 1);
-    p.refused(Capabilities.lovense, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
+    p.refused(Capabilities.vibe, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
     expect(p.requests.length, 1);
     p.boardState(state(toys: 2));
     expect(p.requests, isEmpty);
@@ -53,12 +53,12 @@ void main() {
     final p = make()..boardState(state(toys: 0));
     p.heard(Capabilities.terminal, key, 'Ann', 'k:1',
         done: false, muted: false, direct: true, scope: 2, what: 'put “hi” on your display');
-    p.heard(Capabilities.lovense, key, 'Ann', 'k:1',
-        done: false, muted: false, direct: false, scope: 1, what: 'set your toys to vibrate at 4');
-    p.heard(Capabilities.lovense, key, 'Ann', 'k:1', done: true, muted: false, direct: false, scope: 0, what: 'x');
+    p.heard(Capabilities.vibe, key, 'Ann', 'k:1',
+        done: false, muted: false, direct: false, scope: 1, what: 'set your toys on V1 to 4');
+    p.heard(Capabilities.vibe, key, 'Ann', 'k:1', done: true, muted: false, direct: false, scope: 0, what: 'x');
     expect(p.commandLog.map((e) => (e.via, e.scope, e.outcome)), [
       ('Cloud', 'To everyone', 'Done'),
-      ('Cloud', 'To the channel', 'Not done: Lovense is off'),
+      ('Cloud', 'To the channel', 'Not done: Vibe is off'),
       ('Direct', 'To you only', 'Not done: they asked for permission'),
     ]);
     p.decline(p.requests.first);

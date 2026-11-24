@@ -19,6 +19,7 @@ import 'firmware_ui.dart';
 import 'server_page.dart';
 import 'status_strip.dart';
 import 'theme.dart';
+import 'toys_setup_page.dart';
 import 'widgets.dart';
 
 /// What's set once and left: getting connected (the board, the server, who
@@ -215,6 +216,14 @@ class SetupPage extends StatelessWidget {
                     trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
                     onTap: () =>
                         Navigator.of(context).push(MaterialPageRoute(builder: (_) => DisplayUnitPage(comm: comm))),
+                  ),
+                  PanelRow(
+                    leading: const Icon(Icons.vibration, color: Kc.muted),
+                    title: 'Toys',
+                    subtitle: "Which channel each toy's outputs follow, and the unit's screen controls",
+                    trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
+                    onTap: () =>
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => ToysSetupPage(comm: comm))),
                   ),
                   // Speaker units only: the low-profile one has none to play them on
                   if (settings?.hasSpeaker ?? false)

@@ -9,26 +9,41 @@ import 'text_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// Controlling others: everything there is to control, by capability
-/// (capabilities.dart), how each one shows, and the screens that pick one.
+/// HiveMind Control: controlling others, everything there is to control,
+/// by area (Toys, the Display unit) and capability (capabilities.dart), how
+/// each one shows, and the screens that pick one.
 
 /// The one icon for all of it.
 const controlIcon = Icons.settings_remote;
 
+/// HiveMind Control's areas, in the order they're shown.
+enum ControlArea {
+  toys('Toys'),
+  display('Display unit');
+
+  final String name;
+  const ControlArea(this.name);
+}
+
 /// Something others can control, as this app shows it.
 class ControlKind {
   final int id;             // Capabilities.*
+  final ControlArea area;
   final String name;
   final IconData icon;
   final String does;
-  const ControlKind(this.id, this.name, this.icon, this.does);
+  const ControlKind(this.id, this.area, this.name, this.icon, this.does);
 }
 
-/// Each one this app knows, in the order they're shown. New ones go here.
+/// Each one this app knows, by area, in the order they're shown. New ones
+/// (E-stim, Machines, the Display unit's pictures and sounds) go here.
 const controlKinds = [
-  ControlKind(Capabilities.terminal, 'Terminal', Icons.terminal, 'Put words on their display'),
-  ControlKind(Capabilities.lovense, 'Lovense', Icons.tune, 'Control their toys'),
+  ControlKind(Capabilities.vibe, ControlArea.toys, 'Vibe', Icons.vibration, 'Their vibrating toys, by channel'),
+  ControlKind(Capabilities.terminal, ControlArea.display, 'Terminal', Icons.terminal, 'Put words on their display'),
 ];
+
+/// Those of one area.
+Iterable<ControlKind> kindsOf(ControlArea area) => controlKinds.where((k) => k.area == area);
 
 /// What someone lets others control, by who they are; null if they haven't
 /// said yet, or aren't about.
@@ -58,8 +73,8 @@ void openControl(BuildContext context, CommController comm, Conversation c, int 
   switch (id) {
     case Capabilities.terminal:
       showTerminalSheet(context, comm, c);
-    case Capabilities.lovense:
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => ControlPage(comm: comm, target: c)));
+    case Capabilities.vibe:
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => ToysPage(comm: comm, target: c)));
   }
 }
 
@@ -92,7 +107,10 @@ Future<void> showCapabilities(BuildContext context, String name, Capabilities? c
         title: Text('What $name lets others control'),
         contentPadding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          for (final k in controlKinds) _KindRow(k, caps),
+          for (final a in ControlArea.values) ...[
+            _AreaHeader(a),
+            for (final k in kindsOf(a)) _KindRow(k, caps),
+          ],
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
@@ -106,6 +124,17 @@ Future<void> showCapabilities(BuildContext context, String name, Capabilities? c
         actions: [TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('OK'))],
       ),
     );
+
+class _AreaHeader extends StatelessWidget {
+  final ControlArea area;
+  const _AreaHeader(this.area);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+        child: Text(area.name.toUpperCase(), style: Kc.term(14, color: Kc.muted)),
+      );
+}
 
 class _KindRow extends StatelessWidget {
   final ControlKind kind;
@@ -129,8 +158,9 @@ class _KindRow extends StatelessWidget {
   }
 }
 
-/// Pick what to control of theirs: what they don't let others control is
-/// greyed out. From the Control button on someone's card.
+/// HiveMind Control, for someone: pick what to control of theirs, by area;
+/// what they don't let others control is greyed out. From the Control
+/// button on someone's card.
 class ControlChooserPage extends StatelessWidget {
   final CommController comm;
   final Conversation target;
@@ -143,7 +173,7 @@ class ControlChooserPage extends StatelessWidget {
           final caps = capabilitiesOfConversation(comm, target);
           final online = comm.isOnline(target);
           return Scaffold(
-            appBar: AppBar(title: const Text('Control')),
+            appBar: AppBar(title: const Text('HiveMind Control')),
             body: ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -153,11 +183,14 @@ class ControlChooserPage extends StatelessWidget {
                     padding: EdgeInsets.only(bottom: 8),
                     child: Text("They can't be reached just now", style: TextStyle(color: Kc.muted, fontSize: 13)),
                   ),
-                Panel(children: [
-                  for (final k in controlKinds)
-                    _KindRow(k, caps,
-                        pickable: true, reachable: online, onTap: () => openControl(context, comm, target, k.id)),
-                ]),
+                for (final a in ControlArea.values) ...[
+                  SectionHeader(a.name),
+                  Panel(children: [
+                    for (final k in kindsOf(a))
+                      _KindRow(k, caps,
+                          pickable: true, reachable: online, onTap: () => openControl(context, comm, target, k.id)),
+                  ]),
+                ],
                 const SizedBox(height: 8),
                 Text(
                   caps == null

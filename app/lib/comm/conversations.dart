@@ -13,20 +13,20 @@ import 'message_details.dart';
 /// server or over direct comms), or one person.
 enum ConversationKind { everyone, server, direct, person }
 
-/// A line in a conversation: a text, or a command for a Terminal or Lovense
+/// A line in a conversation: a text, or a command for a Terminal or Vibe toys
 /// devices, ours or someone else's.
 class ConversationEntry {
-  static const text = 'text', terminal = 'terminal', lovense = 'lovense';
+  static const text = 'text', terminal = 'terminal', vibe = 'vibe';
   static const photo = 'photo';     // body: the picture's file, in Conversations.photosPath
 
   final DateTime time;
   final String from;        // who sent it ('' for ours): their name, then
   String who;               // and who they are (KnownPerson.id), '' if not known
   final bool mine;
-  final String kind;        // text, terminal or lovense
+  final String kind;        // text, terminal or vibe
   final String body;        // the text, or what the command did, in words
   final bool done;          // a command: taken by the board it went to
-  DateTime updated;         // a Lovense entry's last level, for running them together
+  DateTime updated;         // a Vibe entry's last level, for running them together
   final String ref;         // a text's or photo's id, as reactions name it (messageRef); '' for none
   final Map<String, String> reactions;    // who reacted (KnownPerson.id, '' for us) and with what
   MessageDetails? details;  // a text's: how it came or went, for its Details; null for one from before them
@@ -190,10 +190,10 @@ class Conversations extends ChangeNotifier {
 
   void add(Conversation c, ConversationEntry e) {
     final prev = c.entries.isEmpty ? null : c.entries.last;
-    // A run of Lovense levels from one person, as a slider's dragged, as one
+    // A run of Vibe levels from one person, as a slider's dragged, as one
     if (prev != null &&
-        e.kind == ConversationEntry.lovense &&
-        prev.kind == ConversationEntry.lovense &&
+        e.kind == ConversationEntry.vibe &&
+        prev.kind == ConversationEntry.vibe &&
         prev.mine == e.mine &&
         prev.from == e.from &&
         prev.who == e.who &&
@@ -314,36 +314,46 @@ const reactionGroups = <(String, List<String>)>[
   ('More', ['🤖', '👽', '👾', '🔥', '💯', '⚡', '🎉', '👀', '🤔', '😱', '😈', '💀']),
 ];
 
+/// Vibe channels, a bit for each, in words: "V1", "V1+V3", or "all
+/// channels".
+String channelNames(int channels) {
+  final c = channels & OthersCommand.allChannels;
+  if (c == OthersCommand.allChannels) return 'all channels';
+  if (c == 0) return 'no channels';
+  return [for (var i = 0; i < OthersCommand.vibeChannels; i++) if (c & (1 << i) != 0) 'V${i + 1}'].join('+');
+}
+
+/// " on V1+V3", or nothing for all of them.
+String _onChannels(int channels) =>
+    channels & OthersCommand.allChannels == OthersCommand.allChannels ? '' : ' on ${channelNames(channels)}';
+
 /// What a command did, in words, for a conversation: [op] is the command
 /// from what to do on, as the board passes it on. [mine] for ones we sent
 /// ("their"), else for ones sent us ("your").
 String describeCommand(Uint8List op, {required bool mine}) {
   if (op.isEmpty) return 'sent a command';
   final your = mine ? 'their' : 'your';
-  String motor(int k) => switch (k) {
-        OthersCommand.vibrate => 'vibrate',
-        OthersCommand.rotate => 'rotate',
-        OthersCommand.air => 'pump',
-        OthersCommand.oscillate => 'thrust',
-        _ => 'motors',
-      };
   const reactions = ['nothing', 'voice', 'moving', 'stillness', 'motion', 'tilt'];
   switch (op[0]) {
-    case OthersCommand.stop:
+    case OthersCommand.vibeStop:
       return 'stopped $your toys';
-    case OthersCommand.level:
+    case OthersCommand.vibeLevel:
       if (op.length < 3) return 'set $your toys';
-      return op[1] == OthersCommand.allMotors
-          ? "set all $your toys' motors to ${op[2]}"
-          : 'set $your toys to ${motor(op[1])} at ${op[2]}';
-    case OthersCommand.pattern:
-      final name = utf8.decode(op.sublist(1), allowMalformed: true);
-      return name.isEmpty ? 'stopped $your patterns' : 'played $name on $your toys';
-    case OthersCommand.speed:
+      return 'set $your toys${_onChannels(op[1])} to ${op[2]}';
+    case OthersCommand.vibePattern:
+      if (op.length < 2) return 'set $your patterns';
+      final name = utf8.decode(op.sublist(2), allowMalformed: true);
+      return name.isEmpty
+          ? 'stopped $your patterns${_onChannels(op[1])}'
+          : 'played $name on $your toys${_onChannels(op[1])}';
+    case OthersCommand.vibeSpeed:
       return op.length >= 3 ? "set $your patterns' speed to ${op[1] | (op[2] << 8)}%" : 'set $your patterns';
-    case OthersCommand.react:
-      final r = op.length >= 2 && op[1] < reactions.length ? reactions[op[1]] : 'something';
-      return op.length >= 2 && op[1] == 0 ? 'stopped $your toys reacting' : 'set $your toys to react to $r';
+    case OthersCommand.vibeReact:
+      if (op.length < 3) return 'set $your toys reacting';
+      final r = op[2] < reactions.length ? reactions[op[2]] : 'something';
+      return op[2] == 0
+          ? 'stopped $your toys reacting${_onChannels(op[1])}'
+          : 'set $your toys${_onChannels(op[1])} to react to $r';
     case OthersCommand.message:
       final text = op.length > 3 ? utf8.decode(op.sublist(3), allowMalformed: true) : '';
       return 'put “$text” on $your display';

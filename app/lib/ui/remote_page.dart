@@ -21,7 +21,7 @@ import 'theme.dart';
 /// matches the board's firmware, however old the app is. The last one is
 /// kept, and only sent again when it changes. The copy built into the app is
 /// for a board too old to send it.
-/// Who may send you commands (kind 0, the Lovense devices) or put words on
+/// Who may send you commands (kind 0, Vibe toys) or put words on
 /// your display (kind 1, the Terminal): the Remote tab, at that tab's
 /// From others.
 void showRemotePermissions(BuildContext context, int kind) {

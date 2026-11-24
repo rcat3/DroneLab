@@ -2819,7 +2819,7 @@ class CommController extends ChangeNotifier {
     conversations.changed();
   }
 
-  /// Send a command (for their Terminals or Lovense devices) to a
+  /// Send a command (for their Terminals or Vibe toys) to a
   /// conversation: everyone in it, whichever ways reach them. Returns false
   /// if it couldn't go anywhere.
   bool sendCommandTo(Conversation c, OthersCommand command, {bool log = true}) {
@@ -2863,7 +2863,7 @@ class CommController extends ChangeNotifier {
 
   static String _kindOf(Uint8List op) => op.isNotEmpty && (op[0] == OthersCommand.message || op[0] == OthersCommand.clear)
       ? ConversationEntry.terminal
-      : ConversationEntry.lovense;
+      : ConversationEntry.vibe;
 
   // ----- Texts' details: how each came or went (message_details.dart) -----
 
@@ -3116,8 +3116,8 @@ class CommController extends ChangeNotifier {
     // Who, by the key they signed it with
     final who = people.byKey(h.key, h.from);
     if (who.muted) {
-      if (h.what == Heard.terminal || h.what == Heard.lovense) {
-        permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.lovense, h.key, h.from, who.id,
+      if (h.what == Heard.terminal || h.what == Heard.vibe) {
+        permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.vibe, h.key, h.from, who.id,
             done: h.done, muted: true, direct: h.direct, scope: h.scope, what: describeCommand(h.data, mine: false));
       }
       return;
@@ -3135,8 +3135,8 @@ class CommController extends ChangeNotifier {
       return;
     }
     // Logged, and one not taken for want of being allowed is a request
-    if (h.what == Heard.terminal || h.what == Heard.lovense) {
-      permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.lovense, h.key, h.from, who.id,
+    if (h.what == Heard.terminal || h.what == Heard.vibe) {
+      permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.vibe, h.key, h.from, who.id,
           done: h.done,
           muted: false,
           direct: h.direct,
@@ -3173,7 +3173,7 @@ class CommController extends ChangeNotifier {
             from: h.from,
             who: who.id,
             mine: false,
-            kind: h.what == Heard.terminal ? ConversationEntry.terminal : ConversationEntry.lovense,
+            kind: h.what == Heard.terminal ? ConversationEntry.terminal : ConversationEntry.vibe,
             body: describeCommand(h.data, mine: false),
             done: h.done);
     // Refused by one way, then done when it came the other: done, once
@@ -3192,7 +3192,7 @@ class CommController extends ChangeNotifier {
     conversations.add(c, e);
     if (h.what == Heard.text) _notifyText(c);
     textResponder.received(c, e);
-    if (e.done && h.what == Heard.lovense) playUnitSound(UnitSoundEvent.lovense);
+    if (e.done && h.what == Heard.vibe) playUnitSound(UnitSoundEvent.vibe);
     if (e.done && h.what == Heard.terminal) playUnitSound(UnitSoundEvent.terminal);
   }
 

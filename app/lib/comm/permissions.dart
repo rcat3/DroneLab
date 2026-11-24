@@ -15,7 +15,7 @@ import 'capabilities.dart';
 /// Senders never hear about any of it: they send, and it's done or not.
 
 /// The board's kind of command (others_kind_t) for each capability.
-const boardKindOf = {Capabilities.lovense: 0, Capabilities.terminal: 1};
+const boardKindOf = {Capabilities.vibe: 0, Capabilities.terminal: 1};
 
 /// Who a capability's taken from, as others_permission_t.
 enum Policy {
@@ -401,7 +401,7 @@ class Permissions extends ChangeNotifier {
 /// What a capability's called.
 String capName(int cap) => switch (cap) {
       Capabilities.terminal => 'Terminal',
-      Capabilities.lovense => 'Lovense',
+      Capabilities.vibe => 'Vibe',
       _ => 'something',
     };
 
