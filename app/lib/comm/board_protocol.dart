@@ -658,10 +658,10 @@ class OthersCommand {
   static OthersCommand play(int channels, String? name) =>
       _make([vibePattern, channels & allChannels, ..._cut(utf8.encode(name ?? ''), nameMax)]);
 
-  /// How fast patterns play, every channel's.
-  static OthersCommand setSpeed(int percent) {
+  /// How fast patterns play on [channels]: each channel has its own.
+  static OthersCommand setSpeed(int channels, int percent) {
     final p = percent.clamp(25, 300);
-    return _make([vibeSpeed, p & 0xFF, p >> 8]);
+    return _make([vibeSpeed, channels & allChannels, p & 0xFF, p >> 8]);
   }
 
   /// [channels] react to the wearer (reactive_mode_t: 0 none, 1 voice, 2

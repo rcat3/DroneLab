@@ -23,7 +23,7 @@ import 'widgets.dart';
 /// level for each channel, or one for several together (ganged, sent as
 /// one command); patterns and their speed; and reactions; each on the
 /// channels picked. The channels can be split into two groups, each with a
-/// pattern and a reaction of its own.
+/// pattern, speed and reaction of its own.
 class ToysPage extends StatefulWidget {
   final CommController comm;
   final Conversation target;
@@ -60,6 +60,7 @@ class _Group {
   int? mask;              // null for every channel shown (the first group, unsplit)
   String? playing;
   int reacting = 0;
+  int speed = 100;
   _Group([this.mask]);
 }
 
@@ -75,7 +76,6 @@ class _ToysPageState extends State<ToysPage> {
   final List<_Group> _groups = [_Group(), _Group(0)];
   bool _split = false;                    // two groups
   int _group = 0;                         // the group shown
-  int _speed = 100;
   bool _stopped = false;
   List<String> _patterns = _builtInPatterns;
   bool _askedPatterns = false;
@@ -201,6 +201,7 @@ class _ToysPageState extends State<ToysPage> {
     if (moved == 0) return;
     if (g.playing != from.playing) _send(OthersCommand.play(moved, g.playing));
     if (g.reacting != from.reacting) _send(OthersCommand.setReact(moved, g.reacting));
+    if (g.speed != from.speed) _send(OthersCommand.setSpeed(moved, g.speed));
     if (g.playing == null && g.reacting == 0 && (from.playing != null || from.reacting != 0)) _zero(moved);
   }
 
@@ -215,7 +216,8 @@ class _ToysPageState extends State<ToysPage> {
           _groups[1]
             ..mask = 0
             ..playing = null
-            ..reacting = 0;
+            ..reacting = 0
+            ..speed = _groups[0].speed;
           _group = 0;
         } else {
           _moveTo(0, _maskOf(_groups[1]));
@@ -225,8 +227,8 @@ class _ToysPageState extends State<ToysPage> {
       });
 
   void _setSpeed(int percent) {
-    setState(() => _speed = percent.clamp(25, 300));
-    _send(OthersCommand.setSpeed(_speed));
+    setState(() => _g.speed = percent.clamp(25, 300));
+    _send(OthersCommand.setSpeed(_on, _g.speed));
   }
 
   Widget _chip(String label, bool selected, VoidCallback? onTap) => ChoiceChip(
@@ -365,13 +367,13 @@ class _ToysPageState extends State<ToysPage> {
                 IconButton(
                     tooltip: 'Slower',
                     color: Kc.pink,
-                    onPressed: canSend && _speed > 25 ? () => _setSpeed(_speed - 25) : null,
+                    onPressed: canSend && _g.speed > 25 ? () => _setSpeed(_g.speed - 25) : null,
                     icon: const Icon(Icons.remove)),
-                SizedBox(width: 150, child: Text('SPEED $_speed%', textAlign: TextAlign.center, style: Kc.term(16))),
+                SizedBox(width: 150, child: Text('SPEED ${_g.speed}%', textAlign: TextAlign.center, style: Kc.term(16))),
                 IconButton(
                     tooltip: 'Faster',
                     color: Kc.pink,
-                    onPressed: canSend && _speed < 300 ? () => _setSpeed(_speed + 25) : null,
+                    onPressed: canSend && _g.speed < 300 ? () => _setSpeed(_g.speed + 25) : null,
                     icon: const Icon(Icons.add)),
               ],
             ),
@@ -397,7 +399,7 @@ class _ToysPageState extends State<ToysPage> {
   /// with its own.
   Widget _onPicker(bool canSend) => Panel(children: [
         Explained(
-          help: 'Split the channels into two groups, each with its own pattern and reaction: pick a group, '
+          help: 'Split the channels into two groups, each with its own pattern, speed and reaction: pick a group, '
               'then its channels. A channel is in one group at a time.',
           builder: (context, info) => PanelRow(
             title: 'Two groups',

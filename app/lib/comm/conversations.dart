@@ -347,7 +347,9 @@ String describeCommand(Uint8List op, {required bool mine}) {
           ? 'stopped $your patterns${_onChannels(op[1])}'
           : 'played $name on $your toys${_onChannels(op[1])}';
     case OthersCommand.vibeSpeed:
-      return op.length >= 3 ? "set $your patterns' speed to ${op[1] | (op[2] << 8)}%" : 'set $your patterns';
+      return op.length >= 4
+          ? "set $your patterns' speed${_onChannels(op[1])} to ${op[2] | (op[3] << 8)}%"
+          : 'set $your patterns';
     case OthersCommand.vibeReact:
       if (op.length < 3) return 'set $your toys reacting';
       final r = op[2] < reactions.length ? reactions[op[2]] : 'something';
