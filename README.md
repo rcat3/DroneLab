@@ -29,7 +29,7 @@ The DroneLab display unit screws into the mask's voice port: a glowing 1.75" rou
 <td width="190" align="center"><a href="docs/features/comms.md"><img src="docs/images/screens/comm_status.png" width="170" alt="The Comms status screen"></a></td>
 <td>
 <h3>HiveMind (Comms)</h3>
-<p>Link every drone in the hive into one mind.  Push to talk, or just speak, and your voice, through the effect of your choice, goes straight into every other drone's headphones, while the display shows which drone is transmitting, with its avatar.  Texts and commands travel the same link: any drone can text any other, and the hive can reach a drone's terminal, or its toys, if that drone has allowed it.  A cheap Bluetooth camera remote makes a talk button.</p>
+<p>Link every drone in the hive into one mind.  Push to talk, or just speak, and your voice, through the effect of your choice, goes straight into every other drone's headphones, while the display shows which drone is transmitting, with its avatar.  Texts travel the same link, and so do the hive's orders: any drone can text any other, and with a drone's consent, the hive can put words on its terminal or run its toys.  A cheap Bluetooth camera remote makes a talk button.</p>
 <p>HiveMind can operate in two modes:</p>
     <ul><li><b>Cloud mode:</b> through the wearer's phone to the hive's <a href="https://www.mumble.info">Mumble</a> server, so distance doesn't matter, and people without a mask join from any Mumble app.</li><li><b>Direct mode</b> <i>(experimental)</i>: unit to unit over the radio, with no server, internet or phone signal.  For demos, scenes and drones close together, across a room at most: the board's small built-in antenna doesn't reach far (<a href="docs/hardware/direct-mode-range.md">why</a>).  Encrypted channels, and relaying through the drones in between.</li></ul>
 <p><a href="docs/features/comms.md">HiveMind (Comms) →</a></p>
@@ -47,9 +47,10 @@ The DroneLab display unit screws into the mask's voice port: a glowing 1.75" rou
 <tr>
 <td width="190" align="center"><a href="docs/features/toys.md"><img src="docs/images/screens/lovense_control.png" width="170" alt="The Toys Control page"></a></td>
 <td>
-<h3>Toy control</h3>
-<p>Runs up to three toys over Bluetooth, Lovense for now, with no Lovense app, by channel, so everyone can have different toys and still take the same commands: levels, patterns (including your own), and reactions to the wearer's voice, movement or stillness.  Others in the hive can send commands from their phones, but only once the wearer has authorized them.</p>
-<p><a href="docs/features/toys.md">Toy control →</a></p>
+<h3>HiveMind Control for Toys</h3>
+<p>Take orders from the hive.  With your consent, other drones can run your toys from their phones, wherever they are: one drone, a channel of them, or the whole hive at once.  You choose who may, a new drone has to ask first, and you can take it back at any moment, right on the unit.</p>
+<p>Lovense toys are supported today, up to three at once, straight from the unit over Bluetooth with no Lovense app, and toys of all kinds are in the works.  Toys run by channel, so every drone's can be different and still obey the same orders: levels, patterns (including your own), and reactions to your voice, movement or stillness.</p>
+<p><a href="docs/features/toys.md">HiveMind Control for Toys →</a></p>
 </td>
 </tr>
 <tr>
