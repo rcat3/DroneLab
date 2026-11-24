@@ -1037,6 +1037,113 @@ static void add_paired_page(ui_feature_t *feature)
     show_paired();
 }
 
+/* ----- A new unit's first phone ----- */
+
+/* Asked once, on a new unit, just after which model it is: pair a phone now,
+ * for COMM_FIRST_PAIRING_MS, or later from the Paired Phones page. Over
+ * everything, under the code when it shows. */
+static lv_obj_t *offer_panel;
+static lv_obj_t *offer_text;
+static lv_obj_t *offer_yes;
+static lv_obj_t *offer_no_label;
+static lv_timer_t *offer_timer;
+
+static void offer_close(void)
+{
+    if (offer_timer != NULL)
+    {
+        lv_timer_delete(offer_timer);
+        offer_timer = NULL;
+    }
+    if (offer_panel != NULL)
+    {
+        lv_obj_delete_async(offer_panel);    // may be in one of its buttons' events
+        offer_panel = NULL;
+    }
+}
+
+static void offer_timer_cb(lv_timer_t *t)
+{
+    uint32_t left = comm_pairing_left(lv_tick_get());
+    if (left == 0)
+    {
+        offer_close();      // paired, or the time's up
+        return;
+    }
+    unsigned s = (unsigned)((left + 999) / 1000);
+    char text[96];
+    snprintf(text, sizeof(text), "In the app's Setup, tap\nFind, and pick\n%s\n\nOpen %u:%02u", comm_name(), s / 60,
+             s % 60);
+    set_label(offer_text, text);
+}
+
+static void offer_yes_cb(lv_event_t *e)
+{
+    comm_allow_pairing_for(COMM_FIRST_PAIRING_MS, lv_tick_get());
+    lv_obj_set_hidden(offer_yes, true);
+    set_label(offer_no_label, "Stop");
+    offer_timer = lv_timer_create(offer_timer_cb, 250, NULL);
+    offer_timer_cb(offer_timer);
+}
+
+static void offer_no_cb(lv_event_t *e)
+{
+    if (offer_timer != NULL)
+    {
+        comm_allow_pairing(false, lv_tick_get());   // stopped part way
+    }
+    offer_close();
+}
+
+static lv_obj_t *offer_button(const char *text, lv_event_cb_t cb, int32_t y, lv_color_t color)
+{
+    lv_obj_t *button = lv_button_create(offer_panel);
+    lv_obj_set_size(button, ui_px(150), ui_px(38));
+    lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(button, color, 0);
+    lv_obj_align(button, LV_ALIGN_CENTER, 0, ui_px(y));
+    lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *label = lv_label_create(button);
+    lv_label_set_text(label, text);
+    lv_obj_center(label);
+    return button;
+}
+
+void ui_offer_first_pairing(void)
+{
+    if (!comm_running() || offer_panel != NULL)
+    {
+        return;     // the Phone App's off: pairing's for later
+    }
+    offer_panel = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(offer_panel, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(offer_panel, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(offer_panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(offer_panel, 0, 0);
+    lv_obj_set_style_radius(offer_panel, 0, 0);
+    lv_obj_set_scrollable(offer_panel, false);
+
+    lv_obj_t *title = lv_label_create(offer_panel);
+    lv_label_set_text(title, "Pair a phone?");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(28));
+
+    offer_text = lv_label_create(offer_panel);
+    lv_label_set_text(offer_text, "For the DroneLab app.\nOr later: Settings,\nPaired Phones");
+    lv_obj_set_style_text_align(offer_text, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(offer_text, COLOR_MUTED, 0);
+    lv_obj_align(offer_text, LV_ALIGN_CENTER, 0, ui_px(-34));
+
+    offer_yes = offer_button("Pair now", offer_yes_cb, 32, lv_palette_main(LV_PALETTE_PINK));
+    lv_obj_t *no = offer_button("Later", offer_no_cb, 76, lv_color_hex(0x3a3a3a));
+    offer_no_label = lv_obj_get_child(no, 0);
+}
+
+#else
+
+void ui_offer_first_pairing(void)
+{
+}
+
 #endif  // RCAT_HAVE_NETWORK
 
 /* ----- Changes from the phone remote ----- */

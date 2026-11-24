@@ -1806,11 +1806,16 @@ static void direct_voice(uint32_t sender, uint16_t seq, uint8_t flags, const uin
     send_retrying(msg, 8 + len);
 }
 
+void comm_allow_pairing_for(uint32_t ms, uint32_t now_ms)
+{
+    pairing_open = ms > 0 && running;
+    pairing_until = now_ms + ms;
+    rcat_hal_ble_peer_allow_pairing(pairing_open);
+}
+
 void comm_allow_pairing(bool allow, uint32_t now_ms)
 {
-    pairing_open = allow && running;
-    pairing_until = now_ms + COMM_PAIRING_MS;
-    rcat_hal_ble_peer_allow_pairing(pairing_open);
+    comm_allow_pairing_for(allow ? COMM_PAIRING_MS : 0, now_ms);
 }
 
 uint32_t comm_pairing_left(uint32_t now_ms)
@@ -2242,6 +2247,10 @@ const char *comm_app_os(void)
 }
 
 void comm_allow_pairing(bool allow, uint32_t now_ms)
+{
+}
+
+void comm_allow_pairing_for(uint32_t ms, uint32_t now_ms)
 {
 }
 

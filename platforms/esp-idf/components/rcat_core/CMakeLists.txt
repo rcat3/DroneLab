@@ -69,9 +69,10 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     endif()
 
     # The comm channel, on boards where a phone can connect over Bluetooth
-    # (CONFIG_BT_NIMBLE_ROLE_PERIPHERAL in the board's sdkconfig.defaults)
+    # (CONFIG_BT_NIMBLE_ROLE_PERIPHERAL in the board's sdkconfig.defaults),
+    # and on from the start on a new board, so the app finds it straight away
     if(CONFIG_BT_NIMBLE_ROLE_PERIPHERAL)
-        target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_HAVE_COMM=1)
+        target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_HAVE_COMM=1 RCAT_DEFAULT_COMM_ON=1)
     endif()
 endif()
 

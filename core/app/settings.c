@@ -48,7 +48,7 @@ static void set_defaults(settings_t *s)
     s->voice_volume = SETTINGS_DEFAULT_VOICE_VOLUME;
     s->speaker = SETTINGS_SPEAKER_ASK;
 #if RCAT_DEFAULT_COMM_ON
-    s->comm_on = 1;     // the comm channel's what this unit's for (the virtual unit)
+    s->comm_on = 1;     // on from the start, so the app finds a new unit
 #endif
 }
 

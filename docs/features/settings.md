@@ -18,7 +18,7 @@ The percentage is worked out from the voltage, along a discharge curve the board
 
 *The ESP32-S3-Touch-AMOLED-1.75*
 
-The Bluetooth link to the DroneLab app on a phone: [comms](comms.md), sending your voice to the hive, and the remote, run from the app.  The app is the better remote, as the phone stays on the internet.  The comms's own settings, its modes and the talk button, are in the [Comm](comms.md#getting-started) feature.
+The Bluetooth link to the DroneLab app on a phone: [comms](comms.md), sending your voice to the hive, and the remote, run from the app.  The app is the better remote, as the phone stays on the internet.  The comms's own settings, its modes and the talk button, are in the [Comm](comms.md#getting-started) feature.  It's on on a new unit.
 
 ## Paired Phones
 

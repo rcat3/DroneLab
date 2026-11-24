@@ -97,7 +97,7 @@ static void splash_hide(splash_t *splash)
 
 /* On a new board whose speaker plugs in, ask which housing it's in, before
  * anything that uses the speaker starts. The answer can be changed later, on
- * Settings' Speaker page. */
+ * Settings' Speaker page. True if it asked: the board's new. */
 static volatile int speaker_answer;
 
 static void speaker_answer_cb(lv_event_t *e)
@@ -124,11 +124,11 @@ static lv_obj_t *speaker_button(lv_obj_t *screen, const char *text, int answer, 
     return button;
 }
 
-static void ask_speaker(void)
+static bool ask_speaker(void)
 {
     if (!settings_speaker_unasked())
     {
-        return;
+        return false;
     }
     lv_display_t *disp = lv_display_get_default();
     int32_t px = LV_MIN(lv_display_get_horizontal_resolution(disp), lv_display_get_vertical_resolution(disp));
@@ -169,6 +169,7 @@ static void ask_speaker(void)
     lv_obj_delete(speaker);
     lv_obj_delete(low);
     lv_obj_delete(hint);
+    return true;
 }
 
 /* Built-in images, plus any on the SD card (shown first). storage_path is
@@ -200,7 +201,7 @@ void app_run(void)
     lv_init();
     rcat_hal_lvgl_register();
     rcat_hal_display_set_rotation(settings_get()->rotation);
-    ask_speaker();
+    bool new_unit = ask_speaker();     // and once the UI's up, offer to pair a phone
     splash_t splash;
     splash_show(&splash);
 
@@ -224,6 +225,10 @@ void app_run(void)
 
     splash_hide(&splash);
     ui_init();
+    if (new_unit)
+    {
+        ui_offer_first_pairing();
+    }
     updater_init();
     screenshot_init(storage_path);      // PWR held and BOOT pressed
     console_init();                     // only with RCAT_SERIAL_CONSOLE

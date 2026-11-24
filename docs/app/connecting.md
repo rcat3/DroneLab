@@ -14,7 +14,7 @@ Back to [the app](README.md).
 
 The unit only talks to a phone that's paired with it, so nobody else nearby can listen in or take it over.
 
-1. On the unit, switch on the *Phone App* page in [Settings](../features/settings.md), just after Brightness.  Pairing is open for two minutes after it's switched on.  (Later, to pair another phone, use *Pair a phone* on the *Paired Phones* page instead.)
+1. On the unit, open pairing: tap *Pair a phone* on the *Paired Phones* page in [Settings](../features/settings.md), just after the *Phone App* page.  It stays open for two minutes.  (A new unit offers to pair as soon as it's set up, for five minutes; see [First start](../build/first-start.md#2-turn-it-on).  Its *Phone App* switch is on already, and switching it on also opens pairing for two minutes.)
 2. In the app's *Setup*, tap *Find* by *Pair the board*.  It lists the units nearby with the Phone App on, the strongest signal first.
 3. Pick yours, by the name on its *Phone App* page: `DroneLab-` and four letters.  With several units about, check the name: if you pick someone else's, the code shows on their display, not yours.
 4. The phone asks to pair, and the unit shows a 6-digit code over whatever's on its screen.  Type it into the phone.

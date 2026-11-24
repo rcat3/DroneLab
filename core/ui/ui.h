@@ -22,6 +22,10 @@ void ui_current(size_t *feature, size_t *page);
 /* Bring a page on screen, as if it had been swiped to. */
 void ui_show(size_t feature, size_t page);
 
+/* On a new unit, just set up: ask whether to pair a phone now. Does nothing
+ * with the Phone App off, or without one. Call after ui_init(). */
+void ui_offer_first_pairing(void);
+
 /* The Sound Visualizer feature's name (feature_visualizer.c), not to be
  * mixed up with the Toys feature's Toy Visualizer. */
 #define UI_SOUND_VISUALIZER "Sound Visualizer"

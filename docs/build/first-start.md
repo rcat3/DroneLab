@@ -22,6 +22,8 @@ Press `PWR`, the lower button on the left side, marked with a power symbol.  The
 
 The first time a new unit starts, it asks **Which model is this?**  Tap **Speaker** for the speaker model, or **Low-profile** for the low-profile model, which has no speaker: the features that need one are left out.  It only asks once.  To change it later, it's **Model** on Settings' **Setup** page (see [Model](../features/settings.md#model)).
 
+Then it asks **Pair a phone?**, for the [DroneLab app](../app/connecting.md).  Tap **Pair now** and pairing stays open for five minutes: in the app's *Setup*, tap *Find* and pick the name the unit shows.  The screen goes once the phone's paired, or the time's up.  Tap **Later** (or **Stop**) to pair another time, with *Pair a phone* on Settings' *Paired Phones* page.
+
 > **Photo to come:** the left side of the speaker model, with the `PWR` and `BOOT` plungers and their engraved marks, and the micro SD slot.
 
 ## 3. Find your way around
