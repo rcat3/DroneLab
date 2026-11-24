@@ -18,7 +18,7 @@ The Visualizer fills the screen with a moving picture of your voice, and of what
 |---|---|
 | **KITT** | Three columns of red bars that light up from the middle, like KITT's voice box in Knight Rider |
 | **Terrain** | A 3D spectrum: frequency from left (low) to right (high), loudness as height, and the last second receding into the distance.  The valleys are indigo and the peaks go through pink and orange to gold.  When it's quiet the flat rows make a perspective grid |
-| **Scope** | The waveform, like an oscilloscope with a glowing trace.  Your voice is aqua and the speaker coral, both whiter as they get louder.  Each trace starts at the same point in the wave, so a held note stands still |
+| **Scope** | The waveform, like an old green CRT oscilloscope: a glowing phosphor trace over a faintly lit screen with a grid, and an afterglow of the last few traces.  Your voice is green and the speaker a yellower green, both whiter as they get louder.  Each trace starts at the same point in the wave, so a held note stands still |
 | **Halo** | The spectrum bent into a slowly turning ring of spokes, lows at the top and highs at the bottom, mirrored left and right.  Teal through blue and violet to magenta, with gold peak markers that fall back slowly |
 | **Aurora** | A spectrogram folded into a mirror image: each moment is a line across the middle, low frequencies in the center, and the history flows up and down away from it.  Speech leaves symmetric, feathery patterns in deep purple, magenta and orange |
 | **Orbit** | Each moment of the sound plotted against the one just before it.  A steady tone draws an ellipse, and a voice draws looping knots that change with every vowel.  Violet into ice blue for your voice, amber into gold for the speaker |
