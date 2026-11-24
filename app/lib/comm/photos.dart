@@ -80,6 +80,23 @@ const displayGifSide = 640;
   return null;
 }
 
+/// The square at [x], [y], [side] pixels cut from an RGBA picture
+/// (avatarToCrop, avatars.dart), scaled to fill the display:
+/// [displayPictureSide] square, bigger or smaller as it takes, as a PNG for
+/// [displayPicture] to make a JPEG of. Slow: run it off the UI's isolate.
+Uint8List displayCut(({int width, int height, Uint8List rgba, int x, int y, int side}) job) {
+  final im = img.Image.fromBytes(
+      width: job.width, height: job.height, bytes: job.rgba.buffer, bytesOffset: job.rgba.offsetInBytes, numChannels: 4);
+  final cut = img.copyCrop(im, x: job.x, y: job.y, width: job.side, height: job.side);
+  final sized = job.side == displayPictureSide
+      ? cut
+      : img.copyResize(cut,
+          width: displayPictureSide,
+          height: displayPictureSide,
+          interpolation: job.side > displayPictureSide ? img.Interpolation.average : img.Interpolation.cubic);
+  return img.encodePng(sized);
+}
+
 /// The message for a photo: its JPEG, inline.
 String photoMessage(Uint8List jpeg) => '<img src="data:image/jpeg;base64,${base64Encode(jpeg)}" />';
 

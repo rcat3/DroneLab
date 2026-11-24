@@ -7,6 +7,7 @@ import '../comm/board_protocol.dart';
 import '../comm/built_in_pictures.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
+import 'avatar_crop.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -34,6 +35,8 @@ String _durationLabel(int seconds) => seconds == 0
 Future<void> showDisplaySheet(BuildContext context, CommController comm, Conversation c) {
   final text = TextEditingController();
   Uint8List? own;           // a picture of ours, picked
+  DisplayCrop? crop;        // the part of it to fill their display with; null to fit it whole
+  var cropping = false;
   var sending = false;
   return showModalBottomSheet<void>(
     context: context,
@@ -55,7 +58,7 @@ Future<void> showDisplaySheet(BuildContext context, CommController comm, Convers
         Future<void> sendPicture() async {
           if (own != null) {
             setState(() => sending = true);
-            final why = await comm.sendDisplayPicture(c, own!, seconds);
+            final why = await comm.sendDisplayPicture(c, crop?.picture ?? own!, seconds);
             if (!sheet.mounted) return;
             setState(() => sending = false);
             if (why != null) {
@@ -70,14 +73,33 @@ Future<void> showDisplaySheet(BuildContext context, CommController comm, Convers
           if (sheet.mounted) Navigator.pop(sheet);
         }
 
+        // A GIF goes as it is, to play: not cropped
+        bool isGif(Uint8List b) => b.length > 3 && b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46;
+
+        Future<void> cropOwn() async {
+          final picture = own;
+          if (picture == null || cropping) return;
+          setState(() => cropping = true);
+          try {
+            final got = await cropForDisplay(sheet, picture, area: crop?.area, onFit: () => crop = null);
+            if (got != null && own == picture) crop = got;
+          } on FormatException {
+            messenger.showSnackBar(const SnackBar(content: Text("That isn't a picture")));
+          } finally {
+            if (sheet.mounted) setState(() => cropping = false);
+          }
+        }
+
         Future<void> pickOwn(ImageSource source) async {
           final file = await ImagePicker().pickImage(source: source, requestFullMetadata: false);
           if (file == null) return;
           final bytes = await file.readAsBytes();
           setState(() {
             own = bytes;
+            crop = null;
             _builtIn = null;
           });
+          if (!isGif(bytes)) await cropOwn();
         }
 
         Widget thumb({required Widget child, required bool selected, required VoidCallback? onTap, String? label}) =>
@@ -185,7 +207,8 @@ Future<void> showDisplaySheet(BuildContext context, CommController comm, Convers
                       }
                     : null,
                 child: own != null
-                    ? Image.memory(own!, fit: BoxFit.cover, gaplessPlayback: true)
+                    ? Image.memory(crop?.picture ?? own!,
+                        fit: crop != null ? BoxFit.cover : BoxFit.contain, gaplessPlayback: true)
                     : Icon(Icons.add_photo_alternate_outlined, color: canOwn ? Kc.pink : Kc.muted),
               ),
               for (final b in builtInPictures)
@@ -209,9 +232,26 @@ Future<void> showDisplaySheet(BuildContext context, CommController comm, Convers
           Row(children: [
             Expanded(
               child: Text(
-                  own != null ? 'Your picture' : _builtIn?.name ?? 'Pick a picture',
+                  own != null
+                      ? crop != null
+                          ? 'Your picture, cropped'
+                          : 'Your picture, whole'
+                      : _builtIn?.name ?? 'Pick a picture',
                   style: TextStyle(color: own != null || _builtIn != null ? Kc.text : Kc.muted)),
             ),
+            if (own != null && !isGif(own!)) ...[
+              IconButton(
+                tooltip: 'Crop',
+                icon: const Icon(Icons.crop),
+                onPressed: cropping || sending ? null : cropOwn,
+              ),
+              if (crop != null)
+                IconButton(
+                  tooltip: 'Fit whole picture',
+                  icon: const Icon(Icons.fit_screen_outlined),
+                  onPressed: sending ? null : () => setState(() => crop = null),
+                ),
+            ],
             sending
                 ? const Padding(
                     padding: EdgeInsets.all(12),

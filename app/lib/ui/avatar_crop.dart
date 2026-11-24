@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../comm/avatars.dart';
+import '../comm/photos.dart';
 import 'theme.dart';
 
 /// The size an avatar's kept at (avatarForMumble): a picture square and no
@@ -28,7 +29,14 @@ Future<Uint8List?> cropAvatar(BuildContext context, Uint8List picture) async {
   final Rect? square;
   try {
     square = await Navigator.of(context).push<Rect>(
-      MaterialPageRoute(fullscreenDialog: true, builder: (_) => _AvatarCropPage(image: shown)),
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _CropPage(
+          image: shown,
+          title: 'Crop your avatar',
+          hint: 'Drag the square to move it. Pinch, or drag a corner, to resize it.',
+        ),
+      ),
     );
   } finally {
     shown.dispose();
@@ -48,23 +56,80 @@ Future<Uint8List?> cropAvatar(BuildContext context, Uint8List picture) async {
   ));
 }
 
+/// What [cropForDisplay] gives: the cut, for the display, and where it was
+/// cut from, to start from next time.
+typedef DisplayCrop = ({Uint8List picture, Rect area});
+
+/// The part of [picture] to fill someone's display with: you pick it in a
+/// circle, the round screen's shape, made smaller to zoom in. Starts at
+/// [area] if given (a [DisplayCrop]'s). Null if it's cancelled, or if Fit
+/// whole is chosen instead, when [onFit] is called. A FormatException if it
+/// isn't a picture.
+Future<DisplayCrop?> cropForDisplay(BuildContext context, Uint8List picture, {Rect? area, VoidCallback? onFit}) async {
+  final pic = await compute(avatarToCrop, picture);
+  if (pic == null) throw const FormatException('Not a picture');
+  final shown = await _toUiImage(pic.rgba, pic.width, pic.height);
+  if (!context.mounted) {
+    shown.dispose();
+    return null;
+  }
+  final Object? picked;
+  try {
+    picked = await Navigator.of(context).push<Object>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _CropPage(
+          image: shown,
+          title: 'Crop for their display',
+          hint: "What's in the circle fills their display. Drag it to move it. Pinch, or drag a corner, "
+              'to resize it: smaller zooms in.',
+          round: true,
+          start: area,
+          fit: onFit != null,
+        ),
+      ),
+    );
+  } finally {
+    shown.dispose();
+  }
+  if (picked == _fitWhole) onFit?.call();
+  if (picked is! Rect) return null;
+  final x = picked.left.round().clamp(0, pic.width - 1);
+  final y = picked.top.round().clamp(0, pic.height - 1);
+  final int side = picked.width.round().clamp(1, math.min(pic.width - x, pic.height - y));
+  final cut = await compute(displayCut, (width: pic.width, height: pic.height, rgba: pic.rgba, x: x, y: y, side: side));
+  return (picture: cut, area: picked);
+}
+
+/// What the crop page gives back for Fit whole.
+const _fitWhole = #fitWhole;
+
 Future<ui.Image> _toUiImage(Uint8List rgba, int width, int height) {
   final done = Completer<ui.Image>();
   ui.decodeImageFromPixels(rgba, width, height, ui.PixelFormat.rgba8888, done.complete);
   return done.future;
 }
 
-class _AvatarCropPage extends StatefulWidget {
+/// Picking a square of [image], shown as a circle if it's for a [round]
+/// screen. Gives back the square (a Rect, in the picture's pixels), or
+/// [_fitWhole] if [fit] offers that and it's chosen.
+class _CropPage extends StatefulWidget {
   final ui.Image image;
-  const _AvatarCropPage({required this.image});
+  final String title;
+  final String hint;
+  final bool round;
+  final Rect? start;
+  final bool fit;
+  const _CropPage(
+      {required this.image, required this.title, required this.hint, this.round = false, this.start, this.fit = false});
 
   @override
-  State<_AvatarCropPage> createState() => _AvatarCropPageState();
+  State<_CropPage> createState() => _CropPageState();
 }
 
 enum _Drag { move, corner }
 
-class _AvatarCropPageState extends State<_AvatarCropPage> {
+class _CropPageState extends State<_CropPage> {
   /// The square kept, in the picture's pixels.
   late Rect _sel;
 
@@ -89,7 +154,8 @@ class _AvatarCropPageState extends State<_AvatarCropPage> {
   void initState() {
     super.initState();
     final side = _maxSide;
-    _sel = Rect.fromLTWH((_w - side) / 2, (_h - side) / 2, side, side);
+    final start = widget.start;
+    _sel = start != null ? _fit(start.center, start.width) : Rect.fromLTWH((_w - side) / 2, (_h - side) / 2, side, side);
   }
 
   /// A square [side] about [center], kept inside the picture.
@@ -153,8 +219,10 @@ class _AvatarCropPageState extends State<_AvatarCropPage> {
     return Scaffold(
       backgroundColor: Kc.bg,
       appBar: AppBar(
-        title: const Text('Crop your avatar'),
+        title: Text(widget.title),
         actions: [
+          if (widget.fit)
+            TextButton(onPressed: () => Navigator.of(context).pop(_fitWhole), child: const Text('Fit whole')),
           TextButton(onPressed: () => Navigator.of(context).pop(_sel), child: const Text('Use')),
           const SizedBox(width: 8),
         ],
@@ -176,7 +244,7 @@ class _AvatarCropPageState extends State<_AvatarCropPage> {
                       onScaleUpdate: _update,
                       child: CustomPaint(
                         size: Size(box.maxWidth, box.maxHeight),
-                        painter: _CropPainter(widget.image, _sel, _scale, _origin),
+                        painter: _CropPainter(widget.image, _sel, _scale, _origin, widget.round),
                       ),
                     ),
                   );
@@ -186,7 +254,7 @@ class _AvatarCropPageState extends State<_AvatarCropPage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Text(
-                'Drag the square to move it. Pinch, or drag a corner, to resize it.',
+                widget.hint,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Kc.muted),
               ),
@@ -203,7 +271,8 @@ class _CropPainter extends CustomPainter {
   final Rect sel;
   final double scale;
   final Offset origin;
-  _CropPainter(this.image, this.sel, this.scale, this.origin);
+  final bool round;
+  _CropPainter(this.image, this.sel, this.scale, this.origin, this.round);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -222,6 +291,16 @@ class _CropPainter extends CustomPainter {
         ..addRect(kept),
       Paint()..color = Colors.black.withValues(alpha: 0.6),
     );
+    if (round) {
+      // The screen's round: outside the circle isn't seen
+      canvas.drawPath(
+        Path()
+          ..fillType = PathFillType.evenOdd
+          ..addRect(kept)
+          ..addOval(kept),
+        Paint()..color = Colors.black.withValues(alpha: 0.85),
+      );
+    }
     final thirds = Paint()
       ..color = Colors.white.withValues(alpha: 0.25)
       ..strokeWidth = 1;
@@ -230,13 +309,17 @@ class _CropPainter extends CustomPainter {
       canvas.drawLine(Offset(x, kept.top), Offset(x, kept.bottom), thirds);
       canvas.drawLine(Offset(kept.left, y), Offset(kept.right, y), thirds);
     }
-    canvas.drawRect(
-      kept,
-      Paint()
-        ..color = Kc.pink
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
+    final edge = Paint()
+      ..color = Kc.pink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    if (round) {
+      canvas.drawOval(kept, edge);
+      edge
+        ..color = Kc.pink.withValues(alpha: 0.5)
+        ..strokeWidth = 1;
+    }
+    canvas.drawRect(kept, edge);
     final handle = Paint()..color = Kc.pink;
     for (final c in [kept.topLeft, kept.topRight, kept.bottomLeft, kept.bottomRight]) {
       canvas.drawRect(Rect.fromCenter(center: c, width: 12, height: 12), handle);
@@ -244,5 +327,5 @@ class _CropPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_CropPainter old) => old.sel != sel || old.scale != scale || old.origin != origin || old.image != image;
+  bool shouldRepaint(_CropPainter old) => old.sel != sel || old.scale != scale || old.origin != origin || old.image != image || old.round != round;
 }
