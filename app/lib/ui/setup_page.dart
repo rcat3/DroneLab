@@ -18,6 +18,7 @@ import 'unit_sounds_page.dart';
 import 'firmware_ui.dart';
 import 'server_page.dart';
 import 'status_strip.dart';
+import 'patterns_page.dart';
 import 'theme.dart';
 import 'toys_setup_page.dart';
 import 'widgets.dart';
@@ -237,6 +238,16 @@ class SetupPage extends StatelessWidget {
                     ),
                 ]),
               ],
+              const SectionHeader('Patterns'),
+              Panel(children: [
+                PanelRow(
+                  leading: const Icon(Icons.graphic_eq, color: Kc.muted),
+                  title: 'Vibe patterns',
+                  subtitle: 'Make your own, keep those sent to you, and import or export them',
+                  trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PatternsPage(comm: comm))),
+                ),
+              ]),
               const SectionHeader('Headphones'),
               _CallsPanel(comm: comm),
               const SectionHeader('Notifications'),

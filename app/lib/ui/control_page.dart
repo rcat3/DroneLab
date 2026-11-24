@@ -8,6 +8,7 @@ import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
 import '../comm/patterns.dart';
 import 'capabilities_ui.dart';
+import 'patterns_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -431,7 +432,15 @@ class _ToysPageState extends State<ToysPage> {
             ),
           ]),
           const SizedBox(height: 8),
-          const Text('Plays in step on the channels picked. Yours are sent along with it', style: small),
+          Row(children: [
+            const Expanded(child: Text('Plays in step on the channels picked. Yours are sent along with it', style: small)),
+            TextButton.icon(
+              onPressed: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => PatternsPage(comm: comm))),
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('Patterns'),
+            ),
+          ]),
         ],
       _Section.react => [
           _onPicker(canSend),

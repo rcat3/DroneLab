@@ -445,3 +445,47 @@ class PatternLibrary extends ChangeNotifier {
   /// A pattern's name by its hash, for saying what a command did.
   static String? nameOf(List<int> hash) => instance?.byHash(VibePattern.hex(hash))?.pattern.name;
 }
+
+/// A pattern shared in a text: a line saying what it is, and a line the
+/// app reads, with its definition (deflated if that's shorter), for a Save
+/// button. It has to fit in a text over direct comms.
+class PatternShare {
+  static const _prefix = 'dronelab://pattern?';
+
+  static String text(VibePattern p) {
+    final def = p.encode();
+    final z = ZLibCodec(level: 9, raw: true).encode(def);
+    final packed = z.length < def.length;
+    final data = base64Url.encode(packed ? z : def).replaceAll('=', '');
+    return 'Pattern “${p.name}”\n$_prefix${packed ? 'z' : 'd'}=$data';
+  }
+
+  /// Whether it fits in a text that can go over direct comms.
+  static bool fits(VibePattern p) => utf8.encode(text(p)).length <= textBytesMax;
+  static const textBytesMax = 654;    // OthersCommand.longTextBytes
+
+  /// The pattern in a text, or null if there's none.
+  static VibePattern? parse(String text) {
+    for (final line in text.split('\n')) {
+      final l = line.trim();
+      if (!l.startsWith(_prefix)) continue;
+      final u = Uri.tryParse(l);
+      final packed = u?.queryParameters['z'], plain = u?.queryParameters['d'];
+      final data = packed ?? plain;
+      if (data == null) return null;
+      try {
+        final bytes = base64Url.decode(base64Url.normalize(data));
+        return VibePattern.decode(packed != null ? ZLibCodec(raw: true).decode(bytes) : bytes);
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /// A text, as shown where the whole of it isn't: a pattern in words.
+  static String preview(String text) {
+    final p = parse(text);
+    return p == null ? text : 'Pattern “${p.name}”';
+  }
+}

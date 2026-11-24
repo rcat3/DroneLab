@@ -407,5 +407,12 @@ void main() {
     expect(l.blocks[1].levels, [10, 11, 0]);
     expect(l.toLovense(), 'V:1;F:v1,v2;S:200#5,10;6,11;20,0;');
     expect(VibePattern.fromLovense('V:1;F:v;S:100#0;4;8;')!.blocks.single.rows, 0);
+    // Shared in a text, and back
+    final share = PatternShare.text(rows);
+    expect(PatternShare.parse('Look\n$share')!.hashHex, rows.hashHex);
+    expect(PatternShare.preview(share), 'Pattern “Two”');
+    final small = VibePattern('Tease', [PatternBlock(100, 0, List.generate(300, (i) => (i ~/ 10).isEven ? 20 : 4))]);
+    expect(PatternShare.fits(small), isTrue);
+    expect(PatternShare.parse('just words'), isNull);
   });
 }

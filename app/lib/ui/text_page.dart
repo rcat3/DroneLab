@@ -7,12 +7,15 @@ import 'package:image_picker/image_picker.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
+import '../comm/patterns.dart';
 import '../comm/server_invites.dart';
 import 'capabilities_ui.dart';
 import 'permissions_page.dart';
 import 'message_details.dart';
 import 'channel_details.dart';
 import 'channel_lists.dart';
+import 'pattern_sparkline.dart';
+import 'patterns_page.dart';
 import 'people.dart';
 import 'person_sheet.dart';
 import 'setup_page.dart';
@@ -150,7 +153,7 @@ class _Row extends StatelessWidget {
         ? null
         : last.kind == ConversationEntry.text || last.kind == ConversationEntry.photo
             ? '${last.mine ? 'You: ' : c.kind == ConversationKind.person ? '' : '${comm.fromLabel(last)}: '}'
-                '${last.kind == ConversationEntry.photo ? '📷 Photo' : ServerInvite.preview(last.body)}'
+                '${last.kind == ConversationEntry.photo ? '📷 Photo' : PatternShare.preview(ServerInvite.preview(last.body))}'
             : '${last.mine ? 'You' : comm.fromLabel(last)} ${last.body}';
     return InkWell(
       onTap: () => openConversation(context, comm, c),
@@ -387,6 +390,16 @@ class _ConversationPageState extends State<ConversationPage> {
     }
   }
 
+  /// Share one of our patterns, as a text with a Save button.
+  Future<void> _sharePattern(Conversation c) async {
+    final e = await pickPattern(context, comm);
+    if (e == null || !mounted) return;
+    if (!comm.sendText(c, PatternShare.text(e.pattern), typed: false)) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Couldn't send it: ${c.title} can't be reached just now")));
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -473,12 +486,14 @@ class _ConversationPageState extends State<ConversationPage> {
                       ? showChannelDetails(context, comm, c)
                       : showPerson(context, comm, id: CommController.personOf(c), inConversation: true),
                   'invite' => _inviteToServer(c),
+                  'pattern' => _sharePattern(c),
                   _ => deleteConversation(context, comm, c, leave: true),
                 },
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'details', child: Text('Details')),
                   if (comm.canInviteToServer(c))
                     PopupMenuItem(value: 'invite', enabled: online, child: const Text('Invite to your server')),
+                  PopupMenuItem(value: 'pattern', enabled: online, child: const Text('Share a pattern')),
                   const PopupMenuItem(value: 'delete', child: Text('Delete conversation')),
                 ],
               ),
@@ -651,6 +666,8 @@ class _Entry extends StatelessWidget {
             if (named && !e.mine) Text(from, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
             if (ServerInvite.parse(e.body) case final i?)
               _ServerInviteCard(comm, i, mine: e.mine)
+            else if (PatternShare.parse(e.body) case final p?)
+              _PatternCard(comm, p, from: from, mine: e.mine)
             else
               Text(e.body, style: const TextStyle(fontSize: 15)),
             const SizedBox(height: 2),
@@ -785,6 +802,51 @@ class _ServerInviteCardState extends State<_ServerInviteCard> {
       ],
     ]);
   }
+}
+
+/// A pattern shared in a text, in its bubble: its shape, and for one sent
+/// us, a button to keep it with our patterns.
+class _PatternCard extends StatelessWidget {
+  final CommController comm;
+  final VibePattern p;
+  final String from;
+  final bool mine;
+  const _PatternCard(this.comm, this.p, {required this.from, required this.mine});
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: comm.patterns,
+        builder: (context, _) {
+          final saved = comm.patterns.byHash(p.hashHex) != null;
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.graphic_eq, size: 18, color: Kc.pink),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(mine ? 'You shared “${p.name}”' : 'Pattern “${p.name}”',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            PatternSparkline(pattern: p, width: 160, height: 36),
+            Text(PatternsPage.describe(p), style: const TextStyle(color: Kc.muted, fontSize: 13)),
+            if (!mine) ...[
+              const SizedBox(height: 8),
+              saved
+                  ? const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.check, size: 16, color: Kc.green),
+                      SizedBox(width: 4),
+                      Text('Saved in your patterns', style: TextStyle(color: Kc.green)),
+                    ])
+                  : FilledButton.icon(
+                      onPressed: () => comm.patterns.keepReceived(p, from),
+                      icon: const Icon(Icons.download),
+                      label: const Text('Save'),
+                    ),
+            ],
+          ]);
+        },
+      );
 }
 
 /// A message's reactions, under it: each emoji once, with how many gave

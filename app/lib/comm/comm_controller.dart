@@ -3022,7 +3022,7 @@ class CommController extends ChangeNotifier {
     notifier.showTexts(c.key, c.title,
         [
           for (final e in last)
-            (fromLabel(e), e.kind == ConversationEntry.photo ? '📷 Photo' : ServerInvite.preview(e.body), e.time, _avatarByName(e.from))
+            (fromLabel(e), e.kind == ConversationEntry.photo ? '📷 Photo' : PatternShare.preview(ServerInvite.preview(e.body)), e.time, _avatarByName(e.from))
         ],
         group: group);
   }
