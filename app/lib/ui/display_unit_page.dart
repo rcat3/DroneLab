@@ -236,7 +236,7 @@ class _DisplayUnitPageState extends State<DisplayUnitPage> {
       ]);
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Display Unit')),
+      appBar: AppBar(title: const Text('General Setup')),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom),
         children: [

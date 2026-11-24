@@ -208,29 +208,21 @@ class SetupPage extends StatelessWidget {
                 ]),
               ],
               if (boardUp) ...[
-                const SectionHeader('Unit'),
+                const SectionHeader('Display Unit'),
                 Panel(children: [
                   PanelRow(
                     leading: const Icon(Icons.brightness_6_outlined, color: Kc.muted),
-                    title: 'Display unit',
+                    title: 'General Setup',
                     subtitle: 'Brightness, rotation, what it shows at startup, the WiFi remote',
                     trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
                     onTap: () =>
                         Navigator.of(context).push(MaterialPageRoute(builder: (_) => DisplayUnitPage(comm: comm))),
                   ),
-                  PanelRow(
-                    leading: const Icon(Icons.vibration, color: Kc.muted),
-                    title: 'Toys',
-                    subtitle: "Which channel each toy's outputs follow, and the unit's screen controls",
-                    trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
-                    onTap: () =>
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => ToysSetupPage(comm: comm))),
-                  ),
                   // Speaker units only: the low-profile one has none to play them on
                   if (settings?.hasSpeaker ?? false)
                     PanelRow(
                       leading: const Icon(Icons.music_note_outlined, color: Kc.muted),
-                      title: 'Unit sounds',
+                      title: 'Sounds',
                       subtitle: 'Sounds the unit plays for calls, texts, commands and units nearby',
                       trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
                       onTap: () =>
@@ -238,11 +230,20 @@ class SetupPage extends StatelessWidget {
                     ),
                 ]),
               ],
-              const SectionHeader('Patterns'),
+              const SectionHeader('Toys'),
               Panel(children: [
+                if (boardUp)
+                  PanelRow(
+                    leading: const Icon(Icons.vibration, color: Kc.muted),
+                    title: 'Pairing and Mapping',
+                    subtitle: "Connect your toys, which channel each one's outputs follow, and the unit's screen controls",
+                    trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
+                    onTap: () =>
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => ToysSetupPage(comm: comm))),
+                  ),
                 PanelRow(
                   leading: const Icon(Icons.graphic_eq, color: Kc.muted),
-                  title: 'Vibe patterns',
+                  title: 'Vibe Patterns',
                   subtitle: 'Make your own, keep those sent to you, and import or export them',
                   trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PatternsPage(comm: comm))),

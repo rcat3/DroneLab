@@ -73,7 +73,7 @@ class _UnitSoundsPageState extends State<UnitSoundsPage> {
         final up = comm.board.state == BoardState.connected && comm.board.status != null;
         final tracks = _tracks;
         return Scaffold(
-          appBar: AppBar(title: const Text('Unit Sounds')),
+          appBar: AppBar(title: const Text('Sounds')),
           body: ListView(
             padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom),
             children: [

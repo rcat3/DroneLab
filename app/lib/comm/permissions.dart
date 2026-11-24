@@ -413,7 +413,7 @@ class Permissions extends ChangeNotifier {
     rulesChanged();
   }
 
-  /// Our toys' layout, for Setup → Toys: the channel an output follows
+  /// Our toys' layout, for Setup → Toys → Pairing and Mapping: the channel an output follows
   /// (-1 for none), of a toy with [outputs] (their channels now), by its
   /// address.
   void mapOutput(String addr, List<int> outputs, int output, int channel) {

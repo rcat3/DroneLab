@@ -319,7 +319,7 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
     return ListenableBuilder(
       listenable: _board,
       builder: (context, _) => Scaffold(
-        appBar: AppBar(title: const Text('Toys')),
+        appBar: AppBar(title: const Text('Pairing and Mapping')),
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [

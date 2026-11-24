@@ -19,7 +19,7 @@ import 'widgets.dart';
 /// Permissions.
 ///
 /// Vibe toys are run by channel, V1 to V6: everyone maps their own toys'
-/// outputs to channels (Setup → Toys), so what V1 drives is up to them. A
+/// outputs to channels (Setup → Toys → Pairing and Mapping), so what V1 drives is up to them. A
 /// level for each channel, or one for several together (ganged, sent as
 /// one command); patterns and their speed; and reactions; each on the
 /// channels picked. The channels can be split into two groups, each with a

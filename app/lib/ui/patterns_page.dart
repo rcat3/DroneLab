@@ -112,7 +112,7 @@ class PatternsPage extends StatelessWidget {
         final mine = comm.patterns.mine.toList(), received = comm.patterns.received.toList().reversed.toList();
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Patterns'),
+            title: const Text('Vibe Patterns'),
             actions: [
               IconButton(tooltip: 'Import', icon: const Icon(Icons.download), onPressed: () => _import(context)),
               IconButton(tooltip: 'New pattern', icon: const Icon(Icons.add), onPressed: () => _open(context)),
@@ -162,7 +162,7 @@ Future<PatternEntry?> pickPattern(BuildContext context, CommController comm) => 
           child: all.isEmpty
               ? const Padding(
                   padding: EdgeInsets.all(24),
-                  child: Text('No patterns to share yet: make one in Setup → Patterns'),
+                  child: Text('No patterns to share yet: make one in Setup → Toys → Vibe Patterns'),
                 )
               : ListView(shrinkWrap: true, children: [
                   const Padding(
