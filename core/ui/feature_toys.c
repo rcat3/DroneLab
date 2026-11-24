@@ -535,6 +535,8 @@ static lv_obj_t **pattern_rows;
 static lv_obj_t **pattern_row_labels;
 static int8_t *pattern_row_shown;      // -1 unknown, 0 stopped, 1 playing
 static size_t pattern_row_count;
+static lv_obj_t *pattern_list;
+static uint32_t shown_pattern_changes;
 static lv_obj_t *speed_label;
 static int target = -1;                // the control patterns play on, or -1 for every channel
 static int shown_target = -2;
@@ -572,6 +574,47 @@ static bool playing_on_target(int p)
     return any;
 }
 
+static void pattern_row_event_cb(lv_event_t *e);
+
+/* A row for each pattern listed, its slot its user data: again whenever
+ * the favourites change. */
+static void build_pattern_rows(void)
+{
+    shown_pattern_changes = patterns_changes();
+    lv_obj_clean(pattern_list);
+    lv_free(pattern_rows);
+    lv_free(pattern_row_labels);
+    lv_free(pattern_row_shown);
+    pattern_row_count = patterns_count();
+    pattern_rows = lv_malloc(LV_MAX(1, pattern_row_count) * sizeof(lv_obj_t *));
+    pattern_row_labels = lv_malloc(LV_MAX(1, pattern_row_count) * sizeof(lv_obj_t *));
+    pattern_row_shown = lv_malloc(LV_MAX(1, pattern_row_count));
+    if (pattern_rows == NULL || pattern_row_labels == NULL || pattern_row_shown == NULL)
+    {
+        pattern_row_count = 0;
+    }
+    for (size_t i = 0; i < pattern_row_count; i++)
+    {
+        lv_obj_t *row = lv_button_create(pattern_list);
+        lv_obj_set_size(row, ui_px(176), ui_px(30));
+        lv_obj_set_style_radius(row, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(row, COLOR_SURFACE, 0);
+        lv_obj_set_style_bg_color(row, COLOR_OUTLINE, LV_STATE_PRESSED);
+        lv_obj_set_style_border_width(row, LV_MAX(1, ui_px(1)), 0);
+        lv_obj_set_style_border_color(row, COLOR_OUTLINE, 0);
+        lv_obj_set_style_shadow_width(row, 0, 0);
+        lv_obj_add_event_cb(row, pattern_row_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)patterns_listed(i));
+        lv_obj_t *label = lv_label_create(row);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_DOTS);
+        lv_obj_set_width(label, ui_px(156));
+        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_center(label);
+        pattern_rows[i] = row;
+        pattern_row_labels[i] = label;
+        pattern_row_shown[i] = -1;
+    }
+}
+
 static void show_patterns(void)
 {
     size_t connected = toys_connected_count();
@@ -605,9 +648,14 @@ static void show_patterns(void)
         lv_obj_set_hidden(target_next, control_count < 2);
     }
 
+    if (patterns_changes() != shown_pattern_changes)
+    {
+        build_pattern_rows();
+    }
     for (size_t i = 0; i < pattern_row_count; i++)
     {
-        int8_t playing = playing_on_target((int)i);
+        int slot = patterns_listed(i);
+        int8_t playing = playing_on_target(slot);
         if (playing == pattern_row_shown[i])
         {
             continue;
@@ -615,11 +663,11 @@ static void show_patterns(void)
         pattern_row_shown[i] = playing;
         if (playing)
         {
-            lv_label_set_text_fmt(pattern_row_labels[i], LV_SYMBOL_PLAY "  %s", patterns_name(i));
+            lv_label_set_text_fmt(pattern_row_labels[i], LV_SYMBOL_PLAY "  %s", patterns_name((size_t)slot));
         }
         else
         {
-            lv_label_set_text(pattern_row_labels[i], patterns_name(i));
+            lv_label_set_text(pattern_row_labels[i], patterns_name((size_t)slot));
         }
         lv_color_t color = lv_palette_main(LV_PALETTE_PINK);
         lv_obj_set_style_border_color(pattern_rows[i], playing ? color : COLOR_OUTLINE, 0);
@@ -697,34 +745,8 @@ static void add_patterns_page(ui_feature_t *feature)
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
 
-    pattern_row_count = patterns_count();
-    pattern_rows = lv_malloc(pattern_row_count * sizeof(lv_obj_t *));
-    pattern_row_labels = lv_malloc(pattern_row_count * sizeof(lv_obj_t *));
-    pattern_row_shown = lv_malloc(pattern_row_count);
-    if (pattern_rows == NULL || pattern_row_labels == NULL || pattern_row_shown == NULL)
-    {
-        pattern_row_count = 0;
-    }
-    for (size_t i = 0; i < pattern_row_count; i++)
-    {
-        lv_obj_t *row = lv_button_create(list);
-        lv_obj_set_size(row, ui_px(176), ui_px(30));
-        lv_obj_set_style_radius(row, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_color(row, COLOR_SURFACE, 0);
-        lv_obj_set_style_bg_color(row, COLOR_OUTLINE, LV_STATE_PRESSED);
-        lv_obj_set_style_border_width(row, LV_MAX(1, ui_px(1)), 0);
-        lv_obj_set_style_border_color(row, COLOR_OUTLINE, 0);
-        lv_obj_set_style_shadow_width(row, 0, 0);
-        lv_obj_add_event_cb(row, pattern_row_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
-        lv_obj_t *label = lv_label_create(row);
-        lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_DOTS);
-        lv_obj_set_width(label, ui_px(156));
-        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_center(label);
-        pattern_rows[i] = row;
-        pattern_row_labels[i] = label;
-        pattern_row_shown[i] = -1;
-    }
+    pattern_list = list;
+    build_pattern_rows();
 
     // Speed, under the list
     lv_obj_t *slower = add_round_button(patterns_page, LV_SYMBOL_MINUS, COLOR_SURFACE);

@@ -287,7 +287,7 @@ void toys_set_level(uint8_t mask, uint8_t level)
 
 void toys_play(uint8_t mask, int pattern)
 {
-    if (pattern >= (int)patterns_count())
+    if (pattern >= PATTERNS_SLOTS || patterns_name((size_t)pattern)[0] == '\0')
     {
         pattern = -1;
     }
@@ -371,6 +371,27 @@ void toys_pattern_came(const uint8_t *hash, int pattern)
             ch->waiting = false;
             ch->pub.pattern = pattern;
             ch->pattern_ms = 0;     // all that waited for it, in step
+        }
+    }
+}
+
+void toys_patterns_moved(int first, int count, const int *moved)
+{
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
+    {
+        channel_t *ch = &channels[c];
+        int p = ch->pub.pattern;
+        if (p < first || p >= first + count)
+        {
+            continue;
+        }
+        if (moved[p - first] >= 0)
+        {
+            ch->pub.pattern = moved[p - first];
+        }
+        else
+        {
+            toys_play(1u << c, -1);
         }
     }
 }

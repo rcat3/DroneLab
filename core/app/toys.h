@@ -171,6 +171,11 @@ void toys_set(uint8_t channels, const uint8_t levels[TOYS_CHANNELS], uint16_t sp
  * together. */
 void toys_pattern_came(const uint8_t *hash, int pattern);
 
+/* Patterns moved, from slot [first] on (count of them): a channel playing
+ * one moves to where it's gone (moved[i] for first + i), or with -1 stops
+ * its pattern, as toys_play(-1) would. */
+void toys_patterns_moved(int first, int count, const int *moved);
+
 /* Whether any channel's playing a pattern, by its index. */
 bool toys_pattern_in_use(int pattern);
 

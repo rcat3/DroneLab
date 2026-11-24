@@ -1,6 +1,8 @@
 # Name,   Type, SubType, Offset,   Size
 # Two app partitions, for updates over WiFi (see core/app/updater.h): the
-# new firmware goes into the one that isn't running.
+# new firmware goes into the one that isn't running. patterns holds the
+# wearer's favourite patterns (core/app/patterns.h), two copies; updates
+# don't change this table, so a board only has it once flashed over USB.
 nvs,      data, nvs,     0x9000,   0x6000,
 phy_init, data, phy,     0xf000,   0x1000,
 ota_0,    app,  ota_0,   0x10000,  7M,
@@ -8,3 +10,4 @@ ota_1,    app,  ota_1,   0x710000, 7M,
 otadata,  data, ota,     0xe10000, 0x2000,
 batlog,   data, 0x40,    0xe12000, 0x1000,
 coredump, data, coredump, 0xe13000, 128K,
+patterns, data, 0x41,    0xe33000, 64K,

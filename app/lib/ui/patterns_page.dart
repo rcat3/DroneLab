@@ -65,16 +65,17 @@ class PatternsPage extends StatelessWidget {
     await _open(context, start: p);
   }
 
-  Widget _tile(BuildContext context, PatternEntry e) {
+  Widget _tile(BuildContext context, PatternEntry e, Set<PatternEntry> left) {
     final lib = comm.patterns;
     return PanelRow(
       leading: PatternSparkline(pattern: e.pattern, color: e.kind == PatternEntry.mine ? Kc.pink : Kc.green),
       title: e.pattern.name,
-      subtitle: '${describe(e.pattern)}${e.from.isEmpty ? '' : ' · from ${e.from}'}',
+      subtitle: '${describe(e.pattern)}${e.from.isEmpty ? '' : ' · from ${e.from}'}'
+          '${left.contains(e) ? " · doesn't fit on your unit" : ''}',
       onTap: () => _open(context, entry: e),
       trailing: [
         IconButton(
-          tooltip: e.favourite ? 'Unstar' : 'Star: a favourite, for your unit and for Control',
+          tooltip: e.favourite ? 'Unstar' : "Star: a favourite, on your unit's Patterns page and on Control",
           icon: Icon(e.favourite ? Icons.star : Icons.star_border, color: e.favourite ? Kc.warn : Kc.muted),
           onPressed: () => lib.setFavourite(e, !e.favourite),
         ),
@@ -107,9 +108,12 @@ class PatternsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     const small = TextStyle(color: Kc.muted, fontSize: 13);
     return ListenableBuilder(
-      listenable: comm.patterns,
+      listenable: Listenable.merge([comm, comm.patterns]),
       builder: (context, _) {
         final mine = comm.patterns.mine.toList(), received = comm.patterns.received.toList().reversed.toList();
+        final (doc, leftOut) = comm.favouritesForUnit();
+        final left = leftOut.toSet();
+        final stars = comm.patterns.favourites.length - left.length;
         return Scaffold(
           appBar: AppBar(
             title: const Text('Vibe Patterns'),
@@ -121,6 +125,28 @@ class PatternsPage extends StatelessWidget {
           body: SafeArea(
             top: false,
             child: ListView(padding: const EdgeInsets.all(16), children: [
+              Explained(
+                help: 'Star patterns to make them favourites: they go to your unit, first on its Patterns page, '
+                    'kept there when it restarts, and on Control with your own.',
+                helpPadding: const EdgeInsets.only(bottom: 6),
+                builder: (context, info) => Row(children: [
+                  Icon(Icons.star, size: 16, color: stars > 0 ? Kc.warn : Kc.dim),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                        !comm.unitTakesFavourites
+                            ? 'Favourites go to your unit when it connects'
+                            : comm.unitFavouritesRoom == 0
+                                ? 'Your unit needs updating over USB once to keep favourites'
+                                : '${stars == 1 ? '1 favourite' : '$stars favourites'} on your unit · '
+                                    '${(doc.length / 1024).toStringAsFixed(1)} of '
+                                    '${comm.unitFavouritesRoom ~/ 1024} KB'
+                                    '${comm.unitFavouritesUpToDate ? '' : ' · sending'}',
+                        style: small),
+                  ),
+                  info,
+                ]),
+              ),
               const SectionHeader('Yours'),
               if (mine.isEmpty)
                 const Padding(
@@ -128,7 +154,7 @@ class PatternsPage extends StatelessWidget {
                   child: Text('None yet: make one with +, or from a built-in one below', style: small),
                 )
               else
-                Panel(children: [for (final e in mine) _tile(context, e)]),
+                Panel(children: [for (final e in mine) _tile(context, e, left)]),
               const SectionHeader('Built in'),
               Panel(children: [
                 for (final name in builtInPatterns)
@@ -143,7 +169,7 @@ class PatternsPage extends StatelessWidget {
               if (received.isEmpty)
                 const Text('Patterns others play on your toys, or share in a message, are kept here', style: small)
               else
-                Panel(children: [for (final e in received) _tile(context, e)]),
+                Panel(children: [for (final e in received) _tile(context, e, left)]),
             ]),
           ),
         );

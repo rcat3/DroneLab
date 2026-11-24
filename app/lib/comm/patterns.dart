@@ -416,6 +416,30 @@ class PatternLibrary extends ChangeNotifier {
     _changed();
   }
 
+  // ----- Favourites, for the unit -----
+
+  static const favouritesMax = 32;    // PATTERNS_FAVOURITES
+
+  /// The favourites, as the unit keeps them (patterns.h): how many, then
+  /// each one's definition's length (2, little endian) and the definition;
+  /// as many as fit in [maxBytes], in order. With those left out.
+  (Uint8List, List<PatternEntry>) favouritesDocument(int maxBytes) {
+    final out = <int>[0];
+    final left = <PatternEntry>[];
+    var count = 0;
+    for (final e in favourites) {
+      final def = e.pattern.encode();
+      if (count >= favouritesMax || out.length + 2 + def.length > maxBytes) {
+        left.add(e);
+        continue;
+      }
+      out.addAll([def.length & 0xFF, def.length >> 8, ...def]);
+      count++;
+    }
+    out[0] = count;
+    return (Uint8List.fromList(out), left);
+  }
+
   // ----- Parts heard -----
 
   final Map<String, (DateTime, int, Map<int, Uint8List>)> _assembling = {};

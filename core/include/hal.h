@@ -97,6 +97,18 @@ bool rcat_hal_log_read(void *data, size_t len);
 bool rcat_hal_log_write(const void *data, size_t len);
 bool rcat_hal_log_program(size_t offset, const void *data, size_t len);
 
+/* Storage for the wearer's favourite patterns (app/patterns.h): one block
+ * of up to RCAT_HAL_PATTERNS_SIZE bytes, in a place of its own in flash,
+ * kept twice, so a save cut short leaves the last one. The caller
+ * validates the contents. rcat_hal_patterns_read returns how many bytes it
+ * read, or 0 for none, or if the board has nowhere to keep them (a 1.75"
+ * flashed over the air before the partition was added: flash it over USB
+ * once). */
+#define RCAT_HAL_PATTERNS_SIZE 16384
+bool rcat_hal_patterns_available(void);
+size_t rcat_hal_patterns_read(void *data, size_t len);
+bool rcat_hal_patterns_write(const void *data, size_t len);
+
 /* Called with each block of microphone samples (mono, signed 16-bit). It runs
  * on the board's audio task, not the UI loop, so it has to be quick and must
  * not call LVGL. */

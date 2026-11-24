@@ -203,6 +203,22 @@ bool rcat_hal_log_program(size_t offset, const void *data, size_t len)
     return write_file(LOG_FILE, log_block, sizeof(log_block));
 }
 
+/* The favourite patterns: a file of their own, like the others. */
+bool rcat_hal_patterns_available(void)
+{
+    return true;
+}
+
+size_t rcat_hal_patterns_read(void *data, size_t len)
+{
+    return rcat_hal_store_read("patterns", data, len > RCAT_HAL_PATTERNS_SIZE ? RCAT_HAL_PATTERNS_SIZE : len);
+}
+
+bool rcat_hal_patterns_write(const void *data, size_t len)
+{
+    return len <= RCAT_HAL_PATTERNS_SIZE && rcat_hal_store_write("patterns", data, len);
+}
+
 bool rcat_hal_storage_mount(const char **path)
 {
     static char dir[512];

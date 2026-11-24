@@ -77,6 +77,7 @@ const commVersionDirectVoice = 13;  // voice from the phone for the board to sen
 const commVersionPhoneMic = 15;  // the phone's mic in place of the board's (0x18), its talk button held (0x18)
 const commVersionRules = 16;    // the wearer's rules from the app (0x10), in place of who's muted
 const commVersionPatterns = 17; // Vibe toys set as a whole (0x41), custom patterns in parts (0x45)
+const commVersionFavourites = 18;   // the wearer's favourite patterns (0x19), /api/state's "favs"
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -97,6 +98,7 @@ const _msgRecord = 0x0A;
 const _msgCommand = 0x0B;
 const _msgHeard = 0x0F;
 const _msgRules = 0x10;
+const _msgFavourites = 0x19;
 const _msgIdentity = 0x11;
 const _msgBinding = 0x12;
 const _msgTalkTo = 0x13;      // to the board: who talking goes to
@@ -778,6 +780,12 @@ List<Uint8List> rulesMessages(Uint8List doc, int maxWrite) {
   }
   return pieces;
 }
+
+/// The wearer's favourite patterns' document (PatternLibrary
+/// .favouritesDocument), in pieces that fit in [maxWrite] bytes, as the
+/// rules go.
+List<Uint8List> favouritesMessages(Uint8List doc, int maxWrite) =>
+    [for (final r in rulesMessages(doc, maxWrite)) Uint8List.fromList([_msgFavourites, ...r.sublist(1)])];
 
 /// Who the wearer is: their public key, for commands to them alone.
 Uint8List identityMessage(List<int> key) => Uint8List.fromList([_msgIdentity, ...key]);

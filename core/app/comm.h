@@ -116,6 +116,12 @@
  *                  phone's mic, and there's no voice mode. Back to the
  *                  board's own mic when the phone goes (from COMM_VERSION
  *                  15).
+ *     0x19 favourites: 19, flags (bit 0 the first piece: the document
+ *                  starts afresh; bit 1 the last), then a piece of the
+ *                  wearer's favourite patterns' document (patterns.h), up
+ *                  to RCAT_HAL_PATTERNS_SIZE bytes in all: kept in flash,
+ *                  for the Toys feature's Patterns page (from COMM_VERSION
+ *                  18).
  *     0x0E update: 0E, flags (bit 0 the start, bit 1 the end, bit 2 asks
  *                  for an ack), then for the start: the firmware's length
  *                  (4, little endian), the board it's for
@@ -228,7 +234,10 @@
  *   COMM_VERSION 16, "rules": the hash of the rules it has (rules.h, eight
  *   hex digits, 0 for none), and "edited": 1 if the wearer's switched
  *   something Off on the unit since, for the app to take on (GET /api/rules
- *   says what they are now)}.
+ *   says what they are now), and from COMM_VERSION 18, "favs": the hash
+ *   of the favourite patterns' document it has (patterns.h), and "favmax":
+ *   the most it can keep, in bytes, 0 if it has nowhere to (it hasn't been
+ *   flashed over USB since the place for them was added)}.
  *   GET /remote.html?h=<hash> answers with the page itself (remote_page.html),
  *   so the app shows the board's own version, or "304\n" if <hash>, eight
  *   hex digits of the page's 32-bit FNV-1a hash, says the app has it already.
@@ -290,8 +299,10 @@
  *  16  the wearer's rules from the app (0x10 rules, in place of who's
  *      muted), with /version's "rules" and "edited", and GET /api/rules
  *  17  Vibe toys set as a whole (others.h 0x41), and custom patterns sent
- *      in parts (0x45) */
-#define COMM_VERSION            17
+ *      in parts (0x45)
+ *  18  the wearer's favourite patterns from the app (0x19), with
+ *      /version's "favs" and "favmax" */
+#define COMM_VERSION            18
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

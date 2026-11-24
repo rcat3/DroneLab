@@ -551,8 +551,9 @@ function showControls() {
   const battery = connected().map(d => d.battery).filter(b => b >= 0);
   let note = battery.length ? Math.min(...battery) + "%" : "";
   const playing = list.map(c => state.channels[firstChannel(c.channels)].pattern);
-  if (playing[0] >= 0 && playing.every(p => p === playing[0]) && info.patterns[playing[0]]) {
-    note = "▶ " + info.patterns[playing[0]] + (note ? "  ·  " + note : "");
+  const named = info.patterns.find(([slot]) => slot === playing[0]);
+  if (playing[0] >= 0 && playing.every(p => p === playing[0]) && named) {
+    note = "▶ " + named[1] + (note ? "  ·  " + note : "");
   }
   box.querySelector(".top .muted").textContent = note;
   box.querySelectorAll(".motor").forEach((motor, i) => {
@@ -600,7 +601,7 @@ function showPatterns() {
     }
   }
   const buttons = $("patterns").children;
-  for (let i = 0; i < buttons.length; i++) buttons[i].classList.toggle("on", playingOnTarget(i));
+  for (const b of buttons) b.classList.toggle("on", playingOnTarget(+b.dataset.slot));
   $("speed").textContent = "Speed " + state.speed + "%";
 }
 
@@ -879,11 +880,13 @@ function show(s) {
 
 function build() {
   const grid = $("patterns");
-  info.patterns.forEach((name, i) => {
+  // Each [its slot, its name]: the favourites, then the built-in ones
+  info.patterns.forEach(([slot, name]) => {
     const b = el("button", "", name);
+    b.dataset.slot = slot;
     b.onclick = () => {
       if (connected().length === 0) { toast("Connect a toy first"); return; }
-      command("play", { c: targetChannels(), p: playingOnTarget(i) ? -1 : i });
+      command("play", { c: targetChannels(), p: playingOnTarget(slot) ? -1 : slot });
     };
     grid.append(b);
   });

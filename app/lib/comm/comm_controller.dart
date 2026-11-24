@@ -362,6 +362,7 @@ class CommController extends ChangeNotifier {
       final c = Capabilities.fromBoardState(json);
       if (c != null) _setMyCaps(c);
       permissions.boardState(json);
+      _favouritesState(json);
     });
     _directAvatarSub = board.directAvatars.listen(_onDirectAvatar);
     _heardSub = board.heard.listen(_onHeard);
@@ -371,6 +372,7 @@ class CommController extends ChangeNotifier {
     _callTimer = Timer.periodic(const Duration(seconds: 1), (_) => _callTick());
     await conversations.load();
     await patterns.load();
+    patterns.addListener(_syncFavourites);
     conversations.onSeen = notifier.clearTexts;
     await notifier.init();
     // Who's talking, kept up to date whether the voices come from the server
@@ -504,6 +506,8 @@ class CommController extends ChangeNotifier {
       _boardNameSent = null;
       _setMyCaps(null);
       permissions.boardGone();
+      _unitFavourites = null;
+      _sentFavourites = null;
       return;
     }
     if (_settingsTimer == null) {
@@ -2017,6 +2021,7 @@ class CommController extends ChangeNotifier {
     }
     // Our rules, who's muted among them, for the unit to go by
     permissions.syncUnit();
+    _syncFavourites();
     final m = mumble;
     final link = m == null
         ? (_serverWanted ? ServerLink.connecting : ServerLink.off)
@@ -2863,6 +2868,61 @@ class CommController extends ChangeNotifier {
           from: '', mine: true, kind: _kindOf(op), body: describeCommand(op, mine: true)));
     }
     return sent;
+  }
+
+  // ----- Favourite patterns, on the unit -----
+
+  /// The hash of the favourites the unit has, as /api/state says, and how
+  /// much room it has for them (0: it needs flashing over USB to keep them).
+  String? _unitFavourites;
+  String? _sentFavourites;
+  int unitFavouritesRoom = 0;
+
+  bool get unitTakesFavourites =>
+      board.state == BoardState.connected && (board.status?.version ?? 0) >= commVersionFavourites;
+
+  /// Whether the unit has our favourites as they are now.
+  bool get unitFavouritesUpToDate => _unitFavourites != null && _unitFavourites == _favouritesHash().$1;
+
+  /// What goes to the unit: as much as fits there (16 KB until it's said).
+  (Uint8List, List<PatternEntry>) favouritesForUnit() =>
+      patterns.favouritesDocument(unitFavouritesRoom > 0 ? unitFavouritesRoom : 16384);
+
+  (String, Uint8List) _favouritesHash() {
+    final (doc, _) = favouritesForUnit();
+    return (fnv1a(doc).toRadixString(16).padLeft(8, '0'), doc);
+  }
+
+  void _favouritesState(String json) {
+    try {
+      final j = jsonDecode(json);
+      if (j is! Map<String, dynamic> || j['favs'] is! String) return;
+      final room = (j['favmax'] as num?)?.toInt() ?? 0;
+      if (j['favs'] == _unitFavourites && room == unitFavouritesRoom) return;
+      _unitFavourites = j['favs'] as String;
+      unitFavouritesRoom = room;
+      notifyListeners();
+      _syncFavourites();
+    } catch (_) {}
+  }
+
+  /// Give the unit our favourites if it hasn't them as they are.
+  void _syncFavourites() {
+    if (!unitTakesFavourites || _unitFavourites == null) return;
+    final (hash, doc) = _favouritesHash();
+    if (hash == _unitFavourites) {
+      _sentFavourites = hash;
+      return;
+    }
+    if (hash == _sentFavourites) return;      // on its way
+    _sentFavourites = hash;
+    for (final piece in favouritesMessages(doc, board.maxWrite)) {
+      board.send(piece);
+    }
+    // For the unit to say it has them
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (unitTakesFavourites) board.request('GET', '/api/state').catchError((_) => RemoteAnswer(0, ''));
+    });
   }
 
   // ----- Custom patterns playing on others' toys -----

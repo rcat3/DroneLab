@@ -25,10 +25,16 @@
  *   wins.
  *
  * Patterns go in slots, by index: the built-in ones first, then the
- * wearer's favourites, from their app, kept in flash, which are listed on
- * the Toys feature's Patterns page with the built-in ones; then those
- * others have sent, kept until there's no room for more (the one played
- * longest ago goes, but never one that's playing).
+ * wearer's favourites, from their app, kept in flash; then those others
+ * have sent, kept until there's no room for more (the one played longest
+ * ago goes, but never one that's playing). The favourites, then the
+ * built-in ones, are listed for the wearer: on the Toys feature's Patterns
+ * page, and the WiFi remote's.
+ *
+ * The favourites come from the app as one document (comm.h's 0x19), at
+ * most RCAT_HAL_PATTERNS_SIZE bytes: how many (0 to PATTERNS_FAVOURITES),
+ * then for each, its definition's length (2, little endian) and the
+ * definition.
  */
 
 #include <stdbool.h>
@@ -45,7 +51,7 @@
 #define PATTERNS_PARTS_MAX      6
 #define PATTERNS_DEF_MAX        (PATTERNS_PART_MAX * PATTERNS_PARTS_MAX)
 #define PATTERNS_BUILT_IN       6
-#define PATTERNS_FAVOURITES     16
+#define PATTERNS_FAVOURITES     32
 #define PATTERNS_RECEIVED       8
 #define PATTERNS_RECEIVED_AT    (PATTERNS_BUILT_IN + PATTERNS_FAVOURITES)
 #define PATTERNS_SLOTS          (PATTERNS_RECEIVED_AT + PATTERNS_RECEIVED)
@@ -53,9 +59,10 @@
 /* Set up the slots, and the built-in patterns. */
 void patterns_init(void);
 
-/* How many are listed for the wearer: the built-in ones, then the
- * favourites, from index 0. */
+/* How many are listed for the wearer, and the slot of each: the
+ * favourites, then the built-in ones. -1 past the end. */
 size_t patterns_count(void);
+int patterns_listed(size_t position);
 
 /* A pattern's name, by its index (any slot); "" for an empty one. */
 const char *patterns_name(size_t index);
@@ -75,6 +82,16 @@ void patterns_hash(const uint8_t *def, size_t len, uint8_t out[PATTERNS_HASH_LEN
  * already; -1 till then, or if it's no good. */
 int patterns_part(const uint8_t hash[PATTERNS_HASH_LEN], uint8_t part, uint8_t count, const uint8_t *data, size_t len,
                   uint32_t now_ms);
+
+/* A piece of the favourites' document, from the app: the first starts it
+ * afresh; with the last, it's checked, kept in flash, and takes the place
+ * of the favourites there were. A channel playing one that's still there
+ * carries on; one that's gone, it stops. Returns false if it was no good. */
+bool patterns_receive_favourites(bool first, bool last, const uint8_t *piece, size_t len);
+
+/* The favourites' document's FNV-1a hash, as the app works it out, for
+ * /version: that of an empty one (a 0) with none. */
+uint32_t patterns_favourites_hash(void);
 
 /* Goes up when the listed patterns change, for the screen to redraw. */
 uint32_t patterns_changes(void);

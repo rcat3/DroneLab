@@ -13,7 +13,7 @@
  *   HTTP, on port 80, serves the page (remote_page.c) and a small JSON API
  *   that it calls:
  *
- *     GET  /api/info      pattern and reaction names, which don't change
+ *     GET  /api/info      pattern and reaction names: patterns as [slot, name]
  *     GET  /api/state     the toys, their channels and what's playing
  *   For the toys (app/toys.h), c= is channels, a bit for each, V1 the
  *   lowest; left out, it's all of them:
@@ -581,6 +581,9 @@ static void write_state(json_t *j)
     }
     jprintf(j, "]");
 
+    // The favourite patterns' hash, and how much room for them, for the app
+    jprintf(j, ",\"favs\":\"%08lx\",\"favmax\":%d", (unsigned long)patterns_favourites_hash(),
+            rcat_hal_patterns_available() ? RCAT_HAL_PATTERNS_SIZE : 0);
     // Commands from others in the comm channel, for each kind: the rules'
     // policy, what's ignored, and who sent the last that was done
     jprintf(j, ",\"rules\":\"%08lx\",\"edited\":%d,\"others\":[", (unsigned long)rules_hash(),
@@ -682,11 +685,13 @@ static void write_info(json_t *j)
     jstring(j, rcat_hal_firmware_version());
     jprintf(j, ",\"built\":");
     jstring(j, rcat_hal_firmware_built());
+    // Each [its slot, its name], as listed: the favourites, then the built-in ones
     jprintf(j, ",\"patterns\":[");
     for (size_t i = 0; i < patterns_count(); i++)
     {
-        jprintf(j, "%s", i ? "," : "");
-        jstring(j, patterns_name(i));
+        jprintf(j, "%s[%d,", i ? "," : "", patterns_listed(i));
+        jstring(j, patterns_name((size_t)patterns_listed(i)));
+        jprintf(j, "]");
     }
     jprintf(j, "],\"modes\":[");
     bool first = true;

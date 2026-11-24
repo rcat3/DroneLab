@@ -28,6 +28,7 @@
 #include "app/battery.h"
 #include "app/direct.h"
 #include "app/others.h"
+#include "app/patterns.h"
 #include "app/rules.h"
 #include "app/remote.h"
 #include "app/settings.h"
@@ -118,6 +119,7 @@
 #define MSG_COMMAND         0x0B    // from the phone: a command for others, in from the server or out over direct
 #define COMMAND_FROM_SERVER 0x01
 #define MSG_RULES           0x10    // from the phone: who's muted there, whose commands are ignored
+#define MSG_FAVOURITES      0x19    // from the phone: the wearer's favourite patterns, in pieces
 #define RULES_FIRST         0x01
 #define RULES_LAST          0x02
 #define MSG_IDENTITY        0x11    // from the phone: the wearer's public key
@@ -1288,11 +1290,12 @@ static void answer_request(void)
             len = snprintf(answer + 4, ANSWER_MAX - 4,
                            "{\"firmware\":\"%s\",\"built\":\"%s\",\"comm\":%d,\"avatar\":%d,\"avatars\":%d,"
                            "\"board\":\"%s\",\"update\":%d,\"msgmax\":%d,\"msgs\":%d,\"rules\":\"%08lx\","
-                           "\"edited\":%d}",
+                           "\"edited\":%d,\"favs\":\"%08lx\",\"favmax\":%d}",
                            rcat_hal_firmware_version(), rcat_hal_firmware_built(), COMM_VERSION, avatar_size,
                            COMM_AVATAR_SLOTS, RCAT_BOARD_NAME, updater_app_available() ? 1 : 0,
                            RCAT_HAL_BLE_PEER_MSG_MAX, RCAT_HAL_BLE_PEER_MSGS, (unsigned long)rules_hash(),
-                           rules_edited() ? 1 : 0);
+                           rules_edited() ? 1 : 0, (unsigned long)patterns_favourites_hash(),
+                           rcat_hal_patterns_available() ? RCAT_HAL_PATTERNS_SIZE : 0);
         }
         else if (strncmp(target, "/remote.html", 12) == 0)
         {
@@ -2038,6 +2041,10 @@ void comm_poll(uint32_t now_ms)
         else if (msg[0] == MSG_RULES && len >= 2)
         {
             rules_receive((msg[1] & RULES_FIRST) != 0, (msg[1] & RULES_LAST) != 0, msg + 2, len - 2);
+        }
+        else if (msg[0] == MSG_FAVOURITES && len >= 2)
+        {
+            patterns_receive_favourites((msg[1] & RULES_FIRST) != 0, (msg[1] & RULES_LAST) != 0, msg + 2, len - 2);
         }
         else if (msg[0] == MSG_IDENTITY && len >= 1 + OTHERS_KEY_LEN)
         {

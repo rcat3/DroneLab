@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "app/patterns.h"
+#include "hal.h"
 #include "lvgl.h"
 #include "mbedtls/sha256.h"
 
@@ -59,6 +60,10 @@ typedef struct
 static pattern_t *patterns;     // PATTERNS_SLOTS of them
 static assembly_t *assembly;    // ASSEMBLING of them
 static size_t favourite_count;
+static uint32_t favourites_hash;
+static uint8_t *incoming;       // a favourites' document coming in pieces, while it does
+static size_t incoming_len;
+static bool incoming_bad;
 static uint32_t changes;
 static uint32_t finds;          // counts finds, for which was played last
 
@@ -149,6 +154,8 @@ static const struct
     { "Wander", gen_wander },
 };
 
+static void load_favourites(void);
+
 void patterns_init(void)
 {
     patterns = lv_malloc(PATTERNS_SLOTS * sizeof(pattern_t));
@@ -170,11 +177,21 @@ void patterns_init(void)
         patterns[i].generator = built_in[i].generator;
         patterns[i].used = true;
     }
+    load_favourites();
 }
 
 size_t patterns_count(void)
 {
     return patterns != NULL ? PATTERNS_BUILT_IN + favourite_count : 0;
+}
+
+int patterns_listed(size_t position)
+{
+    if (position < favourite_count)
+    {
+        return (int)(PATTERNS_BUILT_IN + position);
+    }
+    return position < patterns_count() ? (int)(position - favourite_count) : -1;
 }
 
 const char *patterns_name(size_t index)
@@ -423,6 +440,159 @@ int patterns_part(const uint8_t hash[PATTERNS_HASH_LEN], uint8_t part, uint8_t c
         return -1;
     }
     return keep(hash, a->data, total);
+}
+
+/* ----- Favourites ----- */
+
+static uint32_t fnv1a(const uint8_t *p, size_t len)
+{
+    uint32_t h = 0x811c9dc5u;
+    for (size_t i = 0; i < len; i++)
+    {
+        h = (h ^ p[i]) * 0x01000193u;
+    }
+    return h;
+}
+
+/* A favourites' document, in place of those there were: false, and nothing
+ * changed, if it's no good. */
+static bool take_favourites(const uint8_t *doc, size_t len)
+{
+    if (len < 1 || doc[0] > PATTERNS_FAVOURITES)
+    {
+        return false;
+    }
+    uint8_t count = doc[0];
+    size_t at = 1;
+    for (uint8_t i = 0; i < count; i++)
+    {
+        if (at + 2 > len || at + 2 + le16(doc + at) > len)
+        {
+            return false;
+        }
+        at += 2 + le16(doc + at);
+    }
+    if (at != len)
+    {
+        return false;
+    }
+    pattern_t *fresh = count > 0 ? lv_malloc(count * sizeof(pattern_t)) : NULL;
+    if (count > 0 && fresh == NULL)
+    {
+        return false;
+    }
+    at = 1;
+    for (uint8_t i = 0; i < count; i++)
+    {
+        uint16_t n = le16(doc + at);
+        if (!decode(doc + at + 2, n, &fresh[i]))
+        {
+            for (uint8_t j = 0; j < i; j++)
+            {
+                lv_free(fresh[j].levels);
+            }
+            lv_free(fresh);
+            return false;
+        }
+        patterns_hash(doc + at + 2, n, fresh[i].hash);
+        at += 2 + n;
+    }
+
+    // Where each old one is now, for the channels playing them
+    int moved[PATTERNS_FAVOURITES];
+    for (size_t j = 0; j < PATTERNS_FAVOURITES; j++)
+    {
+        moved[j] = -1;
+        pattern_t *old = &patterns[PATTERNS_BUILT_IN + j];
+        for (uint8_t i = 0; old->used && i < count && moved[j] < 0; i++)
+        {
+            if (memcmp(old->hash, fresh[i].hash, PATTERNS_HASH_LEN) == 0)
+            {
+                moved[j] = (int)(PATTERNS_BUILT_IN + i);
+            }
+        }
+        free_slot(old);
+    }
+    for (uint8_t i = 0; i < count; i++)
+    {
+        patterns[PATTERNS_BUILT_IN + i] = fresh[i];
+    }
+    lv_free(fresh);
+    favourite_count = count;
+    favourites_hash = fnv1a(doc, len);
+    toys_patterns_moved(PATTERNS_BUILT_IN, PATTERNS_FAVOURITES, moved);
+    changes++;
+    return true;
+}
+
+bool patterns_receive_favourites(bool first, bool last, const uint8_t *piece, size_t len)
+{
+    if (patterns == NULL)
+    {
+        return false;
+    }
+    if (first)
+    {
+        lv_free(incoming);
+        incoming = lv_malloc(RCAT_HAL_PATTERNS_SIZE);
+        incoming_len = 0;
+        incoming_bad = incoming == NULL;
+    }
+    if (incoming == NULL)
+    {
+        return false;
+    }
+    if (incoming_len + len > RCAT_HAL_PATTERNS_SIZE)
+    {
+        incoming_bad = true;
+    }
+    else
+    {
+        memcpy(incoming + incoming_len, piece, len);
+        incoming_len += len;
+    }
+    if (!last)
+    {
+        return true;
+    }
+    bool good = !incoming_bad && take_favourites(incoming, incoming_len);
+    if (good)
+    {
+        if (!rcat_hal_patterns_write(incoming, incoming_len) && rcat_hal_patterns_available())
+        {
+            printf("patterns: couldn't keep the favourites\n");
+        }
+        printf("patterns: %u favourites\n", (unsigned)favourite_count);
+    }
+    else
+    {
+        printf("patterns: the favourites sent were no good\n");
+    }
+    lv_free(incoming);
+    incoming = NULL;
+    return good;
+}
+
+uint32_t patterns_favourites_hash(void)
+{
+    return favourites_hash;
+}
+
+static void load_favourites(void)
+{
+    static const uint8_t none = 0;
+    favourites_hash = fnv1a(&none, 1);
+    uint8_t *doc = lv_malloc(RCAT_HAL_PATTERNS_SIZE);
+    if (doc == NULL)
+    {
+        return;
+    }
+    size_t len = rcat_hal_patterns_read(doc, RCAT_HAL_PATTERNS_SIZE);
+    if (len > 0 && !take_favourites(doc, len))
+    {
+        printf("patterns: the favourites kept were no good\n");
+    }
+    lv_free(doc);
 }
 
 /* ----- Playing ----- */
