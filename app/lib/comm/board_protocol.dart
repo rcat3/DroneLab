@@ -76,6 +76,7 @@ const commVersionCaps = 14;     // what other boards' wearers let others control
 const commVersionDirectVoice = 13;  // voice from the phone for the board to send over direct comms (0x16)
 const commVersionPhoneMic = 15;  // the phone's mic in place of the board's (0x18), its talk button held (0x18)
 const commVersionRules = 16;    // the wearer's rules from the app (0x10), in place of who's muted
+const commVersionPatterns = 17; // Vibe toys set as a whole (0x41), custom patterns in parts (0x45)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -573,10 +574,12 @@ class OthersCommand {
   static const invite = 0x31;
   static const reaction = 0x32;
   static const vibeStop = 0x40;
-  static const vibeLevel = 0x41;
-  static const vibePattern = 0x42;
-  static const vibeSpeed = 0x43;
-  static const vibeReact = 0x44;
+  static const vibeSet = 0x41;
+  static const vibePart = 0x45;
+
+  /// A set's pattern's kind: none (a steady level), a built-in one by its
+  /// name, or a custom one by its hash.
+  static const patternNone = 0, patternBuiltIn = 1, patternCustom = 2;
 
   /// Who it's for, as the receivers see it: everyone who can hear us, the
   /// channel it goes on, or them alone.
@@ -589,7 +592,7 @@ class OthersCommand {
   static const levelTop = 20;
 
   /// The longest a pattern's name can be, in bytes.
-  static const nameMax = 32;
+  static const nameMax = 24;
 
   /// The longest a message for the Terminal, and a text, can be, in bytes
   /// (OTHERS_WHAT_MAX, less what goes before them).
@@ -649,24 +652,47 @@ class OthersCommand {
   /// Stop every channel, and any reaction.
   static OthersCommand stopAll() => _make([vibeStop]);
 
-  /// Set [channels] (a bit for each) to a level, together, as one.
-  static OthersCommand setLevel(int channels, int value) =>
-      _make([vibeLevel, channels & allChannels, value.clamp(0, levelTop)]);
-
-  /// Play a pattern on [channels], in step, by its name; no name stops
-  /// their patterns.
-  static OthersCommand play(int channels, String? name) =>
-      _make([vibePattern, channels & allChannels, ..._cut(utf8.encode(name ?? ''), nameMax)]);
-
-  /// How fast patterns play on [channels]: each channel has its own.
-  static OthersCommand setSpeed(int channels, int percent) {
-    final p = percent.clamp(25, 300);
-    return _make([vibeSpeed, channels & allChannels, p & 0xFF, p >> 8]);
+  /// Set [channels] (a bit for each) as a whole: a level for each, from
+  /// [levels] (V1's first, 0 to 20), how fast their pattern plays (25 to
+  /// 300%), the reaction (reactive_mode_t: 0 none, 1 voice, 2 moving, 3
+  /// still, 4 motion, 5 tilt), and the pattern: a built-in one by its name,
+  /// a custom one by its hash (sent first, in [patternParts]), or none. A
+  /// channel already playing the pattern keeps its place in it; a pattern
+  /// with rows drives them in turn, its first row the lowest channel.
+  static OthersCommand setVibe(int channels, List<int> levels,
+      {int speed = 100, int react = 0, String? builtIn, List<int>? hash}) {
+    final mask = channels & allChannels;
+    final s = speed.clamp(25, 300);
+    return _make([
+      vibeSet,
+      mask,
+      for (var c = 0; c < vibeChannels; c++)
+        if (mask & (1 << c) != 0) (c < levels.length ? levels[c] : 0).clamp(0, levelTop),
+      s & 0xFF,
+      s >> 8,
+      react & 0xFF,
+      if (hash != null) ...[patternCustom, ...hash]
+      else if (builtIn != null) ...[patternBuiltIn, ..._cut(utf8.encode(builtIn), nameMax)]
+      else patternNone,
+    ]);
   }
 
-  /// [channels] react to the wearer (reactive_mode_t: 0 none, 1 voice, 2
-  /// moving, 3 still, 4 motion, 5 tilt).
-  static OthersCommand setReact(int channels, int mode) => _make([vibeReact, channels & allChannels, mode & 0xFF]);
+  /// A custom pattern's definition (patterns.dart), in parts, each with
+  /// its hash, sent before the set that plays it.
+  static List<OthersCommand> patternParts(List<int> definition, List<int> hash) {
+    const room = 106;   // PATTERNS_PART_MAX
+    final count = (definition.length + room - 1) ~/ room;
+    return [
+      for (var i = 0; i < count; i++)
+        _make([
+          vibePart,
+          ...hash,
+          i,
+          count,
+          ...definition.sublist(i * room, (i + 1) * room > definition.length ? definition.length : (i + 1) * room),
+        ]),
+    ];
+  }
 
   /// A message for their Terminal, as it is: added on a line of its own
   /// ([append]) or in place of what's there, at a letter size (0 Auto, 1 to 6

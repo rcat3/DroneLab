@@ -6,6 +6,7 @@ import 'package:dronelab/comm/board_protocol.dart';
 import 'package:dronelab/comm/conversations.dart';
 import 'package:dronelab/comm/identity.dart';
 import 'package:dronelab/comm/message_details.dart';
+import 'package:dronelab/comm/patterns.dart';
 import 'package:dronelab/comm/recorder.dart';
 import 'package:image/image.dart' as img;
 import 'package:dronelab/comm/protobuf.dart';
@@ -207,14 +208,16 @@ void main() {
     final key = me.publicKey;
     final cmd = OthersCommand.stopAll().withCounter(0x060504030201).withScope(OthersCommand.scopeOne);
     expect(cmd.body(key), [3, ...key, 1, 2, 3, 4, 5, 6, 2, 0x40]);
-    expect(OthersCommand.setLevel(0x02, 25).what, [0x41, 0x02, 20]);
-    expect(OthersCommand.setLevel(0xFF, 5).what, [0x41, 0x3F, 5]);
-    expect(OthersCommand.play(0x05, 'Wave').what, [0x42, 0x05, ...utf8.encode('Wave')]);
-    expect(OthersCommand.play(0x01, null).what, [0x42, 0x01]);
-    expect(OthersCommand.setSpeed(1000).what, [0x43, 300 & 0xFF, 300 >> 8]);
-    expect(OthersCommand.setReact(0x03, 2).what, [0x44, 0x03, 2]);
-    expect(describeCommand(OthersCommand.setLevel(0x05, 7).what, mine: false), 'set your toys on V1+V3 to 7');
-    expect(describeCommand(OthersCommand.setLevel(0x3F, 7).what, mine: true), 'set their toys to 7');
+    expect(OthersCommand.setVibe(0x05, [25, 0, 7]).what, [0x41, 0x05, 20, 7, 100, 0, 0, 0]);
+    expect(OthersCommand.setVibe(0xFF, [1, 2, 3, 4, 5, 6], speed: 1000, react: 2, builtIn: 'Wave').what,
+        [0x41, 0x3F, 1, 2, 3, 4, 5, 6, 300 & 0xFF, 300 >> 8, 2, 1, ...utf8.encode('Wave')]);
+    expect(OthersCommand.setVibe(0x02, [0, 9], hash: List.filled(8, 0xAB)).what,
+        [0x41, 0x02, 9, 100, 0, 0, 2, ...List.filled(8, 0xAB)]);
+    expect(describeCommand(OthersCommand.setVibe(0x05, [7, 0, 7]).what, mine: false), 'set your toys on V1+V3 to 7');
+    expect(describeCommand(OthersCommand.setVibe(0x3F, List.filled(6, 7), builtIn: 'Pulse', speed: 150).what, mine: true),
+        'set their toys to 7, playing Pulse at 150%');
+    expect(describeCommand(OthersCommand.setVibe(0x03, [5, 9], react: 1).what, mine: false),
+        'set your toys on V1+V2 to 5/9, reacting to voice');
     expect(OthersCommand.terminal('hi', append: false, show: true, size: 3).what, [0x10, 2, 3, ...utf8.encode('hi')]);
     // The longest fit, signed
     final long = OthersCommand.terminal('x' * 500).body(key).length + OthersCommand.signatureLength;
@@ -249,7 +252,6 @@ void main() {
     expect(commandFromServer('Ann', body), [0x0B, 1, 3, ...utf8.encode('Ann'), ...body]);
     expect(commandToDirect(const [], body), [0x0B, 0, 0, ...body]);
     expect(commandToDirect(const [0x11223344], body), [0x0B, 0, 1, 0x44, 0x33, 0x22, 0x11, ...body]);
-    expect(mutedMessages([key]), [[0x10, 1, ...key.take(8)]]);
   });
 
   test('a long text from its parts, with gaps for those that never came', () {
@@ -376,5 +378,34 @@ void main() {
     expect(again.packets.first.copies[1].atMs, 1010);
     expect(again.packets.first.copies[1].bytes, 186);
     expect(jsonEncode(r.toJson()).length, lessThan(jsonEncode(old).length));
+  });
+
+  test('custom patterns, as patterns.h', () {
+    final p = VibePattern('A', [PatternBlock(100, 1, [20, 0, 5])]);
+    final def = p.encode();
+    expect(def, [1, 1, 0x41, 1, 100, 0, 1, 3, 0, 0x14, 0x14]);
+    final back = VibePattern.decode(def)!;
+    expect(back.name, 'A');
+    expect(back.blocks.single.levels, [20, 0, 5]);
+    expect(VibePattern.decode([...def, 0]), isNull);
+    // Two rows, the longest that fits, in six parts
+    final rows = VibePattern('Two', [
+      PatternBlock(100, 1, List.generate(489, (i) => i % 21)),
+      PatternBlock(200, 2, List.generate(489, (i) => 20 - i % 21)),
+    ]);
+    expect(rows.fits, isTrue);
+    final parts = OthersCommand.patternParts(rows.encode(), rows.hash);
+    expect(parts, hasLength(6));
+    expect(parts.every((c) => c.what.length <= OthersCommand.whatMax), isTrue);
+    expect(parts.first.what.sublist(1, 9), rows.hash);
+    expect(VibePattern.decode(rows.encode())!.blocks[1].levels, rows.blocks[1].levels);
+    expect(rows.level(1, 200), 19 / 20);
+    expect(rows.level(2, 0), isNull);
+    // Lovense's format, both ways
+    final l = VibePattern.fromLovense('V:1;F:v,r;S:200#5,10;6,11;20,0;')!;
+    expect(l.blocks.map((b) => b.rows), [1, 2]);
+    expect(l.blocks[1].levels, [10, 11, 0]);
+    expect(l.toLovense(), 'V:1;F:v1,v2;S:200#5,10;6,11;20,0;');
+    expect(VibePattern.fromLovense('V:1;F:v;S:100#0;4;8;')!.blocks.single.rows, 0);
   });
 }

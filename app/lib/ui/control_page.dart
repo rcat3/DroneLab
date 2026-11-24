@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/capabilities.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
+import '../comm/patterns.dart';
 import 'capabilities_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -36,9 +35,6 @@ class ToysPage extends StatefulWidget {
 /// The reactions, as reactive_mode_t: to the wearer's own voice or movement.
 const _reactions = [(1, 'VOICE'), (2, 'MOVING'), (3, 'STILL'), (4, 'MOTION'), (5, 'TILT')];
 
-/// The board's built-in patterns, for when it can't be asked.
-const _builtInPatterns = ['Wave', 'Pulse', 'Heartbeat', 'Climb', 'Surge', 'Wander'];
-
 /// How many channels show to start with: the usual most. The rest come
 /// with More, or by themselves when someone's toys follow them.
 const _usualChannels = 4;
@@ -55,10 +51,23 @@ enum _ToyClass { vibe, estim, machine }
 
 enum _Section { levels, patterns, react }
 
+/// A pattern playing: a built-in one, by its name, or a custom one.
+class _Playing {
+  final String? builtIn;
+  final VibePattern? custom;
+  _Playing.builtIn(String this.builtIn) : custom = null;
+  _Playing.custom(VibePattern this.custom) : builtIn = null;
+
+  late final String? _hash = custom?.hashHex;
+  String get name => builtIn ?? custom!.name;
+
+  bool same(_Playing? other) => other != null && other.builtIn == builtIn && other._hash == _hash;
+}
+
 /// Channels that play a pattern and follow a reaction together.
 class _Group {
   int? mask;              // null for every channel shown (the first group, unsplit)
-  String? playing;
+  _Playing? playing;
   int reacting = 0;
   int speed = 100;
   _Group([this.mask]);
@@ -77,38 +86,14 @@ class _ToysPageState extends State<ToysPage> {
   bool _split = false;                    // two groups
   int _group = 0;                         // the group shown
   bool _stopped = false;
-  List<String> _patterns = _builtInPatterns;
-  bool _askedPatterns = false;
-  Timer? _again;
-
-  @override
-  void initState() {
-    super.initState();
-    comm.addListener(_onComm);
-    _onComm();
-  }
+  final Map<int, Timer> _again = {};      // by group
 
   @override
   void dispose() {
-    comm.removeListener(_onComm);
-    _again?.cancel();
-    super.dispose();
-  }
-
-  /// Ask the board for its patterns once it's connected: its own names,
-  /// those on its card too.
-  void _onComm() {
-    final connected = comm.board.state == BoardState.connected && comm.board.status != null;
-    if (connected && !_askedPatterns) {
-      _askedPatterns = true;
-      comm.board.request('GET', '/api/info').then((a) {
-        if (a.status != 200 || !mounted) return;
-        final names = (jsonDecode(a.body) as Map<String, dynamic>)['patterns'] as List<dynamic>?;
-        if (names != null && names.isNotEmpty) setState(() => _patterns = [for (final n in names) n as String]);
-      }).catchError((_) {});
-    } else if (!connected) {
-      _askedPatterns = false;
+    for (final t in _again.values) {
+      t.cancel();
     }
+    super.dispose();
   }
 
   /// For one person who's said: the channels their toys follow; 0 if not
@@ -126,13 +111,47 @@ class _ToysPageState extends State<ToysPage> {
 
   int _maskOf(_Group g) => (g.mask ?? _shownMask) & _shownMask;
 
-  void _send(OthersCommand what, {bool again = true}) {
-    final cmd = comm.newCommand(what);
+  void _send(OthersCommand what) => comm.sendCommandTo(widget.target, comm.newCommand(what));
+
+  /// A group's channels, as a whole: each one's level, its pattern (a
+  /// custom one's definition first, with [parts]), speed and reaction. Sent
+  /// again a little later, in case it was lost, unless [again] is false
+  /// (while a slider's dragged).
+  void _sendGroup(int i, {bool again = true, bool parts = false}) {
+    final g = _groups[i];
+    final mask = _maskOf(g);
+    if (mask == 0) return;
     final target = widget.target;
+    final custom = g.playing?.custom;
+    if (custom != null && parts) comm.sendPattern(target, custom);
+    final cmd = comm.newCommand(OthersCommand.setVibe(mask, [for (final l in _levels) l.round()],
+        speed: g.speed, react: g.reacting, builtIn: g.playing?.builtIn, hash: custom?.hash));
     comm.sendCommandTo(target, cmd);
-    _again?.cancel();
-    if (again) {
-      _again = Timer(_againAfter, () => comm.sendCommandTo(target, cmd, log: false));
+    _again.remove(i)?.cancel();
+    if (again) _again[i] = Timer(_againAfter, () => comm.sendCommandTo(target, cmd, log: false));
+    _playingChanged();
+  }
+
+  /// The groups that [mask]'s channels are in.
+  Iterable<int> _groupsOf(int mask) sync* {
+    for (var i = 0; i < (_split ? 2 : 1); i++) {
+      if (_maskOf(_groups[i]) & mask != 0) yield i;
+    }
+  }
+
+  /// The custom patterns playing, for the app to send again now and then.
+  void _playingChanged() => comm.setPlayingPatterns(widget.target, [
+        for (var i = 0; i < (_split ? 2 : 1); i++)
+          if (_groups[i].playing?.custom != null && _maskOf(_groups[i]) != 0) _groups[i].playing!.custom!,
+      ]);
+
+  /// Channels starting a pattern or a reaction while off go three quarters of
+  /// the way up, for it to drive up to.
+  void _startDriving(_Group g) {
+    if (g.playing != null || g.reacting != 0) return;
+    final mask = _maskOf(g);
+    for (var c = 0; c < OthersCommand.vibeChannels; c++) {
+      if (mask & (1 << c) != 0 && _levels[c] == 0) _levels[c] = (OthersCommand.levelTop * 3 / 4).roundToDouble();
     }
   }
 
@@ -146,7 +165,12 @@ class _ToysPageState extends State<ToysPage> {
       }
       _stopped = true;
     });
+    for (final t in _again.values) {
+      t.cancel();
+    }
+    _again.clear();
     _send(OthersCommand.stopAll());
+    comm.setPlayingPatterns(widget.target, const []);
   }
 
   /// A level for [mask]'s channels, together.
@@ -162,25 +186,31 @@ class _ToysPageState extends State<ToysPage> {
     final last = _sentAt[mask];
     if (!done && last != null && now.difference(last) < _dragEvery) return;
     _sentAt[mask] = now;
-    _send(OthersCommand.setLevel(mask, v.round()), again: done);
+    for (final i in _groupsOf(mask).toList()) {
+      _sendGroup(i, again: done);
+    }
   }
 
-  void _play(String? name) {
+  int get _gi => _split ? _group : 0;
+
+  void _play(_Playing? p) {
     setState(() {
-      _g.playing = name;
+      if (p != null) _startDriving(_g);
+      _g.playing = p;
       _stopped = false;
-      if (name == null && _g.reacting == 0) _zero(_on);
+      if (p == null && _g.reacting == 0) _zero(_on);
     });
-    _send(OthersCommand.play(_on, name));
+    _sendGroup(_gi, parts: true);
   }
 
   void _react(int mode) {
     setState(() {
+      if (mode != 0) _startDriving(_g);
       _g.reacting = mode;
       _stopped = false;
       if (mode == 0 && _g.playing == null) _zero(_on);
     });
-    _send(OthersCommand.setReact(_on, mode));
+    _sendGroup(_gi);
   }
 
   /// Channels with neither a pattern nor a reaction left go off, as the
@@ -199,10 +229,11 @@ class _ToysPageState extends State<ToysPage> {
     final moved = mask & fromMask;
     if (moved != 0) from.mask = fromMask & ~moved;
     if (moved == 0) return;
-    if (g.playing != from.playing) _send(OthersCommand.play(moved, g.playing));
-    if (g.reacting != from.reacting) _send(OthersCommand.setReact(moved, g.reacting));
-    if (g.speed != from.speed) _send(OthersCommand.setSpeed(moved, g.speed));
     if (g.playing == null && g.reacting == 0 && (from.playing != null || from.reacting != 0)) _zero(moved);
+    // The channels moved take on the group's state, with the rest of it
+    final newPattern = g.playing != null && !g.playing!.same(from.playing);
+    g.mask = (g.mask ?? 0) | moved;
+    _sendGroup(to, parts: newPattern);
   }
 
   void _setOn(int mask) => setState(() {
@@ -228,7 +259,7 @@ class _ToysPageState extends State<ToysPage> {
 
   void _setSpeed(int percent) {
     setState(() => _g.speed = percent.clamp(25, 300));
-    _send(OthersCommand.setSpeed(_on, _g.speed));
+    _sendGroup(_gi);
   }
 
   Widget _chip(String label, bool selected, VoidCallback? onTap) => ChoiceChip(
@@ -355,10 +386,14 @@ class _ToysPageState extends State<ToysPage> {
           _onPicker(canSend),
           const SizedBox(height: 12),
           _grid(2, [
-            for (final p in _patterns)
-              _chip(p.toUpperCase(), _g.playing == p,
-                  canSend && _on != 0 ? () => _play(_g.playing == p ? null : p) : null),
+            for (final name in builtInPatterns) _patternChip(_Playing.builtIn(name), canSend),
           ]),
+          if (_yours.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text('YOURS', style: Kc.term(14, color: Kc.muted)),
+            const SizedBox(height: 6),
+            _grid(2, [for (final e in _yours) _patternChip(_Playing.custom(e.pattern), canSend)]),
+          ],
           const SizedBox(height: 12),
           Panel(children: [
             Row(
@@ -379,7 +414,7 @@ class _ToysPageState extends State<ToysPage> {
             ),
           ]),
           const SizedBox(height: 8),
-          const Text('Plays in step on the channels picked, if their board has it', style: small),
+          const Text('Plays in step on the channels picked. Yours are sent along with it', style: small),
         ],
       _Section.react => [
           _onPicker(canSend),
@@ -430,6 +465,17 @@ class _ToysPageState extends State<ToysPage> {
         _moreButton(),
       ]);
 
+  /// Our own patterns, and the favourites of those sent us.
+  List<PatternEntry> get _yours => [
+        ...comm.patterns.mine,
+        ...comm.patterns.received.where((e) => e.favourite),
+      ];
+
+  Widget _patternChip(_Playing p, bool canSend) {
+    final on = p.same(_g.playing);
+    return _chip(p.name.toUpperCase(), on, canSend && _on != 0 ? () => _play(on ? null : p) : null);
+  }
+
   /// A dot on a group's tab while it plays or reacts.
   String _summary(_Group g) => g.playing != null || g.reacting != 0 ? ' ●' : '';
 
@@ -443,7 +489,7 @@ class _ToysPageState extends State<ToysPage> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: comm,
+      listenable: Listenable.merge([comm, comm.patterns]),
       builder: (context, _) {
         final canSend = comm.isOnline(widget.target);
         final caps = capabilitiesOfConversation(comm, widget.target);

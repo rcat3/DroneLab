@@ -38,6 +38,7 @@ import 'known_people.dart';
 import 'jitter.dart';
 import 'media_buttons.dart';
 import 'message_details.dart';
+import 'patterns.dart';
 import 'recorder.dart';
 import 'text_responder.dart';
 import 'mumble_client.dart';
@@ -204,6 +205,7 @@ class CommController extends ChangeNotifier {
   /// Texts and commands, to and from others, a conversation for each who
   /// with (see conversations.dart).
   final Conversations conversations = Conversations();
+  final PatternLibrary patterns = PatternLibrary();
 
   /// Who may control what of ours, and the requests to (permissions.dart).
   late final Permissions permissions = Permissions(board);
@@ -368,6 +370,7 @@ class CommController extends ChangeNotifier {
     _talkHeldSub = board.talkHeld.listen((t) => _onUnitTalkHeld(t.held));
     _callTimer = Timer.periodic(const Duration(seconds: 1), (_) => _callTick());
     await conversations.load();
+    await patterns.load();
     conversations.onSeen = notifier.clearTexts;
     await notifier.init();
     // Who's talking, kept up to date whether the voices come from the server
@@ -2862,6 +2865,48 @@ class CommController extends ChangeNotifier {
     return sent;
   }
 
+  // ----- Custom patterns playing on others' toys -----
+
+  /// How often the custom patterns we're playing on others' toys go again,
+  /// for anyone who missed them: their boards hold off till they have one.
+  static const patternAgainEvery = Duration(seconds: 30);
+
+  /// Those playing, by the conversation they're played to.
+  final Map<String, (Conversation, List<VibePattern>)> _playing = {};
+  Timer? _patternsAgain;
+
+  /// Send a custom pattern's definition to a conversation, in parts, before
+  /// the set that plays it.
+  void sendPattern(Conversation c, VibePattern p) {
+    final def = p.encode();
+    for (final part in OthersCommand.patternParts(def, VibePattern.hashOf(def))) {
+      sendCommandTo(c, newCommand(part), log: false);
+    }
+  }
+
+  /// The custom patterns playing on a conversation's toys now, none when
+  /// they're stopped: sent again every [patternAgainEvery] while they play.
+  void setPlayingPatterns(Conversation c, List<VibePattern> ps) {
+    if (ps.isEmpty) {
+      _playing.remove(c.key);
+    } else {
+      _playing[c.key] = (c, List.of(ps));
+    }
+    if (_playing.isEmpty) {
+      _patternsAgain?.cancel();
+      _patternsAgain = null;
+    } else {
+      _patternsAgain ??= Timer.periodic(patternAgainEvery, (_) {
+        for (final (c, ps) in _playing.values) {
+          if (!isOnline(c)) continue;
+          for (final p in ps) {
+            sendPattern(c, p);
+          }
+        }
+      });
+    }
+  }
+
   static String _kindOf(Uint8List op) => op.isNotEmpty && (op[0] == OthersCommand.message || op[0] == OthersCommand.clear)
       ? ConversationEntry.terminal
       : ConversationEntry.vibe;
@@ -3109,6 +3154,12 @@ class CommController extends ChangeNotifier {
   }
 
   void _onHeard(Heard h) {
+    // A part of a pattern played on our toys: kept, once it's all here, not
+    // said in the conversation (the set that plays it is)
+    if (h.what == Heard.vibe && h.data.isNotEmpty && h.data[0] == OthersCommand.vibePart) {
+      if (h.done) patterns.heardPart(Uint8List.sublistView(h.data, 1), h.from);
+      return;
+    }
     if (h.what == Heard.textPart) {
       final whole = _textFromParts(h);
       if (whole == null) return;

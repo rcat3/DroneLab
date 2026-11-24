@@ -158,14 +158,14 @@ uint16_t toys_speed(uint8_t channels);
 void toys_stop_all(void);
 
 /* Set the channels as a whole, as a command from others does (others.h):
- * the level, the speed, the reaction, and the pattern, or -1 for none.
+ * each one's level (levels[0] V1's), the speed, the reaction, and the pattern, or -1 for none.
  * A channel already playing that pattern keeps its place in it, and one
  * that starts it takes the place of one of the others that's playing it,
  * so they're in step. A pattern played on several channels drives them by
  * rows: its first row the lowest channel, and so on. With [waiting] (a
  * pattern's hash, see patterns.h) in place of a pattern, they hold at 0 till
  * it comes (toys_pattern_came). */
-void toys_set(uint8_t channels, uint8_t level, uint16_t speed, uint8_t react, int pattern, const uint8_t *waiting);
+void toys_set(uint8_t channels, const uint8_t levels[TOYS_CHANNELS], uint16_t speed, uint8_t react, int pattern, const uint8_t *waiting);
 
 /* A pattern that's come, by its hash: the channels waiting for it start it,
  * together. */

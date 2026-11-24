@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'app_profile.dart';
 import 'board_protocol.dart';
 import 'message_details.dart';
+import 'patterns.dart';
 
 /// What a conversation is with: everyone who can hear us, a channel (on the
 /// server or over direct comms), or one person.
@@ -327,35 +328,45 @@ String channelNames(int channels) {
 String _onChannels(int channels) =>
     channels & OthersCommand.allChannels == OthersCommand.allChannels ? '' : ' on ${channelNames(channels)}';
 
+/// A set, in words: "set your toys on V1+V2 to 12, playing Wave at 150%,
+/// reacting to voice". Null if it's no good.
+String? _describeSet(Uint8List op, String your) {
+  if (op.length < 2) return null;
+  final mask = op[1] & OthersCommand.allChannels;
+  final levels = <int>[];
+  var at = 2;
+  for (var c = 0; c < OthersCommand.vibeChannels; c++) {
+    if (mask & (1 << c) != 0 && at < op.length) levels.add(op[at++]);
+  }
+  if (at + 4 > op.length) return null;
+  final speed = op[at] | (op[at + 1] << 8), react = op[at + 2], kind = op[at + 3];
+  final rest = op.sublist(at + 4);
+  const reactions = ['nothing', 'voice', 'moving', 'stillness', 'motion', 'tilt'];
+  final pattern = switch (kind) {
+    OthersCommand.patternBuiltIn => utf8.decode(rest, allowMalformed: true),
+    OthersCommand.patternCustom => PatternLibrary.nameOf(rest) ?? 'a pattern',
+    _ => null,
+  };
+  final level = levels.toSet().length <= 1 ? '${levels.isEmpty ? 0 : levels.first}' : levels.join('/');
+  final out = StringBuffer('set $your toys${_onChannels(mask)} to $level');
+  if (pattern != null) out.write(', playing $pattern${speed == 100 ? '' : ' at $speed%'}');
+  if (react != 0) out.write(', reacting to ${react < reactions.length ? reactions[react] : 'something'}');
+  return out.toString();
+}
+
 /// What a command did, in words, for a conversation: [op] is the command
 /// from what to do on, as the board passes it on. [mine] for ones we sent
 /// ("their"), else for ones sent us ("your").
 String describeCommand(Uint8List op, {required bool mine}) {
   if (op.isEmpty) return 'sent a command';
   final your = mine ? 'their' : 'your';
-  const reactions = ['nothing', 'voice', 'moving', 'stillness', 'motion', 'tilt'];
   switch (op[0]) {
     case OthersCommand.vibeStop:
       return 'stopped $your toys';
-    case OthersCommand.vibeLevel:
-      if (op.length < 3) return 'set $your toys';
-      return 'set $your toys${_onChannels(op[1])} to ${op[2]}';
-    case OthersCommand.vibePattern:
-      if (op.length < 2) return 'set $your patterns';
-      final name = utf8.decode(op.sublist(2), allowMalformed: true);
-      return name.isEmpty
-          ? 'stopped $your patterns${_onChannels(op[1])}'
-          : 'played $name on $your toys${_onChannels(op[1])}';
-    case OthersCommand.vibeSpeed:
-      return op.length >= 4
-          ? "set $your patterns' speed${_onChannels(op[1])} to ${op[2] | (op[3] << 8)}%"
-          : 'set $your patterns';
-    case OthersCommand.vibeReact:
-      if (op.length < 3) return 'set $your toys reacting';
-      final r = op[2] < reactions.length ? reactions[op[2]] : 'something';
-      return op[2] == 0
-          ? 'stopped $your toys reacting${_onChannels(op[1])}'
-          : 'set $your toys${_onChannels(op[1])} to react to $r';
+    case OthersCommand.vibeSet:
+      return _describeSet(op, your) ?? 'set $your toys';
+    case OthersCommand.vibePart:
+      return 'sent $your toys a pattern';
     case OthersCommand.message:
       final text = op.length > 3 ? utf8.decode(op.sublist(3), allowMalformed: true) : '';
       return 'put “$text” on $your display';

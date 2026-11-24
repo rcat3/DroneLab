@@ -53,8 +53,9 @@
  *   E-stim and 0x60 to 0x6F Machines (those two to come). Channels are a
  *   byte with a bit for each, V1 the lowest (toys.h). For Vibe toys:
  *     40 stop:     stop every channel, as the Stop button, reactions too
- *     41 set:      41, the channels, the level (0 to 20, scaled to each
- *                  output's own range), how fast their pattern plays, in
+ *     41 set:      41, the channels, a level for each of them, the
+ *                  lowest first (0 to 20, scaled to each output's own
+ *                  range), how fast their pattern plays, in
  *                  percent (2 bytes, little endian, 25 to 300), the
  *                  reaction (reactive_mode_t, 0 for none: to this board's
  *                  wearer, if it can sense it), the pattern's kind

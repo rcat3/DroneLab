@@ -257,9 +257,16 @@ static seen_t *seen_entry(const uint8_t *key, uint64_t counter, bool *again)
 static void set_vibe(const uint8_t *arg, size_t len)
 {
     uint8_t channels = arg[0] & TOYS_ALL_CHANNELS;
-    uint16_t speed = (uint16_t)(arg[2] | (arg[3] << 8));
+    uint8_t levels[TOYS_CHANNELS];
+    size_t n = 0;
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
+    {
+        levels[c] = (channels & (1u << c)) ? arg[1 + n++] : 0;
+    }
+    const uint8_t *rest = arg + 1 + n;
+    uint16_t speed = (uint16_t)(rest[0] | (rest[1] << 8));
     speed = speed < TOYS_SPEED_MIN ? TOYS_SPEED_MIN : speed > TOYS_SPEED_MAX ? TOYS_SPEED_MAX : speed;
-    uint8_t mode = arg[4];
+    uint8_t mode = rest[2];
     if (mode >= REACTIVE_COUNT || !reactive_available((reactive_mode_t)mode))
     {
         mode = REACTIVE_OFF;
@@ -267,17 +274,18 @@ static void set_vibe(const uint8_t *arg, size_t len)
     static const uint8_t none[PATTERNS_HASH_LEN];
     int pattern = -1;
     const uint8_t *waiting = NULL;
-    if (arg[5] == OTHERS_PATTERN_BUILT_IN)
+    size_t name_len = len - (size_t)(rest + 4 - arg);
+    if (rest[3] == OTHERS_PATTERN_BUILT_IN)
     {
-        pattern = patterns_built_in(arg + 6, len - 6);
+        pattern = patterns_built_in(rest + 4, name_len);
         waiting = pattern < 0 ? none : NULL;    // one this board hasn't got: held
     }
-    else if (arg[5] == OTHERS_PATTERN_CUSTOM)
+    else if (rest[3] == OTHERS_PATTERN_CUSTOM)
     {
-        pattern = patterns_find(arg + 6);
-        waiting = pattern < 0 ? arg + 6 : NULL;
+        pattern = patterns_find(rest + 4);
+        waiting = pattern < 0 ? rest + 4 : NULL;
     }
-    toys_set(channels, arg[1], speed, mode, pattern, waiting);
+    toys_set(channels, levels, speed, mode, pattern, waiting);
 }
 
 /* A part of a custom pattern's definition: once they're all here, the
@@ -323,6 +331,34 @@ static void show_message(uint8_t flags, uint8_t scale, const uint8_t *text, size
     }
 }
 
+/* Whether a set's the right length (see others.h): what to do (1), the
+ * channels, a level for each, the speed (2), the reaction, the pattern's
+ * kind, then the pattern. */
+static bool set_length_good(const uint8_t *what, size_t len)
+{
+    size_t at = 2;
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
+    {
+        at += (what[1] >> c) & 1;
+    }
+    at += 4;
+    if (len < at)
+    {
+        return false;
+    }
+    switch (what[at - 1])
+    {
+    case OTHERS_PATTERN_NONE:
+        return len == at;
+    case OTHERS_PATTERN_BUILT_IN:
+        return len > at && len <= at + PATTERNS_NAME_MAX;
+    case OTHERS_PATTERN_CUSTOM:
+        return len == at + PATTERNS_HASH_LEN;
+    default:
+        return false;
+    }
+}
+
 /* Which kind a command is, from what to do on: OTHERS_KIND_COUNT for a
  * text, or -1 if it isn't one. */
 static int kind_of(const uint8_t *what, size_t len)
@@ -332,11 +368,7 @@ static int kind_of(const uint8_t *what, size_t len)
     case OTHERS_VIBE_STOP:
         return OTHERS_VIBE;
     case OTHERS_VIBE_SET:
-        // what to do (1), channels, level, speed (2), reaction, the pattern's kind, then the pattern
-        return len == 7 || (len > 7 && what[6] == OTHERS_PATTERN_BUILT_IN && len <= 7 + PATTERNS_NAME_MAX)
-                       || (len == 7 + PATTERNS_HASH_LEN && what[6] == OTHERS_PATTERN_CUSTOM)
-                   ? OTHERS_VIBE
-                   : -1;
+        return set_length_good(what, len) ? OTHERS_VIBE : -1;
     case OTHERS_VIBE_PART:
         // what to do (1), the hash, which part, how many, then that part
         return len > 3 + PATTERNS_HASH_LEN && what[1 + PATTERNS_HASH_LEN] < what[2 + PATTERNS_HASH_LEN]

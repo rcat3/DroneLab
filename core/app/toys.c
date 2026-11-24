@@ -319,7 +319,7 @@ void toys_play(uint8_t mask, int pattern)
     }
 }
 
-void toys_set(uint8_t mask, uint8_t level, uint16_t speed, uint8_t react, int pattern, const uint8_t *waiting)
+void toys_set(uint8_t mask, const uint8_t levels[TOYS_CHANNELS], uint16_t speed, uint8_t react, int pattern, const uint8_t *waiting)
 {
     if (pattern >= PATTERNS_SLOTS || waiting != NULL)
     {
@@ -337,7 +337,6 @@ void toys_set(uint8_t mask, uint8_t level, uint16_t speed, uint8_t react, int pa
             place = channels[c].pattern_ms;
         }
     }
-    toys_set_level(mask, level);
     toys_set_speed(mask, speed);
     for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
@@ -346,6 +345,7 @@ void toys_set(uint8_t mask, uint8_t level, uint16_t speed, uint8_t react, int pa
         {
             continue;
         }
+        ch->pub.level = levels[c] > TOYS_LEVEL_TOP ? TOYS_LEVEL_TOP : levels[c];
         ch->pub.react = react < REACTIVE_COUNT ? react : REACTIVE_OFF;
         ch->row = row_in(mask, c);
         ch->waiting = waiting != NULL;
