@@ -2,7 +2,7 @@
 
 HiveMind Control runs parts of other drones' units, through those units: over the server or over direct mode, wherever they are.  It has areas: **Toys**, their [Vibe toys](../features/toys.md) for now (e-stim and machines are planned), and **Display unit**, words on their [Terminal](text.md#their-display) (pictures and sounds are planned).  It only works on what their wearers have allowed you (see [Permissions](permissions.md)); if they haven't, your first command asks them.
 
-<img src="../images/app/control.png" width="300" alt="Control for one drone: Levels, Patterns and React, a slider for each kind of motor, and STOP">
+<img src="../images/app/control.png" width="300" alt="Toys for RCat-Linux2: the Vibe tab, STOP, and Levels with V1 and V2 ganged at 12, V3 at 6, and V4 greyed out">
 
 Back to [the app](README.md).  Running *your own* toys is on your unit's [Toys](../features/toys.md) feature, or the [Remote](remote.md) tab's *Toys*; which channel each of your toys follows is in [Setup: Toys](#setup-toys).
 
@@ -10,13 +10,13 @@ Back to [the app](README.md).  Running *your own* toys is on your unit's [Toys](
 
 The **HiveMind Control button** (a remote) at the top of a [Text](text.md) conversation opens a menu of what you can control, by area: under *Toys*, **Vibe**, their toys; under *Display unit*, **Terminal**, words on their display.  It's for whoever that conversation is with, which it says at the top.  From a person's conversation it's their unit, sent both ways they can be reached (their unit does each once, by whichever way it allows); from a channel's, the units of everyone in it; from *Broadcast*, everyone who can hear you.
 
-<img src="../images/app/control_menu.png" width="300" alt="The Control menu in a conversation: Terminal, and Lovense greyed out">
+<img src="../images/app/control_menu.png" width="300" alt="The HiveMind Control menu in a conversation: Vibe under Toys, Terminal under Display unit">
 
 For one person, what they don't let others control is greyed out: they've set it to *Nobody*, or for Vibe, have no toy connected.  Each unit says what it lets others control (see [What others see](permissions.md#what-others-see)).  In a channel, everything is, as each person in it may allow different things.
 
 The **Control** button on someone's card, from the [Voice](voice.md#whos-there) list, opens the same choice as a screen, by area: each one, whether anyone can control it or only people they allow, and what's greyed out.
 
-<img src="../images/app/control_choose.png" width="300" alt="Control, to RCat-Linux: Terminal, only people they allow; Lovense greyed out, not available">
+<img src="../images/app/control_choose.png" width="300" alt="HiveMind Control, to RCat-Linux2: Vibe under Toys and Terminal under Display unit, both only people they allow">
 
 ## Toys
 
@@ -47,6 +47,8 @@ It's separate from who can [put words on your display](text.md#who-can-put-words
 ## Setup: Toys
 
 Setup's **Toys**, under *Unit*, sets up your own toys for HiveMind Control.  It's there while the app's connected to the unit, and needs the unit's firmware from this release on.
+
+<img src="../images/app/setup_toys.png" width="300" alt="Setup's Toys: an Edge on V1 and V2, a Nora vibrating on V1 and rotating on V3, and screen controls V1, V2 and V3">
 
 - **Channels**: each toy the unit has found, with **Connect** or **Disconnect**, and under it each of its outputs (each motor, the air pump and so on) with the channel it follows: **V1** to **V6**, or **None**, which leaves it to your own controls.  What anyone sends on V1 drives every output on V1, so two toys on one channel move together.  To start with, a toy's first output follows V1, its second V2.  The unit remembers it, by toy.  **Look for toys** finds toys turned on near the unit.  The line under them says which channels others can control.
 - **Screen controls**: the rings around your unit's [Toys](../features/toys.md#screen-controls) screen.  **Lay them out** for up to three, each with a label and the channels it drives together, so one ring can run V1 and V2 at once; **Save** sends them to the unit.  **One per channel** goes back to a ring for each channel a connected toy follows, as it starts.

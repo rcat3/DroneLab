@@ -42,7 +42,7 @@ A request appears when someone who isn't allowed sends you a command for a featu
 - **Accept** asks what to allow them.  The feature they asked for is already ticked; tick others to allow those too, or **Allow all**.  A feature you've set to *NOBODY* can be ticked: it takes effect when you turn it back on.
 - **Decline** leaves everything as it was, and moves them to [Declined](#declined).
 
-<img src="../images/app/permissions_accept.png" width="300" alt="Allow RCat-Linux2 to control: Terminal ticked, Lovense not, and Allow all or Allow">
+<img src="../images/app/permissions_accept.png" width="300" alt="Allow Hal to control: Vibe ticked, Terminal not, and Allow all or Allow">
 
 A request is only made while the app's linked to your unit.  One is taken back by itself if you allow them on the unit, or set the feature to *ANYONE*.
 
@@ -78,7 +78,7 @@ Accepting, declining and allowing are noted too, in pink.  It keeps the last 500
 
 Each unit tells the others what its wearer lets others control: over the server through its app, and over direct mode in the unit's own hello.  It says each feature that's *ALLOWED* or *ANYONE*, and leaves out those set to *NOBODY*, and *Vibe* while no toy is connected.  For Vibe, it also says which channels your toys follow, so their apps grey out the rest.  It says nothing about who in particular you've allowed.
 
-<img src="../images/app/person_capabilities.png" width="300" alt="What RCat-Linux lets others control: Terminal, only people they allow; Lovense, not available">
+<img src="../images/app/person_capabilities.png" width="300" alt="What RCat-Linux2 lets others control: under Toys, Vibe, and under Display unit, Terminal, both only people they allow">
 
 On someone's card ([Voice](voice.md#whos-there)), *Lets others control* shows an icon for each.  Tap it for the whole list: *Anyone can control it*, *Only people they allow*, or *Not available*.  See [HiveMind Control](control.md#sending) for how it's used.
 
