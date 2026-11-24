@@ -39,7 +39,8 @@ class _Toy {
   final String model;
   final String state;
   final List<(String kind, int channel)> outputs;   // channel -1 for none
-  _Toy(this.slot, this.addr, this.name, this.model, this.state, this.outputs);
+  final int battery;          // percent, -1 till it's said
+  _Toy(this.slot, this.addr, this.name, this.model, this.state, this.outputs, [this.battery = -1]);
 
   bool get connected => state == 'connected';
 }
@@ -127,6 +128,7 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
                 for (final o in d['outputs'] as List<dynamic>? ?? const [])
                   ((o as Map<String, dynamic>)['kind'] as String? ?? 'Vibrate', (o['channel'] as num?)?.toInt() ?? -1),
               ],
+              (d['battery'] as num?)?.toInt() ?? -1,
             ),
       ];
       final notice = j['notice'] as String? ?? '';
@@ -204,7 +206,8 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
           leading: Icon(Icons.vibration, color: t.connected ? Kc.pink : Kc.muted),
           title: t.model,
           subtitle: switch (t.state) {
-            'connected' => t.name == t.model ? 'Connected' : '${t.name} · Connected',
+            'connected' => '${t.name == t.model ? 'Connected' : '${t.name} · Connected'}'
+                '${t.battery >= 0 ? ' · Battery ${t.battery}%' : ''}',
             'connecting' => 'Connecting…',
             'lost' => 'Lost: reconnecting',
             'failed' => "Couldn't connect",
