@@ -1,6 +1,6 @@
 # Permissions
 
-Others in the hive can control parts of your unit: put words on its [Terminal](../features/terminal.md), or run your [Lovense](../features/lovense.md) toys.  **Permissions** is where you choose who can, see who's asking, and look back at every command that came.  The choices are kept on your unit, so they work whether or not your phone's with you.
+Others in the hive can control parts of your unit: put words on its [Terminal](../features/terminal.md), or run your [Lovense](../features/toys.md) toys.  **Permissions** is where you choose who can, see who's asking, and look back at every command that came.  The choices are kept on your unit, so they work whether or not your phone's with you.
 
 Open it from *Setup*, or from the [links sheet](connecting.md#the-links-sheet) that pulls down from the status strip.  When someone's asking, a yellow raised hand with a count shows on the [status strip](README.md#the-status-strip), on the links sheet and in Setup.
 

@@ -1,6 +1,6 @@
 # Text
 
-The Text tab is HiveMind by text, as [Voice](voice.md) is HiveMind by voice.  You text other drones in conversations, as in a chat app: one for everyone who can hear you, one for each channel you're on, and one for each person.  From any conversation you can also put words on their unit's display, or run their [Lovense](../features/lovense.md) toys.
+The Text tab is HiveMind by text, as [Voice](voice.md) is HiveMind by voice.  You text other drones in conversations, as in a chat app: one for everyone who can hear you, one for each channel you're on, and one for each person.  From any conversation you can also put words on their unit's display, or run their [Lovense](../features/toys.md) toys.
 
 <p align="center">
 <img src="../images/app/text.png" width="260" alt="The HiveMind Text tab: Broadcast, then the Cloud Server and Direct channels, the one you're on first and the others under it">

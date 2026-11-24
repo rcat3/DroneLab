@@ -62,5 +62,5 @@ The small round trimmer on the back of the board sets the speaker's volume, on t
 
 ## After it's built
 
-- Put images, sounds and Lovense patterns on a micro SD card (see [Images](../../../docs/features/images.md#images-on-the-sd-card), [Sound](../../../docs/features/sound.md#sounds-on-the-sd-card) and [Lovense](../../../docs/features/lovense.md#patterns-on-the-sd-card)).
+- Put images, sounds and Lovense patterns on a micro SD card (see [Images](../../../docs/features/images.md#images-on-the-sd-card), [Sound](../../../docs/features/sound.md#sounds-on-the-sd-card) and [Toys](../../../docs/features/toys.md#patterns-on-the-sd-card)).
 - Use the [Level](../../../docs/features/level.md) to check the display sits straight.

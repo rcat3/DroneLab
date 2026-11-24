@@ -26,6 +26,6 @@ You choose who can, on the Terminal's second page, *Hive Messages*, with **Off**
 
 The page after it, *Ignore*, ignores some whoever they're from: **Broadcasts**, sent to everyone who can hear the sender (with those to the channel on the open direct channel, which anyone nearby can hear), and those **To a whole channel**.  Anyone you've muted in the app is ignored too.
 
-The same choice and list are under *From others* in the remote's Terminal tab, and in the app's [Permissions](../app/permissions.md), with requests to accept or decline and a log of every command.  It works as the [Lovense feature's](lovense.md#commands-from-others) list does, but is a list of its own, so someone can be allowed to put words on your display without being allowed near your toys.  Texts from others in the app need neither: they go to your app, not the display.
+The same choice and list are under *From others* in the remote's Terminal tab, and in the app's [Permissions](../app/permissions.md), with requests to accept or decline and a log of every command.  It works as the [Toys feature's](toys.md#commands-from-others) list does, but is a list of its own, so someone can be allowed to put words on your display without being allowed near your toys.  Texts from others in the app need neither: they go to your app, not the display.
 
 The Terminal's font is LVGL's 8x8 unscii font with each pixel drawn as a square block.  `tools/gen_terminal_font.py` makes `core/ui/terminal_font.c` from it.

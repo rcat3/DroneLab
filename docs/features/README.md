@@ -95,11 +95,11 @@ Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp
 
 <table>
 <tr>
-<td width="190" align="center"><a href="lovense.md"><img src="../images/screens/lovense_control.png" width="170" alt="The Lovense Control page"></a><br><a href="lovense.md"><img src="../images/screens/lovense_patterns.png" width="80" alt="Patterns" title="Patterns"></a> <a href="lovense.md"><img src="../images/screens/lovense_react.png" width="80" alt="React" title="React"></a></td>
+<td width="190" align="center"><a href="toys.md"><img src="../images/screens/lovense_control.png" width="170" alt="The Toys Control page"></a><br><a href="toys.md"><img src="../images/screens/lovense_patterns.png" width="80" alt="Patterns" title="Patterns"></a> <a href="toys.md"><img src="../images/screens/lovense_react.png" width="80" alt="React" title="React"></a></td>
 <td>
-<h3>Lovense toy control</h3>
-<p>Runs up to three Lovense devices at once over Bluetooth, with no Lovense app.  Set a level for each kind of motor, play patterns (built in, or your own from the SD card), or let the toys react to the wearer's voice, movement or stillness.  Others in the hive can send commands from their phones, but only once the wearer has authorized them.</p>
-<p><a href="lovense.md">Lovense →</a></p>
+<h3>Toys (HiveMind Control)</h3>
+<p>Runs up to three toys at once over Bluetooth, Lovense for now, with no Lovense app.  Toys follow channels, V1 to V6, so everyone can have different toys and still take the same commands.  Set levels, play patterns (built in, or your own from the SD card), or let the toys react to the wearer's voice, movement or stillness.  Others in the hive can send commands from their phones, but only once the wearer has authorized them.</p>
+<p><a href="toys.md">Toys →</a></p>
 </td>
 </tr>
 <tr>

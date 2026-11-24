@@ -45,11 +45,11 @@ The DroneLab display unit screws into the mask's voice port: a glowing 1.75" rou
 </td>
 </tr>
 <tr>
-<td width="190" align="center"><a href="docs/features/lovense.md"><img src="docs/images/screens/lovense_control.png" width="170" alt="The Lovense Control page"></a></td>
+<td width="190" align="center"><a href="docs/features/toys.md"><img src="docs/images/screens/lovense_control.png" width="170" alt="The Toys Control page"></a></td>
 <td>
-<h3>Lovense toy control</h3>
-<p>Runs up to three Lovense devices over Bluetooth, with no Lovense app: levels, patterns (including your own), and reactions to the wearer's voice, movement or stillness.  Others in the hive can send commands from their phones, but only once the wearer has authorized them.</p>
-<p><a href="docs/features/lovense.md">Lovense toy control →</a></p>
+<h3>Toy control</h3>
+<p>Runs up to three toys over Bluetooth, Lovense for now, with no Lovense app, by channel, so everyone can have different toys and still take the same commands: levels, patterns (including your own), and reactions to the wearer's voice, movement or stillness.  Others in the hive can send commands from their phones, but only once the wearer has authorized them.</p>
+<p><a href="docs/features/toys.md">Toy control →</a></p>
 </td>
 </tr>
 <tr>
