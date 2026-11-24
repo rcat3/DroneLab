@@ -60,7 +60,7 @@ The **Level** button opens a spirit level, for lining the display up on the mask
 
 <img src="../images/screens/settings_startup.png" width="220" alt="The Startup page, with Images chosen and the image under it">
 
-What's shown when the display turns on.  Tap **Images**, **Visualizer**, **HiveMind** or **Terminal** (whichever the board has).  With **Images**, scroll the list under them to the image, or *Blank* for the blank page (see [Images](images.md)).  The [Visualizer](visualizer.md) starts on the style it was last on, and [HiveMind](comms.md) on its status screen.
+What's shown when the display turns on.  Tap **Images**, **Sound Visualizer**, **HiveMind**, **Terminal** or **Toys** (whichever the board has).  With **Images**, scroll the list under them to the image, or *Blank* for the blank page (see [Images](images.md)).  The [Sound Visualizer](visualizer.md) starts on the style it was last on, [HiveMind](comms.md) on its status screen, and [Toys](toys.md) on its Toy Visualizer.
 
 ## Battery Log
 

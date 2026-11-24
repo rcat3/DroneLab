@@ -310,7 +310,8 @@ static void add_setup_page(ui_feature_t *feature)
 // The features that can be shown at startup, as a grid of choices, and for
 // the one with more than one choice (Images), a roller of them
 #define MAX_GROUPS 6
-static const char *group_map[MAX_GROUPS + 3];       // the names, a row break and the end
+#define GROUP_TEXT_MAX 88                           // the widest name that fits half a row
+static const char *group_map[MAX_GROUPS * 2];       // the names, row breaks and the end
 static const char *group_names[MAX_GROUPS];
 static size_t group_count;
 static lv_obj_t *group_buttons;
@@ -318,6 +319,17 @@ static lv_obj_t *startup_roller;
 static size_t roller_choices[64];                   // the startup choice of each roller line
 static size_t roller_count;
 static int roller_group = -1;                       // the group the roller's for
+
+/* How wide a name is in font: they're plain ASCII. */
+static int32_t text_width(const char *text, const lv_font_t *font)
+{
+    int32_t w = 0;
+    for (const char *p = text; *p; p++)
+    {
+        w += lv_font_get_glyph_width(font, (uint8_t)p[0], (uint8_t)p[1]);
+    }
+    return w;
+}
 
 static int group_of(size_t choice)
 {
@@ -391,20 +403,35 @@ static void add_startup_page(ui_feature_t *feature)
 {
     lv_obj_t *page = ui_feature_add_page(feature, "Startup", false);
 
-    // The groups, in the order the features come
-    for (size_t i = 0; i < ui_startup_choice_count(); i++)
+    // The groups, in the order the features come, two to a row, but those
+    // too long for half a row go last, on rows of their own
+    const lv_font_t *font = lv_obj_get_style_text_font(page, LV_PART_MAIN);
+    size_t short_count = 0;
+    for (int pass = 0; pass < 2; pass++)
     {
-        if (group_of(i) < 0 && group_count < MAX_GROUPS)
+        for (size_t i = 0; i < ui_startup_choice_count(); i++)
         {
-            group_names[group_count++] = ui_startup_choice_group(i);
+            const char *name = ui_startup_choice_group(i);
+            bool is_long = text_width(name, font) > ui_px(GROUP_TEXT_MAX);
+            if (group_of(i) < 0 && group_count < MAX_GROUPS && is_long == (pass == 1))
+            {
+                group_names[group_count++] = name;
+                short_count += !is_long;
+            }
         }
     }
     size_t n = 0;
+    size_t rows = 0;
     for (size_t g = 0; g < group_count; g++)
     {
-        if (g > 0 && g % 2 == 0)
+        bool row_starts = g < short_count ? g % 2 == 0 : true;
+        if (row_starts)
         {
-            group_map[n++] = "\n";
+            if (g > 0)
+            {
+                group_map[n++] = "\n";
+            }
+            rows++;
         }
         group_map[n++] = group_names[g];
     }
@@ -446,9 +473,11 @@ static void add_startup_page(ui_feature_t *feature)
     }
 
     add_label(page, "Startup", -86);
-    size_t rows = (group_count + 1) / 2;
-    group_buttons = ui_add_choices(page, group_map, ui_px(204), ui_px(rows > 1 ? 72 : 34),
-                                   ui_px(rows > 1 ? -38 : -56));
+    // Rows of 34, or 28 for three, from the top, with the roller under them
+    int32_t row_h = rows > 2 ? 28 : 34;
+    int32_t grid_h = (int32_t)rows * row_h + ((int32_t)rows - 1) * 4;
+    int32_t grid_top = rows > 1 ? -74 : -73;
+    group_buttons = ui_add_choices(page, group_map, ui_px(204), ui_px(grid_h), ui_px(grid_top + grid_h / 2));
     lv_obj_set_style_pad_row(group_buttons, ui_px(4), 0);
     lv_obj_add_event_cb(group_buttons, group_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
@@ -457,7 +486,7 @@ static void add_startup_page(ui_feature_t *feature)
     lv_free(options);   // the roller keeps its own copy
     lv_roller_set_visible_row_count(startup_roller, 2);
     lv_obj_set_width(startup_roller, ui_px(160));
-    lv_obj_align(startup_roller, LV_ALIGN_CENTER, 0, ui_px(rows > 1 ? 44 : 20));
+    lv_obj_align(startup_roller, LV_ALIGN_CENTER, 0, ui_px(grid_top + grid_h + (rows > 1 ? 46 : 59)));
     lv_obj_add_event_cb(startup_roller, startup_roller_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     show_startup();

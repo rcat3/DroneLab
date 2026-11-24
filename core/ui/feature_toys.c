@@ -2,6 +2,9 @@
  * Toys feature (boards with Bluetooth): HiveMind Control's toys on this
  * unit (app/toys.h), up to three at once, run by channel, on dark pages.
  *
+ *   Toy Visualizer: what each channel a toy follows has run at over the last
+ *             few seconds, as glowing traces scrolling across the screen,
+ *             with STOP under them (toys_vis.h).
  *   Control:  a ring around the screen for each of the screen's controls,
  *             with the level on its knob: one for each channel a toy
  *             follows, or as the wearer lays them out in their app, each
@@ -35,6 +38,7 @@
 #include "app/settings.h"
 #include "app/toys.h"
 #include "ui/others_page.h"
+#include "ui/toys_vis.h"
 #include "ui/ui_internal.h"
 
 #define POLL_MS             50
@@ -1073,6 +1077,14 @@ static void on_navigate(void)
 
 static bool build(ui_feature_t *feature)
 {
+    lv_obj_t *vis_page = add_dark_page(feature, "Toy Visualizer");
+    if (!toys_vis_add(vis_page))
+    {
+        lv_obj_t *label = lv_label_create(vis_page);
+        lv_label_set_text(label, "No room");
+        lv_obj_center(label);
+    }
+    ui_add_startup_choice(feature, vis_page, "Toy Visualizer", SETTINGS_STARTUP_TOYS);
     add_control_page(feature);
     add_devices_page(feature);
     add_patterns_page(feature);

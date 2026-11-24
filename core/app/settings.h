@@ -22,10 +22,12 @@
 #define SETTINGS_DIRECT_KEY_LEN     16
 #define SETTINGS_DIRECT_NAME_LEN    16
 
-/* Startup image names that select the blank (black) tile and the Visualizer.
- * Firmware from before the Visualizer saved it as "kitt". */
+/* Startup image names that select the blank (black) tile, the Sound
+ * Visualizer and the Toy Visualizer. Firmware from before the Sound
+ * Visualizer saved it as "kitt". */
 #define SETTINGS_STARTUP_BLANK      "blank"
 #define SETTINGS_STARTUP_VISUALIZER "visualizer"
+#define SETTINGS_STARTUP_TOYS       "toys-visualizer"
 #define SETTINGS_STARTUP_OLD_KITT   "kitt"
 
 /* Only ever add new fields to the end. Settings saved by older firmware are
