@@ -1,37 +1,39 @@
 /*
- * Lovense feature (boards with Bluetooth): controls up to three Lovense
- * devices at once, on dark pages.
+ * Toys feature (boards with Bluetooth): HiveMind Control's toys on this
+ * unit (app/toys.h), up to three at once, run by channel, on dark pages.
  *
- *   Control:  a ring around the screen for each of the device's motors, with
- *             the level on its knob. Only the knobs can be dragged, so swipes
- *             anywhere else still move between pages. The device's name is in
- *             the middle, with arrows to step through the connected devices,
- *             and a Stop button under it that stops them all as soon as it's
+ *   Control:  a ring around the screen for each of the screen's controls,
+ *             with the level on its knob: one for each channel a toy
+ *             follows, or as the wearer lays them out in their app, each
+ *             driving one or more channels together. Only the knobs can be
+ *             dragged, so swipes anywhere else still move between pages. A
+ *             Stop button in the middle stops everything as soon as it's
  *             touched.
- *   Devices:  looks for devices while it's on screen. Tap one to connect to
+ *   Devices:  looks for toys while it's on screen. Tap one to connect to
  *             it, or tap it again to stop it and disconnect.
- *   Patterns: plays a pattern on one device or all of them. While one plays,
- *             each ring on the control page sets how high that motor goes,
- *             and a thin ring inside it shows the level as it plays. The
- *             speed is under the list.
- *   React:    drives the motors from your voice or your movement (see
+ *   Patterns: plays a pattern on every channel, or on one control's. While
+ *             one plays, each ring on the control page sets how high its
+ *             channels go, and a thin ring inside it shows the level as it
+ *             plays. The speed, of the channels picked, is under the list.
+ *   React:    drives the channels from your voice or your movement (see
  *             reactive.h), on top of any pattern.
- *   Options:  Motor Hold: on, a motor keeps its level when you let go of its
+ *   Options:  Hold: on, a control keeps its level when you let go of its
  *             knob; off, it goes back to 0.
  *   Others:   who may send commands from the comm channel (see
  *             app/others.h and others_page.h).
  *
  * The connections keep running while you look at other features, so the
  * levels stay as they were set. Everything here can also be done from a
- * phone, with the phone remote in Settings (see remote.h).
+ * phone, with the phone remote in Settings (see remote.h), and the app maps
+ * the toys' outputs to channels, and lays out the controls.
  */
 #include <stdio.h>
 #include <string.h>
 
-#include "app/lovense.h"
 #include "app/patterns.h"
 #include "app/reactive.h"
 #include "app/settings.h"
+#include "app/toys.h"
 #include "ui/others_page.h"
 #include "ui/ui_internal.h"
 
@@ -58,110 +60,118 @@
 static bool build(ui_feature_t *feature);
 static void on_navigate(void);
 
-const ui_feature_def_t feature_lovense = {
-    .name = "Lovense",
+const ui_feature_def_t feature_toys = {
+    .name = "Toys",
     .build = build,
     .on_navigate = on_navigate,
 };
 
-static const lv_palette_t ring_colors[LOVENSE_MAX_MOTORS] = {
+static const lv_palette_t ring_colors[TOYS_SCREEN_CONTROLS] = {
     LV_PALETTE_PINK, LV_PALETTE_PURPLE, LV_PALETTE_CYAN,
 };
 
 /* ----- Control page ----- */
 
 static lv_obj_t *control_page;
-static lv_obj_t *rings[LOVENSE_MAX_MOTORS];
-static lv_obj_t *live_rings[LOVENSE_MAX_MOTORS];   // thin, inside each ring: the level while a pattern plays
-static lv_obj_t *grips[LOVENSE_MAX_MOTORS];        // invisible, over each knob, to drag it
-static lv_obj_t *knob_labels[LOVENSE_MAX_MOTORS];  // the level, on the grip
-static lv_obj_t *kind_labels[LOVENSE_MAX_MOTORS];
+static lv_obj_t *rings[TOYS_SCREEN_CONTROLS];
+static lv_obj_t *live_rings[TOYS_SCREEN_CONTROLS];   // thin, inside each ring: the level while a pattern plays
+static lv_obj_t *grips[TOYS_SCREEN_CONTROLS];        // invisible, over each knob, to drag it
+static lv_obj_t *knob_labels[TOYS_SCREEN_CONTROLS];  // the level, on the grip
+static lv_obj_t *kind_labels[TOYS_SCREEN_CONTROLS];
 static lv_obj_t *name_label;
-static lv_obj_t *prev_button;
-static lv_obj_t *next_button;
 static lv_obj_t *battery_label;
 static lv_obj_t *stop_button;
 static lv_obj_t *nothing_label;
 static lv_obj_t *nothing_title;     // says what the page is, while it's empty
 
-static int selected = -1;           // slot shown on the control page, or -1
+static toys_control_t controls[TOYS_SCREEN_CONTROLS];
+static int control_count;
 
 // What the control page last showed, to redraw only on a change
-static int shown_slot = -2;
-static uint8_t shown_motor_count;
+static bool shown_valid;
+static uint32_t shown_layout;
+static int shown_count = -1;
 static int shown_battery = -2;
-static int shown_connected = -1;
-static uint8_t shown_levels[LOVENSE_MAX_MOTORS];
-static uint8_t shown_caps[LOVENSE_MAX_MOTORS];
+static size_t shown_connected = (size_t)-1;
+static uint8_t shown_levels[TOYS_SCREEN_CONTROLS];
+static uint8_t shown_outs[TOYS_SCREEN_CONTROLS];
+static bool shown_driven[TOYS_SCREEN_CONTROLS];
 static int shown_pattern = -2;
-static bool shown_driven;
 static char shown_status[40];
 
 /* ----- Devices page ----- */
 
 static lv_obj_t *devices_page;
-static lv_obj_t *device_rows[LOVENSE_MAX_DEVICES];
-static lv_obj_t *device_row_labels[LOVENSE_MAX_DEVICES];
+static lv_obj_t *device_rows[TOYS_MAX_DEVICES];
+static lv_obj_t *device_row_labels[TOYS_MAX_DEVICES];
 static lv_obj_t *devices_status;
-static char row_texts[LOVENSE_MAX_DEVICES][48];
+static char row_texts[TOYS_MAX_DEVICES][48];
 static uint32_t notice_until;
 static bool no_bluetooth;
 
-static bool is_connected(int slot)
+/* The first of a control's channels, which its ring shows. */
+static uint8_t first_channel(uint8_t channels)
 {
-    const lovense_device_t *d = slot >= 0 ? lovense_device(slot) : NULL;
-    return d != NULL && d->state == LOVENSE_CONNECTED;
-}
-
-static int count_connected(void)
-{
-    int n = 0;
-    for (int i = 0; i < LOVENSE_MAX_DEVICES; i++)
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
-        n += is_connected(i);
-    }
-    return n;
-}
-
-/* The next connected device after slot, going forwards (step 1) or back
- * (step -1) and wrapping round, or -1. */
-static int step_connected(int slot, int step)
-{
-    for (int n = 1; n <= LOVENSE_MAX_DEVICES; n++)
-    {
-        int i = ((slot + step * n) % LOVENSE_MAX_DEVICES + LOVENSE_MAX_DEVICES) % LOVENSE_MAX_DEVICES;
-        if (is_connected(i))
+        if (channels & (1u << c))
         {
-            return i;
+            return c;
         }
     }
-    return -1;
+    return 0;
 }
 
-/* "Vibrate", or "Vibrate 2" when the device has more than one of a kind. */
-static void motor_title(const lovense_device_t *d, uint8_t motor, char *out, size_t len)
+static bool any_driven(uint8_t channels)
 {
-    lovense_motor_kind_t kind = d->motors[motor].kind;
-    int same = 0, index = 0;
-    for (uint8_t i = 0; i < d->motor_count; i++)
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
-        if (d->motors[i].kind == kind)
+        if ((channels & (1u << c)) && toys_driven(c))
         {
-            same++;
-            if (i <= motor)
+            return true;
+        }
+    }
+    return false;
+}
+
+/* The lowest battery of the connected toys, or -1. */
+static int lowest_battery(void)
+{
+    int lowest = -1;
+    for (size_t i = 0; i < TOYS_MAX_DEVICES; i++)
+    {
+        const toy_t *t = toys_device(i);
+        if (t != NULL && t->state == TOY_CONNECTED && t->battery >= 0 && (lowest < 0 || t->battery < lowest))
+        {
+            lowest = t->battery;
+        }
+    }
+    return lowest;
+}
+
+/* The pattern every channel the controls drive is playing, or -1. */
+static int controls_pattern(void)
+{
+    int pattern = -2;
+    for (int i = 0; i < control_count; i++)
+    {
+        for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
+        {
+            if (controls[i].channels & (1u << c))
             {
-                index++;
+                int p = toys_channel(c)->pattern;
+                if (pattern == -2)
+                {
+                    pattern = p;
+                }
+                else if (pattern != p)
+                {
+                    return -1;
+                }
             }
         }
     }
-    if (same > 1)
-    {
-        snprintf(out, len, "%s %d", lovense_motor_name(kind), index);
-    }
-    else
-    {
-        snprintf(out, len, "%s", lovense_motor_name(kind));
-    }
+    return pattern < 0 ? -1 : pattern;
 }
 
 /* ----- Ring geometry ----- */
@@ -216,7 +226,7 @@ static void place_knob_label(uint8_t i)
 }
 
 /* Lay out the middle for the space the rings leave. */
-static void layout_middle(uint8_t count)
+static void layout_middle(int count)
 {
     int32_t inner = ui_px(RING_OUTER - RING_STEP * (count > 0 ? count - 1 : 0)) / 2 - ui_px(RING_WIDTH + KNOB_PAD + 4);
     int32_t stop_size = inner * 85 / 100;
@@ -224,13 +234,8 @@ static void layout_middle(uint8_t count)
     lv_obj_align(stop_button, LV_ALIGN_CENTER, 0, inner * 30 / 100);
 
     int32_t name_y = -inner * 52 / 100;
-    int32_t arrow = ui_px(count >= 3 ? 20 : 26);
-    lv_obj_set_width(name_label, inner * 2 - 2 * arrow - ui_px(4));
+    lv_obj_set_width(name_label, inner * 2 - ui_px(8));
     lv_obj_align(name_label, LV_ALIGN_CENTER, 0, name_y);
-    lv_obj_set_size(prev_button, arrow, arrow);
-    lv_obj_set_size(next_button, arrow, arrow);
-    lv_obj_align(prev_button, LV_ALIGN_CENTER, -(inner - arrow / 2 - ui_px(2)), name_y);
-    lv_obj_align(next_button, LV_ALIGN_CENTER, inner - arrow / 2 - ui_px(2), name_y);
     lv_obj_align(battery_label, LV_ALIGN_CENTER, 0, name_y + ui_px(17));
     // There's no room for the battery inside three rings.
     lv_obj_set_hidden(battery_label, count >= 3);
@@ -238,66 +243,57 @@ static void layout_middle(uint8_t count)
 
 static void show_control(void)
 {
-    // Keep to the device picked on the devices page while it connects;
-    // otherwise move on to another one if the one shown has gone.
-    if (!is_connected(selected))
+    uint32_t layout = toys_layout_changes();
+    size_t connected = toys_connected_count();
+    if (!shown_valid || layout != shown_layout || connected != shown_connected)
     {
-        const lovense_device_t *d = selected >= 0 ? lovense_device(selected) : NULL;
-        int next = step_connected(selected < 0 ? 0 : selected, 1);
-        if (next >= 0 || d == NULL || d->state != LOVENSE_CONNECTING)
-        {
-            selected = next;
-        }
+        control_count = connected > 0 ? toys_screen_controls(controls) : 0;
     }
-    const lovense_device_t *d = is_connected(selected) ? lovense_device(selected) : NULL;
-
-    int connected = count_connected();
-    int slot = d != NULL ? selected : -1;
-    int battery = d != NULL ? d->battery : -1;
-    int pattern = d != NULL ? d->pattern : -1;
-    bool driven = d != NULL && lovense_driven(d);
+    int battery = lowest_battery();
+    int pattern = controls_pattern();
     char status[40] = "";
-    if (d != NULL && lovense_reactive())
+    if (toys_reaction() != REACTIVE_OFF)
     {
-        reactive_status(status, sizeof(status));
+        reactive_status((reactive_mode_t)toys_reaction(), status, sizeof(status));
     }
-    uint8_t motor_count = d != NULL ? d->motor_count : 0;
-    bool changed = slot != shown_slot || motor_count != shown_motor_count || battery != shown_battery
-                   || connected != shown_connected || pattern != shown_pattern || driven != shown_driven
-                   || strcmp(status, shown_status) != 0;
-    for (uint8_t i = 0; !changed && i < motor_count; i++)
+    bool changed = !shown_valid || layout != shown_layout || control_count != shown_count || battery != shown_battery
+                   || connected != shown_connected || pattern != shown_pattern || strcmp(status, shown_status) != 0;
+    for (int i = 0; !changed && i < control_count; i++)
     {
-        changed = d->motors[i].level != shown_levels[i] || d->motors[i].cap != shown_caps[i];
+        const toy_channel_t *ch = toys_channel(first_channel(controls[i].channels));
+        changed = ch->level != shown_levels[i] || ch->out != shown_outs[i]
+                  || any_driven(controls[i].channels) != shown_driven[i];
     }
     if (!changed)
     {
         return;
     }
-    bool relayout = slot != shown_slot || motor_count != shown_motor_count;
-    shown_slot = slot;
-    shown_motor_count = motor_count;
+    bool relayout = !shown_valid || layout != shown_layout || control_count != shown_count
+                    || connected != shown_connected;
+    shown_valid = true;
+    shown_layout = layout;
+    shown_count = control_count;
     shown_battery = battery;
     shown_connected = connected;
     shown_pattern = pattern;
-    shown_driven = driven;
     strcpy(shown_status, status);
 
-    lv_obj_set_hidden(nothing_label, d != NULL);
-    lv_obj_set_hidden(nothing_title, d != NULL);
-    lv_obj_set_hidden(name_label, d == NULL);
-    lv_obj_set_hidden(stop_button, d == NULL);
-    lv_obj_set_hidden(prev_button, d == NULL || connected < 2);
-    lv_obj_set_hidden(next_button, d == NULL || connected < 2);
-    if (d == NULL)
+    bool any = control_count > 0;
+    lv_obj_set_hidden(nothing_label, any);
+    lv_obj_set_hidden(nothing_title, any);
+    lv_obj_set_hidden(name_label, !any);
+    lv_obj_set_hidden(stop_button, !any);
+    if (!any)
     {
         lv_obj_set_hidden(battery_label, true);
     }
 
-    for (uint8_t i = 0; i < LOVENSE_MAX_MOTORS; i++)
+    for (int i = 0; i < TOYS_SCREEN_CONTROLS; i++)
     {
-        bool used = i < motor_count;
+        bool used = i < control_count;
+        bool driven = used && any_driven(controls[i].channels);
         lv_obj_set_hidden(rings[i], !used);
-        lv_obj_set_hidden(live_rings[i], !used || !driven);
+        lv_obj_set_hidden(live_rings[i], !driven);
         lv_obj_set_hidden(grips[i], !used);
         lv_obj_set_hidden(kind_labels[i], !used);
         if (!used)
@@ -306,39 +302,51 @@ static void show_control(void)
         }
         // While a pattern or reaction drives it, the ring (dimmed) and its
         // knob set how high it goes, and the thin ring inside shows the level.
-        const lovense_motor_t *m = &d->motors[i];
-        shown_levels[i] = m->level;
-        shown_caps[i] = m->cap;
-        int32_t value = driven ? m->cap : m->level;
-        lv_arc_set_range(rings[i], 0, m->max);
-        if (lv_arc_get_value(rings[i]) != value)
+        const toy_channel_t *ch = toys_channel(first_channel(controls[i].channels));
+        shown_levels[i] = ch->level;
+        shown_outs[i] = ch->out;
+        shown_driven[i] = driven;
+        lv_arc_set_range(rings[i], 0, TOYS_LEVEL_TOP);
+        if (lv_arc_get_value(rings[i]) != ch->level)
         {
-            lv_arc_set_value(rings[i], value);
+            lv_arc_set_value(rings[i], ch->level);
         }
         lv_obj_set_style_arc_opa(rings[i], driven ? LV_OPA_40 : LV_OPA_COVER, LV_PART_INDICATOR);
-        lv_arc_set_range(live_rings[i], 0, m->max);
-        lv_arc_set_value(live_rings[i], m->level);
-        place_knob_label(i);
+        lv_arc_set_range(live_rings[i], 0, TOYS_LEVEL_TOP);
+        lv_arc_set_value(live_rings[i], ch->out);
+        place_knob_label((uint8_t)i);
         if (relayout)
         {
-            char title[16];
-            motor_title(d, i, title, sizeof(title));
-            lv_label_set_text(kind_labels[i], title);
+            lv_label_set_text(kind_labels[i], controls[i].label[0] != '\0' ? controls[i].label : "-");
             // At the ring's 0 end, inside the gap at the bottom
-            int32_t r = ring_mid_radius(i);
+            int32_t r = ring_mid_radius((uint8_t)i);
             int32_t x = (r * lv_trigo_cos(RING_START)) >> LV_TRIGO_SHIFT;
             int32_t y = (r * lv_trigo_sin(RING_START)) >> LV_TRIGO_SHIFT;
             lv_obj_align(kind_labels[i], LV_ALIGN_LEFT_MID, ui_px(120) + x + ui_px(14), y);
         }
     }
 
-    if (d != NULL)
+    if (any)
     {
         if (relayout)
         {
-            layout_middle(motor_count);
+            layout_middle(control_count);
         }
-        lv_label_set_text(name_label, d->model);
+        // The toy's name, or how many
+        const toy_t *only = NULL;
+        for (size_t i = 0; i < TOYS_MAX_DEVICES && only == NULL; i++)
+        {
+            const toy_t *t = toys_device(i);
+            only = t != NULL && t->state == TOY_CONNECTED ? t : NULL;
+        }
+        if (connected == 1 && only != NULL)
+        {
+            lv_label_set_text(name_label, only->model);
+        }
+        else
+        {
+            lv_label_set_text_fmt(name_label, "%u toys", (unsigned)connected);
+        }
         if (status[0] != '\0')
         {
             lv_label_set_text(battery_label, status);
@@ -360,49 +368,38 @@ static void show_control(void)
 
 static void grip_event_cb(lv_event_t *e)
 {
-    uint8_t motor = (uint8_t)(intptr_t)lv_event_get_user_data(e);
-    if (!is_connected(selected))
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    if (i >= control_count)
     {
         return;
     }
+    uint8_t channels = controls[i].channels;
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_PRESSING)
     {
         lv_point_t p;
         lv_indev_get_point(lv_indev_active(), &p);
-        int32_t level = level_at(motor, &p);
-        if (level == lv_arc_get_value(rings[motor]))
+        int32_t level = level_at((uint8_t)i, &p);
+        if (level == lv_arc_get_value(rings[i]))
         {
             return;
         }
-        lv_arc_set_value(rings[motor], level);
-        lovense_set_level(selected, motor, level);
+        lv_arc_set_value(rings[i], level);
+        toys_set_level(channels, (uint8_t)level);
     }
-    else if (settings_get()->lovense_release_to_zero && !lovense_driven(lovense_device(selected)))
+    else if (settings_get()->toy_release_to_zero && !any_driven(channels))
     {
-        // Let go, with Motor Hold off: back to 0 (but a pattern or reaction keeps its cap)
-        lv_arc_set_value(rings[motor], 0);
-        lovense_set_level(selected, motor, 0);
+        // Let go, with Hold off: back to 0 (but a pattern or reaction keeps its level)
+        lv_arc_set_value(rings[i], 0);
+        toys_set_level(channels, 0);
     }
-    place_knob_label(motor);
-    show_control();
-}
-
-static void step_event_cb(lv_event_t *e)
-{
-    int step = (int)(intptr_t)lv_event_get_user_data(e);
-    int next = step_connected(selected, step);
-    if (next >= 0)
-    {
-        selected = next;
-    }
+    place_knob_label((uint8_t)i);
     show_control();
 }
 
 static void stop_event_cb(lv_event_t *e)
 {
-    lovense_stop_all();
-    reactive_set_mode(REACTIVE_OFF);
+    toys_stop_all();
     show_control();
 }
 
@@ -477,7 +474,7 @@ static void add_control_page(ui_feature_t *feature)
 {
     control_page = add_dark_page(feature, "Control");
 
-    for (uint8_t i = 0; i < LOVENSE_MAX_MOTORS; i++)
+    for (uint8_t i = 0; i < TOYS_SCREEN_CONTROLS; i++)
     {
         rings[i] = add_ring(control_page, i);
         live_rings[i] = add_live_ring(control_page, i);
@@ -486,7 +483,7 @@ static void add_control_page(ui_feature_t *feature)
     }
     // A grip over each knob, over all the rings, with the level on it. It
     // doesn't pass drags on to the page, so dragging it only turns the ring.
-    for (uint8_t i = 0; i < LOVENSE_MAX_MOTORS; i++)
+    for (uint8_t i = 0; i < TOYS_SCREEN_CONTROLS; i++)
     {
         grips[i] = lv_obj_create(control_page);
         lv_obj_remove_style_all(grips[i]);
@@ -502,11 +499,11 @@ static void add_control_page(ui_feature_t *feature)
     }
 
     nothing_title = lv_label_create(control_page);
-    lv_label_set_text(nothing_title, "Lovense Control");
+    lv_label_set_text(nothing_title, "Toys");
     lv_obj_align(nothing_title, LV_ALIGN_TOP_MID, 0, ui_px(32));
 
     nothing_label = lv_label_create(control_page);
-    lv_label_set_text(nothing_label, "Nothing connected\n\nSwipe left to\nfind a device");
+    lv_label_set_text(nothing_label, "Nothing connected\n\nSwipe left to\nfind a toy");
     lv_obj_set_style_text_align(nothing_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(nothing_label, COLOR_MUTED, 0);
     lv_obj_center(nothing_label);
@@ -514,11 +511,6 @@ static void add_control_page(ui_feature_t *feature)
     name_label = lv_label_create(control_page);
     lv_label_set_long_mode(name_label, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_style_text_align(name_label, LV_TEXT_ALIGN_CENTER, 0);
-
-    prev_button = add_round_button(control_page, LV_SYMBOL_LEFT, COLOR_SURFACE);
-    lv_obj_add_event_cb(prev_button, step_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)-1);
-    next_button = add_round_button(control_page, LV_SYMBOL_RIGHT, COLOR_SURFACE);
-    lv_obj_add_event_cb(next_button, step_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)1);
 
     battery_label = lv_label_create(control_page);
     lv_obj_set_style_text_color(battery_label, COLOR_MUTED, 0);
@@ -540,26 +532,33 @@ static lv_obj_t **pattern_row_labels;
 static int8_t *pattern_row_shown;      // -1 unknown, 0 stopped, 1 playing
 static size_t pattern_row_count;
 static lv_obj_t *speed_label;
-static int target = -1;                // the device patterns play on, or -1 for all of them
+static int target = -1;                // the control patterns play on, or -1 for every channel
 static int shown_target = -2;
-static int shown_target_connected = -1;
+static size_t shown_target_connected = (size_t)-1;
 static uint32_t pattern_notice_until;
 static int shown_speed = -1;
 
-/* Whether pattern p is playing on the target: on it, or on every
- * connected device when the target is all of them. */
+/* The channels patterns play on: the target control's, or every channel. */
+static uint8_t target_channels(void)
+{
+    return target >= 0 && target < control_count ? controls[target].channels : TOYS_ALL_CHANNELS;
+}
+
+/* Whether pattern p is playing on the target's channels: on every one a toy
+ * follows, or on every one of the control's. */
 static bool playing_on_target(int p)
 {
-    if (target >= 0)
+    uint8_t channels = target_channels();
+    if (target < 0)
     {
-        return is_connected(target) && lovense_device(target)->pattern == p;
+        channels &= toys_channels_mapped();
     }
     bool any = false;
-    for (int i = 0; i < LOVENSE_MAX_DEVICES; i++)
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
-        if (is_connected(i))
+        if (channels & (1u << c))
         {
-            if (lovense_device(i)->pattern != p)
+            if (toys_channel(c)->pattern != p)
             {
                 return false;
             }
@@ -571,8 +570,13 @@ static bool playing_on_target(int p)
 
 static void show_patterns(void)
 {
-    int connected = count_connected();
-    if (target >= 0 && !is_connected(target))
+    size_t connected = toys_connected_count();
+    if (connected == 0 || toys_layout_changes() != shown_layout)
+    {
+        control_count = connected > 0 ? toys_screen_controls(controls) : 0;
+        shown_valid = false;
+    }
+    if (target >= control_count)
     {
         target = -1;
     }
@@ -587,14 +591,14 @@ static void show_patterns(void)
         }
         else if (target >= 0)
         {
-            lv_label_set_text(target_label, lovense_device(target)->model);
+            lv_label_set_text(target_label, controls[target].label);
         }
         else
         {
-            lv_label_set_text(target_label, connected == 1 ? "Connected device" : "All devices");
+            lv_label_set_text(target_label, "Every channel");
         }
-        lv_obj_set_hidden(target_prev, connected < 2);
-        lv_obj_set_hidden(target_next, connected < 2);
+        lv_obj_set_hidden(target_prev, control_count < 2);
+        lv_obj_set_hidden(target_next, control_count < 2);
     }
 
     for (size_t i = 0; i < pattern_row_count; i++)
@@ -617,9 +621,9 @@ static void show_patterns(void)
         lv_obj_set_style_border_color(pattern_rows[i], playing ? color : COLOR_OUTLINE, 0);
         lv_obj_set_style_text_color(pattern_row_labels[i], playing ? color : lv_color_white(), 0);
     }
-    if (lovense_speed() != shown_speed)
+    if (toys_speed(target_channels()) != shown_speed)
     {
-        shown_speed = lovense_speed();
+        shown_speed = toys_speed(target_channels());
         lv_label_set_text_fmt(speed_label, "Speed %d%%", shown_speed);
     }
 }
@@ -627,43 +631,23 @@ static void show_patterns(void)
 static void pattern_row_event_cb(lv_event_t *e)
 {
     int p = (int)(intptr_t)lv_event_get_user_data(e);
-    if (count_connected() == 0)
+    if (toys_connected_count() == 0)
     {
         lv_label_set_text(target_label, "Connect one first");
         pattern_notice_until = lv_tick_get() + NOTICE_MS;
         shown_target = -2;
         return;
     }
-    int play = playing_on_target(p) ? -1 : p;
-    for (int i = 0; i < LOVENSE_MAX_DEVICES; i++)
-    {
-        if (is_connected(i) && (target < 0 || target == i))
-        {
-            lovense_play(i, play);
-        }
-    }
+    toys_play(target_channels(), playing_on_target(p) ? -1 : p);
     show_patterns();
 }
 
-/* All, then each connected device, and round again. */
+/* Every channel, then each control, and round again. */
 static void target_event_cb(lv_event_t *e)
 {
     int step = (int)(intptr_t)lv_event_get_user_data(e);
-    int choices[LOVENSE_MAX_DEVICES + 1];
-    int count = 0, at = 0;
-    choices[count++] = -1;
-    for (int i = 0; i < LOVENSE_MAX_DEVICES; i++)
-    {
-        if (is_connected(i))
-        {
-            if (i == target)
-            {
-                at = count;
-            }
-            choices[count++] = i;
-        }
-    }
-    target = choices[(at + step + count) % count];
+    int count = control_count + 1;
+    target = (target + 1 + step + count) % count - 1;
     for (size_t i = 0; i < pattern_row_count; i++)
     {
         pattern_row_shown[i] = -1;
@@ -674,8 +658,8 @@ static void target_event_cb(lv_event_t *e)
 static void speed_event_cb(lv_event_t *e)
 {
     int step = (int)(intptr_t)lv_event_get_user_data(e);
-    int speed = (int)lovense_speed() + step * 25;
-    lovense_set_speed((uint16_t)LV_CLAMP(25, speed, 300));
+    uint8_t channels = target_channels();
+    toys_set_speed(channels, (uint16_t)LV_CLAMP(TOYS_SPEED_MIN, (int)toys_speed(channels) + step * 25, TOYS_SPEED_MAX));
     show_patterns();
 }
 
@@ -683,7 +667,7 @@ static void add_patterns_page(ui_feature_t *feature)
 {
     patterns_page = add_dark_page(feature, "Patterns");
 
-    // Which device: at the top, with arrows to step through them
+    // Which channels: at the top, with arrows to step through the controls
     target_label = lv_label_create(patterns_page);
     lv_label_set_long_mode(target_label, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_width(target_label, ui_px(110));
@@ -758,35 +742,38 @@ static lv_obj_t *react_page;
 static lv_obj_t *react_rows[REACTIVE_COUNT];
 static lv_obj_t *react_row_labels[REACTIVE_COUNT];
 static lv_obj_t *react_status;
-static int shown_react_mode = -1;
+static uint32_t shown_reactions = UINT32_MAX;
 static char shown_react_status[40];
 
+/* Each reaction that's followed is lit: different channels may follow
+ * different ones, from the app. */
 static void show_react(void)
 {
-    reactive_mode_t mode = reactive_mode();
-    if ((int)mode != shown_react_mode)
+    uint32_t modes = toys_reactions();
+    if (modes != shown_reactions)
     {
-        shown_react_mode = mode;
+        shown_reactions = modes;
         for (int i = 0; i < REACTIVE_COUNT; i++)
         {
             if (react_rows[i] == NULL)
             {
                 continue;
             }
-            bool on = i == (int)mode;
+            bool on = (modes & (1u << i)) != 0;
             lv_color_t color = lv_palette_main(LV_PALETTE_PINK);
             lv_obj_set_style_border_color(react_rows[i], on ? color : COLOR_OUTLINE, 0);
             lv_obj_set_style_text_color(react_row_labels[i], on ? color : lv_color_white(), 0);
         }
     }
     char status[40];
+    uint8_t mode = toys_reaction();
     if (mode == REACTIVE_OFF)
     {
-        snprintf(status, sizeof(status), "%s", count_connected() > 0 ? "" : "Connect a device first");
+        snprintf(status, sizeof(status), "%s", toys_connected_count() > 0 ? "" : "Connect a toy first");
     }
     else
     {
-        reactive_status(status, sizeof(status));
+        reactive_status((reactive_mode_t)mode, status, sizeof(status));
     }
     if (strcmp(status, shown_react_status) != 0)
     {
@@ -795,15 +782,26 @@ static void show_react(void)
     }
 }
 
+/* On every channel; tapping one that's followed stops it. */
 static void react_row_event_cb(lv_event_t *e)
 {
     reactive_mode_t mode = (reactive_mode_t)(intptr_t)lv_event_get_user_data(e);
-    if (mode == reactive_mode())
+    uint8_t followed = 0;
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
-        mode = REACTIVE_OFF;    // tapping the one that's on turns it off
+        if (toys_channel(c)->react == mode)
+        {
+            followed |= 1u << c;
+        }
     }
-    reactive_set_mode(mode);
-    lovense_set_reactive(mode != REACTIVE_OFF);
+    if (followed != 0)
+    {
+        toys_react(followed, REACTIVE_OFF);
+    }
+    else
+    {
+        toys_react(TOYS_ALL_CHANNELS, mode);
+    }
     show_react();
 }
 
@@ -866,9 +864,9 @@ static void show_notice(const char *text)
 static void show_devices(void)
 {
     bool any = false;
-    for (size_t i = 0; i < LOVENSE_MAX_DEVICES; i++)
+    for (size_t i = 0; i < TOYS_MAX_DEVICES; i++)
     {
-        const lovense_device_t *d = lovense_device(i);
+        const toy_t *d = toys_device(i);
         lv_obj_set_hidden(device_rows[i], d == NULL);
         if (d == NULL)
         {
@@ -880,10 +878,10 @@ static void show_devices(void)
         char text[sizeof(row_texts[0])];
         switch (d->state)
         {
-        case LOVENSE_CONNECTING:
+        case TOY_CONNECTING:
             snprintf(text, sizeof(text), "%s  ...", d->name);
             break;
-        case LOVENSE_CONNECTED:
+        case TOY_CONNECTED:
             if (d->battery >= 0)
             {
                 snprintf(text, sizeof(text), LV_SYMBOL_OK "  %s  %d%%", d->model, d->battery);
@@ -893,10 +891,10 @@ static void show_devices(void)
                 snprintf(text, sizeof(text), LV_SYMBOL_OK "  %s", d->model);
             }
             break;
-        case LOVENSE_FAILED:
+        case TOY_FAILED:
             snprintf(text, sizeof(text), "%s  failed", d->name);
             break;
-        case LOVENSE_LOST:
+        case TOY_LOST:
             snprintf(text, sizeof(text), "%s  lost", d->name);
             break;
         default:
@@ -907,7 +905,7 @@ static void show_devices(void)
         {
             strcpy(row_texts[i], text);
             lv_label_set_text(device_row_labels[i], text);
-            bool on = d->state == LOVENSE_CONNECTED;
+            bool on = d->state == TOY_CONNECTED;
             lv_obj_set_style_border_color(device_rows[i], on ? COLOR_CONNECTED : COLOR_OUTLINE, 0);
             lv_obj_set_style_text_color(device_row_labels[i], on ? COLOR_CONNECTED : lv_color_white(), 0);
         }
@@ -921,7 +919,7 @@ static void show_devices(void)
     {
         lv_label_set_text(devices_status, "No Bluetooth");
     }
-    else if (lovense_scanning())
+    else if (toys_scanning())
     {
         lv_label_set_text(devices_status, any ? "Tap to connect" : "Searching...");
     }
@@ -934,22 +932,15 @@ static void show_devices(void)
 static void device_row_event_cb(lv_event_t *e)
 {
     size_t slot = (size_t)(intptr_t)lv_event_get_user_data(e);
-    const lovense_device_t *d = lovense_device(slot);
+    const toy_t *d = toys_device(slot);
     if (d == NULL)
     {
         return;
     }
-    bool connecting = d->state != LOVENSE_CONNECTING && d->state != LOVENSE_CONNECTED;
-    if (!lovense_toggle(slot))
+    bool connecting = d->state != TOY_CONNECTING && d->state != TOY_CONNECTED;
+    if (!toys_toggle(slot) && connecting)
     {
-        if (connecting)
-        {
-            show_notice(count_connected() >= LOVENSE_MAX_CONNECTED ? "Only 3 at once" : "Wait for the other one");
-        }
-    }
-    else if (connecting)
-    {
-        selected = (int)slot;   // show it on the control page once it's connected
+        show_notice(toys_connected_count() >= TOYS_MAX_CONNECTED ? "Only 3 at once" : "Wait for the other one");
     }
     show_devices();
 }
@@ -973,7 +964,7 @@ static void add_devices_page(ui_feature_t *feature)
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
 
-    for (size_t i = 0; i < LOVENSE_MAX_DEVICES; i++)
+    for (size_t i = 0; i < TOYS_MAX_DEVICES; i++)
     {
         lv_obj_t *row = lv_button_create(list);
         lv_obj_set_size(row, ui_px(176), ui_px(30));
@@ -1004,7 +995,7 @@ static void add_devices_page(ui_feature_t *feature)
 static void hold_event_cb(lv_event_t *e)
 {
     bool hold = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
-    settings_set_lovense_release_to_zero(!hold);
+    settings_set_toy_release_to_zero(!hold);
 }
 
 static void add_options_page(ui_feature_t *feature)
@@ -1012,14 +1003,14 @@ static void add_options_page(ui_feature_t *feature)
     lv_obj_t *page = add_dark_page(feature, "Options");
 
     lv_obj_t *label = lv_label_create(page);
-    lv_label_set_text(label, "Motor Hold");
+    lv_label_set_text(label, "Hold");
     lv_obj_align(label, LV_ALIGN_CENTER, 0, ui_px(-34));
 
     lv_obj_t *hold_switch = lv_switch_create(page);
     lv_obj_set_size(hold_switch, ui_px(96), ui_px(48));
     lv_obj_set_style_bg_color(hold_switch, COLOR_TRACK, LV_PART_MAIN);
     lv_obj_set_style_bg_color(hold_switch, lv_palette_main(LV_PALETTE_PINK), LV_PART_INDICATOR | LV_STATE_CHECKED);
-    if (!settings_get()->lovense_release_to_zero)
+    if (!settings_get()->toy_release_to_zero)
     {
         lv_obj_add_state(hold_switch, LV_STATE_CHECKED);
     }
@@ -1032,11 +1023,8 @@ static void add_options_page(ui_feature_t *feature)
 static void poll_timer_cb(lv_timer_t *t)
 {
     uint32_t now = lv_tick_get();
-    if (reactive_mode() != REACTIVE_OFF)
-    {
-        lovense_set_reactive_factor(reactive_poll(now));
-    }
-    lovense_poll(now);
+    reactive_poll(now, toys_reactions());
+    toys_poll(now);
     lv_obj_t *page = ui_current_page();
     if (page == control_page)
     {
@@ -1061,7 +1049,7 @@ static void on_navigate(void)
 {
     if (ui_current_page() == devices_page)
     {
-        if (!lovense_scanning() && !lovense_scan_start())
+        if (!toys_scanning() && !toys_scan_start())
         {
             no_bluetooth = true;
         }
@@ -1069,10 +1057,10 @@ static void on_navigate(void)
     }
     else
     {
-        lovense_scan_stop();
+        toys_scan_stop();
         if (ui_current_page() == control_page)
         {
-            shown_slot = -2;    // redraw it all
+            shown_valid = false;    // redraw it all
             show_control();
         }
         else if (ui_current_page() == patterns_page)
@@ -1090,7 +1078,7 @@ static bool build(ui_feature_t *feature)
     add_patterns_page(feature);
     add_react_page(feature);
     add_options_page(feature);
-    ui_others_page_add(feature, OTHERS_LOVENSE);
+    ui_others_page_add(feature, OTHERS_VIBE);
     show_control();
     lv_timer_create(poll_timer_cb, POLL_MS, NULL);
     return true;

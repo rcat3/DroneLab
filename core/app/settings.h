@@ -42,7 +42,7 @@ typedef struct
     uint8_t sound_autoplay;                 // 1 to start playing at startup
     char sound_track[SETTINGS_NAME_LEN];    // file name of the last track played
     uint8_t voice_effect;                   // voice effect preset, 0 for your natural voice
-    uint8_t lovense_release_to_zero;        // 1 to set a Lovense motor back to 0 when its ring is let go
+    uint8_t toy_release_to_zero;        // 1 to set a toy control back to 0 when its ring is let go
     char remote_ssid[SETTINGS_REMOTE_LEN];      // the phone remote's hotspot; empty until it's first used
     char remote_password[SETTINGS_REMOTE_LEN];
     uint8_t terminal_size;                  // Terminal letter size: 0 to fit the message, or 1 to 6 for 8 to 48 px
@@ -119,7 +119,7 @@ void settings_set_sound_track(const char *name);
 void settings_set_voice_effect(uint8_t preset);
 void settings_set_voice_volume(uint8_t percent);
 void settings_set_voice_loud_room(uint8_t level);
-void settings_set_lovense_release_to_zero(uint8_t enabled);
+void settings_set_toy_release_to_zero(uint8_t enabled);
 void settings_set_remote(const char *ssid, const char *password);
 void settings_set_remote_autostart(uint8_t enabled);
 void settings_set_terminal_size(uint8_t size);

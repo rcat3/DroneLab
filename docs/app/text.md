@@ -1,6 +1,6 @@
 # Text
 
-The Text tab is HiveMind by text, as [Voice](voice.md) is HiveMind by voice.  You text other drones in conversations, as in a chat app: one for everyone who can hear you, one for each channel you're on, and one for each person.  From any conversation you can also put words on their unit's display, or run their [Lovense](../features/lovense.md) toys.
+The Text tab is HiveMind by text, as [Voice](voice.md) is HiveMind by voice.  You text other drones in conversations, as in a chat app: one for everyone who can hear you, one for each channel you're on, and one for each person.  From any conversation you can also put words on their unit's display, or run their [toys](../features/toys.md), with [HiveMind Control](control.md).
 
 <p align="center">
 <img src="../images/app/text.png" width="260" alt="The HiveMind Text tab: Broadcast, then the Cloud Server and Direct channels, the one you're on first and the others under it">
@@ -73,7 +73,7 @@ For your own messages it shows how they went: other units don't say which copies
 
 ## Their display
 
-**Terminal**, in the **Control button**'s menu (a remote) at the top of a conversation, puts words on their unit's display, on its [Terminal](../features/terminal.md), in blocky green letters.  To a channel, it goes to everyone in it.
+**Terminal**, under *Display unit* in the **HiveMind Control button**'s menu (a remote) at the top of a conversation, puts words on their unit's display, on its [Terminal](../features/terminal.md), in blocky green letters.  To a channel, it goes to everyone in it.
 
 <img src="../images/app/text_terminal.png" width="300" alt="Their display: the words, the letter size, Add a line or Replace, Clear their display, and Switch to it">
 
@@ -90,13 +90,13 @@ No name is shown, but it isn't anonymous: their unit knows who sent it, as it ha
 
 ## Their toys
 
-**Lovense**, in the **Control button**'s menu at the top of a conversation, opens [Control](control.md), for the toys of the person, or of everyone in the channel.
+**Vibe**, under *Toys* in the **HiveMind Control button**'s menu at the top of a conversation, opens [Toys](control.md#toys), for the toys of the person, or of everyone in the channel, by channel.
 
 ## What a conversation shows
 
 Texts, yours on the right in pink and theirs on the left in green, with who sent each in a channel.
 
-Between them, in grey, are the commands for the display and the toys, sent each way: *You put "WE ARE THE HIVE" on their display*, or *RubberCat2 set your vibrate to 8*.  One your unit didn't do is in red, *not done*, so you can see who's trying.  It may not be allowed, or your unit may be set to ignore ones sent to everyone or to the whole channel.  Tap *change them* under it to go to [Permissions](permissions.md), whose [log](permissions.md#command-log) says why.  Dragging a slider makes one line, not one for every step.
+Between them, in grey, are the commands for the display and the toys, sent each way: *You put "WE ARE THE HIVE" on their display*, or *RubberCat2 set your toys on V1 to 8*.  One your unit didn't do is in red, *not done*, so you can see who's trying.  It may not be allowed, or your unit may be set to ignore ones sent to everyone or to the whole channel.  Tap *change them* under it to go to [Permissions](permissions.md), whose [log](permissions.md#command-log) says why.  Dragging a slider makes one line, not one for every step.
 
 Someone you've muted (*Mute for me*, in their details) is muted here too: their texts and commands are ignored, and your unit doesn't do their commands, whoever they're for.
 

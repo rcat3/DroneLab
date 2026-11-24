@@ -2,7 +2,7 @@
 
 The DroneLab app is for **Android** phones and tablets, and **Linux** computers (a desktop, a laptop, or a Raspberry Pi 4 or 5: see [On a Linux computer](#on-a-linux-computer)).  It isn't on the Play Store: you install it from a file on the project's [releases page](https://github.com/rcat3/DroneLab/releases/latest).  To build it yourself instead, see [`app/README.md`](../../app/README.md).
 
-**No Android phone?**  iPhones, and any phone without the app, can still run the unit from a web browser, through the unit's own [WiFi Hotspot Remote](../features/phone-remote.md).  That covers what's on the display, the settings, the Lovense toys, the voice effect, sounds and the Terminal; it doesn't cover talking to the hive ([Voice](voice.md)), [texting](text.md) others, or recording, which need the app.
+**No Android phone?**  iPhones, and any phone without the app, can still run the unit from a web browser, through the unit's own [WiFi Hotspot Remote](../features/phone-remote.md).  That covers what's on the display, the settings, the toys, the voice effect, sounds and the Terminal; it doesn't cover talking to the hive ([Voice](voice.md)), [texting](text.md) others, or recording, which need the app.
 
 Back to [the app](README.md).
 

@@ -1123,7 +1123,7 @@ static void heard(const uint8_t *msg, size_t len, int8_t rssi, uint32_t now)
                 {
                     end = (size_t)(zero - plain);
                     size_t caps = plain_len - end - 1;
-                    if (caps >= 1 && caps >= 1 + 2 * (size_t)plain[end + 1])
+                    if (caps >= 1 && caps >= 1 + OTHERS_CAP_ENTRY * (size_t)plain[end + 1])
                     {
                         caps = caps < OTHERS_CAPS_MAX ? caps : OTHERS_CAPS_MAX;
                         memcpy(p->caps, plain + end + 1, caps);

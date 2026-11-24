@@ -3,8 +3,9 @@
 
 /*
  * A feature's "Others" page: who may send it commands over the comm channel
- * (see app/others.h). An Accept switch, the people who've sent them (tap one
- * to allow them or not, hold to forget them), and who sent the last one.
+ * (see app/others.h), by the wearer's rules, which their app sets: Off, Ask
+ * or Anyone, with a button to switch it Off here, who's allowed, and who
+ * sent the last one.
  */
 
 #include "app/others.h"

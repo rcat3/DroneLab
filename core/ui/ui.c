@@ -45,7 +45,7 @@ extern const ui_feature_def_t feature_visualizer;
 extern const ui_feature_def_t feature_voice;
 extern const ui_feature_def_t feature_sound;
 extern const ui_feature_def_t feature_comm;
-extern const ui_feature_def_t feature_lovense;
+extern const ui_feature_def_t feature_toys;
 extern const ui_feature_def_t feature_terminal;
 extern const ui_feature_def_t feature_settings;
 
@@ -68,8 +68,8 @@ static const ui_feature_def_t *const feature_defs[] = {
 #if RCAT_FEATURE_TERMINAL
     &feature_terminal,
 #endif
-#if RCAT_FEATURE_LOVENSE
-    &feature_lovense,
+#if RCAT_FEATURE_TOYS
+    &feature_toys,
 #endif
     &feature_settings,   // last, so it can list every feature's startup choices
 };

@@ -2,9 +2,9 @@
 #define RCAT_REACTIVE_H
 
 /*
- * Reactions for the Lovense feature: a factor from 0 to 1, worked out from
+ * Reactions for the toys' channels: a factor from 0 to 1, worked out from
  * the microphone or the accelerometer, that scales whatever's driving the
- * motors (a pattern, or the levels set on the rings).
+ * channels that follow it (a pattern, or their levels).
  *
  *   Voice    follows how loud you're talking
  *   Moving   on while you move, off soon after you stop
@@ -31,21 +31,23 @@ typedef enum
     REACTIVE_COUNT
 } reactive_mode_t;
 
-void reactive_set_mode(reactive_mode_t mode);
-reactive_mode_t reactive_mode(void);
-
 /* Whether the board has what a mode needs (a microphone or an
  * accelerometer). */
 bool reactive_available(reactive_mode_t mode);
 
 const char *reactive_name(reactive_mode_t mode);
 
-/* Read the sensors and return the factor, 0 to 1. Call every 50 ms or so
- * with a millisecond clock. Returns 1 when the mode is off. */
-float reactive_poll(uint32_t now_ms);
+/* Read the sensors and work out the factor, 0 to 1, of each of the modes in
+ * [modes] (a bit for each, 1 << mode): several can be followed at once, by
+ * different channels. A mode that's just come into [modes] starts afresh.
+ * Call every 50 ms or so with a millisecond clock. */
+void reactive_poll(uint32_t now_ms, uint32_t modes);
 
-/* A few words on what it's sensing now, e.g. "Hold still..." or
+/* A mode's factor, as the last poll worked it out: 1 for Off. */
+float reactive_factor(reactive_mode_t mode);
+
+/* A few words on what a mode's sensing now, e.g. "Hold still..." or
  * "Tilt 12°", for showing on screen. */
-void reactive_status(char *text, size_t len);
+void reactive_status(reactive_mode_t mode, char *text, size_t len);
 
 #endif

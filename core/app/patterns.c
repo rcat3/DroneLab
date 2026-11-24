@@ -3,8 +3,8 @@
  * the file format).
  *
  * The built-in ones are worked out from the time as they play, so they cost
- * no memory. On a device with two motors, some run the second one half a
- * cycle behind the first, so the two take turns.
+ * no memory. Some run the even channels (V2, V4, V6) half a cycle behind the
+ * odd ones, so a pattern played on two channels takes turns.
  */
 #include <math.h>
 #include <stdio.h>
@@ -22,7 +22,7 @@
 #define MAX_PATTERNS        32
 #define MAX_NAME            24
 #define MAX_BLOCKS          4       // separately repeating parts of one file
-#define MAX_TARGETS         6       // motors one part can drive
+#define MAX_TARGETS         6       // channels one part can drive
 #define MAX_STEPS           4096    // levels in one part
 #define MAX_FILE_BYTES      32768
 #define MIN_STEP_MS         100     // Lovense's own patterns go no faster
@@ -31,19 +31,13 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-typedef float (*generator_t)(uint8_t motor, float seconds);
-
-typedef struct
-{
-    lovense_motor_kind_t kind;
-    uint8_t which;          // 0 for every motor of the kind
-} target_t;
+typedef float (*generator_t)(uint8_t channel, float seconds);
 
 typedef struct
 {
     uint16_t step_ms;
-    uint8_t target_count;   // 0 drives every motor
-    target_t targets[MAX_TARGETS];
+    uint8_t target_count;   // 0 drives every channel
+    uint8_t targets[MAX_TARGETS];   // channels, 0 for V1, or ALL_CHANNELS
     uint16_t step_count;
     uint8_t *steps;         // 0 to 20
 } block_t;
@@ -59,6 +53,8 @@ typedef struct
 static pattern_t patterns[MAX_PATTERNS];
 static size_t pattern_count;
 
+#define ALL_CHANNELS        0xFF
+
 /* ----- Built-in patterns, each 0 to 1 over time ----- */
 
 static float wrap(float x, float period)
@@ -66,24 +62,24 @@ static float wrap(float x, float period)
     return x - period * floorf(x / period);
 }
 
-/* Half a cycle later on the second motor, so two motors take turns. */
-static float offset(uint8_t motor, float period)
+/* Half a cycle later on the even channels, so two channels take turns. */
+static float offset(uint8_t channel, float period)
 {
-    return (motor % 2) ? period / 2 : 0;
+    return (channel % 2) ? period / 2 : 0;
 }
 
-static float gen_pulse(uint8_t motor, float s)
+static float gen_pulse(uint8_t channel, float s)
 {
-    return wrap(s + offset(motor, 0.8f), 0.8f) < 0.4f ? 1.0f : 0.0f;
+    return wrap(s + offset(channel, 0.8f), 0.8f) < 0.4f ? 1.0f : 0.0f;
 }
 
-static float gen_wave(uint8_t motor, float s)
+static float gen_wave(uint8_t channel, float s)
 {
-    float p = wrap(s + offset(motor, 4.0f), 4.0f) / 4.0f;
+    float p = wrap(s + offset(channel, 4.0f), 4.0f) / 4.0f;
     return 0.5f - 0.5f * cosf(2 * (float)M_PI * p);
 }
 
-static float gen_heartbeat(uint8_t motor, float s)
+static float gen_heartbeat(uint8_t channel, float s)
 {
     // Two beats, the second softer, then a rest
     float p = wrap(s, 1.1f);
@@ -95,13 +91,13 @@ static float gen_heartbeat(uint8_t motor, float s)
     return beat > 1.0f ? 1.0f : beat;
 }
 
-static float gen_climb(uint8_t motor, float s)
+static float gen_climb(uint8_t channel, float s)
 {
     // Up over eight seconds, then drop back
     return wrap(s, 8.0f) / 8.0f;
 }
 
-static float gen_surge(uint8_t motor, float s)
+static float gen_surge(uint8_t channel, float s)
 {
     // Waves that grow for twenty seconds, then a short rest
     float p = wrap(s, 23.0f);
@@ -110,26 +106,26 @@ static float gen_surge(uint8_t motor, float s)
         return 0.0f;
     }
     float swell = 0.25f + 0.75f * p / 20.0f;
-    return swell * (0.55f + 0.45f * sinf(2 * (float)M_PI * (p + offset(motor, 1.5f)) / 1.5f));
+    return swell * (0.55f + 0.45f * sinf(2 * (float)M_PI * (p + offset(channel, 1.5f)) / 1.5f));
 }
 
 /* Smooth noise: random levels a third of a second apart, eased between. */
-static float noise_at(uint32_t n, uint8_t motor)
+static float noise_at(uint32_t n, uint8_t channel)
 {
-    uint32_t h = n * 2654435761u + motor * 40503u;
+    uint32_t h = n * 2654435761u + channel * 40503u;
     h ^= h >> 15;
     h *= 2246822519u;
     h ^= h >> 13;
     return (h & 0xFFFF) / 65535.0f;
 }
 
-static float gen_wander(uint8_t motor, float s)
+static float gen_wander(uint8_t channel, float s)
 {
     float x = s * 3.0f;
     uint32_t n = (uint32_t)x;
     float f = x - n;
     f = f * f * (3 - 2 * f);
-    return noise_at(n, motor) + (noise_at(n + 1, motor) - noise_at(n, motor)) * f;
+    return noise_at(n, channel) + (noise_at(n + 1, channel) - noise_at(n, channel)) * f;
 }
 
 static void add_builtin(const char *name, generator_t generator)
@@ -147,23 +143,21 @@ static void add_builtin(const char *name, generator_t generator)
 
 #if RCAT_HAVE_FILESYSTEM
 
-static bool parse_target(const char *s, size_t len, target_t *t)
+/* One of F's motors, e.g. "v2": the number is the channel, V2, whatever
+ * the letter; with none, it's every channel. The letter's only checked,
+ * as channels can drive any kind of output. */
+static bool parse_target(const char *s, size_t len, uint8_t *channel)
 {
-    if (len == 0)
+    if (len == 0 || strchr("vrptfo", s[0]) == NULL)
+    {
+        return false;   // s (suction) and d (depth): nothing here has them
+    }
+    int n = len > 1 ? atoi(s + 1) : 0;
+    if (n < 0 || n > TOYS_CHANNELS)
     {
         return false;
     }
-    switch (s[0])
-    {
-    case 'v': t->kind = LOVENSE_VIBRATE; break;
-    case 'r': t->kind = LOVENSE_ROTATE; break;
-    case 'p': t->kind = LOVENSE_AIR; break;
-    case 't':
-    case 'f':
-    case 'o': t->kind = LOVENSE_OSCILLATE; break;
-    default: return false;     // s (suction) and d (depth): nothing here has them
-    }
-    t->which = len > 1 ? (uint8_t)atoi(s + 1) : 0;
+    *channel = n == 0 ? ALL_CHANNELS : (uint8_t)(n - 1);
     return true;
 }
 
@@ -383,7 +377,7 @@ const char *patterns_name(size_t index)
     return index < pattern_count ? patterns[index].name : "";
 }
 
-static bool block_drives(const block_t *b, lovense_motor_kind_t kind, uint8_t which)
+static bool block_drives(const block_t *b, uint8_t channel)
 {
     if (b->target_count == 0)
     {
@@ -391,7 +385,7 @@ static bool block_drives(const block_t *b, lovense_motor_kind_t kind, uint8_t wh
     }
     for (uint8_t i = 0; i < b->target_count; i++)
     {
-        if (b->targets[i].kind == kind && (b->targets[i].which == 0 || b->targets[i].which == which))
+        if (b->targets[i] == ALL_CHANNELS || b->targets[i] == channel)
         {
             return true;
         }
@@ -399,7 +393,7 @@ static bool block_drives(const block_t *b, lovense_motor_kind_t kind, uint8_t wh
     return false;
 }
 
-float patterns_level(size_t index, lovense_motor_kind_t kind, uint8_t which, uint8_t motor, uint32_t t_ms)
+float patterns_level(size_t index, uint8_t channel, uint32_t t_ms)
 {
     if (index >= pattern_count)
     {
@@ -408,15 +402,15 @@ float patterns_level(size_t index, lovense_motor_kind_t kind, uint8_t which, uin
     const pattern_t *p = &patterns[index];
     if (p->generator != NULL)
     {
-        return p->generator(motor, t_ms / 1000.0f);
+        return p->generator(channel, t_ms / 1000.0f);
     }
 
-    // The last part that drives this motor wins.
+    // The last part that drives this channel wins.
     float level = -1;
     for (uint8_t i = 0; i < p->block_count; i++)
     {
         const block_t *b = &p->blocks[i];
-        if (block_drives(b, kind, which))
+        if (block_drives(b, channel))
         {
             uint32_t step = (t_ms / b->step_ms) % b->step_count;
             level = b->steps[step] / 20.0f;

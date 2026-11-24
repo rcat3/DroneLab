@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:dronelab/comm/avatars.dart';
 import 'package:dronelab/comm/board_protocol.dart';
+import 'package:dronelab/comm/conversations.dart';
 import 'package:dronelab/comm/identity.dart';
 import 'package:dronelab/comm/message_details.dart';
 import 'package:dronelab/comm/recorder.dart';
@@ -205,13 +206,15 @@ void main() {
     final me = await Identity.fromSeed(List.generate(32, (i) => i));
     final key = me.publicKey;
     final cmd = OthersCommand.stopAll().withCounter(0x060504030201).withScope(OthersCommand.scopeOne);
-    expect(cmd.body(key), [3, ...key, 1, 2, 3, 4, 5, 6, 2, 0x00]);
-    expect(OthersCommand.setLevel(OthersCommand.rotate, 25).what, [0x01, 1, 20]);
-    expect(OthersCommand.setLevel(OthersCommand.allMotors, 5).what, [0x01, 0xFF, 5]);
-    expect(OthersCommand.play('Wave').what, [0x02, ...utf8.encode('Wave')]);
-    expect(OthersCommand.play(null).what, [0x02]);
-    expect(OthersCommand.setSpeed(1000).what, [0x03, 300 & 0xFF, 300 >> 8]);
-    expect(OthersCommand.setReact(2).what, [0x04, 2]);
+    expect(cmd.body(key), [3, ...key, 1, 2, 3, 4, 5, 6, 2, 0x40]);
+    expect(OthersCommand.setLevel(0x02, 25).what, [0x41, 0x02, 20]);
+    expect(OthersCommand.setLevel(0xFF, 5).what, [0x41, 0x3F, 5]);
+    expect(OthersCommand.play(0x05, 'Wave').what, [0x42, 0x05, ...utf8.encode('Wave')]);
+    expect(OthersCommand.play(0x01, null).what, [0x42, 0x01]);
+    expect(OthersCommand.setSpeed(1000).what, [0x43, 300 & 0xFF, 300 >> 8]);
+    expect(OthersCommand.setReact(0x03, 2).what, [0x44, 0x03, 2]);
+    expect(describeCommand(OthersCommand.setLevel(0x05, 7).what, mine: false), 'set your toys on V1+V3 to 7');
+    expect(describeCommand(OthersCommand.setLevel(0x3F, 7).what, mine: true), 'set their toys to 7');
     expect(OthersCommand.terminal('hi', append: false, show: true, size: 3).what, [0x10, 2, 3, ...utf8.encode('hi')]);
     // The longest fit, signed
     final long = OthersCommand.terminal('x' * 500).body(key).length + OthersCommand.signatureLength;

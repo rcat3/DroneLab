@@ -7,5 +7,5 @@ set(RCAT_FEATURE_VOICE  ON)     # the voice ring, voice effects and the voice la
 set(RCAT_FEATURE_SOUND  ON)     # sound file player
 set(RCAT_FEATURE_COMM   ON)     # the comm channel's status screen, through the app
 set(RCAT_FEATURE_LEVEL  OFF)    # no accelerometer
-set(RCAT_FEATURE_LOVENSE ON)    # with virtual toys, for now (see toys.h)
+set(RCAT_FEATURE_TOYS ON)       # with virtual toys, for now (see toys.h)
 set(RCAT_FEATURE_TERMINAL ON)   # green screen text, typed in on the remote in the app

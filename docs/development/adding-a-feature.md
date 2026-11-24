@@ -19,4 +19,4 @@ A feature is one of the sections you swipe up and down between, like Images or C
 
 ## Things that run in the background
 
-Some features keep things going while you look at others: the sound player keeps playing, and the Lovense devices stay connected.  Put that part in `core/app/` or `core/audio/`, and keep the feature's file to its pages.  Do regular work in an LVGL timer (`lv_timer_create()`), created in the feature's `build`, which keeps running whichever page is on screen.  The [phone remote](../features/phone-remote.md) calls the same modules, so it and the display always agree.
+Some features keep things going while you look at others: the sound player keeps playing, and the toys stay connected.  Put that part in `core/app/` or `core/audio/`, and keep the feature's file to its pages.  Do regular work in an LVGL timer (`lv_timer_create()`), created in the feature's `build`, which keeps running whichever page is on screen.  The [phone remote](../features/phone-remote.md) calls the same modules, so it and the display always agree.

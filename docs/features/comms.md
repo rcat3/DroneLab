@@ -138,7 +138,7 @@ Units start on the **open channel**, which any unit in range can hear.  To keep 
 
 The app turns the channel's name and passphrase into a key (PBKDF2, deliberately slow), and the unit encrypts everything with it (AES-128-GCM), so units outside the channel can neither hear it nor send to it, however they're changed.  The passphrase never leaves the phone.  What's not hidden: that a channel's there, its name, and how many are on it; and anyone who's been given the passphrase is on it, so start a new channel if someone shouldn't be any more.  The unit keeps its channel's key in its settings, so someone with the unit itself could read it out.
 
-Commands, texts and words for the display are signed by whoever sent them (see [Commands from others](lovense.md#commands-from-others)), so nobody can send them as someone else, on any channel.  Voice isn't: it's too much to sign every few milliseconds, so it's shown as coming from the unit it says it's from.  On a channel with a passphrase only its members can talk at all; on the open channel someone could talk as another unit nearby.  On the server, voice is tied to each person's certificate, so it can't be.
+Commands, texts and words for the display are signed by whoever sent them (see [Commands from others](toys.md#commands-from-others)), so nobody can send them as someone else, on any channel.  Voice isn't: it's too much to sign every few milliseconds, so it's shown as coming from the unit it says it's from.  On a channel with a passphrase only its members can talk at all; on the open channel someone could talk as another unit nearby.  On the server, voice is tied to each person's certificate, so it can't be.
 
 The app's status strip shows a grey arrow when someone's talking on another channel nearby: the unit hears it on the air, but can't listen to it.
 
@@ -162,7 +162,7 @@ The DroneLab app is the phone's side of HiveMind: it joins the server, plays the
 
 - [Connecting](../app/connecting.md): pairing it with the unit, joining the server, your avatar.
 - [HiveMind](../app/voice.md): the two links, who's there, the ways to talk, hearing the hive, channels, and the talking settings.
-- [Text](../app/text.md) and [Control](../app/control.md): texts, words on displays and Lovense commands to others, and who may send you theirs.
+- [Text](../app/text.md) and [HiveMind Control](../app/control.md): texts, words on displays and toy commands to others, and who may send you theirs.
 - The [status strip](../app/README.md#the-status-strip) and the app's other signs.
 
 ## Trying it out

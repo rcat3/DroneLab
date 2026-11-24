@@ -30,7 +30,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-static reactive_mode_t mode = REACTIVE_OFF;
+static uint32_t following;          // the modes followed, a bit for each
 static uint32_t last_ms;
 static bool have_gravity;
 static float gx, gy, gz;            // the gravity estimate, in g
@@ -39,7 +39,7 @@ static float tilt_deg;
 static uint32_t still_since;        // when it last became still, or 0
 static uint32_t last_move_ms;
 static bool accel_ok;
-static float output;
+static float output[REACTIVE_COUNT];
 
 static const char *const names[REACTIVE_COUNT] = {
     "Off", "Voice", "Moving", "Still", "Motion", "Tilt",
@@ -48,23 +48,6 @@ static const char *const names[REACTIVE_COUNT] = {
 static float clamp01(float x)
 {
     return x < 0 ? 0 : x > 1 ? 1 : x;
-}
-
-void reactive_set_mode(reactive_mode_t new_mode)
-{
-    if (new_mode >= REACTIVE_COUNT)
-    {
-        new_mode = REACTIVE_OFF;
-    }
-    mode = new_mode;
-    output = 0;
-    still_since = 0;
-    last_move_ms = 0;
-}
-
-reactive_mode_t reactive_mode(void)
-{
-    return mode;
 }
 
 bool reactive_available(reactive_mode_t m)
@@ -142,7 +125,7 @@ static void read_motion(uint32_t now_ms, uint32_t dt_ms)
     }
 }
 
-float reactive_poll(uint32_t now_ms)
+void reactive_poll(uint32_t now_ms, uint32_t modes)
 {
     uint32_t dt = last_ms != 0 ? now_ms - last_ms : 50;
     last_ms = now_ms;
@@ -150,22 +133,46 @@ float reactive_poll(uint32_t now_ms)
     {
         dt = 500;
     }
-    if (mode == REACTIVE_OFF)
+    modes &= ((1u << REACTIVE_COUNT) - 1) & ~(1u << REACTIVE_OFF);
+    uint32_t started = modes & ~following;
+    following = modes;
+    for (int m = 0; m < REACTIVE_COUNT; m++)
     {
-        return 1;
+        if (started & (1u << m))
+        {
+            output[m] = 0;
+        }
     }
-
-    float target = 0;
-    if (mode == REACTIVE_VOICE)
+    if (started & (1u << REACTIVE_STILL))
     {
-        target = audio_level_get() / (float)AUDIO_LEVEL_MAX;
+        still_since = 0;
     }
-    else
+    if (started & (1u << REACTIVE_MOVING))
+    {
+        last_move_ms = 0;
+    }
+    if (modes == 0)
+    {
+        return;
+    }
+    if (modes & ~(1u << REACTIVE_VOICE))
     {
         read_motion(now_ms, dt);
-        if (accel_ok)
+    }
+    for (int m = REACTIVE_OFF + 1; m < REACTIVE_COUNT; m++)
+    {
+        if (!(modes & (1u << m)))
         {
-            switch (mode)
+            continue;
+        }
+        float target = 0;
+        if (m == REACTIVE_VOICE)
+        {
+            target = audio_level_get() / (float)AUDIO_LEVEL_MAX;
+        }
+        else if (accel_ok)
+        {
+            switch (m)
             {
             case REACTIVE_MOVING:
                 target = (last_move_ms != 0 && now_ms - last_move_ms < MOVING_HOLD_MS) ? 1 : 0;
@@ -183,19 +190,23 @@ float reactive_poll(uint32_t now_ms)
                 break;
             }
         }
+        float *out = &output[m];
+        *out += (target - *out) * (target > *out ? RISE : FALL);
+        if (*out < 0.01f)
+        {
+            *out = 0;
+        }
     }
-
-    output += (target - output) * (target > output ? RISE : FALL);
-    if (output < 0.01f)
-    {
-        output = 0;
-    }
-    return output;
 }
 
-void reactive_status(char *text, size_t len)
+float reactive_factor(reactive_mode_t mode)
 {
-    int percent = (int)(output * 100 + 0.5f);
+    return mode > REACTIVE_OFF && mode < REACTIVE_COUNT ? output[mode] : 1;
+}
+
+void reactive_status(reactive_mode_t mode, char *text, size_t len)
+{
+    int percent = (int)(reactive_factor(mode) * 100 + 0.5f);
     switch (mode)
     {
     case REACTIVE_OFF:

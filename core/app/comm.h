@@ -81,12 +81,13 @@
  *                  little endian, as the status gives it): that the board's
  *                  theirs, for its hello (direct.h). Each time it connects,
  *                  and whenever the id changes (from COMM_VERSION 10).
- *     0x10 muted:  10, flags (bit 0 the first piece: the list starts
- *                  afresh), then the first 8 bytes of the public key of each
- *                  the wearer's muted in the app, whose commands are ignored
- *                  (others.h; before COMM_VERSION 10, names). Sent whole each time it connects or the list
- *                  changes, in pieces if it's long; none, an empty first
- *                  piece (from COMM_VERSION 9).
+ *     0x10 rules:  10, flags (bit 0 the first piece: the document starts
+ *                  afresh, bit 1 the last), then a piece of the wearer's
+ *                  rules (rules.h): who may control what, who's muted, and
+ *                  how the toys are laid out. Kept, and gone by once the
+ *                  last piece has come and it's good. Sent whenever they
+ *                  change, and when it connects if /version's "rules" isn't
+ *                  their hash (from COMM_VERSION 16).
  *     0x13 talk to: 13, who to (comm_to_t), flags (bit 0 the person's on
  *                  the server, so they can be talked to through it), then
  *                  for one person their public key (32), then the name to
@@ -223,7 +224,11 @@
  *   COMM_AVATAR_SLOTS, and from COMM_VERSION 7, "board": RCAT_BOARD_NAME,
  *   "update": 1 if the app can update the firmware (0x0E), "msgmax": the
  *   longest message it takes from the phone (RCAT_HAL_BLE_PEER_MSG_MAX), and
- *   "msgs": how many it keeps before dropping the oldest}.
+ *   "msgs": how many it keeps before dropping the oldest, and from
+ *   COMM_VERSION 16, "rules": the hash of the rules it has (rules.h, eight
+ *   hex digits, 0 for none), and "edited": 1 if the wearer's switched
+ *   something Off on the unit since, for the app to take on (GET /api/rules
+ *   says what they are now)}.
  *   GET /remote.html?h=<hash> answers with the page itself (remote_page.html),
  *   so the app shows the board's own version, or "304\n" if <hash>, eight
  *   hex digits of the page's 32-bit FNV-1a hash, says the app has it already.
@@ -281,8 +286,10 @@
  *      auto responder
  *  14  what other boards' wearers let others control (0x17)
  *  15  the phone's mic in place of the board's (0x18 from the phone), and
- *      the talk button or screen held for it (0x18 to the phone) */
-#define COMM_VERSION            15
+ *      the talk button or screen held for it (0x18 to the phone)
+ *  16  the wearer's rules from the app (0x10 rules, in place of who's
+ *      muted), with /version's "rules" and "edited", and GET /api/rules */
+#define COMM_VERSION            16
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4
@@ -379,7 +386,7 @@ typedef enum
 {
     COMM_HEARD_TEXT,        // a text, for the app only
     COMM_HEARD_TERMINAL,    // a command for the Terminal
-    COMM_HEARD_LOVENSE,     // a command for the Lovense devices
+    COMM_HEARD_VIBE,        // a command for Vibe toys
     COMM_HEARD_TEXT_PART,   // a part of a long text, for the app to put together
     COMM_HEARD_CALL,        // a call's signal (OTHERS_CALL), for the app
     COMM_HEARD_INVITE,      // an invitation to a direct channel (OTHERS_INVITE), for the app

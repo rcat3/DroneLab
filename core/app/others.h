@@ -5,10 +5,11 @@
  * Commands from others in the comm channel: someone in the group sends them
  * from the DroneLab app, to everyone who can hear them, to a channel, or to
  * one person, and they come in over the server (the phone passes them on,
- * see comm.h) or over direct comms (see direct.h). There are three kinds:
- * for the Lovense devices, which they set as the Lovense feature's own
- * controls do, and stay set until they're changed or Stop's touched; for the
- * Terminal, on the display; and texts, for the wearer's app only.
+ * see comm.h) or over direct comms (see direct.h). They're HiveMind
+ * Control's, by area: the Toys, Vibe toys for now (toys.h), which they set
+ * by channel as the Toys feature's own controls do, and stay set until
+ * they're changed or Stop's touched; the Display unit, its Terminal for now;
+ * and besides those, texts and the like, for the wearer's app only.
  *
  * Everyone is known by their identity key: an Ed25519 key pair their app
  * makes and keeps, which signs each command they send. A board checks the
@@ -18,23 +19,16 @@
  * Names are only labels, so nobody can pass as someone else by taking
  * their name.
  *
- * Those who've sent commands are kept in one list of people, by key, each
- * with their name, whether they're allowed for each kind, and the counter
- * of the last command they sent (so a recorded one can't be played back).
- * The Lovense devices and the Terminal each have their permission: Off,
- * nobody (and nobody's added to the list either); Ask, only those the
- * wearer has allowed for that kind; or Accept, anyone. Anyone new who sends
- * one is added to the list, not allowed, for the wearer to tick if they want
- * to, in Ask and Accept both, so the list says who's been sending. Someone
- * new who uses the name of someone already listed is marked (clash): it's
- * someone else using that name. Texts aren't anything to permit: anyone can
- * text anyone, though they're signed too.
- *
- * Each kind can also ignore commands sent to everyone who can hear the
- * sender (broadcasts, and those to the channel over the open direct comms
- * group, which anyone nearby can hear), and those sent to a whole channel,
- * whoever they're from; and commands from anyone the wearer has muted in
- * their app (others_set_muted) are ignored, whatever the permission.
+ * Who may send what is the wearer's rules (rules.h), which their app owns
+ * and gives this unit: each kind (others_kind_t) is a class there, with its
+ * own policy: Off, nobody; Ask, only those the wearer has allowed for it
+ * (their app asks them about anyone else who tries); or Anyone. Each kind
+ * can also ignore commands sent to everyone who can hear the sender
+ * (broadcasts, and those to the channel over the open direct comms group,
+ * which anyone nearby can hear), and those sent to a whole channel, whoever
+ * they're from; and commands from anyone the wearer has muted are ignored,
+ * whatever the policy. Texts aren't anything to permit: anyone can text
+ * anyone, though they're signed too.
  *
  * Whatever comes is passed on to the wearer's app, with whether it was done,
  * for its conversations (comm_heard_to_phone).
@@ -54,19 +48,24 @@
  *   id (4 bytes, direct_group_id), or 'S', the server's certificate's
  *   SHA-256 (32) and the channel's id (4, little endian); to one person,
  *   'O' and their public key (32: the board's wearer's, others_set_owner).
- *   What to do: for the Lovense devices,
- *     00 stop:     stop everything, as the Stop button, reactions too
- *     01 level:    01, the kind of motor (lovense_motor_kind_t, or 0xFF for
- *                  all of them), the level (0 to 20, scaled to each motor's
- *                  own range)
- *     02 pattern:  02, then the pattern's name, in UTF-8: played on every
- *                  device, if this board has one by that name; no name stops
- *                  the patterns
- *     03 speed:    03, how fast patterns play, in percent (2 bytes, little
- *                  endian, 25 to 300)
- *     04 react:    04, the reaction (reactive_mode_t, 0 for none): to this
- *                  board's wearer, if it can sense it
- *   For the Terminal, as its own controls (and the remote's) do:
+ *   What to do, by its first byte: 0x10 to 0x1F for the Display unit, 0x20
+ *   to 0x3F for the app, then 0x40 to 0x4F for Vibe toys, 0x50 to 0x5F
+ *   E-stim and 0x60 to 0x6F Machines (those two to come). Channels are a
+ *   byte with a bit for each, V1 the lowest (toys.h). For Vibe toys:
+ *     40 stop:     stop every channel, as the Stop button, reactions too
+ *     41 level:    41, the channels, the level (0 to 20, scaled to each
+ *                  output's own range): the channels together, as one
+ *     42 pattern:  42, the channels, then the pattern's name, in UTF-8:
+ *                  played on them, in step, if this board has one by that
+ *                  name; no name stops their patterns
+ *     43 speed:    43, the channels, how fast their patterns play, in
+ *                  percent (2 bytes, little endian, 25 to 300): each
+ *                  channel has its own
+ *     44 react:    44, the channels, the reaction (reactive_mode_t, 0 for
+ *                  none): to this board's wearer, if it can sense it. There's
+ *                  one reaction for every channel that follows it.
+ *   For the Display unit's Terminal, as its own controls (and the remote's)
+ *   do:
  *     10 message:  10, flags (bit 0 add it on a line of its own after
  *                  what's there, rather than replace it; bit 1 bring the
  *                  Terminal on screen), the letter size (0 for Auto, 1 to 6
@@ -102,22 +101,21 @@
 #define OTHERS_HEADER_LEN       40      // version, key, counter, who it's for
 #define OTHERS_WHAT_MAX         117     // what to do and its arguments, at most
 #define OTHERS_CMD_MAX          (OTHERS_HEADER_LEN + OTHERS_WHAT_MAX + OTHERS_SIG_LEN)
-#define OTHERS_PEOPLE_MAX       16      // in the list
+#define OTHERS_SENDERS_KEPT     32      // senders whose last counter is kept
 #define OTHERS_TEXT_WINDOW_MS   10000   // how far a text may come behind (see above)
 
-#define OTHERS_STOP             0x00
-#define OTHERS_LEVEL            0x01
-#define OTHERS_PATTERN          0x02
-#define OTHERS_SPEED            0x03
-#define OTHERS_REACT            0x04
-#define OTHERS_MESSAGE          0x10
-#define OTHERS_ALL_MOTORS       0xFF
+#define OTHERS_MESSAGE          0x10    // the Display unit
 #define OTHERS_CLEAR            0x11
 #define OTHERS_TEXT             0x20
 #define OTHERS_TEXT_PART        0x21
 #define OTHERS_CALL             0x30    // a call's signal, for the app: op, call id (4)
 #define OTHERS_INVITE           0x31    // an invitation to a direct channel, sealed for the app
 #define OTHERS_REACTION         0x32    // a reaction to a message, for the app: its id (8), an emoji
+#define OTHERS_VIBE_STOP        0x40    // Vibe toys
+#define OTHERS_VIBE_LEVEL       0x41
+#define OTHERS_VIBE_PATTERN     0x42
+#define OTHERS_VIBE_SPEED       0x43
+#define OTHERS_VIBE_REACT       0x44
 #define OTHERS_MESSAGE_APPEND   0x01    // a message's flags: on a line of its own after what's there
 #define OTHERS_MESSAGE_SHOW     0x02    // and bring the Terminal on screen
 
@@ -126,22 +124,17 @@
 #define OTHERS_SCOPE_CHANNEL    1       // the channel it came on, server or direct
 #define OTHERS_SCOPE_ONE        2       // this board alone
 
+/* What can be controlled here, each a class in the rules (others_class).
+ * E-stim, Machines, and the Display unit's pictures and sounds, are to
+ * come. */
 typedef enum
 {
-    OTHERS_LOVENSE,
-    OTHERS_TERMINAL,
+    OTHERS_VIBE,            // Vibe toys
+    OTHERS_TERMINAL,        // the Display unit's Terminal
     OTHERS_KIND_COUNT,
 } others_kind_t;
 
-typedef struct
-{
-    uint8_t key[OTHERS_KEY_LEN];
-    char name[COMM_NAME_MAX];
-    bool allowed;
-    bool clash;             // took the name of someone listed before them took it
-} others_sender_t;
-
-/* Set it up, and read the list. Call it once at startup, after LVGL and
+/* Set it up. Call it once at startup, after LVGL and the rules, and
  * before direct comms. */
 void others_init(void);
 
@@ -194,47 +187,22 @@ bool others_board_checked(uint32_t *id, uint8_t key[OTHERS_KEY_LEN], bool *good)
  * in its hello. */
 bool others_owner(uint8_t key[OTHERS_KEY_LEN], uint8_t sig[OTHERS_SIG_LEN]);
 
-/* Who a kind of command is taken from. Remembered. */
+/* A kind's class in the rules (RULES_CLASS_*). */
+uint8_t others_class(others_kind_t kind);
+
+/* Who a kind of command is taken from, by the rules. */
 typedef enum
 {
     OTHERS_OFF,         // nobody
-    OTHERS_ASK,         // those allowed for it in the list
+    OTHERS_ASK,         // those allowed for it
     OTHERS_ACCEPT,      // anyone
 } others_permission_t;
 others_permission_t others_permission(others_kind_t kind);
-void others_set_permission(others_kind_t kind, others_permission_t permission);
-
-/* Whether a kind of command is taken at all: its permission isn't Off.
- * Switching it on goes back to Ask. Remembered. */
-bool others_accepting(others_kind_t kind);
-void others_set_accepting(others_kind_t kind, bool on);
 
 /* What a kind ignores, whoever it's from: OTHERS_IGNORE_* together. */
 #define OTHERS_IGNORE_EVERYONE  0x02    // broadcasts, and the open direct group's channel
 #define OTHERS_IGNORE_CHANNEL   0x04    // those to a whole channel
 uint8_t others_ignoring(others_kind_t kind);
-void others_set_ignoring(others_kind_t kind, uint8_t ignore);
-
-/* Those the wearer's muted in their app, whose commands are ignored: the
- * first OTHERS_ID_LEN bytes of each one's key, one after another, [len]
- * bytes in all; [first] starts the list afresh, otherwise they're added to
- * it. Kept until the board restarts, as the app sends them each time it
- * connects. */
-void others_set_muted(bool first, const uint8_t *ids, size_t len);
-
-/* Those who've sent a kind of command, or are allowed for it, oldest
- * first. Returns how many there are. */
-int others_senders(others_kind_t kind, others_sender_t *out, int max);
-
-/* Allow someone for a kind, or not, or forget them for it, by their key.
- * Remembered. */
-void others_allow(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN], bool allow);
-void others_forget(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN]);
-
-/* As others_allow(), but someone not in the list is added to it first, by
- * the name given, when they're allowed: from the app, for someone who
- * hasn't sent that kind, or who's dropped out of the list. */
-void others_allow_new(others_kind_t kind, const uint8_t key[OTHERS_KEY_LEN], const char *name, bool allow);
 
 /* Who sent the last command of a kind that was done, and how long ago, in
  * ms; NULL if none has been. */
@@ -242,23 +210,28 @@ const char *others_last(others_kind_t kind, uint32_t now_ms, uint32_t *age_ms);
 
 /* What the wearer lets others control: their capabilities, for direct
  * comms' hello and the app to say to the others. A list, so more can be
- * added: how many (1), then for each, its id (OTHERS_CAP_*) and how
- * (OTHERS_CAP_ASK: those the wearer allows; OTHERS_CAP_OPEN: anyone). One
- * the wearer hasn't got (the Lovense devices, with none connected), or
- * lets nobody control (Off), is left out. Worked out on the UI loop, by
- * others_poll(); from any task. Returns its length, 1 for none. */
+ * added: how many (1), then for each (OTHERS_CAP_ENTRY bytes), its id
+ * (OTHERS_CAP_*), how (OTHERS_CAP_ASK: those the wearer allows;
+ * OTHERS_CAP_OPEN: anyone), and a byte more: for Vibe toys, the channels a
+ * connected toy follows; otherwise 0. One the wearer hasn't got (Vibe toys,
+ * with none connected), or lets nobody control (Off), is left out. Worked
+ * out on the UI loop, by others_poll(); from any task. Returns its length,
+ * 1 for none. Ids 3 to 6 are kept for E-stim, Machines, Pictures and
+ * Sounds. */
 #define OTHERS_CAP_TERMINAL     1
-#define OTHERS_CAP_LOVENSE      2
+#define OTHERS_CAP_VIBE         2
 #define OTHERS_CAP_ASK          1
 #define OTHERS_CAP_OPEN         2
-#define OTHERS_CAPS_MAX         (1 + 2 * OTHERS_KIND_COUNT)
+#define OTHERS_CAP_ENTRY        3
+#define OTHERS_CAPS_MAX         (1 + OTHERS_CAP_ENTRY * OTHERS_KIND_COUNT)
 size_t others_capabilities(uint8_t out[OTHERS_CAPS_MAX]);
 
-/* Goes up whenever any of the above changes, for screens to redraw. */
+/* Goes up whenever any of the above changes, or the rules do, for screens
+ * to redraw. */
 uint32_t others_changes(void);
 
-/* Check and do what's queued, and save the list once it's settled. Call it
- * every 50 ms or so, from the UI loop. */
+/* Check and do what's queued, and save the senders' counters once they've
+ * settled. Call it every 50 ms or so, from the UI loop. */
 void others_poll(uint32_t now_ms);
 
 #endif

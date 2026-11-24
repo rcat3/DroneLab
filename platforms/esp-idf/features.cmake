@@ -7,6 +7,6 @@ set(RCAT_FEATURE_VOICE  ON)     # the voice ring, voice effects and the voice la
 set(RCAT_FEATURE_SOUND  ON)     # sound file player
 set(RCAT_FEATURE_COMM   ON)     # the comm channel's status screen, through the phone app (boards with it)
 set(RCAT_FEATURE_LEVEL  ON)     # spirit level in Settings, for lining the display up on the mask
-set(RCAT_FEATURE_LOVENSE ON)    # controls a Lovense device over Bluetooth
-set(RCAT_FEATURE_TERMINAL ON)   # green screen text, typed in on the Lovense feature's phone remote
+set(RCAT_FEATURE_TOYS ON)       # HiveMind Control's toys, over Bluetooth (Lovense for now)
+set(RCAT_FEATURE_TERMINAL ON)   # green screen text, typed in on the phone remote
 

@@ -121,7 +121,7 @@ static void draw(void)
     int y = PAD;
     text(COLOR_TEXT, PAD, y, "Virtual Lovense toys");
     y += LINE;
-    text(COLOR_DIM, PAD, y, "For the Lovense feature to find");
+    text(COLOR_DIM, PAD, y, "For the Toys feature to find");
     y += LINE + GAP;
 
     // A button for each model
@@ -141,7 +141,7 @@ static void draw(void)
     if (toys == 0)
     {
         text(COLOR_DIM, PAD, y, "Switch a toy on, then scan for it");
-        text(COLOR_DIM, PAD, y + LINE, "in the Lovense feature, on the unit");
+        text(COLOR_DIM, PAD, y + LINE, "in the Toys feature, on the unit");
         text(COLOR_DIM, PAD, y + 2 * LINE, "or on its remote in the app.");
     }
 

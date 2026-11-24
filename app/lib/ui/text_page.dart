@@ -438,14 +438,20 @@ class _ConversationPageState extends State<ConversationPage> {
               // Everything to control, in one menu; for one person, what they
               // don't let others control is greyed out
               PopupMenuButton<int>(
-                tooltip: 'Control',
+                tooltip: 'HiveMind Control',
                 icon: const Icon(controlIcon),
                 enabled: online,
                 onSelected: (id) => openControl(context, comm, c, id),
                 itemBuilder: (_) {
                   final caps = capabilitiesOfConversation(comm, c);
                   return [
-                    for (final k in controlKinds)
+                    for (final a in ControlArea.values) ...[
+                      PopupMenuItem(
+                        enabled: false,
+                        height: 32,
+                        child: Text(a.name.toUpperCase(), style: Kc.term(14, color: Kc.muted)),
+                      ),
+                      for (final k in kindsOf(a))
                       PopupMenuItem(
                         value: k.id,
                         enabled: canControl(caps, k.id),
@@ -457,6 +463,7 @@ class _ConversationPageState extends State<ConversationPage> {
                           contentPadding: EdgeInsets.zero,
                         ),
                       ),
+                    ],
                   ];
                 },
               ),
@@ -596,7 +603,7 @@ class _Entry extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(e.kind == ConversationEntry.terminal ? Icons.terminal : Icons.tune, size: 14, color: Kc.muted),
+          Icon(e.kind == ConversationEntry.terminal ? Icons.terminal : Icons.vibration, size: 14, color: Kc.muted),
           const SizedBox(width: 6),
           Flexible(
             child: Column(mainAxisSize: MainAxisSize.min, children: [

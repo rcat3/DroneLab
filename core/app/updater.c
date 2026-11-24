@@ -20,7 +20,7 @@
 
 #include "app/battery.h"
 #include "app/direct.h"
-#include "app/lovense.h"
+#include "app/toys.h"
 #include "app/remote.h"
 #include "audio/audio_player.h"
 #include "audio/voice_fx.h"
@@ -123,8 +123,8 @@ static void quiet(bool on)
             audio_player_pause();
         }
         audio_player_chime_stop();
-        lovense_stop_all();
-        lovense_scan_stop();
+        toys_stop_all();
+        toys_scan_stop();
     }
     else
     {

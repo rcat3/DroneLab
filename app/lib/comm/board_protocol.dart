@@ -60,7 +60,7 @@ const fromPhoneUuid = 'efe06e1d-a7ff-4823-bfbb-b3a82ea05849';
 ///   2  the phone remote's requests, GET /version, pairing with a code, and
 ///      the status's talk button bit
 ///   3  server and hearing, for the board's Comm screen
-///   4  commands for others (Lovense and the Terminal)
+///   4  commands for others (Vibe toys and the Terminal)
 const commVersion = 3;
 const commVersionCommands = 4;
 const commVersionRemote = 2;
@@ -75,6 +75,7 @@ const commVersionCopies = 12;
 const commVersionCaps = 14;     // what other boards' wearers let others control (0x17)   // each copy of a command heard over direct comms, and how it came (0x15)
 const commVersionDirectVoice = 13;  // voice from the phone for the board to send over direct comms (0x16)
 const commVersionPhoneMic = 15;  // the phone's mic in place of the board's (0x18), its talk button held (0x18)
+const commVersionRules = 16;    // the wearer's rules from the app (0x10), in place of who's muted
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -94,7 +95,7 @@ const _msgDirectGroup = 0x09;
 const _msgRecord = 0x0A;
 const _msgCommand = 0x0B;
 const _msgHeard = 0x0F;
-const _msgMuted = 0x10;
+const _msgRules = 0x10;
 const _msgIdentity = 0x11;
 const _msgBinding = 0x12;
 const _msgTalkTo = 0x13;      // to the board: who talking goes to
@@ -209,9 +210,9 @@ class DirectAvatarPiece {
 }
 
 /// What someone sent the board, passed on as it came (commVersion 8): a
-/// text, or a command for its Terminal or Lovense devices, done or not.
+/// text, or a command for its Terminal or Vibe toys, done or not.
 class Heard {
-  static const text = 0, terminal = 1, lovense = 2, textPart = 3, call = 4, invite = 5, reaction = 6;    // comm_heard_t
+  static const text = 0, terminal = 1, vibe = 2, textPart = 3, call = 4, invite = 5, reaction = 6;    // comm_heard_t
   final bool direct;        // heard over direct comms, not the server
   final bool done;          // a command: taken, by the permission for its kind
   final int what;
@@ -559,15 +560,11 @@ int fnv1a(List<int> bytes) {
 /// do, signed with our identity key (identity.dart) for where it's sent
 /// ([contextEveryone] and so on), so it can't be taken anywhere else. Each
 /// board only does it if its wearer has allowed us, and only once, by our
-/// key and the counter. Commands for the Lovense devices, and messages for
-/// the Terminal.
+/// key and the counter. HiveMind Control's, by area: Vibe toys, by
+/// channel (V1 to V6, a bit for each in a byte, V1 the lowest), and the
+/// Display unit's Terminal; and texts and the like, for the app.
 class OthersCommand {
   static const version = 3;
-  static const stop = 0x00;
-  static const level = 0x01;
-  static const pattern = 0x02;
-  static const speed = 0x03;
-  static const react = 0x04;
   static const message = 0x10;
   static const clear = 0x11;
   static const text = 0x20;
@@ -575,16 +572,20 @@ class OthersCommand {
   static const call = 0x30;
   static const invite = 0x31;
   static const reaction = 0x32;
-  static const allMotors = 0xFF;
+  static const vibeStop = 0x40;
+  static const vibeLevel = 0x41;
+  static const vibePattern = 0x42;
+  static const vibeSpeed = 0x43;
+  static const vibeReact = 0x44;
 
   /// Who it's for, as the receivers see it: everyone who can hear us, the
   /// channel it goes on, or them alone.
   static const scopeEveryone = 0, scopeChannel = 1, scopeOne = 2;
 
-  /// The kinds of motor, as lovense_motor_kind_t.
-  static const vibrate = 0, rotate = 1, air = 2, oscillate = 3;
+  /// Vibe toys' channels, V1 to V6 (TOYS_CHANNELS), and all of them.
+  static const vibeChannels = 6, allChannels = (1 << vibeChannels) - 1;
 
-  /// The levels commands give, 0 to this, scaled to each motor's own range.
+  /// The levels commands give, 0 to this, scaled to each output's own range.
   static const levelTop = 20;
 
   /// The longest a pattern's name can be, in bytes.
@@ -645,20 +646,27 @@ class OthersCommand {
   static List<int> signedPart(List<int> context, List<int> body) =>
       [...utf8.encode(_signedPrefix), ...context, ...body];
 
-  /// Stop every device, and any reaction.
-  static OthersCommand stopAll() => _make([stop]);
-  static OthersCommand setLevel(int kind, int value) => _make([level, kind & 0xFF, value.clamp(0, levelTop)]);
+  /// Stop every channel, and any reaction.
+  static OthersCommand stopAll() => _make([vibeStop]);
 
-  /// Play a pattern on every device, by its name; no name stops them.
-  static OthersCommand play(String? name) => _make([pattern, ..._cut(utf8.encode(name ?? ''), nameMax)]);
-  static OthersCommand setSpeed(int percent) {
+  /// Set [channels] (a bit for each) to a level, together, as one.
+  static OthersCommand setLevel(int channels, int value) =>
+      _make([vibeLevel, channels & allChannels, value.clamp(0, levelTop)]);
+
+  /// Play a pattern on [channels], in step, by its name; no name stops
+  /// their patterns.
+  static OthersCommand play(int channels, String? name) =>
+      _make([vibePattern, channels & allChannels, ..._cut(utf8.encode(name ?? ''), nameMax)]);
+
+  /// How fast patterns play on [channels]: each channel has its own.
+  static OthersCommand setSpeed(int channels, int percent) {
     final p = percent.clamp(25, 300);
-    return _make([speed, p & 0xFF, p >> 8]);
+    return _make([vibeSpeed, channels & allChannels, p & 0xFF, p >> 8]);
   }
 
-  /// React to the wearer (reactive_mode_t: 0 none, 1 voice, 2 moving, 3
-  /// still, 4 motion, 5 tilt).
-  static OthersCommand setReact(int mode) => _make([react, mode & 0xFF]);
+  /// [channels] react to the wearer (reactive_mode_t: 0 none, 1 voice, 2
+  /// moving, 3 still, 4 motion, 5 tilt).
+  static OthersCommand setReact(int channels, int mode) => _make([vibeReact, channels & allChannels, mode & 0xFF]);
 
   /// A message for their Terminal, as it is: added on a line of its own
   /// ([append]) or in place of what's there, at a letter size (0 Auto, 1 to 6
@@ -730,21 +738,18 @@ class ReadCommand {
 const othersCommandMax = OthersCommand.headerLength + OthersCommand.whatMax + OthersCommand.signatureLength;
 const directCommandTargets = 1;
 
-/// Who's muted here, for the board to ignore their commands: the first 8
-/// bytes of each one's key, in pieces, the first starting the list afresh
-/// (an empty one for nobody).
-List<Uint8List> mutedMessages(Iterable<List<int>> keys) {
-  const room = 180;
+/// The wearer's rules (rules.dart, core/app/rules.h), in pieces that fit
+/// in [maxWrite] bytes: the first starts the document afresh, the last
+/// ends it.
+List<Uint8List> rulesMessages(Uint8List doc, int maxWrite) {
+  final room = (maxWrite - 2).clamp(16, 240);
   final pieces = <Uint8List>[];
-  var piece = <int>[_msgMuted, 0x01];
-  for (final k in keys) {
-    if (piece.length + 8 > room) {
-      pieces.add(Uint8List.fromList(piece));
-      piece = [_msgMuted, 0x00];
-    }
-    piece.addAll(k.take(8));
+  for (var at = 0; at < doc.length || at == 0; at += room) {
+    final end = (at + room).clamp(0, doc.length);
+    final flags = (at == 0 ? 0x01 : 0) | (end >= doc.length ? 0x02 : 0);
+    pieces.add(Uint8List.fromList([_msgRules, flags, ...doc.sublist(at, end)]));
+    if (doc.isEmpty) break;
   }
-  pieces.add(Uint8List.fromList(piece));
   return pieces;
 }
 

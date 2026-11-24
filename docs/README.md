@@ -17,14 +17,14 @@ New here?  Start with the [project page](../README.md).
   - [Connecting](app/connecting.md): pairing the unit, joining the server, your avatar.
   - [HiveMind](app/voice.md): talking to other drones, over the server and direct, and hearing them.
   - [Text](app/text.md): texts with one drone, a channel or all of the hive, words on their displays, and who can put words on yours.
-  - [Control](app/control.md): others' displays and Lovense toys.
+  - [HiveMind Control](app/control.md): others' toys and displays, and your toys' channels.
   - [Permissions](app/permissions.md): who can control yours, requests, and the command log.
   - [Record](app/record.md): your voice effect to WAV files, for videos.
   - [Remote](app/remote.md): the unit's controls on the phone, and the WiFi hotspot for iPhones.
   - [Updating the unit's firmware](app/firmware-updates.md): from the app, or over USB.
 
 - [Using the Display](using-the-display.md): finding your way around, and turning it on and off.
-- [Features](features/README.md): [Voice Effects](features/voice-effects.md), [HiveMind (Comms)](features/comms.md), [Visualizer](features/visualizer.md), [Lovense](features/lovense.md), [Images](features/images.md), [Voice Ring](features/voice-ring.md), [Terminal](features/terminal.md), [WiFi Hotspot Remote](features/phone-remote.md), [Sound](features/sound.md), [Voice Lab](features/voice-lab.md) and [Settings](features/settings.md), with the [Level](features/level.md).
+- [Features](features/README.md): [Voice Effects](features/voice-effects.md), [HiveMind (Comms)](features/comms.md), [Visualizer](features/visualizer.md), [Toys](features/toys.md), [Images](features/images.md), [Voice Ring](features/voice-ring.md), [Terminal](features/terminal.md), [WiFi Hotspot Remote](features/phone-remote.md), [Sound](features/sound.md), [Voice Lab](features/voice-lab.md) and [Settings](features/settings.md), with the [Level](features/level.md).
 
 ## Under the hood
 

@@ -323,8 +323,18 @@ class CommController extends ChangeNotifier {
       notifier.showPermissionRequest(r.name, r.what);
     };
     permissions.onNone = notifier.clearPermissionRequests;
-    // A command refused: the board's list has them now, for Permissions
-    permissions.onRefused = _askBoardState;
+    // The rules: who's muted is ours too, and a name clash is a warning
+    permissions.mutedKeys = () => {
+          for (final p in muted)
+            if (p.key != null) p.key!.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
+        };
+    permissions.clashOf = (key) {
+      final who = people[KnownPerson.keyId([
+        for (var i = 0; i + 1 < key.length; i += 2) int.parse(key.substring(i, i + 2), radix: 16),
+      ])];
+      return who != null && nameClash(who) != null;
+    };
+    permissions.onRulesChanged = permissions.syncUnit;
     try {
       final saved = jsonDecode(p.getString('unitSounds') ?? '{}') as Map<String, dynamic>;
       for (final e in UnitSoundEvent.values) {
@@ -1911,7 +1921,6 @@ class CommController extends ChangeNotifier {
   /// from now on, and the old one's forgotten (see KnownPeople.replace).
   void acceptNewIdentity(KnownPerson old, KnownPerson now) {
     people.replace(old.id, now.id);
-    _sentMuted = null;    // the board's list, by key, again
     _updateBoardScreen();
     notifyListeners();
   }
@@ -1964,7 +1973,6 @@ class CommController extends ChangeNotifier {
 
   Uint8List? _sentServer;
   Uint8List? _sentHearing;
-  String? _sentMuted;
   bool _sentIdentity = false;
   int? _boundId;      // the board's direct id we've signed it's ours for
 
@@ -1978,7 +1986,7 @@ class CommController extends ChangeNotifier {
     if (_updating) return;
     _boardAvatars.update();
     if (board.state != BoardState.connected || board.status == null) {
-      _sentServer = _sentHearing = _sentMuted = _sentTalkTo = null;
+      _sentServer = _sentHearing = _sentTalkTo = null;
       _sentTalkOn = null;
       _sentPairs = null;
       _sentIdentity = false;
@@ -2004,15 +2012,8 @@ class CommController extends ChangeNotifier {
         });
       }
     }
-    // Who's muted, by key, for the board to ignore their commands too
-    final mutedKeys = [for (final p in muted) if (p.key != null) p.key!];
-    final mutedNow = (mutedKeys.map(Identity.idOf).toList()..sort()).join('\n');
-    if (_sentMuted != mutedNow && keys) {
-      _sentMuted = mutedNow;
-      for (final piece in mutedMessages(mutedKeys)) {
-        board.send(piece);
-      }
-    }
+    // Our rules, who's muted among them, for the unit to go by
+    permissions.syncUnit();
     final m = mumble;
     final link = m == null
         ? (_serverWanted ? ServerLink.connecting : ServerLink.off)
@@ -2819,7 +2820,7 @@ class CommController extends ChangeNotifier {
     conversations.changed();
   }
 
-  /// Send a command (for their Terminals or Lovense devices) to a
+  /// Send a command (for their Terminals or Vibe toys) to a
   /// conversation: everyone in it, whichever ways reach them. Returns false
   /// if it couldn't go anywhere.
   bool sendCommandTo(Conversation c, OthersCommand command, {bool log = true}) {
@@ -2863,7 +2864,7 @@ class CommController extends ChangeNotifier {
 
   static String _kindOf(Uint8List op) => op.isNotEmpty && (op[0] == OthersCommand.message || op[0] == OthersCommand.clear)
       ? ConversationEntry.terminal
-      : ConversationEntry.lovense;
+      : ConversationEntry.vibe;
 
   // ----- Texts' details: how each came or went (message_details.dart) -----
 
@@ -3116,8 +3117,8 @@ class CommController extends ChangeNotifier {
     // Who, by the key they signed it with
     final who = people.byKey(h.key, h.from);
     if (who.muted) {
-      if (h.what == Heard.terminal || h.what == Heard.lovense) {
-        permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.lovense, h.key, h.from, who.id,
+      if (h.what == Heard.terminal || h.what == Heard.vibe) {
+        permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.vibe, h.key, h.from, who.id,
             done: h.done, muted: true, direct: h.direct, scope: h.scope, what: describeCommand(h.data, mine: false));
       }
       return;
@@ -3135,8 +3136,8 @@ class CommController extends ChangeNotifier {
       return;
     }
     // Logged, and one not taken for want of being allowed is a request
-    if (h.what == Heard.terminal || h.what == Heard.lovense) {
-      permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.lovense, h.key, h.from, who.id,
+    if (h.what == Heard.terminal || h.what == Heard.vibe) {
+      permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.vibe, h.key, h.from, who.id,
           done: h.done,
           muted: false,
           direct: h.direct,
@@ -3173,7 +3174,7 @@ class CommController extends ChangeNotifier {
             from: h.from,
             who: who.id,
             mine: false,
-            kind: h.what == Heard.terminal ? ConversationEntry.terminal : ConversationEntry.lovense,
+            kind: h.what == Heard.terminal ? ConversationEntry.terminal : ConversationEntry.vibe,
             body: describeCommand(h.data, mine: false),
             done: h.done);
     // Refused by one way, then done when it came the other: done, once
@@ -3192,7 +3193,7 @@ class CommController extends ChangeNotifier {
     conversations.add(c, e);
     if (h.what == Heard.text) _notifyText(c);
     textResponder.received(c, e);
-    if (e.done && h.what == Heard.lovense) playUnitSound(UnitSoundEvent.lovense);
+    if (e.done && h.what == Heard.vibe) playUnitSound(UnitSoundEvent.vibe);
     if (e.done && h.what == Heard.terminal) playUnitSound(UnitSoundEvent.terminal);
   }
 

@@ -14,21 +14,16 @@
  *   that it calls:
  *
  *     GET  /api/info      pattern and reaction names, which don't change
- *     GET  /api/state     the devices and what's playing
- *     POST /api/level?d=<slot>&m=<motor>&v=<level>[&release=1]
- *     POST /api/play?d=<slot, or -1 for every device>&p=<pattern, or -1 to stop>
- *     POST /api/react?m=<mode>
- *     POST /api/speed?v=<percent>
+ *     GET  /api/state     the toys, their channels and what's playing
+ *   For the toys (app/toys.h), c= is channels, a bit for each, V1 the
+ *   lowest; left out, it's all of them:
+ *     POST /api/level?c=<channels>&v=<level, 0 to 20>[&release=1]
+ *     POST /api/play?c=<channels>&p=<pattern, or -1 to stop>
+ *     POST /api/react?c=<channels>&m=<mode, 0 to stop>
+ *     POST /api/speed?c=<channels>&v=<percent>   patterns' speed, each channel's own
  *     POST /api/scan?on=<1 or 0>
  *     POST /api/connect?d=<slot>      connect, or disconnect if connected
  *     POST /api/stop                  everything, as the Stop button
-*     POST /api/others?kind=<0 Lovense, 1 Terminal>[&accept=<1 or 0>][&permission=<0 off, 1 ask, 2 accept>]
-*                       [&ignore=<OTHERS_IGNORE_* together>]
-*                       [&id=<key's id>|&key=<whole key, hex>&name=<who>][&allow=<1 or 0>][&forget=1]
-*                                     commands from others in the comm channel
-*                                     (app/others.h): who they're taken from
-*                                     (accept=1 is ask), what's ignored, and
-*                                     who may send them
  *     POST /api/show?f=<feature>&p=<page>     bring a page on screen
  *     POST /api/message?append=<1 or 0>&show=<1 or 0>   the body (UTF-8) to
  *                                     the Terminal feature, and show it there
@@ -48,6 +43,10 @@
  *                                     phones joined, start at power-up
  *     POST /api/hotspot?[on=<1 or 0>][&new=1][&auto=<1 or 0>]   switch it
  *                                     on or off, a new password, at power-up
+ *     GET  /api/rules     (the app only, over Bluetooth) the wearer's rules
+ *                                     (rules.h): each class's policy, the
+ *                                     people, the toys' mappings and the
+ *                                     screen's controls, for the app to take on
  *     GET  /api/about     the board: firmware, build, MAC addresses, housing,
  *                                     uptime and battery, for the app's About page
  *     POST /api/voice?[p=<preset>][&speaker=<1 or 0>][&v=<percent>][&loud=<0 off, 1 to 4>]
@@ -72,8 +71,9 @@
 #include "app/battery.h"
 #include "app/comm.h"
 #include "app/direct.h"
-#include "app/lovense.h"
+#include "app/toys.h"
 #include "app/others.h"
+#include "app/rules.h"
 #include "app/message.h"
 #include "app/patterns.h"
 #include "app/reactive.h"
@@ -417,37 +417,28 @@ static void jstring(json_t *j, const char *s)
     jprintf(j, "\"");
 }
 
-static const char *state_name(lovense_device_state_t state)
+static const char *state_name(toy_state_t state)
 {
     switch (state)
     {
-    case LOVENSE_CONNECTING: return "connecting";
-    case LOVENSE_CONNECTED: return "connected";
-    case LOVENSE_FAILED: return "failed";
-    case LOVENSE_LOST: return "lost";
+    case TOY_CONNECTING: return "connecting";
+    case TOY_CONNECTED: return "connected";
+    case TOY_FAILED: return "failed";
+    case TOY_LOST: return "lost";
     default: return "found";
-    }
-}
-
-/* Someone's key's id, as the list's shown and changed by: its first bytes,
- * in hex. */
-static void key_id(const uint8_t *key, char out[2 * OTHERS_ID_LEN + 1])
-{
-    for (int i = 0; i < OTHERS_ID_LEN; i++)
-    {
-        snprintf(out + 2 * i, 3, "%02x", key[i]);
     }
 }
 
 static void write_state(json_t *j)
 {
     char status[40] = "";
-    if (reactive_mode() != REACTIVE_OFF)
+    uint8_t reaction = toys_reaction();
+    if (reaction != REACTIVE_OFF)
     {
-        reactive_status(status, sizeof(status));
+        reactive_status((reactive_mode_t)reaction, status, sizeof(status));
     }
-    jprintf(j, "{\"scan\":%d,\"speed\":%u,\"hold\":%d,\"react\":%d,\"status\":", lovense_scanning() ? 1 : 0,
-            lovense_speed(), settings_get()->lovense_release_to_zero ? 0 : 1, (int)reactive_mode());
+    jprintf(j, "{\"scan\":%d,\"speed\":%u,\"hold\":%d,\"react\":%d,\"status\":", toys_scanning() ? 1 : 0,
+            toys_speed(TOYS_ALL_CHANNELS), settings_get()->toy_release_to_zero ? 0 : 1, (int)reaction);
     jstring(j, status);
     jprintf(j, ",\"notice\":");
     jstring(j, notice != NULL ? notice : "");
@@ -544,56 +535,65 @@ static void write_state(json_t *j)
                 (unsigned long)length, s->sound_volume, s->sound_repeat, s->sound_autoplay,
                 audio_player_chiming() ? 1 : 0);
     }
-    jprintf(j, ",\"devices\":[");
-    bool first = true;
-    for (size_t i = 0; i < LOVENSE_MAX_DEVICES; i++)
+    // The toys' channels, V1 first, and the screen's controls
+    jprintf(j, ",\"channels\":[");
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
-        const lovense_device_t *d = lovense_device(i);
+        const toy_channel_t *ch = toys_channel(c);
+        jprintf(j, "%s{\"level\":%u,\"out\":%u,\"pattern\":%d,\"react\":%d,\"speed\":%u,\"driven\":%d}", c ? "," : "",
+                ch->level, ch->out, ch->pattern, ch->react, ch->speed, toys_driven(c) ? 1 : 0);
+    }
+    toys_control_t controls[TOYS_SCREEN_CONTROLS];
+    int control_count = toys_screen_controls(controls);
+    jprintf(j, "],\"mapped\":%u,\"controls\":[", toys_channels_mapped());
+    for (int i = 0; i < control_count; i++)
+    {
+        jprintf(j, "%s{\"label\":", i ? "," : "");
+        jstring(j, controls[i].label);
+        jprintf(j, ",\"channels\":%u}", controls[i].channels);
+    }
+    jprintf(j, "],\"devices\":[");
+    bool first = true;
+    for (size_t i = 0; i < TOYS_MAX_DEVICES; i++)
+    {
+        const toy_t *d = toys_device(i);
         if (d == NULL)
         {
             continue;
         }
-        jprintf(j, "%s{\"slot\":%u,\"name\":", first ? "" : ",", (unsigned)i);
+        jprintf(j, "%s{\"slot\":%u,\"addr\":\"%02x%02x%02x%02x%02x%02x\",\"name\":", first ? "" : ",",
+                (unsigned)i, d->addr[0], d->addr[1], d->addr[2], d->addr[3], d->addr[4], d->addr[5]);
         first = false;
         jstring(j, d->name);
+        jprintf(j, ",\"maker\":");
+        jstring(j, d->maker != NULL ? d->maker : "");
         jprintf(j, ",\"model\":");
         jstring(j, d->model != NULL ? d->model : d->name);
-        jprintf(j, ",\"state\":\"%s\",\"battery\":%d,\"pattern\":%d,\"driven\":%d,\"motors\":[",
-                state_name(d->state), d->battery, d->pattern, lovense_driven(d) ? 1 : 0);
-        for (uint8_t m = 0; m < d->motor_count; m++)
+        jprintf(j, ",\"state\":\"%s\",\"battery\":%d,\"outputs\":[", state_name(d->state), d->battery);
+        for (uint8_t o = 0; o < d->output_count; o++)
         {
-            const lovense_motor_t *motor = &d->motors[m];
-            jprintf(j, "%s{\"kind\":\"%s\",\"max\":%u,\"level\":%u,\"cap\":%u}", m ? "," : "",
-                    lovense_motor_name(motor->kind), motor->max, motor->level, motor->cap);
+            const toy_output_t *out = &d->outputs[o];
+            jprintf(j, "%s{\"kind\":\"%s\",\"max\":%u,\"level\":%u,\"channel\":%d}", o ? "," : "",
+                    toys_output_name(out->kind), out->max, out->level,
+                    out->channel < TOYS_CHANNELS ? out->channel : -1);
         }
         jprintf(j, "]}");
     }
     jprintf(j, "]");
 
-    // Commands from others in the comm channel, a list for each kind
-    jprintf(j, ",\"others\":[");
+    // Commands from others in the comm channel, for each kind: the rules'
+    // policy, what's ignored, and who sent the last that was done
+    jprintf(j, ",\"rules\":\"%08lx\",\"edited\":%d,\"others\":[", (unsigned long)rules_hash(),
+            rules_edited() ? 1 : 0);
     for (int k = 0; k < OTHERS_KIND_COUNT; k++)
     {
         uint32_t age = 0;
         const char *last = others_last((others_kind_t)k, now, &age);
-        jprintf(j, "%s{\"accept\":%d,\"permission\":%d,\"ignore\":%d,", k ? "," : "",
-                others_accepting((others_kind_t)k) ? 1 : 0, (int)others_permission((others_kind_t)k),
+        jprintf(j, "%s{\"class\":%d,\"permission\":%d,\"ignore\":%d,\"last\":", k ? "," : "",
+                others_class((others_kind_t)k), (int)others_permission((others_kind_t)k),
                 (int)others_ignoring((others_kind_t)k));
-        jprintf(j, "\"last\":");
         jstring(j, last != NULL ? last : "");
-        jprintf(j, ",\"age\":%lu,\"senders\":[", (unsigned long)(age / 1000));
-        others_sender_t senders[OTHERS_PEOPLE_MAX];
-        int n = others_senders((others_kind_t)k, senders, OTHERS_PEOPLE_MAX);
-        for (int i = 0; i < n && i < OTHERS_PEOPLE_MAX; i++)
-        {
-            jprintf(j, "%s{\"name\":", i ? "," : "");
-            jstring(j, senders[i].name);
-            char id[2 * OTHERS_ID_LEN + 1];
-            key_id(senders[i].key, id);
-            jprintf(j, ",\"id\":\"%s\",\"allowed\":%d,\"clash\":%d}", id, senders[i].allowed ? 1 : 0,
-                    senders[i].clash ? 1 : 0);
-        }
-        jprintf(j, "]}");
+        jprintf(j, ",\"age\":%lu}", (unsigned long)(age / 1000));
     }
     jprintf(j, "]}");
 }
@@ -700,7 +700,9 @@ static void write_info(json_t *j)
             first = false;
         }
     }
-    jprintf(j, "],\"max_connected\":%d,\"message_max\":%d,\"features\":[", LOVENSE_MAX_CONNECTED, MESSAGE_MAX);
+    jprintf(j, "],\"max_connected\":%d,\"channel_count\":%d,\"screen_controls\":%d,\"message_max\":%d,"
+               "\"features\":[",
+            TOYS_MAX_CONNECTED, TOYS_CHANNELS, TOYS_SCREEN_CONTROLS, MESSAGE_MAX);
     for (size_t f = 0; f < ui_feature_count(); f++)
     {
         jprintf(j, "%s[", f ? "," : "");
@@ -782,20 +784,24 @@ static int query_int(const char *query, const char *name, int fallback)
     return fallback;
 }
 
-static bool is_connected(int slot)
+/* Channels, as c= gives them (a bit for each, V1 the lowest), or all of
+ * them. */
+static uint8_t query_channels(const char *query)
 {
-    const lovense_device_t *d = slot >= 0 ? lovense_device((size_t)slot) : NULL;
-    return d != NULL && d->state == LOVENSE_CONNECTED;
+    return (uint8_t)(query_int(query, "c", TOYS_ALL_CHANNELS) & TOYS_ALL_CHANNELS);
 }
 
-static int connected_count(void)
+/* Whether any of the channels is driven by a pattern or the reaction. */
+static bool any_driven(uint8_t channels)
 {
-    int n = 0;
-    for (int i = 0; i < LOVENSE_MAX_DEVICES; i++)
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
-        n += is_connected(i);
+        if ((channels & (1u << c)) && toys_driven(c))
+        {
+            return true;
+        }
     }
-    return n;
+    return false;
 }
 
 /* The value of name in a query string, %-decoded into out (cap bytes), or
@@ -933,35 +939,27 @@ static bool run_command(const char *name, const char *query, const char *body, s
 {
     if (strcmp(name, "level") == 0)
     {
-        int slot = query_int(query, "d", -1);
-        int motor = query_int(query, "m", 0);
+        // c= the channels, together; v= the level
+        uint8_t channels = query_channels(query);
         int level = query_int(query, "v", 0);
-        if (is_connected(slot) && motor >= 0 && level >= 0)
+        if (level >= 0)
         {
-            // Let go, with Motor Hold off: back to 0, as on the screen
-            if (query_int(query, "release", 0) && settings_get()->lovense_release_to_zero
-                && !lovense_driven(lovense_device((size_t)slot)))
+            // Let go, with Hold off: back to 0, as on the screen
+            if (query_int(query, "release", 0) && settings_get()->toy_release_to_zero && !any_driven(channels))
             {
                 level = 0;
             }
-            lovense_set_level((size_t)slot, (uint8_t)motor, (uint8_t)(level > 255 ? 255 : level));
+            toys_set_level(channels, (uint8_t)(level > TOYS_LEVEL_TOP ? TOYS_LEVEL_TOP : level));
         }
     }
     else if (strcmp(name, "play") == 0)
     {
-        int slot = query_int(query, "d", -1);
         int pattern = query_int(query, "p", -1);
-        if (connected_count() == 0)
+        if (pattern >= 0 && toys_connected_count() == 0)
         {
-            notice = "Connect a device first";
+            notice = "Connect a toy first";
         }
-        for (int i = 0; i < LOVENSE_MAX_DEVICES; i++)
-        {
-            if (is_connected(i) && (slot < 0 || slot == i))
-            {
-                lovense_play((size_t)i, pattern);
-            }
-        }
+        toys_play(query_channels(query), pattern);
     }
     else if (strcmp(name, "react") == 0)
     {
@@ -970,21 +968,19 @@ static bool run_command(const char *name, const char *query, const char *body, s
         {
             mode = REACTIVE_OFF;
         }
-        reactive_set_mode((reactive_mode_t)mode);
-        lovense_set_reactive(mode != REACTIVE_OFF);
+        toys_react(query_channels(query), (uint8_t)mode);
     }
     else if (strcmp(name, "speed") == 0)
     {
-        int speed = query_int(query, "v", 100);
-        lovense_set_speed((uint16_t)(speed < 25 ? 25 : speed > 300 ? 300 : speed));
+        toys_set_speed(query_channels(query), (uint16_t)LV_CLAMP(TOYS_SPEED_MIN, query_int(query, "v", 100), TOYS_SPEED_MAX));
     }
     else if (strcmp(name, "scan") == 0)
     {
         if (query_int(query, "on", 1))
         {
-            if (!lovense_scanning())
+            if (!toys_scanning())
             {
-                if (lovense_scan_start())
+                if (toys_scan_start())
                 {
                     scan_ours = true;
                 }
@@ -997,7 +993,7 @@ static bool run_command(const char *name, const char *query, const char *body, s
         }
         else if (scan_ours)
         {
-            lovense_scan_stop();
+            toys_scan_stop();
             scan_ours = false;
             scan_until = 0;
         }
@@ -1005,88 +1001,19 @@ static bool run_command(const char *name, const char *query, const char *body, s
     else if (strcmp(name, "connect") == 0)
     {
         int slot = query_int(query, "d", -1);
-        const lovense_device_t *d = slot >= 0 ? lovense_device((size_t)slot) : NULL;
+        const toy_t *d = slot >= 0 ? toys_device((size_t)slot) : NULL;
         if (d != NULL)
         {
-            bool connecting = d->state != LOVENSE_CONNECTING && d->state != LOVENSE_CONNECTED;
-            if (!lovense_toggle((size_t)slot) && connecting)
+            bool connecting = d->state != TOY_CONNECTING && d->state != TOY_CONNECTED;
+            if (!toys_toggle((size_t)slot) && connecting)
             {
-                notice = connected_count() >= LOVENSE_MAX_CONNECTED ? "Only 3 at once" : "Wait for the other one";
+                notice = toys_connected_count() >= TOYS_MAX_CONNECTED ? "Only 3 at once" : "Wait for the other one";
             }
         }
     }
     else if (strcmp(name, "stop") == 0)
     {
-        lovense_stop_all();
-        reactive_set_mode(REACTIVE_OFF);
-    }
-    else if (strcmp(name, "others") == 0)
-    {
-        int kind = query_int(query, "kind", -1);
-        if (kind < 0 || kind >= OTHERS_KIND_COUNT)
-        {
-            return true;
-        }
-        int accept = query_int(query, "accept", -1);
-        if (accept >= 0)
-        {
-            others_set_accepting((others_kind_t)kind, accept != 0);
-        }
-        int permission = query_int(query, "permission", -1);
-        if (permission >= OTHERS_OFF && permission <= OTHERS_ACCEPT)
-        {
-            others_set_permission((others_kind_t)kind, (others_permission_t)permission);
-        }
-        int ignore = query_int(query, "ignore", -1);
-        if (ignore >= 0)
-        {
-            others_set_ignoring((others_kind_t)kind, (uint8_t)ignore);
-        }
-        // Someone by their whole key (key=64 hex digits, and name=), added
-        // to the list if they're allowed and aren't in it; or someone in
-        // the list, for any kind, by their key's id
-        char hex[2 * OTHERS_KEY_LEN + 1], want[2 * OTHERS_ID_LEN + 1];
-        uint8_t key[OTHERS_KEY_LEN];
-        bool found = false;
-        if (query_str(query, "key", hex, sizeof(hex)) && strlen(hex) == 2 * OTHERS_KEY_LEN)
-        {
-            found = true;
-            for (int i = 0; i < OTHERS_KEY_LEN && found; i++)
-            {
-                char b[3] = { hex[2 * i], hex[2 * i + 1], '\0' };
-                char *end;
-                key[i] = (uint8_t)strtol(b, &end, 16);
-                found = *end == '\0';
-            }
-        }
-        else if (query_str(query, "id", want, sizeof(want)))
-        {
-            for (int k = 0; k < OTHERS_KIND_COUNT && !found; k++)
-            {
-                others_sender_t senders[OTHERS_PEOPLE_MAX];
-                int n = others_senders((others_kind_t)k, senders, OTHERS_PEOPLE_MAX);
-                for (int i = 0; i < n && i < OTHERS_PEOPLE_MAX && !found; i++)
-                {
-                    char id[2 * OTHERS_ID_LEN + 1];
-                    key_id(senders[i].key, id);
-                    if (strcmp(id, want) == 0)
-                    {
-                        memcpy(key, senders[i].key, OTHERS_KEY_LEN);
-                        found = true;
-                    }
-                }
-            }
-        }
-        if (found && query_int(query, "forget", 0))
-        {
-            others_forget((others_kind_t)kind, key);
-        }
-        else if (found)
-        {
-            char who[COMM_NAME_MAX] = "";
-            query_str(query, "name", who, sizeof(who));
-            others_allow_new((others_kind_t)kind, key, who, query_int(query, "allow", 0) != 0);
-        }
+        toys_stop_all();
     }
     else if (strcmp(name, "show") == 0)
     {
@@ -1335,6 +1262,59 @@ static void respond_json(client_t *c, void (*write)(json_t *))
     respond(c, "200 OK", "application/json", c->json, j.len, NULL);
 }
 
+/* The wearer's rules, as they are on the unit, for the app to take on (over
+ * Bluetooth only): each class's policy and what it ignores, and everyone in
+ * them, by their whole key. */
+static void write_rules(json_t *j)
+{
+    static const uint8_t classes[] = { RULES_CLASS_TERMINAL, RULES_CLASS_VIBE,     RULES_CLASS_ESTIM,
+                                       RULES_CLASS_MACHINE,  RULES_CLASS_PICTURES, RULES_CLASS_SOUNDS };
+    jprintf(j, "{\"hash\":\"%08lx\",\"edited\":%d,\"classes\":[", (unsigned long)rules_hash(),
+            rules_edited() ? 1 : 0);
+    for (size_t i = 0; i < sizeof(classes); i++)
+    {
+        jprintf(j, "%s{\"id\":%u,\"policy\":%u,\"ignore\":%u}", i ? "," : "", classes[i],
+                rules_policy(classes[i]), rules_ignoring(classes[i]));
+    }
+    jprintf(j, "],\"people\":[");
+    for (int i = 0; i < rules_people_count(); i++)
+    {
+        const rules_person_t *p = rules_person_at(i);
+        jprintf(j, "%s{\"key\":\"", i ? "," : "");
+        for (int b = 0; b < RULES_KEY_LEN; b++)
+        {
+            jprintf(j, "%02x", p->key[b]);
+        }
+        jprintf(j, "\",\"name\":");
+        jstring(j, p->name);
+        jprintf(j, ",\"flags\":%u,\"allowed\":%u}", p->flags, p->allowed);
+    }
+    const toys_map_t *maps;
+    int map_count = toys_maps(&maps);
+    jprintf(j, "],\"toys\":[");
+    for (int i = 0; i < map_count; i++)
+    {
+        const toys_map_t *m = &maps[i];
+        jprintf(j, "%s{\"addr\":\"%02x%02x%02x%02x%02x%02x\",\"channels\":[", i ? "," : "", m->addr[0], m->addr[1],
+                m->addr[2], m->addr[3], m->addr[4], m->addr[5]);
+        for (int o = 0; o < TOYS_MAX_OUTPUTS; o++)
+        {
+            jprintf(j, "%s%d", o ? "," : "", m->channels[o] < TOYS_CHANNELS ? m->channels[o] : -1);
+        }
+        jprintf(j, "]}");
+    }
+    toys_control_t controls[TOYS_SCREEN_CONTROLS];
+    int control_count = toys_custom_controls(controls);
+    jprintf(j, "],\"controls\":[");
+    for (int i = 0; i < control_count; i++)
+    {
+        jprintf(j, "%s{\"label\":", i ? "," : "");
+        jstring(j, controls[i].label);
+        jprintf(j, ",\"channels\":%u}", controls[i].channels);
+    }
+    jprintf(j, "]}");
+}
+
 /* The hotspot itself, for the app (over Bluetooth only: a phone on the
  * hotspot can't switch it off under itself): whether it's on, its name and
  * password, what a phone's camera needs to join it, how many phones have,
@@ -1413,6 +1393,10 @@ int remote_api(const char *method, const char *target, const char *body, size_t 
     else if (strcmp(path, "/api/chime") == 0)
     {
         write = write_chime;
+    }
+    else if (strcmp(path, "/api/rules") == 0)
+    {
+        write = write_rules;
     }
     else if (strcmp(path, "/api/hotspot") == 0)
     {
@@ -1730,7 +1714,7 @@ void remote_stop(void)
     memset(known, 0, sizeof(known));
     if (scan_ours)
     {
-        lovense_scan_stop();
+        toys_scan_stop();
         scan_ours = false;
     }
     scan_until = 0;
@@ -1766,7 +1750,7 @@ void remote_poll(uint32_t now_ms)
         scan_until = 0;
         if (scan_ours)
         {
-            lovense_scan_stop();
+            toys_scan_stop();
             scan_ours = false;
         }
     }
