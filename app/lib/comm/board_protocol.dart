@@ -78,6 +78,7 @@ const commVersionPhoneMic = 15;  // the phone's mic in place of the board's (0x1
 const commVersionRules = 16;    // the wearer's rules from the app (0x10), in place of who's muted
 const commVersionPatterns = 17; // Vibe toys set as a whole (0x41), custom patterns in parts (0x45)
 const commVersionFavourites = 18;   // the wearer's favourite patterns (0x19), /api/state's "favs"
+const commVersionPictures = 20; // Display commands: words and pictures for a while (others.h 0x10, 0x12), pictures from the phone (0x1A)
 const commVersionFollow = 19;   // the wearer's own Vibe commands, for their toys to follow along (0x0B's bit 1)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
@@ -100,6 +101,7 @@ const _msgCommand = 0x0B;
 const _msgHeard = 0x0F;
 const _msgRules = 0x10;
 const _msgFavourites = 0x19;
+const _msgPicture = 0x1A;     // both ways: a picture for the screen, in pieces, and the ack
 const _msgIdentity = 0x11;
 const _msgBinding = 0x12;
 const _msgTalkTo = 0x13;      // to the board: who talking goes to
@@ -214,9 +216,9 @@ class DirectAvatarPiece {
 }
 
 /// What someone sent the board, passed on as it came (commVersion 8): a
-/// text, or a command for its Terminal or Vibe toys, done or not.
+/// text, or a command for its display or Vibe toys, done or not.
 class Heard {
-  static const text = 0, terminal = 1, vibe = 2, textPart = 3, call = 4, invite = 5, reaction = 6;    // comm_heard_t
+  static const text = 0, display = 1, vibe = 2, textPart = 3, call = 4, invite = 5, reaction = 6;    // comm_heard_t
   final bool direct;        // heard over direct comms, not the server
   final bool done;          // a command: taken, by the permission for its kind
   final int what;
@@ -341,6 +343,9 @@ Object? parseBoardMessage(Uint8List data) {
   if (data[0] == _msgUpdate && data.length >= 7) {
     return UpdateAck(data[1] & 1 != 0, data[1] & 2 != 0, data[2],
         data[3] | (data[4] << 8) | (data[5] << 16) | (data[6] << 24), data[1] & 4 != 0);
+  }
+  if (data[0] == _msgPicture && data.length >= 6) {
+    return PictureAck(data[1] & 1 != 0, data[1] & 2 != 0, le32(2));
   }
   if (data[0] == _msgAvatar && data.length >= 7) {
     final got = data[3] | (data[4] << 8) | (data[5] << 16) | (data[6] << 24);
@@ -526,6 +531,37 @@ List<Uint8List> avatarMessages(int slot, Uint8List rgb565, int maxWrite, {int wi
   return out;
 }
 
+/// A picture for the board's screen (core/app/pictures.h), [kind] a
+/// [pictureJpeg] or [pictureGif], with its SHA-256, cut into messages of up
+/// to [maxWrite] bytes: the start, its pieces, every [window]th asking for
+/// an ack, then the end, which always does (commVersion 20).
+const pictureJpeg = 0, pictureGif = 1;
+const pictureMaxBytes = 256 * 1024;     // PICTURES_MAX_BYTES
+
+List<Uint8List> pictureMessages(Uint8List bytes, int kind, List<int> hash, int maxWrite, {int window = 8}) {
+  final n = bytes.length;
+  final out = <Uint8List>[
+    Uint8List.fromList([_msgPicture, 1 | 4, n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF, (n >> 24) & 0xFF, kind, ...hash]),
+  ];
+  final room = maxWrite - 2;
+  for (var at = 0, i = 1; at < n; at += room, i++) {
+    final end = at + room < n ? at + room : n;
+    out.add(Uint8List.fromList([_msgPicture, i % window == 0 ? 4 : 0, ...Uint8List.sublistView(bytes, at, end)]));
+  }
+  out.add(Uint8List.fromList([_msgPicture, 2]));
+  return out;
+}
+
+/// The board's answer to a picture's pieces: [done] for the end's, [ok] all's
+/// well (for the end: it's here, and came to its hash), and how much of it's
+/// come.
+class PictureAck {
+  final bool done;
+  final bool ok;
+  final int received;
+  PictureAck(this.done, this.ok, this.received);
+}
+
 /// A direct comms group's key, from its name and passphrase, as 32 hex
 /// digits for the board (POST /api/comm?key=): PBKDF2-HMAC-SHA256, the salt
 /// "dronelab-direct\n" and the name, [directKeyRounds] rounds, 16 bytes, as
@@ -566,11 +602,13 @@ int fnv1a(List<int> bytes) {
 /// board only does it if its wearer has allowed us, and only once, by our
 /// key and the counter. HiveMind Control's, by area: Vibe toys, by
 /// channel (V1 to V6, a bit for each in a byte, V1 the lowest), and the
-/// Display unit's Terminal; and texts and the like, for the app.
+/// Display unit's screen, words on its Terminal and pictures; and texts
+/// and the like, for the app.
 class OthersCommand {
   static const version = 3;
   static const message = 0x10;
   static const clear = 0x11;
+  static const picture = 0x12;
   static const text = 0x20;
   static const textPart = 0x21;
   static const call = 0x30;
@@ -579,6 +617,10 @@ class OthersCommand {
   static const vibeStop = 0x40;
   static const vibeSet = 0x41;
   static const vibePart = 0x45;
+
+  /// A picture's from: one sent, by its SHA-256, or one built into the
+  /// firmware, by its name.
+  static const pictureSent = 0, pictureBuiltIn = 1;
 
   /// A set's pattern's kind: none (a steady level), a built-in one by its
   /// name, or a custom one by its hash.
@@ -599,7 +641,7 @@ class OthersCommand {
 
   /// The longest a message for the Terminal, and a text, can be, in bytes
   /// (OTHERS_WHAT_MAX, less what goes before them).
-  static const messageMax = whatMax - 3;
+  static const messageMax = whatMax - 5;
   static const textMax = whatMax - 1;
 
   /// A longer text goes in parts, each this long at most, and no more than
@@ -697,14 +739,32 @@ class OthersCommand {
     ];
   }
 
-  /// A message for their Terminal, as it is: added on a line of its own
-  /// ([append]) or in place of what's there, at a letter size (0 Auto, 1 to 6
-  /// for 8 to 48 px), and brought on screen if [show].
-  static OthersCommand terminal(String text, {bool append = true, bool show = true, int size = 0}) =>
-      _make([message, (append ? 1 : 0) | (show ? 2 : 0), size.clamp(0, 6), ..._cut(utf8.encode(text), messageMax)]);
+  /// Words for their display's Terminal, as they are: added on a line of
+  /// their own ([append]) or in place of what's there, at a letter size (0
+  /// Auto, 1 to 6 for 8 to 48 px), brought on screen for [seconds], or with
+  /// 0 until they move on, after which it goes back to what it was showing.
+  static OthersCommand words(String text, {bool append = true, int size = 0, int seconds = 0}) => _make([
+        message,
+        append ? 1 : 0,
+        size.clamp(0, 6),
+        seconds.clamp(0, 0xFFFF) & 0xFF,
+        seconds.clamp(0, 0xFFFF) >> 8,
+        ..._cut(utf8.encode(text), messageMax),
+      ]);
 
-  /// Empty their Terminal.
-  static OthersCommand clearTerminal() => _make([clear]);
+  /// A picture on their display, for [seconds] as [words]: one sent, by its
+  /// SHA-256 (sent over the server, beside the command), or one built into
+  /// the firmware, by its name.
+  static OthersCommand showPicture({List<int>? hash, String? builtIn, int seconds = 0}) => _make([
+        picture,
+        seconds.clamp(0, 0xFFFF) & 0xFF,
+        seconds.clamp(0, 0xFFFF) >> 8,
+        if (hash != null) ...[pictureSent, ...hash] else ...[pictureBuiltIn, ..._cut(utf8.encode(builtIn ?? ''), 23)],
+      ]);
+
+  /// Empty their Terminal, and take off what we put on their display: it
+  /// goes back to what it was showing.
+  static OthersCommand clearDisplay() => _make([clear]);
 
   /// A reaction to a message, by its id (8 bytes, messageRef): an emoji,
   /// or none to take ours back.

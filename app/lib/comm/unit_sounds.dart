@@ -8,7 +8,7 @@ enum UnitSoundEvent {
   call('Incoming call', 'Someone calling you'),
   text('Text message', 'A text or photo comes in'),
   vibe('Toy command', 'Someone sends your toys a command, and it is taken'),
-  terminal('Display message', 'Someone puts words on your display, and they are taken'),
+  display('Display', 'Someone puts words or a picture on your display, and they are taken'),
   nearby('Unit nearby', 'A unit is heard over direct mode, not heard in the last 10 minutes');
 
   final String title;

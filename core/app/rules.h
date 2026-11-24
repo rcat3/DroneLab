@@ -60,11 +60,11 @@
 #define RULES_SECTION_CONTROLS  0x04
 
 /* Classes, by the capabilities' ids */
-#define RULES_CLASS_TERMINAL    1
+#define RULES_CLASS_DISPLAY     1       // the Display unit's screen: words and pictures
 #define RULES_CLASS_VIBE        2
 #define RULES_CLASS_ESTIM       3
 #define RULES_CLASS_MACHINE     4
-#define RULES_CLASS_PICTURES    5
+#define RULES_CLASS_PICTURES    5       // not used: Display covers pictures
 #define RULES_CLASS_SOUNDS      6
 #define RULES_CLASS_MAX         15      // the allowed bits have room for ids up to this
 

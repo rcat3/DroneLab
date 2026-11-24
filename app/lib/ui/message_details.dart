@@ -43,7 +43,7 @@ class MessageDetailsPage extends StatelessWidget {
                 Fact('Kind', switch (e.kind) {
                   ConversationEntry.text => 'Text',
                   ConversationEntry.photo => 'Photo',
-                  ConversationEntry.terminal => 'Display command',
+                  ConversationEntry.display => 'Display command',
                   _ => 'Toy command',
                 }),
                 if (e.kind == ConversationEntry.text)

@@ -12,6 +12,10 @@ While the Images feature is on screen, the [Voice Ring](voice-ring.md) can glow 
 
 The images built into the firmware are in the `imgs/` folder.  The first is KatCorp's logo, the cat in its ring, which is what a new unit shows when it starts, until another image is picked in *Startup*.  The ESP32-S3 boards can also show images from their micro SD card, which come first, so with a card in, a new unit starts on the card's first image.
 
+## Pictures from others
+
+Others in your hive can show you a picture from their app, if you allow them *Display* in [Permissions](../app/permissions.md) (see [Their display](../app/text.md#their-display)).  Your display switches to it, for a while or until you swipe away.  A built-in one is its own page.  One they sent from their phone gets a page of its own at the end of Images, after the card's and the built-in ones, just before the blank page, so you can swipe back to it later.  *Received* shows at the top for a moment each time it comes on screen.  Tap it, or hold it, to delete it.  The unit keeps the last three, in memory only: they're gone when it restarts.
+
 ## Adding or changing built-in images
 
 1. Put the image in the `imgs/` folder.  PNG, BMP, JPG and animated GIF files all work.
@@ -27,6 +31,7 @@ The images built into the firmware are in the `imgs/` folder.  The first is KatC
    ```
 
 3. Rebuild and flash (see [Installing the Firmware](../building-firmware.md)).  The build converts the images automatically, for the board's screen size.
+4. Run `python3 tools/gen_app_pictures.py`, so the app offers it to show on others' displays, and rebuild the app.
 
 The image name is also what shows up in the *Startup* setting.  To remove an image, just take it out of the list.  Images in `imgs/` that aren't in the list don't take up any space in the firmware.
 

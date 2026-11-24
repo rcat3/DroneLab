@@ -17,12 +17,14 @@
 #include "app/direct.h"
 #include "app/message.h"
 #include "app/patterns.h"
+#include "app/pictures.h"
 #include "app/reactive.h"
 #include "app/rules.h"
 #include "app/settings.h"
 #include "app/toys.h"
 #include "crypto/monocypher-ed25519.h"
 #include "hal.h"
+#include "media/media_library.h"
 #include "lvgl.h"
 #include "ui/ui.h"
 
@@ -302,9 +304,9 @@ static void pattern_part(const uint8_t *arg, size_t len)
 }
 
 /* On the Terminal, as its own controls would put it: as it is, added on a
- * line of its own or in place of what's there, at its letter size, and on
- * screen if they want it to be. */
-static void show_message(uint8_t flags, uint8_t scale, const uint8_t *text, size_t len)
+ * line of its own or in place of what's there, at its letter size, and
+ * brought on screen for so many seconds (0: till the wearer moves on). */
+static void show_message(uint8_t flags, uint8_t scale, uint16_t seconds, const uint8_t *text, size_t len)
 {
     char line[OTHERS_WHAT_MAX + 2];
     bool append = (flags & OTHERS_MESSAGE_APPEND) != 0;
@@ -319,15 +321,26 @@ static void show_message(uint8_t flags, uint8_t scale, const uint8_t *text, size
         settings_set_terminal_size(scale);   // as the remote's letter size does
     }
     message_set(line, (size_t)n < sizeof(line) ? (size_t)n : sizeof(line) - 1, append);
-    if (flags & OTHERS_MESSAGE_SHOW)
+    for (size_t f = 0; f < ui_feature_count(); f++)
     {
-        for (size_t f = 0; f < ui_feature_count(); f++)
+        if (strcmp(ui_feature_name(f), TERMINAL_FEATURE) == 0)
         {
-            if (strcmp(ui_feature_name(f), TERMINAL_FEATURE) == 0)
-            {
-                ui_show(f, 0);
-            }
+            ui_show_for(f, 0, seconds);
         }
+    }
+}
+
+/* A picture: sent, by its hash, or built in, by its name. */
+static void show_picture(const uint8_t *arg, size_t len)
+{
+    uint16_t seconds = (uint16_t)(arg[0] | (arg[1] << 8));
+    if (arg[2] == OTHERS_PICTURE_SENT)
+    {
+        pictures_show_sent(arg + 3, seconds);
+    }
+    else
+    {
+        pictures_show_built_in((const char *)arg + 3, len - 3, seconds);
     }
 }
 
@@ -377,9 +390,20 @@ static int kind_of(const uint8_t *what, size_t len)
                    ? OTHERS_VIBE
                    : -1;
     case OTHERS_MESSAGE:
-        return len > 3 ? OTHERS_TERMINAL : -1;
+        // what to do, flags, the letter size, how long (2), then the text
+        return len > 5 ? OTHERS_DISPLAY : -1;
     case OTHERS_CLEAR:
-        return OTHERS_TERMINAL;
+        return OTHERS_DISPLAY;
+    case OTHERS_PICTURE:
+        // what to do, how long (2), where from, then its hash or name
+        if (len < 5)
+        {
+            return -1;
+        }
+        return (what[3] == OTHERS_PICTURE_SENT && len == 4 + PICTURES_HASH_LEN)
+                       || (what[3] == OTHERS_PICTURE_BUILT_IN && len < 4 + MEDIA_NAME_LEN)
+                   ? OTHERS_DISPLAY
+                   : -1;
     case OTHERS_TEXT:
         return len > 1 ? OTHERS_KIND_COUNT : -1;
     case OTHERS_TEXT_PART:
@@ -411,10 +435,14 @@ static void run(const uint8_t *what, size_t len)
         pattern_part(arg, len - 1);
         break;
     case OTHERS_MESSAGE:
-        show_message(arg[0], arg[1], arg + 2, len - 3);
+        show_message(arg[0], arg[1], (uint16_t)(arg[2] | (arg[3] << 8)), arg + 4, len - 5);
         break;
     case OTHERS_CLEAR:
         message_clear();
+        ui_go_back();
+        break;
+    case OTHERS_PICTURE:
+        show_picture(arg, len - 1);
         break;
     }
 }
@@ -569,7 +597,7 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
         comm_heard_to_phone(via, from, key, counter, kind, scope, true, what + 1, what_len - 1);
         return;
     }
-    comm_heard_t heard = which == OTHERS_VIBE ? COMM_HEARD_VIBE : COMM_HEARD_TERMINAL;
+    comm_heard_t heard = which == OTHERS_VIBE ? COMM_HEARD_VIBE : COMM_HEARD_DISPLAY;
     bool done = false;
     // To everyone nearby, if it's to the channel in the open direct group
     bool open = via == COMM_TALK_DIRECT && !settings_get()->direct_keyed;
@@ -585,7 +613,7 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
         done = policy == RULES_ANYONE || (p != NULL && (p->allowed & (1u << cls)));
         if (!done)
         {
-            printf("others: %s commands from %s (%s), not allowed\n", which == OTHERS_VIBE ? "Vibe" : "Terminal",
+            printf("others: %s commands from %s (%s), not allowed\n", which == OTHERS_VIBE ? "Vibe" : "Display",
                    from, via == COMM_TALK_DIRECT ? "direct" : "server");
         }
     }
@@ -757,7 +785,7 @@ void others_queue(const char *from, const uint8_t *cmd, size_t len, const others
 
 uint8_t others_class(others_kind_t kind)
 {
-    return kind == OTHERS_VIBE ? RULES_CLASS_VIBE : kind == OTHERS_TERMINAL ? RULES_CLASS_TERMINAL : 0;
+    return kind == OTHERS_VIBE ? RULES_CLASS_VIBE : kind == OTHERS_DISPLAY ? RULES_CLASS_DISPLAY : 0;
 }
 
 others_permission_t others_permission(others_kind_t kind)
@@ -825,7 +853,7 @@ static void update_capabilities(void)
 size_t others_capabilities(uint8_t out[OTHERS_CAPS_MAX])
 {
     static const uint8_t ids[OTHERS_KIND_COUNT] = { [OTHERS_VIBE] = OTHERS_CAP_VIBE,
-                                                    [OTHERS_TERMINAL] = OTHERS_CAP_TERMINAL };
+                                                    [OTHERS_DISPLAY] = OTHERS_CAP_DISPLAY };
     size_t at = 1;
     out[0] = 0;
     for (int k = 0; k < OTHERS_KIND_COUNT; k++)
@@ -845,6 +873,7 @@ size_t others_capabilities(uint8_t out[OTHERS_CAPS_MAX])
 void others_poll(uint32_t now_ms)
 {
     update_capabilities();
+    pictures_poll(now_ms);
     if (list == NULL)
     {
         return;

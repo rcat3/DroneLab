@@ -12,6 +12,7 @@
  *   LV_USE_LODEPNG = 1: PNG
  *   LV_USE_BMP = 1: BMP
  *   LV_USE_LIBJPEG_TURBO = 1: JPEG, including progressive JPEG
+ *   LV_USE_FS_MEMFS = 1: files in memory, drive letter M
  *   LV_USE_QRCODE = 1: QR codes
  * The RGB565 byte swap the panels need is done in the display flush callback.
  */
@@ -2086,11 +2087,11 @@
 #endif /*LV_USE_FS_FROGFS*/
 
 /** Reach data already in memory through the lv_fs API, without a real file system. */
-#define LV_USE_FS_MEMFS 0
+#define LV_USE_FS_MEMFS 1
 
 #if LV_USE_FS_MEMFS
 /** Drive letter for memfs (65 = 'A', 0 = disabled) */
-#define LV_FS_MEMFS_LETTER 0
+#define LV_FS_MEMFS_LETTER 'M'
 
 #endif /*LV_USE_FS_MEMFS*/
 

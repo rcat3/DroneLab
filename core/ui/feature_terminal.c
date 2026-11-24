@@ -329,7 +329,7 @@ static bool build(ui_feature_t *feature)
     add_scanlines();
 
     ui_add_startup_choice(feature, page, "Terminal", "terminal");
-    ui_others_page_add(feature, OTHERS_TERMINAL);
+    ui_others_page_add(feature, OTHERS_DISPLAY);
     lv_timer_create(tick_cb, TICK_MS, NULL);
     tick_cb(NULL);
     return true;

@@ -31,4 +31,15 @@ const media_item_t *media_get(size_t index);
 /* Index of the image with the given name, or -1 if there isn't one. */
 int media_find(const char *name);
 
+/* A picture in memory, a JPEG or a GIF, for showing on a screen_size x
+ * screen_size screen, as one from storage is: a JPEG decoded and scaled, a
+ * GIF wrapped as it is (data must stay valid while it's shown), with the
+ * scale to show it at. NULL if it can't be. Free it with
+ * media_free_decoded(). */
+const void *media_decode_memory(const uint8_t *data, size_t len, bool is_gif, int32_t screen_size, uint16_t *scale);
+void media_free_decoded(const void *src, bool is_gif);
+
+/* How many of the images are built into the firmware: the last of them. */
+size_t media_built_in_count(void);
+
 #endif

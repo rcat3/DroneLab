@@ -197,6 +197,144 @@ static void setup_theme(void)
     lv_display_set_theme(disp, theme);
 }
 
+/* Each page where its place in the row says, after one's been put in or
+ * taken out. */
+static void lay_out_pages(ui_feature_t *feature)
+{
+    uint32_t n = lv_obj_get_child_count(feature->pages);
+    for (uint32_t i = 0; i < n; i++)
+    {
+        lv_obj_set_pos(lv_obj_get_child(feature->pages, (int32_t)i), lv_pct((int32_t)i * 100), 0);
+    }
+    // Where each is now, before anything's shown by it: otherwise a new
+    // page is still at 0 till the next refresh, and showing it shows the first
+    lv_obj_update_layout(feature->pages);
+}
+
+lv_obj_t *ui_feature_insert_page(ui_feature_t *feature, size_t at, const char *name, bool black)
+{
+    lv_obj_t *current = lv_tileview_get_tile_active(feature->pages);
+    lv_obj_t *page = ui_feature_add_page(feature, name, black);
+    if (at < (size_t)feature->page_count - 1)
+    {
+        lv_obj_move_to_index(page, (int32_t)at);
+    }
+    lay_out_pages(feature);
+    if (current != NULL)
+    {
+        lv_tileview_set_tile(feature->pages, current, LV_ANIM_OFF);     // it may have moved along
+    }
+    if (ui_feature_is_current(feature))
+    {
+        navigate_event_cb(NULL);    // for the dots
+    }
+    return page;
+}
+
+static lv_obj_t *back_page;         // where ui_show_for() goes back to
+static lv_obj_t *shown_page;        // what it showed
+static lv_timer_t *back_timer;
+
+void ui_feature_remove_page(ui_feature_t *feature, lv_obj_t *page)
+{
+    if (lv_obj_get_parent(page) != feature->pages || feature->page_count <= 1)
+    {
+        return;
+    }
+    lv_obj_t *current = lv_tileview_get_tile_active(feature->pages);
+    if (current == page)
+    {
+        // Onto the next page, or the one before if it's the last
+        int32_t i = lv_obj_get_index(page);
+        current = lv_obj_get_child(feature->pages, i + 1 < feature->page_count ? i + 1 : i - 1);
+    }
+    if (back_page == page)
+    {
+        back_page = NULL;
+    }
+    if (shown_page == page)
+    {
+        shown_page = NULL;
+    }
+    lv_obj_delete(page);
+    feature->page_count--;
+    lay_out_pages(feature);
+    lv_tileview_set_tile(feature->pages, current, LV_ANIM_OFF);
+    if (ui_feature_is_current(feature))
+    {
+        navigate_event_cb(NULL);
+    }
+}
+
+size_t ui_feature_page_count(const ui_feature_t *feature)
+{
+    return feature->page_count;
+}
+
+lv_obj_t *ui_page_of(ui_feature_t *feature, size_t page)
+{
+    return page < feature->page_count ? lv_obj_get_child(feature->pages, (int32_t)page) : NULL;
+}
+
+/* Forget where to go back to: the wearer's moved on, or it's been. */
+static void forget_back(void)
+{
+    back_page = NULL;
+    shown_page = NULL;
+    if (back_timer != NULL)
+    {
+        lv_timer_delete(back_timer);
+        back_timer = NULL;
+    }
+}
+
+void ui_go_back(void)
+{
+    lv_obj_t *to = back_page;
+    bool still = shown_page != NULL && ui_current_page() == shown_page;
+    forget_back();
+    if (to != NULL && still)
+    {
+        ui_show_page(to);
+    }
+}
+
+static void back_timer_cb(lv_timer_t *timer)
+{
+    (void)timer;
+    back_timer = NULL;      // it's gone after this, as it only runs once
+    ui_go_back();
+}
+
+bool ui_show_page_for(lv_obj_t *page, uint32_t seconds)
+{
+    lv_obj_t *current = ui_current_page();
+    // What's on screen now, to go back to, unless it's what an earlier one
+    // showed, still waiting to go back
+    lv_obj_t *back = back_page != NULL && current == shown_page ? back_page : current;
+    forget_back();
+    if (!ui_show_page(page))
+    {
+        return false;
+    }
+    back_page = back != page ? back : NULL;
+    shown_page = page;
+    if (seconds > 0 && back_page != NULL)
+    {
+        back_timer = lv_timer_create(back_timer_cb, seconds * 1000, NULL);
+        lv_timer_set_repeat_count(back_timer, 1);
+    }
+    return true;
+}
+
+void ui_show_for(size_t feature, size_t page, uint32_t seconds)
+{
+    if (page < ui_page_count(feature))
+    {
+        ui_show_page_for(lv_obj_get_child(features[feature].pages, (int32_t)page), seconds);
+    }
+}
+
 lv_obj_t *ui_feature_add_page(ui_feature_t *feature, const char *name, bool black)
 {
     lv_obj_t *page = lv_tileview_add_tile(feature->pages, feature->page_count++, 0, LV_DIR_HOR);
@@ -392,6 +530,12 @@ static void show_startup_page(void)
 /* A different feature or page came on screen. */
 static void navigate_event_cb(lv_event_t *e)
 {
+    // Moved on from what ui_show_for() showed: it stays where it is
+    if (shown_page != NULL && ui_current_page() != shown_page)
+    {
+        forget_back();
+    }
+
     lv_obj_t *row = lv_tileview_get_tile_active(features_view);
     for (uint8_t i = 0; i < feature_count; i++)
     {

@@ -215,7 +215,7 @@ static void defaults(void)
 {
     memset(policy, 0, sizeof(policy));
     memset(ignoring, 0, sizeof(ignoring));
-    for (int c = RULES_CLASS_TERMINAL; c <= RULES_CLASS_SOUNDS; c++)
+    for (int c = RULES_CLASS_DISPLAY; c <= RULES_CLASS_SOUNDS; c++)
     {
         policy[c] = c == RULES_CLASS_ESTIM ? RULES_OFF : RULES_ASK;
     }
@@ -367,7 +367,7 @@ void rules_set_off(uint8_t class_id)
         d[at++] = RULES_SECTION_CLASSES;
         size_t len_at = at;
         at += 2;
-        for (int c = RULES_CLASS_TERMINAL; c <= RULES_CLASS_SOUNDS; c++)
+        for (int c = RULES_CLASS_DISPLAY; c <= RULES_CLASS_SOUNDS; c++)
         {
             d[at++] = (uint8_t)c;
             d[at++] = policy[c];

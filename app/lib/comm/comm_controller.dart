@@ -2792,6 +2792,117 @@ class CommController extends ChangeNotifier {
     return null;
   }
 
+  // ----- Pictures on others' displays -----
+
+  /// Marks a server text as a picture for displays, which the receiving
+  /// app gives its unit rather than putting in the conversation.
+  static const _displayMark = '<!-- dl-display -->';
+
+  /// Put a picture of ours on the displays of those in a conversation, for
+  /// [seconds] (0 until they move on): over the server only, as a text
+  /// with the picture, then the command that shows it, by its hash. Returns
+  /// why not, or null once it's gone.
+  Future<String?> sendDisplayPicture(Conversation c, Uint8List picture, int seconds) async {
+    if (!canSendPhoto(c)) return 'Your own pictures go over the server: not on it just now';
+    final m = mumble!;
+    final made = await compute(displayPicture, (picture, m.imageMessageLength));
+    if (made == null) {
+      return "That picture can't go on a display: too big (a GIF can be up to $displayGifSide px across)";
+    }
+    if (!canSendPhoto(c)) return 'The server went meanwhile';
+    final (bytes, kind) = made;
+    final hash = sha256.convert(bytes).bytes;
+    final html = '<img src="data:image/${kind == pictureGif ? 'gif' : 'jpeg'};base64,${base64Encode(bytes)}" />'
+        '$_displayMark';
+    switch (c.kind) {
+      case ConversationKind.everyone:
+        m.sendText(html + _everyoneMark);
+      case ConversationKind.server:
+        m.sendText(html);
+      case ConversationKind.person:
+        final u = serverUser(personOf(c));
+        if (u == null) return 'They aren\'t on the server just now';
+        m.sendTextTo(u.session, html);
+      case ConversationKind.direct:
+        return 'Your own pictures go over the server only';
+    }
+    // After the picture, which the server passes on first
+    sendCommandTo(c, newCommand(OthersCommand.showPicture(hash: hash, seconds: seconds)), serverOnly: true);
+    return null;
+  }
+
+  /// Pictures for our display that have come over the server, by their
+  /// hash (hex): what they are, and when they came, kept a while for the
+  /// command that shows them; and the commands come first, waiting for
+  /// theirs.
+  final Map<String, (Uint8List, int, int)> _displayPictures = {};
+  final Map<String, int> _picturesWanted = {};
+  static const _picturesFor = 120000;   // ms
+  Future<void> _picturesSending = Future.value();
+
+  void _prunePictures() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _displayPictures.removeWhere((_, v) => now - v.$3 > _picturesFor);
+    _picturesWanted.removeWhere((_, at) => now - at > _picturesFor);
+    while (_displayPictures.length > 4) {
+      _displayPictures.remove(_displayPictures.keys.first);
+    }
+  }
+
+  /// A picture for our display, as it came over the server.
+  void _onDisplayPicture(Uint8List bytes, String ext) {
+    _prunePictures();
+    final key = sha256.convert(bytes).toString();
+    final kind = ext == 'gif' ? pictureGif : pictureJpeg;
+    _displayPictures[key] = (bytes, kind, DateTime.now().millisecondsSinceEpoch);
+    if (_picturesWanted.remove(key) != null) _givePicture(key);
+  }
+
+  /// Our unit took a command to show a picture sent it: it's given the
+  /// picture, now or once it comes.
+  void _onPictureShown(Uint8List op) {
+    if (op.length != 4 + 32 || op[3] != OthersCommand.pictureSent) return;
+    _prunePictures();
+    final key = op.sublist(4).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    if (_displayPictures.containsKey(key)) {
+      _givePicture(key);
+    } else {
+      _picturesWanted[key] = DateTime.now().millisecondsSinceEpoch;
+    }
+  }
+
+  /// Give the unit a picture, one at a time, a few pieces at a time, each
+  /// few waiting for the unit to say it's got them.
+  void _givePicture(String key) {
+    final p = _displayPictures[key];
+    if (p == null) return;
+    _picturesSending = _picturesSending.then((_) async {
+      if (board.state != BoardState.connected || (board.status?.version ?? 0) < commVersionPictures) return;
+      final hash = [for (var i = 0; i < key.length; i += 2) int.parse(key.substring(i, i + 2), radix: 16)];
+      final pieces = pictureMessages(p.$1, p.$2, hash, board.maxWrite);
+      for (final piece in pieces) {
+        final wantsAck = piece[1] & 4 != 0 || piece[1] & 2 != 0;
+        final ack = wantsAck ? board.pictureAcks.first.timeout(const Duration(seconds: 5)) : null;
+        if (!await board.sendFast(piece)) {
+          ack?.ignore();
+          return;
+        }
+        if (ack != null) {
+          try {
+            final a = await ack;
+            if (!a.ok) {
+              debugPrint('picture: the unit didn\'t take it');
+              return;
+            }
+          } catch (_) {
+            debugPrint('picture: the unit didn\'t answer');
+            return;
+          }
+        }
+      }
+    });
+  }
+
   /// A hidden mark on a server text, for the app's id for it: who wrote it
   /// and their number for it. Mumble's own apps don't show it.
   String _idMark(int msgId) => identity == null ? '' : '<!-- dl-id:${identity!.id}:$msgId -->';
@@ -2834,7 +2945,7 @@ class CommController extends ChangeNotifier {
   /// Send a command (for their Terminals or Vibe toys) to a
   /// conversation: everyone in it, whichever ways reach them. Returns false
   /// if it couldn't go anywhere.
-  bool sendCommandTo(Conversation c, OthersCommand command, {bool log = true}) {
+  bool sendCommandTo(Conversation c, OthersCommand command, {bool log = true, bool serverOnly = false}) {
     final cmd = command.withScope(_scopeOf(c));
     final m = mumble;
     var sent = false;
@@ -2844,6 +2955,7 @@ class CommController extends ChangeNotifier {
       sent = true;
     }
     void toDirect({NearbyBoard? to}) {
+      if (serverOnly) return;
       _toDirect(cmd, to: to);
       sent = true;
     }
@@ -3014,8 +3126,9 @@ class CommController extends ChangeNotifier {
     }
   }
 
-  static String _kindOf(Uint8List op) => op.isNotEmpty && (op[0] == OthersCommand.message || op[0] == OthersCommand.clear)
-      ? ConversationEntry.terminal
+  static String _kindOf(Uint8List op) => op.isNotEmpty &&
+          (op[0] == OthersCommand.message || op[0] == OthersCommand.clear || op[0] == OthersCommand.picture)
+      ? ConversationEntry.display
       : ConversationEntry.vibe;
 
   // ----- Texts' details: how each came or went (message_details.dart) -----
@@ -3175,6 +3288,13 @@ class CommController extends ChangeNotifier {
     final who = u == null ? people.named(t.from) : personOfUser(u);
     if (who.muted) return;
     final (photos, rest) = photosIn(t.message);
+    if (t.message.contains(_displayMark)) {
+      // For our display, not the conversation: what shows it says so
+      for (final (ext, bytes) in photos) {
+        _onDisplayPicture(bytes, ext);
+      }
+      return;
+    }
     // Its id: from the app, by who wrote it and their number for it;
     // from plain Mumble, by their name and what it says
     final mark = _idOf.firstMatch(rest);
@@ -3275,8 +3395,8 @@ class CommController extends ChangeNotifier {
     // Who, by the key they signed it with
     final who = people.byKey(h.key, h.from);
     if (who.muted) {
-      if (h.what == Heard.terminal || h.what == Heard.vibe) {
-        permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.vibe, h.key, h.from, who.id,
+      if (h.what == Heard.display || h.what == Heard.vibe) {
+        permissions.heard(h.what == Heard.display ? Capabilities.display : Capabilities.vibe, h.key, h.from, who.id,
             done: h.done, muted: true, direct: h.direct, scope: h.scope, what: describeCommand(h.data, mine: false));
       }
       return;
@@ -3294,8 +3414,8 @@ class CommController extends ChangeNotifier {
       return;
     }
     // Logged, and one not taken for want of being allowed is a request
-    if (h.what == Heard.terminal || h.what == Heard.vibe) {
-      permissions.heard(h.what == Heard.terminal ? Capabilities.terminal : Capabilities.vibe, h.key, h.from, who.id,
+    if (h.what == Heard.display || h.what == Heard.vibe) {
+      permissions.heard(h.what == Heard.display ? Capabilities.display : Capabilities.vibe, h.key, h.from, who.id,
           done: h.done,
           muted: false,
           direct: h.direct,
@@ -3332,7 +3452,7 @@ class CommController extends ChangeNotifier {
             from: h.from,
             who: who.id,
             mine: false,
-            kind: h.what == Heard.terminal ? ConversationEntry.terminal : ConversationEntry.vibe,
+            kind: h.what == Heard.display ? ConversationEntry.display : ConversationEntry.vibe,
             body: describeCommand(h.data, mine: false),
             done: h.done);
     // Refused by one way, then done when it came the other: done, once
@@ -3349,10 +3469,13 @@ class CommController extends ChangeNotifier {
       if (c.unread > 0) c.unread--;
     }
     conversations.add(c, e);
+    if (e.done && h.what == Heard.display && h.data.isNotEmpty && h.data[0] == OthersCommand.picture) {
+      _onPictureShown(h.data);
+    }
     if (h.what == Heard.text) _notifyText(c);
     textResponder.received(c, e);
     if (e.done && h.what == Heard.vibe) playUnitSound(UnitSoundEvent.vibe);
-    if (e.done && h.what == Heard.terminal) playUnitSound(UnitSoundEvent.terminal);
+    if (e.done && h.what == Heard.display) playUnitSound(UnitSoundEvent.display);
   }
 
   // ----- The server -----

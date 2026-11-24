@@ -12,9 +12,9 @@ import 'dart:typed_data';
 /// over the server by the app, in Mumble's plugin data ([dataId]), worked
 /// out from the board's own /api/state.
 class Capabilities {
-  /// The ids, as OTHERS_CAP_*. 3 to 6 are kept for E-stim, Machines,
-  /// Pictures and Sounds.
-  static const terminal = 1, vibe = 2;
+  /// The ids, as OTHERS_CAP_*: the display (words and pictures) and Vibe
+  /// toys. 3, 4 and 6 are kept for E-stim, Machines and Sounds.
+  static const display = 1, vibe = 2;
 
   /// The plugin data's id over the server.
   static const dataId = 'dronelab-caps';
@@ -59,7 +59,7 @@ class Capabilities {
     return Capabilities(open, more);
   }
 
-  /// Ours, from the board's /api/state: the Terminal and Vibe toys as their
+  /// Ours, from the board's /api/state: the display and Vibe toys as their
   /// permissions have them (Off left out), and Vibe toys only with one
   /// connected, with the channels they follow ("mapped"), as the board
   /// itself works it out. Null if it isn't the state.
@@ -78,7 +78,7 @@ class Capabilities {
       final toys = devices.any((d) => const ['connected', 'connecting', 'lost'].contains((d as Map)['state']));
       final term = how(others[1]), toy = toys ? how(others[0]) : null;
       final mapped = (j['mapped'] as num?)?.toInt() ?? 0;
-      return Capabilities({terminal: ?term, vibe: ?toy}, {if (toy != null && mapped != 0) vibe: mapped});
+      return Capabilities({display: ?term, vibe: ?toy}, {if (toy != null && mapped != 0) vibe: mapped});
     } catch (_) {
       return null;
     }

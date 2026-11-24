@@ -92,6 +92,9 @@ flutter:
     - assets/dronelab_logo.png
     # The firmware it carries, put there by tools/release/bundle_firmware.sh
     - assets/firmware/
+    # Thumbnails of the pictures built into the firmware, by
+    # tools/gen_app_pictures.py
+    - assets/pictures/
 
   # The board's Terminal letters: unscii 8, public domain
   # (http://viznut.fi/unscii/), from third_party/lvgl

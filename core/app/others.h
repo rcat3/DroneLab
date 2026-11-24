@@ -8,7 +8,8 @@
  * see comm.h) or over direct comms (see direct.h). They're HiveMind
  * Control's, by area: the Toys, Vibe toys for now (toys.h), which they set
  * by channel as the Toys feature's own controls do, and stay set until
- * they're changed or Stop's touched; the Display unit, its Terminal for now;
+ * they're changed or Stop's touched; the Display unit's screen, words on its
+ * Terminal and pictures;
  * and besides those, texts and the like, for the wearer's app only.
  *
  * Everyone is known by their identity key: an Ed25519 key pair their app
@@ -74,14 +75,25 @@
  *                  here, and come to the hash, it's kept, and the channels
  *                  waiting for it start it. They're taken from whoever's
  *                  allowed Vibe toys.
- *   For the Display unit's Terminal, as its own controls (and the remote's)
- *   do:
+ *   For the Display unit, words on its Terminal (as its own controls, and
+ *   the remote's, put them) and pictures, each brought on screen, and kept
+ *   there for a while, or until the wearer moves on: see ui_show_for():
  *     10 message:  10, flags (bit 0 add it on a line of its own after
- *                  what's there, rather than replace it; bit 1 bring the
- *                  Terminal on screen), the letter size (0 for Auto, 1 to 6
- *                  for 8 to 48 px), then the text, in UTF-8, as it is: no
+ *                  what's there, rather than replace it), the letter size
+ *                  (0 for Auto, 1 to 6 for 8 to 48 px), how long it stays
+ *                  on screen (2, little endian, in seconds, 0 until the
+ *                  wearer moves on), then the text, in UTF-8, as it is: no
  *                  name's added
- *     11 clear:    11: empty the Terminal
+ *     11 clear:    11: empty the Terminal, and go back to what was on
+ *                  screen before the last of these, if it's still showing
+ *     12 picture:  12, how long it stays on screen (2, as a message's),
+ *                  where it's from (OTHERS_PICTURE_*), then for one sent,
+ *                  its SHA-256 (32): the picture itself comes to this board
+ *                  from its phone (comm.h 0x1A), which has it from the
+ *                  server, and the command waits up to
+ *                  PICTURES_WAIT_MS for it (pictures.h); for one built into
+ *                  the firmware, its name (image_list.c), in UTF-8, which
+ *                  every board has, so it works over direct comms too
  *   For the wearer's app:
  *     20 text:     20, then the text, in UTF-8: a text, only passed on to
  *                  the app, whoever it's from
@@ -116,6 +128,7 @@
 
 #define OTHERS_MESSAGE          0x10    // the Display unit
 #define OTHERS_CLEAR            0x11
+#define OTHERS_PICTURE          0x12
 #define OTHERS_TEXT             0x20
 #define OTHERS_TEXT_PART        0x21
 #define OTHERS_CALL             0x30    // a call's signal, for the app: op, call id (4)
@@ -128,7 +141,8 @@
 #define OTHERS_PATTERN_BUILT_IN 1       // by its name
 #define OTHERS_PATTERN_CUSTOM   2       // by its hash
 #define OTHERS_MESSAGE_APPEND   0x01    // a message's flags: on a line of its own after what's there
-#define OTHERS_MESSAGE_SHOW     0x02    // and bring the Terminal on screen
+#define OTHERS_PICTURE_SENT     0       // a picture's from: sent, by its SHA-256
+#define OTHERS_PICTURE_BUILT_IN 1       // built into the firmware, by its name
 
 /* Who a command's for, as its sender put it */
 #define OTHERS_SCOPE_EVERYONE   0       // everyone who can hear the sender, by any means
@@ -136,12 +150,11 @@
 #define OTHERS_SCOPE_ONE        2       // this board alone
 
 /* What can be controlled here, each a class in the rules (others_class).
- * E-stim, Machines, and the Display unit's pictures and sounds, are to
- * come. */
+ * E-stim, Machines, and the Display unit's sounds, are to come. */
 typedef enum
 {
     OTHERS_VIBE,            // Vibe toys
-    OTHERS_TERMINAL,        // the Display unit's Terminal
+    OTHERS_DISPLAY,         // the Display unit's screen: words on its Terminal, and pictures
     OTHERS_KIND_COUNT,
 } others_kind_t;
 
@@ -233,9 +246,9 @@ const char *others_last(others_kind_t kind, uint32_t now_ms, uint32_t *age_ms);
  * connected toy follows; otherwise 0. One the wearer hasn't got (Vibe toys,
  * with none connected), or lets nobody control (Off), is left out. Worked
  * out on the UI loop, by others_poll(); from any task. Returns its length,
- * 1 for none. Ids 3 to 6 are kept for E-stim, Machines, Pictures and
- * Sounds. */
-#define OTHERS_CAP_TERMINAL     1
+ * 1 for none. Ids 3, 4 and 6 are kept for E-stim, Machines and Sounds (5
+ * was to be Pictures, which Display covers). */
+#define OTHERS_CAP_DISPLAY      1       // words and pictures
 #define OTHERS_CAP_VIBE         2
 #define OTHERS_CAP_ASK          1
 #define OTHERS_CAP_OPEN         2

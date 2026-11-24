@@ -464,7 +464,7 @@ class Permissions extends ChangeNotifier {
 
 /// What a capability's called.
 String capName(int cap) => switch (cap) {
-      Capabilities.terminal => 'Terminal',
+      Capabilities.display => 'Display',
       Capabilities.vibe => 'Vibe',
       _ => 'something',
     };

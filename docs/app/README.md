@@ -13,8 +13,8 @@ The DroneLab app is the phone's half of your unit.  It links your unit to the re
 ## What it does
 
 - **[Voice](voice.md)**: talk to other drones and hear them, like a radio, over the internet through a shared server, or unit to unit with no signal at all.  Your voice goes out through your voice effect; theirs comes to your headphones, through the phone.  [Call](voice.md#calls) one drone to talk alone.
-- **[Text](text.md)**: text one drone, a channel, or everyone who can hear you, in a conversation for each, with photos over the server and emoji reactions; and from any of them, put words on their displays, if they've allowed you.
-- **[HiveMind Control](control.md)**: run other drones' [toys](../features/toys.md) by channel, and put words on their displays, if they've allowed you, from a conversation; and set up which channel your own toys follow.
+- **[Text](text.md)**: text one drone, a channel, or everyone who can hear you, in a conversation for each, with photos over the server and emoji reactions; and from any of them, put words or pictures on their displays, if they've allowed you.
+- **[HiveMind Control](control.md)**: run other drones' [toys](../features/toys.md) by channel, and put words or pictures on their displays, if they've allowed you, from a conversation; and set up which channel your own toys follow.
 - **[Vibe Patterns](patterns.md)**: make your own patterns, keep those sent you, and pick favourites for your unit.
 - **[Permissions](permissions.md)**: choose who can control your display and toys, accept or decline their requests, and see a log of every command that came.
 - **[Record](record.md)**: record your voice effect to the phone as WAV files, for videos, with a beep to line it up with the camera.

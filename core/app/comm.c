@@ -28,6 +28,7 @@
 #include "app/battery.h"
 #include "app/direct.h"
 #include "app/others.h"
+#include "app/pictures.h"
 #include "app/patterns.h"
 #include "app/rules.h"
 #include "app/remote.h"
@@ -121,6 +122,12 @@
 #define COMMAND_OWN         0x02
 #define MSG_RULES           0x10    // from the phone: who's muted there, whose commands are ignored
 #define MSG_FAVOURITES      0x19    // from the phone: the wearer's favourite patterns, in pieces
+#define MSG_PICTURE         0x1A    // both ways: a picture for the screen, in pieces, and the ack
+#define PICTURE_START       0x01
+#define PICTURE_END         0x02
+#define PICTURE_ACK         0x04
+#define PICTURE_DONE        0x01    // in the ack
+#define PICTURE_WELL        0x02
 #define RULES_FIRST         0x01
 #define RULES_LAST          0x02
 #define MSG_IDENTITY        0x11    // from the phone: the wearer's public key
@@ -1976,6 +1983,38 @@ static void receive_update(const uint8_t *msg, size_t len)
     }
 }
 
+/* A picture for the screen, from the phone (pictures.h), in pieces: see
+ * comm.h's 0x1A. */
+static void receive_picture(const uint8_t *msg, size_t len)
+{
+    uint8_t flags = msg[1];
+    static bool well;
+    if (flags & PICTURE_START)
+    {
+        uint32_t length = 0;
+        if (len >= 7 + PICTURES_HASH_LEN)
+        {
+            memcpy(&length, msg + 2, 4);
+        }
+        well = len >= 7 + PICTURES_HASH_LEN && pictures_begin(length, msg[6], msg + 7);
+    }
+    else if (flags & PICTURE_END)
+    {
+        well = well && pictures_finish();
+    }
+    else
+    {
+        well = well && pictures_write(msg + 2, len - 2);
+    }
+    if (flags & (PICTURE_ACK | PICTURE_END))
+    {
+        uint32_t got = pictures_received();
+        uint8_t out[6] = { MSG_PICTURE, (uint8_t)((flags & PICTURE_END ? PICTURE_DONE : 0) | (well ? PICTURE_WELL : 0)),
+                           (uint8_t)got, (uint8_t)(got >> 8), (uint8_t)(got >> 16), (uint8_t)(got >> 24) };
+        send_retrying(out, sizeof(out));
+    }
+}
+
 void comm_poll(uint32_t now_ms)
 {
     others_poll(now_ms);
@@ -2050,6 +2089,10 @@ void comm_poll(uint32_t now_ms)
         else if (msg[0] == MSG_FAVOURITES && len >= 2)
         {
             patterns_receive_favourites((msg[1] & RULES_FIRST) != 0, (msg[1] & RULES_LAST) != 0, msg + 2, len - 2);
+        }
+        else if (msg[0] == MSG_PICTURE && len >= 2)
+        {
+            receive_picture(msg, len);
         }
         else if (msg[0] == MSG_IDENTITY && len >= 1 + OTHERS_KEY_LEN)
         {

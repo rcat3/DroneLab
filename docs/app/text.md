@@ -75,20 +75,22 @@ For your own messages it shows how they went: other units don't say which copies
 
 ## Their display
 
-**Terminal**, under *Display unit* in the **HiveMind Control button**'s menu (a remote) at the top of a conversation, puts words on their unit's display, on its [Terminal](../features/terminal.md), in blocky green letters.  To a channel, it goes to everyone in it.
+**Display**, under *Display unit* in the **HiveMind Control button**'s menu (a remote) at the top of a conversation, puts words or a picture on their unit's display.  To a channel, it goes to everyone in it.  Their display switches to it, and goes back to what it was showing after the time you pick (5 s to 5 min), or keeps it until they swipe away (*Until they move on*, the slider's far right).  They can swipe away at any time.
 
 <img src="../images/app/text_terminal.png" width="300" alt="Their display: the words, the letter size, Add a line or Replace, Clear their display, and Switch to it">
 
-It shows just as you type it, with no name added, and the same choices as typing on your own Terminal:
+**TEXT** goes on their [Terminal](../features/terminal.md), in blocky green letters, just as you type it, with no name added, and the same choices as typing on your own Terminal:
 
 - **Letter size** (the `T` icon): *AUTO*, the biggest letters the whole message fits in, or 8 to 48 px.
 - **ADD A LINE** puts it under what's already there; **REPLACE** puts it in its place.
-- **Switch to it** brings their display to the Terminal.  Off, it waits there, for when they next look.
-- **Clear their display** empties their Terminal.
 
-It only shows if they [allow you](#who-can-put-words-on-your-display).  The display has plain capital letters, numbers and punctuation: anything else, like emoji, shows as `?`.
+**PICTURE** shows a picture: one of yours (the first circle: take a photo or choose one), or one of the pictures built into every unit.  Yours go over the server only, made the size of their screen (a GIF goes as it is, up to 640 px across, and plays).  The built-in ones are on every unit already, so they work in [direct mode](../features/comms.md#direct-mode) too.  A picture of yours is kept on their unit after it shows, at the end of its [Images](../features/images.md#pictures-from-others), until they delete it or it restarts.
 
-No name is shown, but it isn't anonymous: their unit knows who sent it, as it has to in order to check they allow you, and shows the last sender on its *Hive Messages* page.  Their app notes it in your conversation, and in their [command log](permissions.md#command-log).
+**Clear their display** empties their Terminal, and takes their display back to what it was showing before you put something on it.
+
+It only shows if they [allow you](#who-can-put-words-on-your-display).  The Terminal has plain capital letters, numbers and punctuation: anything else, like emoji, shows as `?`.
+
+No name is shown, but it isn't anonymous: their unit knows who sent it, as it has to in order to check they allow you, and shows the last sender on its *Hive Display* page.  Their app notes it in your conversation, and in their [command log](permissions.md#command-log).
 
 ## Their toys
 
@@ -104,6 +106,6 @@ Someone you've muted (*Mute for me*, in their details) is muted here too: their 
 
 ## Who can put words on your display
 
-You choose who can put words on your display in [Permissions](permissions.md), as for your [toys](control.md#who-can-control-your-toys), with a list of its own.  It's **Allowed** to start with: the first time someone sends you words, nothing shows, and it comes in as a [request](permissions.md#requests) for you to accept or decline.
+You choose who can put words or pictures on your display (*Display*, one permission for both) in [Permissions](permissions.md), as for your [toys](control.md#who-can-control-your-toys), with a list of its own.  It's **Allowed** to start with: the first time someone sends you words, nothing shows, and it comes in as a [request](permissions.md#requests) for you to accept or decline.
 
 Someone's known by their identity, not their name: their app signs each command with a key only it has.  So it's one entry whether they reach you over the server or direct, and someone else can't pass as them by using their name.  Someone new who uses a name already on the list is marked ⚠: it's someone else.

@@ -28,6 +28,9 @@ FILES = {
     "LV_USE_LODEPNG": ("1", "PNG"),
     "LV_USE_BMP": ("1", "BMP"),
     "LV_USE_LIBJPEG_TURBO": ("1", "JPEG, including progressive JPEG"),
+    # Pictures others send, decoded from memory (pictures.c)
+    "LV_USE_FS_MEMFS": ("1", "files in memory, drive letter M"),
+    "LV_FS_MEMFS_LETTER": ("'M'", None),
 }
 
 PLATFORMS = {

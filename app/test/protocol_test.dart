@@ -218,10 +218,31 @@ void main() {
         'set their toys to 7, playing Pulse at 150%');
     expect(describeCommand(OthersCommand.setVibe(0x03, [5, 9], react: 1).what, mine: false),
         'set your toys on V1+V2 to 5/9, reacting to voice');
-    expect(OthersCommand.terminal('hi', append: false, show: true, size: 3).what, [0x10, 2, 3, ...utf8.encode('hi')]);
+    expect(OthersCommand.words('hi', append: false, size: 3, seconds: 300).what, [0x10, 0, 3, 0x2C, 1, ...utf8.encode('hi')]);
+    expect(describeCommand(OthersCommand.words('hi', seconds: 30).what, mine: true), 'put “hi” on their display for 30 s');
+    expect(describeCommand(OthersCommand.words('hi').what, mine: false), 'put “hi” on your display');
     // The longest fit, signed
-    final long = OthersCommand.terminal('x' * 500).body(key).length + OthersCommand.signatureLength;
+    final long = OthersCommand.words('x' * 500).body(key).length + OthersCommand.signatureLength;
     expect(long, othersCommandMax);
+    // Pictures: sent, by hash, and built in, by name
+    final hash = List.filled(32, 0xCD);
+    expect(OthersCommand.showPicture(hash: hash, seconds: 10).what, [0x12, 10, 0, 0, ...hash]);
+    expect(OthersCommand.showPicture(builtIn: 'katcorp').what, [0x12, 0, 0, 1, ...utf8.encode('katcorp')]);
+    expect(describeCommand(OthersCommand.showPicture(builtIn: 'katcorp', seconds: 120).what, mine: false),
+        'put “katcorp” on your display for 2 min');
+    expect(describeCommand(OthersCommand.showPicture(hash: hash).what, mine: true), 'put a picture on their display');
+    // A picture for the unit, in pieces: the start with its length, kind and
+    // hash, pieces in order, then the end
+    final bytes = Uint8List.fromList(List.generate(1000, (i) => i & 0xFF));
+    final msgs = pictureMessages(bytes, pictureJpeg, hash, 244, window: 2);
+    expect(msgs.first.sublist(0, 7), [0x1A, 5, 0xE8, 3, 0, 0, 0]);
+    expect(msgs.first.sublist(7), hash);
+    expect(msgs.last, [0x1A, 2]);
+    expect([for (final m in msgs.sublist(1, msgs.length - 1)) ...m.sublist(2)], bytes);
+    expect(msgs[2][1], 4);    // every second piece asks for an ack
+    final ack = parseBoardMessage(Uint8List.fromList([0x1A, 3, 0xE8, 3, 0, 0]));
+    expect(ack, isA<PictureAck>());
+    expect((ack as PictureAck).done && ack.ok && ack.received == 1000, isTrue);
     expect(OthersCommand.sendText('y' * OthersCommand.textMax), hasLength(1));
     expect(OthersCommand.sendText('y' * OthersCommand.textMax).first.what[0], OthersCommand.text);
     // Longer, in parts, each fitting, cut only between characters

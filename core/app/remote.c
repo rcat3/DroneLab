@@ -1272,7 +1272,7 @@ static void respond_json(client_t *c, void (*write)(json_t *))
  * them, by their whole key. */
 static void write_rules(json_t *j)
 {
-    static const uint8_t classes[] = { RULES_CLASS_TERMINAL, RULES_CLASS_VIBE,     RULES_CLASS_ESTIM,
+    static const uint8_t classes[] = { RULES_CLASS_DISPLAY, RULES_CLASS_VIBE,     RULES_CLASS_ESTIM,
                                        RULES_CLASS_MACHINE,  RULES_CLASS_PICTURES, RULES_CLASS_SOUNDS };
     jprintf(j, "{\"hash\":\"%08lx\",\"edited\":%d,\"classes\":[", (unsigned long)rules_hash(),
             rules_edited() ? 1 : 0);

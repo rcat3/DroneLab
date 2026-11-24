@@ -5,9 +5,12 @@
 library;
 
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
+
+import 'board_protocol.dart' show pictureGif, pictureJpeg, pictureMaxBytes;
 
 /// [photo] (any picture) as a JPEG small enough that its message, in
 /// base64, is no longer than [maxChars]: shrunk and squeezed till it is.
@@ -32,6 +35,47 @@ Uint8List? shrinkPhoto((Uint8List, int) photoAndMax) {
       final jpeg = img.encodeJpg(sized, quality: quality);
       if (jpeg.length <= room) return jpeg;
     }
+  }
+  return null;
+}
+
+/// The longest side of a picture for someone's display: the biggest unit's
+/// screen, 466 px across.
+const displayPictureSide = 466;
+
+/// The biggest a GIF can be each way, as it isn't made smaller: the unit
+/// keeps a frame of it, 2 bytes a pixel, for each it has.
+const displayGifSide = 640;
+
+/// [picture] (any picture) made for others' displays, and what it is
+/// ([pictureJpeg] or [pictureGif], board_protocol.dart): a GIF as it is, a
+/// still one as a JPEG no bigger than the screen; either small enough for
+/// the unit, and for a message no longer than [maxChars] in base64. Null if
+/// it isn't a picture, or won't go that small. Slow: run it off the UI's
+/// isolate.
+(Uint8List, int)? displayPicture((Uint8List, int) pictureAndMax) {
+  final (picture, maxChars) = pictureAndMax;
+  final room = min(pictureMaxBytes, maxChars <= 0 ? 1 << 20 : ((maxChars - 96) * 3) ~/ 4);
+  final gif = picture.length > 10 && picture[0] == 0x47 && picture[1] == 0x49 && picture[2] == 0x46;     // "GIF"
+  if (gif) {
+    // Played as it is, its frames as big as it says: kept within what the
+    // unit has room for
+    final w = picture[6] | (picture[7] << 8), h = picture[8] | (picture[9] << 8);
+    return picture.length <= room && w <= displayGifSide && h <= displayGifSide ? (picture, pictureGif) : null;
+  }
+  final decoded = img.decodeImage(picture);
+  if (decoded == null) return null;
+  final upright = img.bakeOrientation(decoded);
+  final big = max(upright.width, upright.height);
+  final sized = big > displayPictureSide
+      ? img.copyResize(upright,
+          width: upright.width >= upright.height ? displayPictureSide : null,
+          height: upright.height > upright.width ? displayPictureSide : null,
+          interpolation: img.Interpolation.average)
+      : upright;
+  for (final quality in const [85, 72, 60, 48]) {
+    final jpeg = img.encodeJpg(sized, quality: quality);
+    if (jpeg.length <= room) return (jpeg, pictureJpeg);
   }
   return null;
 }

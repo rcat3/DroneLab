@@ -14,17 +14,17 @@ import 'patterns.dart';
 /// server or over direct comms), or one person.
 enum ConversationKind { everyone, server, direct, person }
 
-/// A line in a conversation: a text, or a command for a Terminal or Vibe toys
+/// A line in a conversation: a text, or a command for a display or Vibe toys
 /// devices, ours or someone else's.
 class ConversationEntry {
-  static const text = 'text', terminal = 'terminal', vibe = 'vibe';
+  static const text = 'text', display = 'display', vibe = 'vibe';
   static const photo = 'photo';     // body: the picture's file, in Conversations.photosPath
 
   final DateTime time;
   final String from;        // who sent it ('' for ours): their name, then
   String who;               // and who they are (KnownPerson.id), '' if not known
   final bool mine;
-  final String kind;        // text, terminal or vibe
+  final String kind;        // text, photo, display or vibe
   final String body;        // the text, or what the command did, in words
   final bool done;          // a command: taken by the board it went to
   DateTime updated;         // a Vibe entry's last level, for running them together
@@ -354,6 +354,16 @@ String? _describeSet(Uint8List op, String your) {
   return out.toString();
 }
 
+/// How long something's on a display, in words: " for 30 s", or nothing
+/// for until they move on.
+String _forHowLong(int seconds) => seconds == 0
+    ? ''
+    : seconds < 60
+        ? ' for $seconds s'
+        : seconds % 60 == 0
+            ? ' for ${seconds ~/ 60} min'
+            : ' for ${seconds ~/ 60} min ${seconds % 60} s';
+
 /// What a command did, in words, for a conversation: [op] is the command
 /// from what to do on, as the board passes it on. [mine] for ones we sent
 /// ("their"), else for ones sent us ("your").
@@ -368,8 +378,14 @@ String describeCommand(Uint8List op, {required bool mine}) {
     case OthersCommand.vibePart:
       return 'sent $your toys a pattern';
     case OthersCommand.message:
-      final text = op.length > 3 ? utf8.decode(op.sublist(3), allowMalformed: true) : '';
-      return 'put “$text” on $your display';
+      final text = op.length > 5 ? utf8.decode(op.sublist(5), allowMalformed: true) : '';
+      return 'put “$text” on $your display${op.length > 4 ? _forHowLong(op[3] | (op[4] << 8)) : ''}';
+    case OthersCommand.picture:
+      if (op.length < 4) return 'put a picture on $your display';
+      final which = op[3] == OthersCommand.pictureBuiltIn
+          ? '“${utf8.decode(op.sublist(4), allowMalformed: true)}”'
+          : 'a picture';
+      return 'put $which on $your display${_forHowLong(op[1] | (op[2] << 8))}';
     case OthersCommand.clear:
       return 'cleared $your display';
     default:

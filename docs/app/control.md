@@ -1,6 +1,6 @@
 # HiveMind Control
 
-HiveMind Control runs parts of other drones' units, through those units: over the server or over direct mode, wherever they are.  It has areas: **Toys**, their [Vibe toys](../features/toys.md) for now (e-stim and machines are planned), and **Display unit**, words on their [Terminal](text.md#their-display) (pictures and sounds are planned).  It only works on what their wearers have allowed you (see [Permissions](permissions.md)); if they haven't, your first command asks them.
+HiveMind Control runs parts of other drones' units, through those units: over the server or over direct mode, wherever they are.  It has areas: **Toys**, their [Vibe toys](../features/toys.md) for now (e-stim and machines are planned), and **Display unit**, words and pictures on their [display](text.md#their-display) (sounds are planned).  It only works on what their wearers have allowed you (see [Permissions](permissions.md)); if they haven't, your first command asks them.
 
 <img src="../images/app/control.png" width="300" alt="Toys for RCat-Linux2: the Vibe tab, STOP, and Levels with V1 and V2 ganged at 12, V3 at 6, and V4 greyed out">
 
@@ -8,7 +8,7 @@ Back to [the app](README.md).  Running *your own* toys is on your unit's [Toys](
 
 ## Sending
 
-The **HiveMind Control button** (a remote) at the top of a [Text](text.md) conversation opens a menu of what you can control, by area: under *Toys*, **Vibe**, their toys; under *Display unit*, **Terminal**, words on their display.  It's for whoever that conversation is with, which it says at the top.  From a person's conversation it's their unit, sent both ways they can be reached (their unit does each once, by whichever way it allows); from a channel's, the units of everyone in it; from *Broadcast*, everyone who can hear you.
+The **HiveMind Control button** (a remote) at the top of a [Text](text.md) conversation opens a menu of what you can control, by area: under *Toys*, **Vibe**, their toys; under *Display unit*, **Display**, words or a picture on their display.  It's for whoever that conversation is with, which it says at the top.  From a person's conversation it's their unit, sent both ways they can be reached (their unit does each once, by whichever way it allows); from a channel's, the units of everyone in it; from *Broadcast*, everyone who can hear you.
 
 <img src="../images/app/control_menu.png" width="300" alt="The HiveMind Control menu in a conversation: Vibe under Toys, Terminal under Display unit">
 
@@ -40,7 +40,7 @@ What you set stays set on their toys until it's changed or stopped, even once yo
 
 ## Display unit
 
-Picking **Terminal** puts words on their unit's display: see [Their display](text.md#their-display).
+Picking **Display** puts words or a picture on their unit's display, for a while or until they move on: see [Their display](text.md#their-display).
 
 ## Who can control your toys
 

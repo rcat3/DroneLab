@@ -101,6 +101,11 @@ int media_find(const char *name)
     return -1;
 }
 
+size_t media_built_in_count(void)
+{
+    return builtin_image_count;
+}
+
 #if RCAT_HAVE_FILESYSTEM
 
 static bool has_extension(const char *file_name, const char *ext)
@@ -249,8 +254,82 @@ static void draw_into(lv_draw_buf_t *buf, const void *src, int32_t src_w, int32_
     lv_obj_delete(canvas);
 }
 
-/* Decode a static image and draw it, scaled for the screen, into an RGB565
- * buffer. */
+/* Decode a static image, from LVGL's path to it, and draw it, scaled for the
+ * screen (as if made for a prepared_size screen, if it's not 0), into an
+ * RGB565 buffer. what names it, for what's printed. */
+static const void *decode_static(const char *lv_path, const char *what, int32_t prepared_size, int32_t screen_size)
+{
+    lv_image_header_t header;
+    if (lv_image_decoder_get_info(lv_path, &header) != LV_RESULT_OK
+        || header.w == 0 || header.h == 0)
+    {
+        printf("images: can't read %s (BMP files must be 16, 24 or 32-bit)\n", what);
+        return NULL;
+    }
+    // Some decoders report success for files they can't actually decode (the
+    // BMP decoder does for 1/4/8-bit files), which crashes LVGL when drawn.
+    switch (header.cf)
+    {
+        case LV_COLOR_FORMAT_RGB565:
+        case LV_COLOR_FORMAT_RGB565A8:
+        case LV_COLOR_FORMAT_RGB888:
+        case LV_COLOR_FORMAT_XRGB8888:
+        case LV_COLOR_FORMAT_ARGB8888:
+            break;
+        case LV_COLOR_FORMAT_RAW:
+            // A JPEG decoder may report RAW here and decode to RGB888.
+            if (has_extension(lv_path, ".jpg") || has_extension(lv_path, ".jpeg"))
+            {
+                break;
+            }
+            // fall through
+        default:
+            printf("images: can't read %s (BMP files must be 16, 24 or 32-bit)\n", what);
+            return NULL;
+    }
+    if ((uint32_t)header.w * header.h > MAX_SOURCE_PIXELS)
+    {
+        printf("images: %s is too big (%dx%d), use 1024x1024 or less\n", what, header.w, header.h);
+        return NULL;
+    }
+
+    int32_t reference = reference_size(header.w, header.h, prepared_size);
+    int32_t w = LV_MAX(1, (header.w * screen_size + reference / 2) / reference);
+    int32_t h = LV_MAX(1, (header.h * screen_size + reference / 2) / reference);
+
+    // First decode the image at its own size onto black (the tile
+    // background). The BMP decoder hands over the image a strip at a time,
+    // which LVGL can copy but not scale, so scaling is a second step from the
+    // decoded copy.
+    lv_draw_buf_t *decoded = lv_draw_buf_create(header.w, header.h, LV_COLOR_FORMAT_RGB565, LV_STRIDE_AUTO);
+    if (decoded == NULL)
+    {
+        printf("images: not enough memory for %s\n", what);
+        return NULL;
+    }
+    lv_draw_buf_clear(decoded, NULL);
+    draw_into(decoded, lv_path, header.w, header.h, LV_SCALE_NONE, LV_SCALE_NONE);
+
+    if (w == (int32_t)header.w && h == (int32_t)header.h)
+    {
+        return decoded;
+    }
+
+    lv_draw_buf_t *scaled = lv_draw_buf_create(w, h, LV_COLOR_FORMAT_RGB565, LV_STRIDE_AUTO);
+    if (scaled == NULL)
+    {
+        printf("images: not enough memory for %s\n", what);
+        lv_draw_buf_destroy(decoded);
+        return NULL;
+    }
+    lv_draw_buf_clear(scaled, NULL);
+    draw_into(scaled, decoded, header.w, header.h,
+              LV_SCALE_NONE * w / header.w, LV_SCALE_NONE * h / header.h);
+    lv_draw_buf_destroy(decoded);
+    return scaled;
+}
+
+/* A static image from a file on storage. */
 static const void *load_static(const char *path, int32_t screen_size)
 {
     char lv_path[MAX_PATH_LEN + sizeof(LVGL_DRIVE)];
@@ -266,75 +345,7 @@ static const void *load_static(const char *path, int32_t screen_size)
     {
         *c = (char)tolower((unsigned char)*c);
     }
-
-    lv_image_header_t header;
-    if (lv_image_decoder_get_info(lv_path, &header) != LV_RESULT_OK
-        || header.w == 0 || header.h == 0)
-    {
-        printf("images: can't read %s (BMP files must be 16, 24 or 32-bit)\n", path);
-        return NULL;
-    }
-    // Some decoders report success for files they can't actually decode (the
-    // BMP decoder does for 1/4/8-bit files), which crashes LVGL when drawn.
-    switch (header.cf)
-    {
-        case LV_COLOR_FORMAT_RGB565:
-        case LV_COLOR_FORMAT_RGB565A8:
-        case LV_COLOR_FORMAT_RGB888:
-        case LV_COLOR_FORMAT_XRGB8888:
-        case LV_COLOR_FORMAT_ARGB8888:
-            break;
-        case LV_COLOR_FORMAT_RAW:
-            // A JPEG decoder may report RAW here and decode to RGB888.
-            if (has_extension(path, ".jpg") || has_extension(path, ".jpeg"))
-            {
-                break;
-            }
-            // fall through
-        default:
-            printf("images: can't read %s (BMP files must be 16, 24 or 32-bit)\n", path);
-            return NULL;
-    }
-    if ((uint32_t)header.w * header.h > MAX_SOURCE_PIXELS)
-    {
-        printf("images: %s is too big (%dx%d), use 1024x1024 or less\n", path, header.w, header.h);
-        return NULL;
-    }
-
-    int32_t reference = reference_size(header.w, header.h, prepared_size_of_file(path));
-    int32_t w = LV_MAX(1, (header.w * screen_size + reference / 2) / reference);
-    int32_t h = LV_MAX(1, (header.h * screen_size + reference / 2) / reference);
-
-    // First decode the image at its own size onto black (the tile
-    // background). The BMP decoder hands over the image a strip at a time,
-    // which LVGL can copy but not scale, so scaling is a second step from the
-    // decoded copy.
-    lv_draw_buf_t *decoded = lv_draw_buf_create(header.w, header.h, LV_COLOR_FORMAT_RGB565, LV_STRIDE_AUTO);
-    if (decoded == NULL)
-    {
-        printf("images: not enough memory for %s\n", path);
-        return NULL;
-    }
-    lv_draw_buf_clear(decoded, NULL);
-    draw_into(decoded, lv_path, header.w, header.h, LV_SCALE_NONE, LV_SCALE_NONE);
-
-    if (w == (int32_t)header.w && h == (int32_t)header.h)
-    {
-        return decoded;
-    }
-
-    lv_draw_buf_t *scaled = lv_draw_buf_create(w, h, LV_COLOR_FORMAT_RGB565, LV_STRIDE_AUTO);
-    if (scaled == NULL)
-    {
-        printf("images: not enough memory for %s\n", path);
-        lv_draw_buf_destroy(decoded);
-        return NULL;
-    }
-    lv_draw_buf_clear(scaled, NULL);
-    draw_into(scaled, decoded, header.w, header.h,
-              LV_SCALE_NONE * w / header.w, LV_SCALE_NONE * h / header.h);
-    lv_draw_buf_destroy(decoded);
-    return scaled;
+    return decode_static(lv_path, path, prepared_size_of_file(path), screen_size);
 }
 
 size_t media_load_folder(const char *path, int32_t screen_size)
@@ -404,11 +415,79 @@ size_t media_load_folder(const char *path, int32_t screen_size)
     return loaded_count;
 }
 
+#endif
+
+#if RCAT_HAVE_FILESYSTEM && LV_USE_FS_MEMFS
+
+/* A GIF in memory, wrapped in an image descriptor for lv_gif, with the scale
+ * to show it at. */
+static const void *wrap_gif(const uint8_t *data, size_t len, int32_t screen_size, uint16_t *scale)
+{
+    if (len <= 10 || memcmp(data, "GIF", 3) != 0)
+    {
+        return NULL;
+    }
+    lv_image_dsc_t *dsc = lv_malloc_zeroed(sizeof(*dsc));
+    if (dsc == NULL)
+    {
+        return NULL;
+    }
+    dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+    dsc->header.cf = LV_COLOR_FORMAT_RAW;
+    dsc->header.w = data[6] | (data[7] << 8);
+    dsc->header.h = data[8] | (data[9] << 8);
+    dsc->data_size = len;
+    dsc->data = data;
+    int32_t reference = reference_size(dsc->header.w, dsc->header.h, 0);
+    *scale = (uint16_t)(LV_SCALE_NONE * screen_size / reference);
+    return dsc;
+}
+
+const void *media_decode_memory(const uint8_t *data, size_t len, bool is_gif, int32_t screen_size, uint16_t *scale)
+{
+    *scale = LV_SCALE_NONE;
+    if (is_gif)
+    {
+        return wrap_gif(data, len, screen_size, scale);
+    }
+    lv_fs_path_ex_t path;
+    lv_fs_make_path_from_buffer(&path, LV_FS_MEMFS_LETTER, data, (uint32_t)len, "jpg");
+    return decode_static((const char *)&path, "a picture sent", 0, screen_size);
+}
+
+void media_free_decoded(const void *src, bool is_gif)
+{
+    if (src == NULL)
+    {
+        return;
+    }
+    if (is_gif)
+    {
+        lv_free((void *)src);   // the descriptor; the data's the caller's
+    }
+    else
+    {
+        lv_draw_buf_destroy((lv_draw_buf_t *)src);
+    }
+}
+
 #else
 
+#if !RCAT_HAVE_FILESYSTEM
 size_t media_load_folder(const char *path, int32_t screen_size)
 {
     return 0;
+}
+#endif
+
+const void *media_decode_memory(const uint8_t *data, size_t len, bool is_gif, int32_t screen_size, uint16_t *scale)
+{
+    *scale = LV_SCALE_NONE;
+    return NULL;
+}
+
+void media_free_decoded(const void *src, bool is_gif)
+{
 }
 
 #endif

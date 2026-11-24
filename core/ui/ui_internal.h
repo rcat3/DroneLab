@@ -44,6 +44,17 @@ int32_t ui_px(int32_t design_px);
  * background, for pages that show images or effects rather than controls. */
 lv_obj_t *ui_feature_add_page(ui_feature_t *feature, const char *name, bool black);
 
+/* Put a page in a feature while it runs, at a place in the row (from 0), or
+ * take one out; what's on screen stays, or for the page taken out, the next
+ * one comes on. */
+lv_obj_t *ui_feature_insert_page(ui_feature_t *feature, size_t at, const char *name, bool black);
+void ui_feature_remove_page(ui_feature_t *feature, lv_obj_t *page);
+size_t ui_feature_page_count(const ui_feature_t *feature);
+lv_obj_t *ui_page_of(ui_feature_t *feature, size_t page);     // NULL if there's no such page
+
+/* ui_show_for(), by the page. Returns false if it isn't one. */
+bool ui_show_page_for(lv_obj_t *page, uint32_t seconds);
+
 /* The feature and page currently on screen. */
 bool ui_feature_is_current(const ui_feature_t *feature);
 lv_obj_t *ui_current_page(void);
@@ -87,5 +98,13 @@ int ui_find_startup_choice(const char *value);
 
 /* True while the images feature is on screen (the voice ring shows over it). */
 bool feature_images_on_screen(void);
+
+/* For app/pictures.c: the page of a picture built into the firmware, by its
+ * name (NULL if there's none); and a page for a sent picture (what
+ * media_decode_memory() made of it), before the blank page at the end, or
+ * taken out. NULL without the Images feature. */
+lv_obj_t *feature_images_built_in_page(const char *name);
+lv_obj_t *feature_images_add_received(const void *src, bool is_gif, uint16_t scale);
+void feature_images_remove_received(lv_obj_t *page);
 
 #endif

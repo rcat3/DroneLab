@@ -22,6 +22,14 @@ void ui_current(size_t *feature, size_t *page);
 /* Bring a page on screen, as if it had been swiped to. */
 void ui_show(size_t feature, size_t page);
 
+/* Bring a page on screen for others (others.h's Display commands), and go
+ * back to what was on screen before after seconds, or with ui_go_back();
+ * 0 seconds stays until the wearer moves on, though ui_go_back() still goes
+ * back. Once the wearer moves on, it's left where it is. Another, while the
+ * first's still showing, goes back to what was before the first. */
+void ui_show_for(size_t feature, size_t page, uint32_t seconds);
+void ui_go_back(void);
+
 /* On a new unit, just set up: ask whether to pair a phone now. Does nothing
  * with the Phone App off, or without one. Call after ui_init(). */
 void ui_offer_first_pairing(void);

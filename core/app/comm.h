@@ -126,6 +126,16 @@
  *                  to RCAT_HAL_PATTERNS_SIZE bytes in all: kept in flash,
  *                  for the Toys feature's Patterns page (from COMM_VERSION
  *                  18).
+ *     0x1A picture: 1A, flags (bit 0 the start, bit 1 the end, bit 2 asks
+ *                  for an ack), then for the start: its length (4, little
+ *                  endian, at most PICTURES_MAX_BYTES), what it is
+ *                  (PICTURES_JPEG or PICTURES_GIF) and its SHA-256 (32); for
+ *                  the end, nothing; or else the next piece of it, in order:
+ *                  a picture someone's sent, over the server, for this
+ *                  board's screen (pictures.h), once the command to show it's
+ *                  been taken (0x0F heard, done). Sent as avatars are, a
+ *                  few pieces at a time, waiting for the ack of the last of
+ *                  each few (from COMM_VERSION 20).
  *     0x0E update: 0E, flags (bit 0 the start, bit 1 the end, bit 2 asks
  *                  for an ack), then for the start: the firmware's length
  *                  (4, little endian), the board it's for
@@ -147,6 +157,10 @@
  *                  1 it's the right size), then how many bytes have come,
  *                  32 bits little endian. For each piece that asks, and for
  *                  the last.
+ *     0x1A picture ack: 1A, flags (bit 0 done: it's the end's, bit 1 all's
+ *                  well: for the end, it's here and came to its hash), then
+ *                  how much of it's come (4, little endian). For each piece
+ *                  that asks, and the end.
  *     0x0A recorded sound: as 0x01 sound, while recording, at 48 kb/s.
  *     0x07 direct sound: 07, the sender's id (32 bits, little endian), seq
  *                  (16), flags, then the Opus packet: another board's voice,
@@ -307,8 +321,10 @@
  *  18  the wearer's favourite patterns from the app (0x19), with
  *      /version's "favs" and "favmax"
  *  19  the wearer's own Vibe commands, for their toys to follow along
- *      (0x0B's bit 1) */
-#define COMM_VERSION            19
+ *      (0x0B's bit 1)
+ *  20  Display commands (others.h): words and pictures on screen for a
+ *      while, and pictures sent over the server, from the phone (0x1A) */
+#define COMM_VERSION            20
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4
@@ -404,7 +420,7 @@ bool comm_phone_connected(void);
 typedef enum
 {
     COMM_HEARD_TEXT,        // a text, for the app only
-    COMM_HEARD_TERMINAL,    // a command for the Terminal
+    COMM_HEARD_DISPLAY,     // a command for the Display unit's screen: words or a picture
     COMM_HEARD_VIBE,        // a command for Vibe toys
     COMM_HEARD_TEXT_PART,   // a part of a long text, for the app to put together
     COMM_HEARD_CALL,        // a call's signal (OTHERS_CALL), for the app

@@ -16,11 +16,11 @@ void main() {
     final p = make()..boardState(state());
     var told = 0;
     p.onNew = (_) => told++;
-    p.refused(Capabilities.terminal, key, 'Ann', 'k:1', everyone: false, channel: false, what: 'hi');
-    p.refused(Capabilities.terminal, key, 'Ann', 'k:1', everyone: false, channel: false, what: 'hi again');
+    p.refused(Capabilities.display, key, 'Ann', 'k:1', everyone: false, channel: false, what: 'hi');
+    p.refused(Capabilities.display, key, 'Ann', 'k:1', everyone: false, channel: false, what: 'hi again');
     p.refused(Capabilities.vibe, key, 'Ann', 'k:1', everyone: false, channel: false, what: 'vibrate 3');
     expect(p.requests.length, 1);
-    expect(p.requests.first.caps, {Capabilities.terminal, Capabilities.vibe});
+    expect(p.requests.first.caps, {Capabilities.display, Capabilities.vibe});
     expect(told, 2);
   });
 
@@ -32,15 +32,15 @@ void main() {
     p.refused(Capabilities.vibe, key, 'Ann', 'k:1', everyone: true, channel: false, what: '');
     expect(p.requests, isEmpty);
     p.boardState(state(allowed: true));
-    p.refused(Capabilities.terminal, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
+    p.refused(Capabilities.display, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
     expect(p.requests, isEmpty);
   });
 
   test('declined, it does not ask again for that; allowed on the unit, the request goes', () {
     final p = make()..boardState(state());
-    p.refused(Capabilities.terminal, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
+    p.refused(Capabilities.display, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
     p.decline(p.requests.first);
-    p.refused(Capabilities.terminal, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
+    p.refused(Capabilities.display, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
     expect(p.requests, isEmpty);
     expect(p.declined.length, 1);
     p.refused(Capabilities.vibe, key, 'Ann', 'k:1', everyone: false, channel: false, what: '');
@@ -51,7 +51,7 @@ void main() {
 
   test('the log says how each command came and what came of it', () {
     final p = make()..boardState(state(toys: 0));
-    p.heard(Capabilities.terminal, key, 'Ann', 'k:1',
+    p.heard(Capabilities.display, key, 'Ann', 'k:1',
         done: false, muted: false, direct: true, scope: 2, what: 'put “hi” on your display');
     p.heard(Capabilities.vibe, key, 'Ann', 'k:1',
         done: false, muted: false, direct: false, scope: 1, what: 'set your toys on V1 to 4');

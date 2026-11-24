@@ -25,7 +25,7 @@ import 'widgets.dart';
 
 /// HiveMind by text: a conversation for everyone who can hear us, for each
 /// channel, and for each person, picked from a list as in a chat app. Each
-/// has its own texts, and its own way to put words on their displays and to
+/// has its own texts, and its own way to put words or pictures on their displays and to
 /// control their toys.
 class TextPage extends StatelessWidget {
   final CommController comm;
@@ -209,7 +209,7 @@ Future<void> deleteConversation(BuildContext context, CommController comm, Conve
 }
 
 /// One conversation: its texts and commands, a box to text, and buttons to
-/// put words on their displays or control their toys.
+/// put words or pictures on their displays or control their toys.
 class ConversationPage extends StatefulWidget {
   final CommController comm;
   final String conversationKey;
@@ -618,7 +618,7 @@ class _Entry extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(e.kind == ConversationEntry.terminal ? Icons.terminal : Icons.vibration, size: 14, color: Kc.muted),
+          Icon(e.kind == ConversationEntry.display ? Icons.monitor : Icons.vibration, size: 14, color: Kc.muted),
           const SizedBox(width: 6),
           Flexible(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -897,110 +897,3 @@ void _viewPhoto(BuildContext context, File f) => Navigator.of(context).push(Mate
           appBar: AppBar(backgroundColor: Colors.black),
           body: InteractiveViewer(maxScale: 6, child: Center(child: Image.file(f))),
         )));
-
-/// Words for their displays' Terminals, as our own Terminal takes them: a
-/// letter size, added on a line or in place of what's there, brought on
-/// screen or not; and clearing them. Kept for next time while the app runs.
-int _size = 0;
-bool _append = true;
-bool _show = true;
-
-Future<void> showTerminalSheet(BuildContext context, CommController comm, Conversation c) {
-  final text = TextEditingController();
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    builder: (sheet) => StatefulBuilder(
-      builder: (sheet, setState) {
-        const sizes = ['AUTO', '8', '16', '24', '32', '40', '48'];
-        void send() {
-          final t = text.text.trim();
-          if (t.isEmpty) return;
-          comm.sendCommandTo(
-              c, comm.newCommand(OthersCommand.terminal(t, append: _append, show: _show, size: _size)));
-          Navigator.pop(sheet);
-        }
-
-        // Compact, with Send beside the words, so it all fits over the keyboard
-        return Padding(
-          padding: EdgeInsets.fromLTRB(16, 0, 16, 8 + MediaQuery.viewInsetsOf(sheet).bottom),
-          child: SafeArea(
-            child: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const SectionHeader('Their display'),
-                Text(
-                    "On ${c.kind == ConversationKind.person ? "${c.title}'s display" : 'the displays of ${c.audience}'}, "
-                    'as typed: no name is added. It only shows if they allow you; if not, it asks them.',
-                    style: const TextStyle(color: Kc.muted, fontSize: 13)),
-                const SizedBox(height: 10),
-                Row(children: [
-                  Expanded(
-                    child: TextField(
-                      controller: text,
-                      autofocus: true,
-                      maxLength: OthersCommand.messageMax,
-                      minLines: 1,
-                      maxLines: 3,
-                      textCapitalization: TextCapitalization.characters,
-                      style: Kc.term(16, color: Kc.green),
-                      decoration: const InputDecoration(hintText: 'TYPE A MESSAGE', counterText: '', isDense: true),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    tooltip: 'Send',
-                    icon: const Icon(Icons.send),
-                    style: IconButton.styleFrom(backgroundColor: Kc.pink, foregroundColor: Kc.bg),
-                    onPressed: send,
-                  ),
-                ]),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(children: [
-                    const Icon(Icons.format_size, color: Kc.muted, semanticLabel: 'Letter size'),
-                    for (var i = 0; i < sizes.length; i++)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4),
-                        child: ChoiceChip(
-                          label: Text(sizes[i]),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          labelPadding: EdgeInsets.zero,
-                          selected: _size == i,
-                          onSelected: (_) => setState(() => _size = i),
-                        ),
-                      ),
-                  ]),
-                ),
-                const SizedBox(height: 8),
-                SegmentedButton<bool>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: true, label: Text('ADD A LINE')),
-                    ButtonSegment(value: false, label: Text('REPLACE')),
-                  ],
-                  selected: {_append},
-                  onSelectionChanged: (sel) => setState(() => _append = sel.first),
-                ),
-                Row(children: [
-                  TextButton.icon(
-                    icon: const Icon(Icons.clear_all),
-                    label: const Text('Clear their display'),
-                    onPressed: () {
-                      comm.sendCommandTo(c, comm.newCommand(OthersCommand.clearTerminal()));
-                      Navigator.pop(sheet);
-                    },
-                  ),
-                  const Spacer(),
-                  const Text('Switch to it'),
-                  Switch(value: _show, onChanged: (on) => setState(() => _show = on)),
-                ]),
-              ]),
-            ),
-          ),
-        );
-      },
-    ),
-  );
-}
