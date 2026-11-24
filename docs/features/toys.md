@@ -53,7 +53,7 @@ Two more settings in Permissions ignore some commands whoever they're from: **Br
 
 Someone's known by their identity, not their name: their DroneLab app makes a key pair the first time it runs and signs every command with it, and your board checks the signature (or your app does, for those that come over the server).  It's the same person whether they're heard in cloud or direct mode, and the app marks someone new using a name it already knows with ⚠: it's someone else with that name.  A command can't be recorded and played back later either, as each is numbered and an old one's dropped.
 
-Your board also tells the others what you let them control: Vibe toys while they're on *Ask* or *Accept* and a toy is connected, with which channels your toys follow, and the [Terminal](terminal.md#messages-from-others) while it isn't *Off*.  It's said in its hello over direct mode, and by your app over the server, for their apps to grey out what you don't allow (see [What others see](../app/permissions.md#what-others-see)).  It doesn't say who you've allowed.
+Your board also tells the others what you let them control: Vibe toys while they're on *Ask* or *Anyone* and a toy is connected, with which channels your toys follow, and the [Terminal](terminal.md#messages-from-others) while it isn't *Off*.  It's said in its hello over direct mode, and by your app over the server, for their apps to grey out what you don't allow (see [What others see](../app/permissions.md#what-others-see)).  It doesn't say who you've allowed.
 
 A pattern plays if your board has one by the same name: the six built-in ones always do, and patterns on the SD card only if yours has one with that name too.
 
