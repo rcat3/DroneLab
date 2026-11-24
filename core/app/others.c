@@ -15,11 +15,11 @@
 #include <string.h>
 
 #include "app/direct.h"
-#include "app/lovense.h"
 #include "app/message.h"
 #include "app/patterns.h"
 #include "app/reactive.h"
 #include "app/settings.h"
+#include "app/toys.h"
 #include "crypto/monocypher-ed25519.h"
 #include "hal.h"
 #include "lvgl.h"
@@ -38,7 +38,6 @@
 #define COUNTER_AT          33
 #define SCOPE_AT            39
 #define OP                  OTHERS_HEADER_LEN   // where what to do is
-#define LEVEL_TOP           20          // the levels commands give, as Lovense's patterns
 #define TERMINAL_FEATURE    "Terminal"
 #define MUTED_MAX           24
 
@@ -326,36 +325,7 @@ static seen_t *seen_entry(const uint8_t *key, uint64_t counter, bool *again)
 
 /* ----- What they do ----- */
 
-static bool connected(size_t slot)
-{
-    const lovense_device_t *d = lovense_device(slot);
-    return d != NULL && d->state == LOVENSE_CONNECTED;
-}
-
-static void set_levels(uint8_t kind, uint8_t level)
-{
-    if (level > LEVEL_TOP)
-    {
-        level = LEVEL_TOP;
-    }
-    for (size_t slot = 0; slot < LOVENSE_MAX_DEVICES; slot++)
-    {
-        if (!connected(slot))
-        {
-            continue;
-        }
-        const lovense_device_t *d = lovense_device(slot);
-        for (uint8_t m = 0; m < d->motor_count; m++)
-        {
-            if (kind == OTHERS_ALL_MOTORS || d->motors[m].kind == (lovense_motor_kind_t)kind)
-            {
-                lovense_set_level(slot, m, (uint8_t)((level * d->motors[m].max + LEVEL_TOP / 2) / LEVEL_TOP));
-            }
-        }
-    }
-}
-
-static void play(const uint8_t *name, size_t len)
+static void play(uint8_t channels, const uint8_t *name, size_t len)
 {
     int pattern = -1;
     if (len > 0)
@@ -373,24 +343,26 @@ static void play(const uint8_t *name, size_t len)
             return;     // not one this board has
         }
     }
-    for (size_t slot = 0; slot < LOVENSE_MAX_DEVICES; slot++)
-    {
-        if (connected(slot))
-        {
-            lovense_play(slot, pattern);
-        }
-    }
+    toys_play(channels, pattern);
 }
 
-/* As the Lovense feature's React page, or the remote's. */
-static void react(uint8_t mode)
+/* As the Toys feature's React page, or the remote's, on those channels:
+ * there's one reaction, for every channel that follows it. */
+static void react(uint8_t channels, uint8_t mode)
 {
     if (mode >= REACTIVE_COUNT || !reactive_available((reactive_mode_t)mode))
     {
         mode = REACTIVE_OFF;
     }
-    reactive_set_mode((reactive_mode_t)mode);
-    lovense_set_reactive(mode != REACTIVE_OFF);
+    toys_react(channels, mode != REACTIVE_OFF);
+    if (mode != REACTIVE_OFF)
+    {
+        reactive_set_mode((reactive_mode_t)mode);
+    }
+    else if (!toys_reacting())
+    {
+        reactive_set_mode(REACTIVE_OFF);
+    }
 }
 
 /* On the Terminal, as its own controls would put it: as it is, added on a
@@ -429,14 +401,14 @@ static int kind_of(const uint8_t *what, size_t len)
 {
     switch (what[0])
     {
-    case OTHERS_STOP:
-    case OTHERS_PATTERN:
-        return OTHERS_LOVENSE;
-    case OTHERS_LEVEL:
-    case OTHERS_SPEED:
-        return len >= 3 ? OTHERS_LOVENSE : -1;
-    case OTHERS_REACT:
-        return len >= 2 ? OTHERS_LOVENSE : -1;
+    case OTHERS_VIBE_STOP:
+        return OTHERS_VIBE;
+    case OTHERS_VIBE_PATTERN:
+        return len >= 2 ? OTHERS_VIBE : -1;
+    case OTHERS_VIBE_LEVEL:
+    case OTHERS_VIBE_SPEED:
+    case OTHERS_VIBE_REACT:
+        return len >= 3 ? OTHERS_VIBE : -1;
     case OTHERS_MESSAGE:
         return len > 3 ? OTHERS_TERMINAL : -1;
     case OTHERS_CLEAR:
@@ -462,24 +434,21 @@ static void run(const uint8_t *what, size_t len)
     const uint8_t *arg = what + 1;
     switch (what[0])
     {
-    case OTHERS_STOP:
-        lovense_stop_all();
+    case OTHERS_VIBE_STOP:
+        toys_stop_all();
         reactive_set_mode(REACTIVE_OFF);
         break;
-    case OTHERS_LEVEL:
-        set_levels(arg[0], arg[1]);
+    case OTHERS_VIBE_LEVEL:
+        toys_set_level(arg[0] & TOYS_ALL_CHANNELS, arg[1]);
         break;
-    case OTHERS_PATTERN:
-        play(arg, len - 1);
+    case OTHERS_VIBE_PATTERN:
+        play(arg[0] & TOYS_ALL_CHANNELS, arg + 1, len - 2);
         break;
-    case OTHERS_SPEED:
-    {
-        uint16_t speed = (uint16_t)(arg[0] | (arg[1] << 8));
-        lovense_set_speed(speed < 25 ? 25 : speed > 300 ? 300 : speed);
+    case OTHERS_VIBE_SPEED:
+        toys_set_speed((uint16_t)(arg[0] | (arg[1] << 8)));
         break;
-    }
-    case OTHERS_REACT:
-        react(arg[0]);
+    case OTHERS_VIBE_REACT:
+        react(arg[0] & TOYS_ALL_CHANNELS, arg[1]);
         break;
     case OTHERS_MESSAGE:
         show_message(arg[0], arg[1], arg + 2, len - 3);
@@ -660,7 +629,7 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
         comm_heard_to_phone(via, from, key, counter, kind, scope, true, what + 1, what_len - 1);
         return;
     }
-    comm_heard_t heard = which == OTHERS_LOVENSE ? COMM_HEARD_LOVENSE : COMM_HEARD_TERMINAL;
+    comm_heard_t heard = which == OTHERS_VIBE ? COMM_HEARD_VIBE : COMM_HEARD_TERMINAL;
     uint8_t bit = (uint8_t)(1u << which);
     bool done = false;
     // To everyone nearby, if it's to the channel in the open direct group
@@ -675,7 +644,7 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
         if (p == NULL)
         {
             p = add(key, from, counter);    // listed either way, to say who's been sending
-            printf("others: %s commands from %s (%s), %s\n", which == OTHERS_LOVENSE ? "Lovense" : "Terminal", from,
+            printf("others: %s commands from %s (%s), %s\n", which == OTHERS_VIBE ? "Vibe" : "Terminal", from,
                    via == COMM_TALK_DIRECT ? "direct" : "server", anyone ? "accepted" : "not allowed yet");
         }
         if (p != NULL && !(p->sent & bit))
@@ -978,17 +947,18 @@ uint32_t others_changes(void)
     return changes;
 }
 
-/* The capabilities, a byte for each kind: how it's open (OTHERS_CAP_*),
- * 0 for not at all. Set on the UI loop, read from any task. */
+/* The capabilities, for each kind: how it's open (OTHERS_CAP_*), 0 for not
+ * at all, and its byte more. Set on the UI loop, read from any task. */
 static uint8_t caps_how[OTHERS_KIND_COUNT];
+static uint8_t caps_data[OTHERS_KIND_COUNT];
 
-/* Whether a Lovense device is connected, or on its way to it. */
-static bool lovense_any(void)
+/* Whether a toy is connected, or on its way to it. */
+static bool toys_any(void)
 {
-    for (size_t i = 0; i < LOVENSE_MAX_DEVICES; i++)
+    for (size_t i = 0; i < TOYS_MAX_DEVICES; i++)
     {
-        const lovense_device_t *d = lovense_device(i);
-        if (d != NULL && (d->state == LOVENSE_CONNECTED || d->state == LOVENSE_CONNECTING || d->state == LOVENSE_LOST))
+        const toy_t *t = toys_device(i);
+        if (t != NULL && (t->state == TOY_CONNECTED || t->state == TOY_CONNECTING || t->state == TOY_LOST))
         {
             return true;
         }
@@ -1002,17 +972,20 @@ static void update_capabilities(void)
     {
         others_permission_t p = others_permission((others_kind_t)k);
         uint8_t how = p == OTHERS_ACCEPT ? OTHERS_CAP_OPEN : p == OTHERS_ASK ? OTHERS_CAP_ASK : 0;
-        if (k == OTHERS_LOVENSE && !lovense_any())
+        uint8_t data = 0;
+        if (k == OTHERS_VIBE)
         {
-            how = 0;
+            how = toys_any() ? how : 0;
+            data = toys_channels_mapped();
         }
         __atomic_store_n(&caps_how[k], how, __ATOMIC_RELAXED);
+        __atomic_store_n(&caps_data[k], data, __ATOMIC_RELAXED);
     }
 }
 
 size_t others_capabilities(uint8_t out[OTHERS_CAPS_MAX])
 {
-    static const uint8_t ids[OTHERS_KIND_COUNT] = { [OTHERS_LOVENSE] = OTHERS_CAP_LOVENSE,
+    static const uint8_t ids[OTHERS_KIND_COUNT] = { [OTHERS_VIBE] = OTHERS_CAP_VIBE,
                                                     [OTHERS_TERMINAL] = OTHERS_CAP_TERMINAL };
     size_t at = 1;
     out[0] = 0;
@@ -1023,6 +996,7 @@ size_t others_capabilities(uint8_t out[OTHERS_CAPS_MAX])
         {
             out[at++] = ids[k];
             out[at++] = how;
+            out[at++] = __atomic_load_n(&caps_data[k], __ATOMIC_RELAXED);
             out[0]++;
         }
     }

@@ -1,7 +1,7 @@
 /*
  * Virtual Lovense toys (hal_ble.c): pretend devices the virtual unit finds
  * and connects to as if over Bluetooth, which take Lovense's own commands,
- * so the Lovense feature, and the app's remote for it, can be tried without
+ * so the Toys feature, and the app's remote for it, can be tried without
  * a toy. The panel beside the screen (toys_panel.c) makes them and shows
  * what they're doing.
  */
@@ -12,7 +12,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define TOY_MAX         3       // as many as the Lovense feature connects to
+#define TOY_MAX         3       // as many as the Toys feature connects to (TOYS_MAX_CONNECTED)
 #define TOY_MAX_MOTORS  3
 
 typedef enum

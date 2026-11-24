@@ -379,7 +379,7 @@ typedef enum
 {
     COMM_HEARD_TEXT,        // a text, for the app only
     COMM_HEARD_TERMINAL,    // a command for the Terminal
-    COMM_HEARD_LOVENSE,     // a command for the Lovense devices
+    COMM_HEARD_VIBE,        // a command for Vibe toys
     COMM_HEARD_TEXT_PART,   // a part of a long text, for the app to put together
     COMM_HEARD_CALL,        // a call's signal (OTHERS_CALL), for the app
     COMM_HEARD_INVITE,      // an invitation to a direct channel (OTHERS_INVITE), for the app

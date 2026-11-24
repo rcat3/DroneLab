@@ -4,7 +4,7 @@
 /*
  * Phone remote: the board runs a WiFi hotspot of its own, and a phone that
  * joins it gets a web page that runs the display: which page it shows, its
- * brightness, rotation and startup page, the Lovense devices (their motors,
+ * brightness, rotation and startup page, the toys (their channels,
  * patterns, reactions and Stop), the voice ring, the voice effect and the
  * sound player, and messages for the Terminal. It's switched on in Settings,
  * or at power-up if settings_t's remote_autostart is set.
@@ -17,7 +17,7 @@
  * The hotspot's name and password are made up the first time, and kept. A
  * new password (remote_new_password) shuts out anyone who had the old one.
  *
- * Everything runs from remote_poll(), on the UI loop, like the Lovense
+ * Everything runs from remote_poll(), on the UI loop, like the toys'
  * connections, so the page and the screen change the same things and each
  * shows what the other did.
  */

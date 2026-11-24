@@ -35,7 +35,7 @@ void voice_lab_init(const char *storage_path);
 /* True on boards that can stream (WiFi and a microphone). */
 bool voice_lab_available(void);
 
-/* True between voice_lab_start() and voice_lab_stop(). The Lovense phone
+/* True between voice_lab_start() and voice_lab_stop(). The phone
  * remote stops it, as the WiFi can't do both. */
 bool voice_lab_running(void);
 

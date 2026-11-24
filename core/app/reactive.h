@@ -2,9 +2,9 @@
 #define RCAT_REACTIVE_H
 
 /*
- * Reactions for the Lovense feature: a factor from 0 to 1, worked out from
+ * Reactions for the toys' channels: a factor from 0 to 1, worked out from
  * the microphone or the accelerometer, that scales whatever's driving the
- * motors (a pattern, or the levels set on the rings).
+ * channels that follow it (a pattern, or their levels).
  *
  *   Voice    follows how loud you're talking
  *   Moving   on while you move, off soon after you stop

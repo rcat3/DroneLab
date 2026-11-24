@@ -1,5 +1,5 @@
 /*
- * A feature's "Others" page (see others_page.h), dark like the Lovense
+ * A feature's "Others" page (see others_page.h), dark like the Toys
  * feature's pages: a title, who's taken (Off, Ask or Accept), a row for each
  * person who's sent commands of its kind, and a line saying who sent the
  * last one; and after it, what it ignores, whoever it's from: broadcasts,
@@ -186,7 +186,7 @@ lv_obj_t *ui_others_page_add(ui_feature_t *feature, others_kind_t kind)
     lv_obj_set_style_text_color(p->page, lv_color_white(), 0);
 
     lv_obj_t *title = lv_label_create(p->page);
-    lv_label_set_text(title, kind == OTHERS_LOVENSE ? "Hive Commands" : "Hive Messages");
+    lv_label_set_text(title, kind == OTHERS_VIBE ? "Hive Commands" : "Hive Messages");
     lv_obj_set_style_text_color(title, COLOR_MUTED, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(28));
 
@@ -248,7 +248,7 @@ lv_obj_t *ui_others_page_add(ui_feature_t *feature, others_kind_t kind)
     lv_obj_set_scrollable(p->ignore_page, false);
     lv_obj_set_style_text_color(p->ignore_page, lv_color_white(), 0);
     lv_obj_t *t = lv_label_create(p->ignore_page);
-    lv_label_set_text(t, kind == OTHERS_LOVENSE ? "Hive Commands" : "Hive Messages");
+    lv_label_set_text(t, kind == OTHERS_VIBE ? "Hive Commands" : "Hive Messages");
     lv_obj_set_style_text_color(t, COLOR_MUTED, 0);
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, ui_px(28));
     lv_obj_t *ignore_heading = lv_label_create(p->ignore_page);

@@ -44,7 +44,7 @@ static void set_defaults(settings_t *s)
     s->sound_autoplay = 0;
     s->sound_track[0] = '\0';
     s->voice_effect = 0;
-    s->lovense_release_to_zero = 0;
+    s->toy_release_to_zero = 0;
     s->voice_volume = SETTINGS_DEFAULT_VOICE_VOLUME;
     s->speaker = SETTINGS_SPEAKER_ASK;
 #if RCAT_DEFAULT_COMM_ON
@@ -128,7 +128,7 @@ static bool load(settings_t *out)
     {
         out->voice_loud_room = 0;
     }
-    out->lovense_release_to_zero = out->lovense_release_to_zero ? 1 : 0;
+    out->toy_release_to_zero = out->toy_release_to_zero ? 1 : 0;
     out->remote_autostart = out->remote_autostart ? 1 : 0;
     // visualizer is checked against the list of styles by the UI
     out->comm_on = out->comm_on ? 1 : 0;
@@ -312,9 +312,9 @@ void settings_set_sound_track(const char *name)
     schedule_save();
 }
 
-void settings_set_lovense_release_to_zero(uint8_t enabled)
+void settings_set_toy_release_to_zero(uint8_t enabled)
 {
-    current.lovense_release_to_zero = enabled ? 1 : 0;
+    current.toy_release_to_zero = enabled ? 1 : 0;
     schedule_save();
 }
 

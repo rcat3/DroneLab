@@ -69,6 +69,9 @@ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .speed span { min-width: 110px; text-align: center; color: var(--muted); }
 .list button { display: flex; width: 100%; justify-content: space-between; margin-bottom: 8px;
 border-radius: 16px; text-align: left; }
+.map { display: flex; justify-content: space-between; align-items: center; margin: -2px 12px 8px; }
+.map select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--outline);
+border-radius: 12px; padding: 6px 10px; min-height: 40px; }
 .status { text-align: center; color: var(--muted); min-height: 22px; margin-top: 8px; }
 .empty { color: var(--muted); text-align: center; padding: 18px 0; }
 /* Screen */
@@ -310,7 +313,7 @@ let info = { patterns: [], modes: [], max_connected: 3, message_max: 600, featur
 startup_choices: [], visualizers: [] };
 let tracks = [];
 let state = null;
-let target = -1;                // where patterns play: -1 for every device
+let target = -1;                // where patterns play: -1 for every channel, or a control
 let online = true;
 const dragging = new Set();     // sliders under a finger: the page leaves them alone
 const pending = new Map();      // levels and volumes waiting to go out, newest only
@@ -456,53 +459,57 @@ function queue(key, path, params) {
 pending.set(key, [path, params]);
 sendPending();
 }
-function setLevel(d, m, v, release) {
-const params = { d, m, v };
+// c: the channels, a bit for each, V1 the lowest (toys.h)
+function setLevel(c, v, release) {
+const params = { c, v };
 if (release) params.release = 1;
-queue(d + "." + m, "level", params);
+queue("c" + c, "level", params);
 }
 const connected = () => state ? state.devices.filter(d => d.state === "connected") : [];
+const controls = () => state && connected().length ? state.controls : [];
+const channelNames = c => [0, 1, 2, 3, 4, 5].filter(i => c & (1 << i)).map(i => "V" + (i + 1)).join("+");
+const firstChannel = c => Math.max(0, [0, 1, 2, 3, 4, 5].findIndex(i => c & (1 << i)));
+const driven = c => [0, 1, 2, 3, 4, 5].some(i => (c & (1 << i)) && state.channels[i].driven);
 function fill(slider) {
 const p = slider.max > 0 ? 100 * slider.value / slider.max : 0;
 slider.style.setProperty("--p", p + "%");
 }
-// The motor controls, one card per connected device. They're rebuilt only
-// when the devices or their motors change, so a slider isn't replaced mid-drag.
+// A slider for each of the screen's controls, each driving its channels
+// together. They're rebuilt only when the controls change, so a slider
+// isn't replaced mid-drag.
 let controlsKey = "";
 function showControls() {
-const devs = connected();
-const key = devs.map(d => d.slot + ":" + d.motors.map(m => m.kind + m.max).join()).join("|");
+const list = controls();
+const key = list.map(c => c.label + ":" + c.channels).join("|");
 const box = $("controls");
 if (key !== controlsKey) {
 controlsKey = key;
 box.replaceChildren();
-if (devs.length === 0) {
-box.append(el("div", "card empty", "Nothing connected yet. Search for devices below."));
-}
-for (const d of devs) {
+if (list.length === 0) {
+box.append(el("div", "card empty", "Nothing connected yet. Search for toys below."));
+} else {
 const card = el("div", "card");
-card.id = "dev" + d.slot;
 const top = el("div", "top");
-top.append(el("span", "name", d.model), el("span", "muted"));
+top.append(el("span", "name", "Channels"), el("span", "muted"));
 card.append(top);
-d.motors.forEach((m, i) => {
+list.forEach((c, i) => {
 const motor = el("div", "motor");
 motor.style.setProperty("--c", colors[i % colors.length]);
 const row = el("div", "row");
-row.append(el("span", "", m.kind), el("b"));
+row.append(el("span", "", c.label + (c.label === channelNames(c.channels) ? "" : "  (" + channelNames(c.channels) + ")")), el("b"));
 const slider = el("input");
-slider.type = "range"; slider.min = 0; slider.max = m.max; slider.step = 1;
-const id = d.slot + "." + i;
+slider.type = "range"; slider.min = 0; slider.max = 20; slider.step = 1;
+const id = "c" + c.channels;
 slider.addEventListener("pointerdown", () => dragging.add(id));
 slider.addEventListener("input", () => {
 dragging.add(id); fill(slider);
 row.lastChild.textContent = slider.value;
-setLevel(d.slot, i, slider.value, false);
+setLevel(c.channels, slider.value, false);
 });
 const release = () => {
 if (!dragging.has(id)) return;
 dragging.delete(id);
-setLevel(d.slot, i, slider.value, true);
+setLevel(c.channels, slider.value, true);
 };
 slider.addEventListener("change", release);
 slider.addEventListener("pointerup", release);
@@ -515,46 +522,52 @@ card.append(motor);
 box.append(card);
 }
 }
-for (const d of devs) {
-const card = $("dev" + d.slot);
-if (!card) continue;
-let note = d.battery >= 0 ? d.battery + "%" : "";
-if (d.pattern >= 0 && info.patterns[d.pattern]) note = "▶ " + info.patterns[d.pattern] + (note ? "  ·  " + note : "");
-card.querySelector(".top .muted").textContent = note;
-card.querySelectorAll(".motor").forEach((motor, i) => {
-const m = d.motors[i];
+if (list.length === 0) return;
+const battery = connected().map(d => d.battery).filter(b => b >= 0);
+let note = battery.length ? Math.min(...battery) + "%" : "";
+const playing = list.map(c => state.channels[firstChannel(c.channels)].pattern);
+if (playing[0] >= 0 && playing.every(p => p === playing[0]) && info.patterns[playing[0]]) {
+note = "▶ " + info.patterns[playing[0]] + (note ? "  ·  " + note : "");
+}
+box.querySelector(".top .muted").textContent = note;
+box.querySelectorAll(".motor").forEach((motor, i) => {
+const c = list[i];
+const ch = state.channels[firstChannel(c.channels)];
 const slider = motor.querySelector("input");
-const value = d.driven ? m.cap : m.level;
-if (!dragging.has(d.slot + "." + i) && !pending.has(d.slot + "." + i)) {
-slider.value = value; fill(slider);
-motor.querySelector(".row b").textContent = d.driven ? "up to " + value : value;
+const on = driven(c.channels);
+const id = "c" + c.channels;
+if (!dragging.has(id) && !pending.has(id)) {
+slider.value = ch.level; fill(slider);
+motor.querySelector(".row b").textContent = on ? "up to " + ch.level : ch.level;
 }
 // While a pattern or reaction drives it, the slider sets how high it
 // goes, and the thin bar shows the level as it plays.
-motor.querySelector(".live").style.visibility = d.driven ? "visible" : "hidden";
-motor.querySelector(".live i").style.width = (m.max ? 100 * m.level / m.max : 0) + "%";
+motor.querySelector(".live").style.visibility = on ? "visible" : "hidden";
+motor.querySelector(".live i").style.width = (100 * ch.out / 20) + "%";
 });
 }
-}
+// Where patterns play: every channel (-1), or one control's channels
+const targetChannels = () => target >= 0 && controls()[target] ? controls()[target].channels : 63;
 function playingOnTarget(p) {
-const devs = connected();
-if (target >= 0) { const d = devs.find(d => d.slot === target); return !!d && d.pattern === p; }
-return devs.length > 0 && devs.every(d => d.pattern === p);
+let c = targetChannels();
+if (target < 0) c &= state.mapped;
+const chans = [0, 1, 2, 3, 4, 5].filter(i => c & (1 << i));
+return chans.length > 0 && chans.every(i => state.channels[i].pattern === p);
 }
 let targetsKey = "";
 function showPatterns() {
-const devs = connected();
-if (target >= 0 && !devs.some(d => d.slot === target)) target = -1;
-const key = target + "|" + devs.map(d => d.slot + d.model).join();
+const list = controls();
+if (target >= list.length) target = -1;
+const key = target + "|" + list.map(c => c.label + c.channels).join();
 if (key !== targetsKey) {
 targetsKey = key;
 const box = $("targets");
 box.replaceChildren();
-if (devs.length > 1) {
-const choices = [[-1, "All devices"]].concat(devs.map(d => [d.slot, d.model]));
-for (const [slot, name] of choices) {
-const b = el("button", slot === target ? "on" : "", name);
-b.onclick = () => { target = slot; showPatterns(); };
+if (list.length > 1) {
+const choices = [[-1, "Every channel"]].concat(list.map((c, i) => [i, c.label]));
+for (const [i, name] of choices) {
+const b = el("button", i === target ? "on" : "", name);
+b.onclick = () => { target = i; showPatterns(); };
 box.append(b);
 }
 }
@@ -568,7 +581,15 @@ const buttons = $("modes").children;
 for (const b of buttons) b.classList.toggle("on", +b.dataset.mode === state.react);
 $("react-status").textContent = state.react ? state.status : "";
 }
+// The toys, and for each one connected, the channel each of its outputs
+// follows. Rebuilt only when something changes, so a picker isn't replaced
+// while it's open.
+let devicesKey = "";
 function showDevices() {
+const key = JSON.stringify([state.scan, state.devices.map(d => [d.slot, d.name, d.model, d.state, d.battery,
+d.outputs.map(o => o.kind + o.channel)])]);
+if (key === devicesKey) return;
+devicesKey = key;
 const box = $("devices");
 box.replaceChildren();
 for (const d of state.devices) {
@@ -578,13 +599,28 @@ if (d.state === "connected") right = (d.battery >= 0 ? d.battery + "%  " : "") +
 b.append(el("span", "", d.state === "connected" ? d.model : d.name), el("span", "muted", right));
 b.onclick = () => command("connect", { d: d.slot });
 box.append(b);
+if (d.state !== "connected") continue;
+d.outputs.forEach((o, i) => {
+const row = el("div", "row map");
+const pick = el("select");
+for (let c = -1; c < info.channel_count; c++) {
+const opt = el("option", "", c < 0 ? "Off" : "V" + (c + 1));
+opt.value = c;
+opt.selected = c === o.channel;
+pick.append(opt);
 }
-if (state.devices.length === 0) box.append(el("div", "empty", state.scan ? "Searching…" : "No devices found yet"));
+pick.onchange = () => command("map", { d: d.slot, o: i, c: pick.value });
+const same = d.outputs.filter(x => x.kind === o.kind).length > 1;
+row.append(el("span", "muted", o.kind + (same ? " " + (d.outputs.slice(0, i + 1).filter(x => x.kind === o.kind).length) : "")), pick);
+box.append(row);
+});
+}
+if (state.devices.length === 0) box.append(el("div", "empty", state.scan ? "Searching…" : "No toys found yet"));
 $("search").textContent = state.scan ? "Searching…" : "Search";
 $("search").classList.toggle("on", !!state.scan);
 }
-// Commands from others in the comm channel, for the Lovense devices (kind 0,
-// on the Toys tab) and the Terminal (kind 1): who may send them
+// Commands from others in the comm channel, for Vibe toys (kind 0, on the
+// Toys tab) and the Terminal (kind 1): who may send them
 const othersAbout = ["commands", "messages"];
 function showOthers(kind) {
 const o = state.others && state.others[kind];
@@ -837,8 +873,8 @@ const grid = $("patterns");
 info.patterns.forEach((name, i) => {
 const b = el("button", "", name);
 b.onclick = () => {
-if (connected().length === 0) { toast("Connect a device first"); return; }
-command("play", { d: target, p: playingOnTarget(i) ? -1 : i });
+if (connected().length === 0) { toast("Connect a toy first"); return; }
+command("play", { c: targetChannels(), p: playingOnTarget(i) ? -1 : i });
 };
 grid.append(b);
 });

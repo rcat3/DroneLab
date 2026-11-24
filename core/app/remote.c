@@ -14,15 +14,20 @@
  *   that it calls:
  *
  *     GET  /api/info      pattern and reaction names, which don't change
- *     GET  /api/state     the devices and what's playing
- *     POST /api/level?d=<slot>&m=<motor>&v=<level>[&release=1]
- *     POST /api/play?d=<slot, or -1 for every device>&p=<pattern, or -1 to stop>
- *     POST /api/react?m=<mode>
+ *     GET  /api/state     the toys, their channels and what's playing
+ *   For the toys (app/toys.h), c= is channels, a bit for each, V1 the
+ *   lowest; left out, it's all of them:
+ *     POST /api/level?c=<channels>&v=<level, 0 to 20>[&release=1]
+ *     POST /api/play?c=<channels>&p=<pattern, or -1 to stop>
+ *     POST /api/react?c=<channels>&m=<mode, 0 to stop>
  *     POST /api/speed?v=<percent>
  *     POST /api/scan?on=<1 or 0>
  *     POST /api/connect?d=<slot>      connect, or disconnect if connected
+ *     POST /api/map?d=<slot>&o=<output>&c=<channel, 0 for V1, or -1 for none>
+ *     POST /api/controls?n=<count, 0 for one per mapped channel>&l0=<label>&c0=<channels>&l1=...
+ *                                     the screen's controls
  *     POST /api/stop                  everything, as the Stop button
-*     POST /api/others?kind=<0 Lovense, 1 Terminal>[&accept=<1 or 0>][&permission=<0 off, 1 ask, 2 accept>]
+*     POST /api/others?kind=<0 Vibe, 1 Terminal>[&accept=<1 or 0>][&permission=<0 off, 1 ask, 2 accept>]
 *                       [&ignore=<OTHERS_IGNORE_* together>]
 *                       [&id=<key's id>|&key=<whole key, hex>&name=<who>][&allow=<1 or 0>][&forget=1]
 *                                     commands from others in the comm channel
@@ -72,7 +77,7 @@
 #include "app/battery.h"
 #include "app/comm.h"
 #include "app/direct.h"
-#include "app/lovense.h"
+#include "app/toys.h"
 #include "app/others.h"
 #include "app/message.h"
 #include "app/patterns.h"
@@ -417,14 +422,14 @@ static void jstring(json_t *j, const char *s)
     jprintf(j, "\"");
 }
 
-static const char *state_name(lovense_device_state_t state)
+static const char *state_name(toy_state_t state)
 {
     switch (state)
     {
-    case LOVENSE_CONNECTING: return "connecting";
-    case LOVENSE_CONNECTED: return "connected";
-    case LOVENSE_FAILED: return "failed";
-    case LOVENSE_LOST: return "lost";
+    case TOY_CONNECTING: return "connecting";
+    case TOY_CONNECTED: return "connected";
+    case TOY_FAILED: return "failed";
+    case TOY_LOST: return "lost";
     default: return "found";
     }
 }
@@ -446,8 +451,8 @@ static void write_state(json_t *j)
     {
         reactive_status(status, sizeof(status));
     }
-    jprintf(j, "{\"scan\":%d,\"speed\":%u,\"hold\":%d,\"react\":%d,\"status\":", lovense_scanning() ? 1 : 0,
-            lovense_speed(), settings_get()->lovense_release_to_zero ? 0 : 1, (int)reactive_mode());
+    jprintf(j, "{\"scan\":%d,\"speed\":%u,\"hold\":%d,\"react\":%d,\"status\":", toys_scanning() ? 1 : 0,
+            toys_speed(), settings_get()->toy_release_to_zero ? 0 : 1, (int)reactive_mode());
     jstring(j, status);
     jprintf(j, ",\"notice\":");
     jstring(j, notice != NULL ? notice : "");
@@ -544,11 +549,28 @@ static void write_state(json_t *j)
                 (unsigned long)length, s->sound_volume, s->sound_repeat, s->sound_autoplay,
                 audio_player_chiming() ? 1 : 0);
     }
-    jprintf(j, ",\"devices\":[");
-    bool first = true;
-    for (size_t i = 0; i < LOVENSE_MAX_DEVICES; i++)
+    // The toys' channels, V1 first, and the screen's controls
+    jprintf(j, ",\"channels\":[");
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
-        const lovense_device_t *d = lovense_device(i);
+        const toy_channel_t *ch = toys_channel(c);
+        jprintf(j, "%s{\"level\":%u,\"out\":%u,\"pattern\":%d,\"react\":%d,\"driven\":%d}", c ? "," : "",
+                ch->level, ch->out, ch->pattern, ch->react ? 1 : 0, toys_driven(c) ? 1 : 0);
+    }
+    toys_control_t controls[TOYS_SCREEN_CONTROLS];
+    int control_count = toys_screen_controls(controls);
+    jprintf(j, "],\"mapped\":%u,\"controls\":[", toys_channels_mapped());
+    for (int i = 0; i < control_count; i++)
+    {
+        jprintf(j, "%s{\"label\":", i ? "," : "");
+        jstring(j, controls[i].label);
+        jprintf(j, ",\"channels\":%u}", controls[i].channels);
+    }
+    jprintf(j, "],\"devices\":[");
+    bool first = true;
+    for (size_t i = 0; i < TOYS_MAX_DEVICES; i++)
+    {
+        const toy_t *d = toys_device(i);
         if (d == NULL)
         {
             continue;
@@ -556,15 +578,17 @@ static void write_state(json_t *j)
         jprintf(j, "%s{\"slot\":%u,\"name\":", first ? "" : ",", (unsigned)i);
         first = false;
         jstring(j, d->name);
+        jprintf(j, ",\"maker\":");
+        jstring(j, d->maker != NULL ? d->maker : "");
         jprintf(j, ",\"model\":");
         jstring(j, d->model != NULL ? d->model : d->name);
-        jprintf(j, ",\"state\":\"%s\",\"battery\":%d,\"pattern\":%d,\"driven\":%d,\"motors\":[",
-                state_name(d->state), d->battery, d->pattern, lovense_driven(d) ? 1 : 0);
-        for (uint8_t m = 0; m < d->motor_count; m++)
+        jprintf(j, ",\"state\":\"%s\",\"battery\":%d,\"outputs\":[", state_name(d->state), d->battery);
+        for (uint8_t o = 0; o < d->output_count; o++)
         {
-            const lovense_motor_t *motor = &d->motors[m];
-            jprintf(j, "%s{\"kind\":\"%s\",\"max\":%u,\"level\":%u,\"cap\":%u}", m ? "," : "",
-                    lovense_motor_name(motor->kind), motor->max, motor->level, motor->cap);
+            const toy_output_t *out = &d->outputs[o];
+            jprintf(j, "%s{\"kind\":\"%s\",\"max\":%u,\"level\":%u,\"channel\":%d}", o ? "," : "",
+                    toys_output_name(out->kind), out->max, out->level,
+                    out->channel < TOYS_CHANNELS ? out->channel : -1);
         }
         jprintf(j, "]}");
     }
@@ -700,7 +724,9 @@ static void write_info(json_t *j)
             first = false;
         }
     }
-    jprintf(j, "],\"max_connected\":%d,\"message_max\":%d,\"features\":[", LOVENSE_MAX_CONNECTED, MESSAGE_MAX);
+    jprintf(j, "],\"max_connected\":%d,\"channel_count\":%d,\"screen_controls\":%d,\"message_max\":%d,"
+               "\"features\":[",
+            TOYS_MAX_CONNECTED, TOYS_CHANNELS, TOYS_SCREEN_CONTROLS, MESSAGE_MAX);
     for (size_t f = 0; f < ui_feature_count(); f++)
     {
         jprintf(j, "%s[", f ? "," : "");
@@ -782,20 +808,24 @@ static int query_int(const char *query, const char *name, int fallback)
     return fallback;
 }
 
-static bool is_connected(int slot)
+/* Channels, as c= gives them (a bit for each, V1 the lowest), or all of
+ * them. */
+static uint8_t query_channels(const char *query)
 {
-    const lovense_device_t *d = slot >= 0 ? lovense_device((size_t)slot) : NULL;
-    return d != NULL && d->state == LOVENSE_CONNECTED;
+    return (uint8_t)(query_int(query, "c", TOYS_ALL_CHANNELS) & TOYS_ALL_CHANNELS);
 }
 
-static int connected_count(void)
+/* Whether any of the channels is driven by a pattern or the reaction. */
+static bool any_driven(uint8_t channels)
 {
-    int n = 0;
-    for (int i = 0; i < LOVENSE_MAX_DEVICES; i++)
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
-        n += is_connected(i);
+        if ((channels & (1u << c)) && toys_driven(c))
+        {
+            return true;
+        }
     }
-    return n;
+    return false;
 }
 
 /* The value of name in a query string, %-decoded into out (cap bytes), or
@@ -933,35 +963,27 @@ static bool run_command(const char *name, const char *query, const char *body, s
 {
     if (strcmp(name, "level") == 0)
     {
-        int slot = query_int(query, "d", -1);
-        int motor = query_int(query, "m", 0);
+        // c= the channels, together; v= the level
+        uint8_t channels = query_channels(query);
         int level = query_int(query, "v", 0);
-        if (is_connected(slot) && motor >= 0 && level >= 0)
+        if (level >= 0)
         {
-            // Let go, with Motor Hold off: back to 0, as on the screen
-            if (query_int(query, "release", 0) && settings_get()->lovense_release_to_zero
-                && !lovense_driven(lovense_device((size_t)slot)))
+            // Let go, with Hold off: back to 0, as on the screen
+            if (query_int(query, "release", 0) && settings_get()->toy_release_to_zero && !any_driven(channels))
             {
                 level = 0;
             }
-            lovense_set_level((size_t)slot, (uint8_t)motor, (uint8_t)(level > 255 ? 255 : level));
+            toys_set_level(channels, (uint8_t)(level > TOYS_LEVEL_TOP ? TOYS_LEVEL_TOP : level));
         }
     }
     else if (strcmp(name, "play") == 0)
     {
-        int slot = query_int(query, "d", -1);
         int pattern = query_int(query, "p", -1);
-        if (connected_count() == 0)
+        if (pattern >= 0 && toys_connected_count() == 0)
         {
-            notice = "Connect a device first";
+            notice = "Connect a toy first";
         }
-        for (int i = 0; i < LOVENSE_MAX_DEVICES; i++)
-        {
-            if (is_connected(i) && (slot < 0 || slot == i))
-            {
-                lovense_play((size_t)i, pattern);
-            }
-        }
+        toys_play(query_channels(query), pattern);
     }
     else if (strcmp(name, "react") == 0)
     {
@@ -970,21 +992,23 @@ static bool run_command(const char *name, const char *query, const char *body, s
         {
             mode = REACTIVE_OFF;
         }
-        reactive_set_mode((reactive_mode_t)mode);
-        lovense_set_reactive(mode != REACTIVE_OFF);
+        toys_react(query_channels(query), mode != REACTIVE_OFF);
+        if (mode != REACTIVE_OFF || !toys_reacting())
+        {
+            reactive_set_mode((reactive_mode_t)mode);
+        }
     }
     else if (strcmp(name, "speed") == 0)
     {
-        int speed = query_int(query, "v", 100);
-        lovense_set_speed((uint16_t)(speed < 25 ? 25 : speed > 300 ? 300 : speed));
+        toys_set_speed((uint16_t)LV_CLAMP(TOYS_SPEED_MIN, query_int(query, "v", 100), TOYS_SPEED_MAX));
     }
     else if (strcmp(name, "scan") == 0)
     {
         if (query_int(query, "on", 1))
         {
-            if (!lovense_scanning())
+            if (!toys_scanning())
             {
-                if (lovense_scan_start())
+                if (toys_scan_start())
                 {
                     scan_ours = true;
                 }
@@ -997,7 +1021,7 @@ static bool run_command(const char *name, const char *query, const char *body, s
         }
         else if (scan_ours)
         {
-            lovense_scan_stop();
+            toys_scan_stop();
             scan_ours = false;
             scan_until = 0;
         }
@@ -1005,19 +1029,51 @@ static bool run_command(const char *name, const char *query, const char *body, s
     else if (strcmp(name, "connect") == 0)
     {
         int slot = query_int(query, "d", -1);
-        const lovense_device_t *d = slot >= 0 ? lovense_device((size_t)slot) : NULL;
+        const toy_t *d = slot >= 0 ? toys_device((size_t)slot) : NULL;
         if (d != NULL)
         {
-            bool connecting = d->state != LOVENSE_CONNECTING && d->state != LOVENSE_CONNECTED;
-            if (!lovense_toggle((size_t)slot) && connecting)
+            bool connecting = d->state != TOY_CONNECTING && d->state != TOY_CONNECTED;
+            if (!toys_toggle((size_t)slot) && connecting)
             {
-                notice = connected_count() >= LOVENSE_MAX_CONNECTED ? "Only 3 at once" : "Wait for the other one";
+                notice = toys_connected_count() >= TOYS_MAX_CONNECTED ? "Only 3 at once" : "Wait for the other one";
             }
         }
     }
+    else if (strcmp(name, "map") == 0)
+    {
+        // d= the toy's slot, o= its output, c= the channel (0 for V1), or -1
+        // for none
+        int slot = query_int(query, "d", -1);
+        int output = query_int(query, "o", -1);
+        int channel = query_int(query, "c", -1);
+        if (slot >= 0 && output >= 0)
+        {
+            toys_set_channel((size_t)slot, (uint8_t)output,
+                             channel >= 0 && channel < TOYS_CHANNELS ? (uint8_t)channel : TOYS_NO_CHANNEL);
+        }
+    }
+    else if (strcmp(name, "controls") == 0)
+    {
+        // n= how many (0 for one for each mapped channel), then for each, l0=
+        // its label and c0= its channels, l1= and c1=, and so on
+        toys_control_t controls[TOYS_SCREEN_CONTROLS];
+        int count = LV_CLAMP(0, query_int(query, "n", 0), TOYS_SCREEN_CONTROLS);
+        for (int i = 0; i < count; i++)
+        {
+            char key[4];
+            snprintf(key, sizeof(key), "l%d", i);
+            if (!query_str(query, key, controls[i].label, sizeof(controls[i].label)))
+            {
+                controls[i].label[0] = '\0';
+            }
+            snprintf(key, sizeof(key), "c%d", i);
+            controls[i].channels = (uint8_t)(query_int(query, key, 0) & TOYS_ALL_CHANNELS);
+        }
+        toys_set_screen_controls(controls, count);
+    }
     else if (strcmp(name, "stop") == 0)
     {
-        lovense_stop_all();
+        toys_stop_all();
         reactive_set_mode(REACTIVE_OFF);
     }
     else if (strcmp(name, "others") == 0)
@@ -1730,7 +1786,7 @@ void remote_stop(void)
     memset(known, 0, sizeof(known));
     if (scan_ours)
     {
-        lovense_scan_stop();
+        toys_scan_stop();
         scan_ours = false;
     }
     scan_until = 0;
@@ -1766,7 +1822,7 @@ void remote_poll(uint32_t now_ms)
         scan_until = 0;
         if (scan_ours)
         {
-            lovense_scan_stop();
+            toys_scan_stop();
             scan_ours = false;
         }
     }

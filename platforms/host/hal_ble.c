@@ -2,7 +2,7 @@
  * The virtual unit's Bluetooth central (hal.h), which only finds virtual
  * Lovense toys (toys.h): the computer's own Bluetooth isn't used yet. Each
  * toy advertises as a real one does ("LVS-S01"), offers Lovense's service,
- * and answers its text commands, as lovense.c expects:
+ * and answers its text commands, as toy_lovense.c expects:
  *
  *   DeviceType;        "S:11:C0FFEE000101;"
  *   Battery;           "85;"
@@ -37,7 +37,7 @@ typedef struct
     const char *motors[TOY_MAX_MOTORS];
 } model_t;
 
-// A few of each kind lovense.c knows: its table has them all
+// A few of each kind toy_lovense.c knows: its table has them all
 static const model_t models[] = {
     { "S",  "Lush",    1, { "Vibrate" } },
     { "P",  "Edge",    2, { "Vibrate", "Vibrate" } },
