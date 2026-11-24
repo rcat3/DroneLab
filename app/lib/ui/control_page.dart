@@ -364,6 +364,7 @@ class _ToysPageState extends State<ToysPage> {
         return Scaffold(
           appBar: AppBar(title: const Text('Toys')),
           body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),

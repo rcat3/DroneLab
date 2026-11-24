@@ -603,7 +603,7 @@ class _Entry extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(e.kind == ConversationEntry.terminal ? Icons.terminal : Icons.tune, size: 14, color: Kc.muted),
+          Icon(e.kind == ConversationEntry.terminal ? Icons.terminal : Icons.vibration, size: 14, color: Kc.muted),
           const SizedBox(width: 6),
           Flexible(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
