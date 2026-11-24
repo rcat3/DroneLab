@@ -75,6 +75,7 @@ const commVersionCopies = 12;
 const commVersionCaps = 14;     // what other boards' wearers let others control (0x17)   // each copy of a command heard over direct comms, and how it came (0x15)
 const commVersionDirectVoice = 13;  // voice from the phone for the board to send over direct comms (0x16)
 const commVersionPhoneMic = 15;  // the phone's mic in place of the board's (0x18), its talk button held (0x18)
+const commVersionRules = 16;    // the wearer's rules from the app (0x10), in place of who's muted
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -94,7 +95,7 @@ const _msgDirectGroup = 0x09;
 const _msgRecord = 0x0A;
 const _msgCommand = 0x0B;
 const _msgHeard = 0x0F;
-const _msgMuted = 0x10;
+const _msgRules = 0x10;
 const _msgIdentity = 0x11;
 const _msgBinding = 0x12;
 const _msgTalkTo = 0x13;      // to the board: who talking goes to
@@ -737,21 +738,18 @@ class ReadCommand {
 const othersCommandMax = OthersCommand.headerLength + OthersCommand.whatMax + OthersCommand.signatureLength;
 const directCommandTargets = 1;
 
-/// Who's muted here, for the board to ignore their commands: the first 8
-/// bytes of each one's key, in pieces, the first starting the list afresh
-/// (an empty one for nobody).
-List<Uint8List> mutedMessages(Iterable<List<int>> keys) {
-  const room = 180;
+/// The wearer's rules (rules.dart, core/app/rules.h), in pieces that fit
+/// in [maxWrite] bytes: the first starts the document afresh, the last
+/// ends it.
+List<Uint8List> rulesMessages(Uint8List doc, int maxWrite) {
+  final room = (maxWrite - 2).clamp(16, 240);
   final pieces = <Uint8List>[];
-  var piece = <int>[_msgMuted, 0x01];
-  for (final k in keys) {
-    if (piece.length + 8 > room) {
-      pieces.add(Uint8List.fromList(piece));
-      piece = [_msgMuted, 0x00];
-    }
-    piece.addAll(k.take(8));
+  for (var at = 0; at < doc.length || at == 0; at += room) {
+    final end = (at + room).clamp(0, doc.length);
+    final flags = (at == 0 ? 0x01 : 0) | (end >= doc.length ? 0x02 : 0);
+    pieces.add(Uint8List.fromList([_msgRules, flags, ...doc.sublist(at, end)]));
+    if (doc.isEmpty) break;
   }
-  pieces.add(Uint8List.fromList(piece));
   return pieces;
 }
 

@@ -7,6 +7,7 @@ import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
+import '../comm/rules.dart';
 import 'theme.dart';
 import 'utf8_limit.dart';
 import 'widgets.dart';
@@ -14,10 +15,9 @@ import 'widgets.dart';
 /// The unit's own toys, for HiveMind Control (core/app/toys.h): which
 /// channel, V1 to V6, each toy's outputs follow, so what others send on a
 /// channel drives what you choose; and the controls the unit's screen
-/// shows, each driving one or more channels together. Through the remote's
-/// API (core/app/remote.c: /api/map, /api/controls), over Bluetooth, so it
-/// shows what the unit's screen and the WiFi remote do. The unit remembers
-/// both, by toy.
+/// shows, each driving one or more channels together. Both are kept in the
+/// app's rules (rules.dart), by toy, and go to the unit with the rest of
+/// them; the toys themselves are the unit's, from its state (/api/state).
 class ToysSetupPage extends StatefulWidget {
   final CommController comm;
   const ToysSetupPage({super.key, required this.comm});
@@ -34,11 +34,12 @@ const _labelMax = 11;
 /// A toy, as the state has it.
 class _Toy {
   final int slot;
+  final String addr;          // its Bluetooth address, 12 hex digits
   final String name;
   final String model;
   final String state;
   final List<(String kind, int channel)> outputs;   // channel -1 for none
-  _Toy(this.slot, this.name, this.model, this.state, this.outputs);
+  _Toy(this.slot, this.addr, this.name, this.model, this.state, this.outputs);
 
   bool get connected => state == 'connected';
 }
@@ -61,7 +62,6 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
   bool _scanning = false;
   int _mapped = 0;
   List<_Toy> _toys = const [];
-  List<(String, int)> _controls = const [];   // as the unit has them
 
   List<_Control>? _editing;    // being laid out; null when not
 
@@ -72,6 +72,7 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
     super.initState();
     _statesSub = _board.states.listen(_onState);
     _board.addListener(_onBoard);
+    widget.comm.permissions.addListener(_onRules);
     _onBoard();
     // Changes made on the display itself, or on the WiFi remote
     _poll = Timer.periodic(const Duration(seconds: 2), (_) {
@@ -83,6 +84,7 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
   void dispose() {
     _statesSub?.cancel();
     _board.removeListener(_onBoard);
+    widget.comm.permissions.removeListener(_onRules);
     _poll?.cancel();
     for (final c in _editing ?? const <_Control>[]) {
       c.label.dispose();
@@ -98,9 +100,15 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
     }
     if (_asked) return;
     _asked = true;
-    // A command with nothing to change answers with the state in full
-    _post('map');
+    _board.request('GET', '/api/state').catchError((_) => RemoteAnswer(0, ''));
   }
+
+  void _onRules() {
+    if (mounted) setState(() {});
+  }
+
+  /// The controls as laid out in the rules: none for one per channel.
+  List<(String, int)> get _controls => [for (final c in widget.comm.permissions.rules.controls ?? const <ScreenControl>[]) (c.label, c.channels)];
 
   void _onState(String json) {
     try {
@@ -111,6 +119,7 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
           if (d is Map<String, dynamic>)
             _Toy(
               (d['slot'] as num).toInt(),
+              d['addr'] as String? ?? '',
               d['name'] as String? ?? '',
               (d['model'] as String?)?.isNotEmpty == true ? d['model'] as String : d['name'] as String? ?? 'Toy',
               d['state'] as String? ?? 'found',
@@ -120,10 +129,6 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
               ],
             ),
       ];
-      final controls = [
-        for (final c in j['controls'] as List<dynamic>? ?? const [])
-          ((c as Map<String, dynamic>)['label'] as String? ?? '', (c['channels'] as num?)?.toInt() ?? 0),
-      ];
       final notice = j['notice'] as String? ?? '';
       if (!mounted) return;
       setState(() {
@@ -131,7 +136,6 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
         _scanning = j['scan'] == 1;
         _mapped = (j['mapped'] as num?)?.toInt() ?? 0;
         _toys = toys;
-        _controls = controls;
       });
       if (notice.isNotEmpty) _toast(notice);
     } catch (_) {}
@@ -163,18 +167,24 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
     setState(() => _editing = null);
   }
 
-  Future<void> _saveControls() async {
-    final e = [for (final c in _editing!) if (c.channels != 0) c];
-    await _post('controls', {
-      'n': e.length,
-      for (var i = 0; i < e.length; i++) ...{'l$i': e[i].label.text.trim(), 'c$i': e[i].channels},
-    });
+  void _saveControls() {
+    final e = [for (final c in _editing!) if (c.channels != 0) ScreenControl(c.label.text.trim(), c.channels)];
+    widget.comm.permissions.setControls(e.isEmpty ? null : e);
     _stopEditing();
   }
 
-  Future<void> _automatic() async {
-    await _post('controls', {'n': 0});
+  void _automatic() {
+    widget.comm.permissions.setControls(null);
     _stopEditing();
+  }
+
+  /// An output's channel, in the rules: the toy's other outputs keep theirs.
+  void _map(_Toy t, int output, int channel) {
+    widget.comm.permissions.mapOutput(t.addr, [for (final o in t.outputs) o.$2], output, channel);
+    setState(() {
+      final outs = t.outputs;
+      outs[output] = (outs[output].$1, channel);
+    });
   }
 
   Widget _channelChips(int mask, ValueChanged<int> onChanged) => Wrap(spacing: 6, runSpacing: 6, children: [
@@ -215,7 +225,7 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
                 value: t.outputs[o].$2 >= 0 && t.outputs[o].$2 < OthersCommand.vibeChannels ? t.outputs[o].$2 : -1,
                 underline: const SizedBox.shrink(),
                 dropdownColor: Kc.raised,
-                onChanged: _up ? (c) => _post('map', {'d': t.slot, 'o': o, 'c': c ?? -1}) : null,
+                onChanged: t.addr.isEmpty ? null : (c) => _map(t, o, c ?? -1),
                 items: [
                   const DropdownMenuItem(value: -1, child: Text('None')),
                   for (var c = 0; c < OthersCommand.vibeChannels; c++)
@@ -245,7 +255,7 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
             title: 'Lay them out',
             subtitle: 'Up to $_controlsMax, each driving one or more channels together',
             trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
-            onTap: _up ? _startEditing : null,
+            onTap: _startEditing,
           ),
         ]),
       ];
@@ -291,11 +301,11 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
       const Text('A control with no channel is left out.', style: small),
       const SizedBox(height: 8),
       Row(children: [
-        TextButton(onPressed: _up ? _automatic : null, child: const Text('One per channel')),
+        TextButton(onPressed: _automatic, child: const Text('One per channel')),
         const Spacer(),
         TextButton(onPressed: _stopEditing, child: const Text('Cancel')),
         const SizedBox(width: 8),
-        FilledButton(onPressed: _up ? _saveControls : null, child: const Text('Save')),
+        FilledButton(onPressed: _saveControls, child: const Text('Save')),
       ]),
     ];
   }
@@ -319,7 +329,7 @@ class _ToysSetupPageState extends State<ToysSetupPage> {
               Explained(
                 help: "Others control your toys by channel, V1 to V6. Choose which channel each of your toys' "
                     'outputs follows: what anyone sends on V1 drives every output on V1. None leaves an output '
-                    'to your own controls. The unit remembers it, by toy.',
+                    'to your own controls. Your phone keeps it, by toy, and gives it to your unit.',
                 builder: (context, info) => SectionHeader('Channels', trailing: info),
               ),
               if (_toys.isEmpty)

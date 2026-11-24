@@ -323,8 +323,18 @@ class CommController extends ChangeNotifier {
       notifier.showPermissionRequest(r.name, r.what);
     };
     permissions.onNone = notifier.clearPermissionRequests;
-    // A command refused: the board's list has them now, for Permissions
-    permissions.onRefused = _askBoardState;
+    // The rules: who's muted is ours too, and a name clash is a warning
+    permissions.mutedKeys = () => {
+          for (final p in muted)
+            if (p.key != null) p.key!.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
+        };
+    permissions.clashOf = (key) {
+      final who = people[KnownPerson.keyId([
+        for (var i = 0; i + 1 < key.length; i += 2) int.parse(key.substring(i, i + 2), radix: 16),
+      ])];
+      return who != null && nameClash(who) != null;
+    };
+    permissions.onRulesChanged = permissions.syncUnit;
     try {
       final saved = jsonDecode(p.getString('unitSounds') ?? '{}') as Map<String, dynamic>;
       for (final e in UnitSoundEvent.values) {
@@ -1911,7 +1921,6 @@ class CommController extends ChangeNotifier {
   /// from now on, and the old one's forgotten (see KnownPeople.replace).
   void acceptNewIdentity(KnownPerson old, KnownPerson now) {
     people.replace(old.id, now.id);
-    _sentMuted = null;    // the board's list, by key, again
     _updateBoardScreen();
     notifyListeners();
   }
@@ -1964,7 +1973,6 @@ class CommController extends ChangeNotifier {
 
   Uint8List? _sentServer;
   Uint8List? _sentHearing;
-  String? _sentMuted;
   bool _sentIdentity = false;
   int? _boundId;      // the board's direct id we've signed it's ours for
 
@@ -1978,7 +1986,7 @@ class CommController extends ChangeNotifier {
     if (_updating) return;
     _boardAvatars.update();
     if (board.state != BoardState.connected || board.status == null) {
-      _sentServer = _sentHearing = _sentMuted = _sentTalkTo = null;
+      _sentServer = _sentHearing = _sentTalkTo = null;
       _sentTalkOn = null;
       _sentPairs = null;
       _sentIdentity = false;
@@ -2004,15 +2012,8 @@ class CommController extends ChangeNotifier {
         });
       }
     }
-    // Who's muted, by key, for the board to ignore their commands too
-    final mutedKeys = [for (final p in muted) if (p.key != null) p.key!];
-    final mutedNow = (mutedKeys.map(Identity.idOf).toList()..sort()).join('\n');
-    if (_sentMuted != mutedNow && keys) {
-      _sentMuted = mutedNow;
-      for (final piece in mutedMessages(mutedKeys)) {
-        board.send(piece);
-      }
-    }
+    // Our rules, who's muted among them, for the unit to go by
+    permissions.syncUnit();
     final m = mumble;
     final link = m == null
         ? (_serverWanted ? ServerLink.connecting : ServerLink.off)

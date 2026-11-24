@@ -22,7 +22,8 @@ import 'widgets.dart';
 /// outputs to channels (Setup → Toys), so what V1 drives is up to them. A
 /// level for each channel, or one for several together (ganged, sent as
 /// one command); patterns and their speed; and reactions; each on the
-/// channels picked.
+/// channels picked. The channels can be split into two groups, each with a
+/// pattern and a reaction of its own.
 class ToysPage extends StatefulWidget {
   final CommController comm;
   final Conversation target;
@@ -54,6 +55,14 @@ enum _ToyClass { vibe, estim, machine }
 
 enum _Section { levels, patterns, react }
 
+/// Channels that play a pattern and follow a reaction together.
+class _Group {
+  int? mask;              // null for every channel shown (the first group, unsplit)
+  String? playing;
+  int reacting = 0;
+  _Group([this.mask]);
+}
+
 class _ToysPageState extends State<ToysPage> {
   CommController get comm => widget.comm;
 
@@ -63,10 +72,10 @@ class _ToysPageState extends State<ToysPage> {
   bool _more = false;
   bool _gang = false;
   int _gangMask = 0x03;                   // V1 and V2
-  int? _onMask;                           // what patterns and reactions go on; null for all shown
+  final List<_Group> _groups = [_Group(), _Group(0)];
+  bool _split = false;                    // two groups
+  int _group = 0;                         // the group shown
   int _speed = 100;
-  String? _playing;
-  int _reacting = 0;
   bool _stopped = false;
   List<String> _patterns = _builtInPatterns;
   bool _askedPatterns = false;
@@ -110,8 +119,12 @@ class _ToysPageState extends State<ToysPage> {
   int get _shown => _more || _theirs >> _usualChannels != 0 ? OthersCommand.vibeChannels : _usualChannels;
   int get _shownMask => (1 << _shown) - 1;
 
-  /// What patterns and reactions go on.
-  int get _on => (_onMask ?? _shownMask) & _shownMask;
+  _Group get _g => _groups[_split ? _group : 0];
+
+  /// What the group shown's patterns and reactions go on.
+  int get _on => _maskOf(_g);
+
+  int _maskOf(_Group g) => (g.mask ?? _shownMask) & _shownMask;
 
   void _send(OthersCommand what, {bool again = true}) {
     final cmd = comm.newCommand(what);
@@ -126,8 +139,11 @@ class _ToysPageState extends State<ToysPage> {
   void _stop() {
     setState(() {
       _levels.fillRange(0, _levels.length, 0);
-      _playing = null;
-      _reacting = 0;
+      for (final g in _groups) {
+        g
+          ..playing = null
+          ..reacting = 0;
+      }
       _stopped = true;
     });
     _send(OthersCommand.stopAll());
@@ -151,19 +167,62 @@ class _ToysPageState extends State<ToysPage> {
 
   void _play(String? name) {
     setState(() {
-      _playing = name;
+      _g.playing = name;
       _stopped = false;
+      if (name == null && _g.reacting == 0) _zero(_on);
     });
     _send(OthersCommand.play(_on, name));
   }
 
   void _react(int mode) {
     setState(() {
-      _reacting = mode;
+      _g.reacting = mode;
       _stopped = false;
+      if (mode == 0 && _g.playing == null) _zero(_on);
     });
     _send(OthersCommand.setReact(_on, mode));
   }
+
+  /// Channels with neither a pattern nor a reaction left go off, as the
+  /// board has them.
+  void _zero(int mask) {
+    for (var c = 0; c < OthersCommand.vibeChannels; c++) {
+      if (mask & (1 << c) != 0) _levels[c] = 0;
+    }
+  }
+
+  /// The channels [mask] move to group [to], from the other: they take on
+  /// its pattern and reaction, so each group's channels do what it shows.
+  void _moveTo(int to, int mask) {
+    final g = _groups[to], from = _groups[1 - to];
+    final fromMask = _maskOf(from);
+    final moved = mask & fromMask;
+    if (moved != 0) from.mask = fromMask & ~moved;
+    if (moved == 0) return;
+    if (g.playing != from.playing) _send(OthersCommand.play(moved, g.playing));
+    if (g.reacting != from.reacting) _send(OthersCommand.setReact(moved, g.reacting));
+    if (g.playing == null && g.reacting == 0 && (from.playing != null || from.reacting != 0)) _zero(moved);
+  }
+
+  void _setOn(int mask) => setState(() {
+        if (_split) _moveTo(_group, mask & ~_on);
+        _g.mask = mask;
+      });
+
+  void _setSplit(bool on) => setState(() {
+        if (on) {
+          _groups[0].mask = _maskOf(_groups[0]);
+          _groups[1]
+            ..mask = 0
+            ..playing = null
+            ..reacting = 0;
+          _group = 0;
+        } else {
+          _moveTo(0, _maskOf(_groups[1]));
+          _groups[0].mask = null;
+        }
+        _split = on;
+      });
 
   void _setSpeed(int percent) {
     setState(() => _speed = percent.clamp(25, 300));
@@ -295,7 +354,8 @@ class _ToysPageState extends State<ToysPage> {
           const SizedBox(height: 12),
           _grid(2, [
             for (final p in _patterns)
-              _chip(p.toUpperCase(), _playing == p, canSend && _on != 0 ? () => _play(_playing == p ? null : p) : null),
+              _chip(p.toUpperCase(), _g.playing == p,
+                  canSend && _on != 0 ? () => _play(_g.playing == p ? null : p) : null),
           ]),
           const SizedBox(height: 12),
           Panel(children: [
@@ -324,8 +384,8 @@ class _ToysPageState extends State<ToysPage> {
           const SizedBox(height: 12),
           _grid(3, [
             for (final (mode, name) in _reactions)
-              _chip(name, _reacting == mode,
-                  canSend && _on != 0 ? () => _react(_reacting == mode ? 0 : mode) : null),
+              _chip(name, _g.reacting == mode,
+                  canSend && _on != 0 ? () => _react(_g.reacting == mode ? 0 : mode) : null),
           ]),
           const SizedBox(height: 8),
           const Text('The channels picked follow their own voice or movement', style: small),
@@ -333,18 +393,43 @@ class _ToysPageState extends State<ToysPage> {
     };
   }
 
-  /// Which channels patterns and reactions go on.
+  /// Which channels patterns and reactions go on: one group, or two, each
+  /// with its own.
   Widget _onPicker(bool canSend) => Panel(children: [
+        Explained(
+          help: 'Split the channels into two groups, each with its own pattern and reaction: pick a group, '
+              'then its channels. A channel is in one group at a time.',
+          builder: (context, info) => PanelRow(
+            title: 'Two groups',
+            trailing: [info, Switch(value: _split, onChanged: _setSplit)],
+          ),
+        ),
+        if (_split)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: SegmentedButton<int>(
+              showSelectedIcon: false,
+              segments: [
+                for (final (i, name) in const [(0, 'A'), (1, 'B')])
+                  ButtonSegment(value: i, label: Text('GROUP $name${_summary(_groups[i])}')),
+              ],
+              selected: {_group},
+              onSelectionChanged: (sel) => setState(() => _group = sel.first),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
             Text('ON', style: Kc.term(16, color: Kc.muted)),
             const SizedBox(width: 12),
-            Expanded(child: _channelPicker(_on, (m) => setState(() => _onMask = m), enabled: true)),
+            Expanded(child: _channelPicker(_on, _setOn, enabled: true)),
           ]),
         ),
         _moreButton(),
       ]);
+
+  /// A dot on a group's tab while it plays or reacts.
+  String _summary(_Group g) => g.playing != null || g.reacting != 0 ? ' ●' : '';
 
   static int _firstOf(int mask) {
     for (var c = 0; c < OthersCommand.vibeChannels; c++) {

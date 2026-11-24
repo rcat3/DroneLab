@@ -4,45 +4,35 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'board_link.dart';
+import 'board_protocol.dart';
 import 'capabilities.dart';
+import 'rules.dart';
 
-/// Who may control what of ours, in one place: the board's own policy for
-/// each capability (core/app/others.h: Off, Ask or Anyone, what's ignored,
-/// and who's allowed), read from its state and changed through its remote
-/// API; requests, from those whose commands it didn't take as they aren't
-/// allowed yet; and those whose requests were declined.
+export 'rules.dart' show Policy, ignoreEveryone, ignoreChannel;
+
+/// Who may control what of ours, in one place: the rules this app owns
+/// (rules.dart: each class's policy, what it ignores, and who's allowed),
+/// pushed to the unit, which goes by them while the phone's away; requests,
+/// from those whose commands weren't taken as they aren't allowed yet; and
+/// those whose requests were declined.
 ///
 /// Senders never hear about any of it: they send, and it's done or not.
 
-/// The board's kind of command (others_kind_t) for each capability.
-const boardKindOf = {Capabilities.vibe: 0, Capabilities.terminal: 1};
-
-/// Who a capability's taken from, as others_permission_t.
-enum Policy {
-  off,      // nobody
-  ask,      // those allowed
-  anyone;
-
-  static Policy of(int v) => v == 2 ? anyone : v == 1 ? ask : off;
-}
-
-/// What a capability ignores, whoever it's from (OTHERS_IGNORE_*).
-const ignoreEveryone = 0x02, ignoreChannel = 0x04;
-
-/// Someone in the board's list.
+/// Someone listed.
 class ListedPerson {
   final String id;          // their key's first 8 bytes, in hex
+  final String key;         // the whole key, in hex
   final String name;
   final bool allowed;
-  final bool clash;         // using a name someone listed had first
-  const ListedPerson(this.id, this.name, this.allowed, this.clash);
+  final bool clash;         // using a name someone known had first
+  const ListedPerson(this.id, this.key, this.name, this.allowed, this.clash);
 }
 
-/// One capability's policy on the board.
+/// One class's rule, and everyone listed, allowed it or not.
 class CapPolicy {
   final Policy policy;
   final int ignore;
-  final List<ListedPerson> people;    // who's sent it, or is allowed it
+  final List<ListedPerson> people;
   const CapPolicy(this.policy, this.ignore, this.people);
 
   ListedPerson? person(String id) {
@@ -55,41 +45,11 @@ class CapPolicy {
   bool allows(String id) => policy == Policy.anyone || (person(id)?.allowed ?? false);
 }
 
-/// The board's policy for each capability, from its state.
-class BoardPolicy {
+/// The rules, as Permissions shows them: each class's.
+class PolicyView {
   final Map<int, CapPolicy> caps;
-  const BoardPolicy(this.caps);
-
-  static BoardPolicy? fromState(String json) {
-    try {
-      final j = jsonDecode(json);
-      if (j is! Map<String, dynamic> || j['others'] is! List) return null;
-      final others = j['others'] as List<dynamic>;
-      final caps = <int, CapPolicy>{};
-      for (final MapEntry(key: cap, value: kind) in boardKindOf.entries) {
-        if (kind >= others.length) continue;
-        final o = others[kind] as Map<String, dynamic>;
-        caps[cap] = CapPolicy(Policy.of((o['permission'] as num?)?.toInt() ?? 0), (o['ignore'] as num?)?.toInt() ?? 0, [
-          for (final s in o['senders'] as List<dynamic>? ?? const [])
-            ListedPerson(s['id'] as String, s['name'] as String, s['allowed'] == 1, s['clash'] == 1),
-        ]);
-      }
-      return BoardPolicy(caps);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Everyone in the list, once each, for any capability: their id and name.
-  List<ListedPerson> get everyone {
-    final byId = <String, ListedPerson>{};
-    for (final c in caps.values) {
-      for (final p in c.people) {
-        byId.putIfAbsent(p.id, () => p);
-      }
-    }
-    return byId.values.toList()..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-  }
+  final List<ListedPerson> everyone;
+  const PolicyView(this.caps, this.everyone);
 }
 
 /// Someone asking, by sending commands we didn't take as they aren't
@@ -116,14 +76,22 @@ class PermissionRequest {
       j['what'] as String? ?? '');
 }
 
+/// Whether the unit has the rules as they are here.
+enum RulesSync { noUnit, sending, upToDate }
+
 class Permissions extends ChangeNotifier {
   final BoardLink board;
   Permissions(this.board);
 
   SharedPreferences? _prefs;
 
-  /// The board's, null until it's said (or while there's no board).
-  BoardPolicy? policy;
+  /// Ours, kept here and pushed to the unit.
+  HiveRules rules = HiveRules();
+
+  /// Whole keys (hex) of those muted, for the rules; and whether someone
+  /// listed is using a name someone else had first. From the controller.
+  Set<String> Function() mutedKeys = () => const {};
+  bool Function(String keyHex) clashOf = (_) => false;
 
   /// Waiting to be accepted or declined, newest first.
   final List<PermissionRequest> requests = [];
@@ -139,9 +107,8 @@ class Permissions extends ChangeNotifier {
   /// The requests are all seen to, for the notification to go.
   VoidCallback? onNone;
 
-  /// A command wasn't taken: the board may have added its sender to its
-  /// list, so its state's wanted again.
-  VoidCallback? onRefused;
+  /// The rules have changed: the unit's to have them.
+  VoidCallback? onRulesChanged;
 
   void load(SharedPreferences p) {
     _prefs = p;
@@ -159,6 +126,10 @@ class Permissions extends ChangeNotifier {
     requests.addAll(read('permissionRequests'));
     declined.addAll(read('permissionDeclined'));
     try {
+      final r = p.getString('hiveRules');
+      if (r != null) rules = HiveRules.fromJson(jsonDecode(r) as Map<String, dynamic>);
+    } catch (_) {}
+    try {
       commandLog.addAll([
         for (final e in jsonDecode(p.getString('commandLog') ?? '[]') as List<dynamic>)
           LogEntry.fromJson(e as Map<String, dynamic>)
@@ -173,33 +144,121 @@ class Permissions extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The board's state's come: its policy, and requests it's made moot (the
-  /// person allowed on the unit itself, or the capability open to anyone).
+  /// The rules have changed: kept, and on their way to the unit.
+  void rulesChanged() {
+    rules.owned = true;
+    _prefs?.setString('hiveRules', jsonEncode(rules.toJson()));
+    notifyListeners();
+    onRulesChanged?.call();
+  }
+
+  /// The rules, for the Permissions screen: the classes controlKinds show.
+  PolicyView get policy {
+    final everyone = [
+      for (final p in rules.people.values) ListedPerson(p.id, p.key, p.name, false, clashOf(p.key)),
+    ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return PolicyView({
+      for (final cls in RuleClass.all)
+        cls: CapPolicy(rules.policy(cls), rules.rule(cls).ignore, [
+          for (final p in everyone)
+            ListedPerson(p.id, p.key, p.name, rules.people[p.key]!.allowed.contains(cls), p.clash),
+        ]),
+    }, everyone);
+  }
+
+  // ----- The unit -----
+
+  /// The unit's rules' hash, and whether its wearer's switched something
+  /// Off on it since: as it last said (its /version, and its state).
+  String? _unitHash;
+  bool _unitEdited = false;
+  String? _sentHash;          // pushed, waiting for the unit to say it has them
+  bool _askingUnit = false;
+
+  bool get unitHasRules => board.state == BoardState.connected && (board.status?.version ?? 0) >= commVersionRules;
+
+  RulesSync get sync {
+    if (!unitHasRules || _unitHash == null) return RulesSync.noUnit;
+    return _unitHash == HiveRules.hashOf(rules.encode(mutedKeys())) ? RulesSync.upToDate : RulesSync.sending;
+  }
+
+  /// The unit's state's come (or its /version): its rules' hash, and
+  /// whether it's changed them.
+  void unitSaid(Map<String, dynamic> j) {
+    final h = j['rules'];
+    if (h is! String) return;
+    final edited = j['edited'] == 1;
+    if (h == _unitHash && edited == _unitEdited) return;
+    _unitHash = h;
+    _unitEdited = edited;
+    notifyListeners();
+    syncUnit();
+  }
+
   void boardState(String json) {
-    final p = BoardPolicy.fromState(json);
-    if (p == null) return;
-    policy = p;
-    var changed = false;
-    for (final r in requests.toList()) {
-      final before = r.caps.length;
-      r.caps.removeWhere((c) => p.caps[c]?.allows(r.id) ?? false);
-      if (r.caps.length != before) changed = true;
-      if (r.caps.isEmpty) requests.remove(r);
-    }
-    changed ? _save() : notifyListeners();
+    try {
+      final j = jsonDecode(json);
+      if (j is Map<String, dynamic>) unitSaid(j);
+    } catch (_) {}
   }
 
   void boardGone() {
-    policy = null;
+    _unitHash = null;
+    _unitEdited = false;
+    _sentHash = null;
     notifyListeners();
   }
 
+  /// Give the unit our rules if it hasn't them: or first take on its own,
+  /// if this app's never had any (a new phone, or the app put back), and
+  /// what its wearer's switched Off on it.
+  Future<void> syncUnit() async {
+    if (!unitHasRules || _unitHash == null || _askingUnit) return;
+    if (_unitEdited || (!rules.owned && _unitHash != '00000000')) {
+      _askingUnit = true;
+      var took = false;
+      try {
+        final a = await board.request('GET', '/api/rules');
+        if (a.status == 200) {
+          rules.takeOn(jsonDecode(a.body) as Map<String, dynamic>, all: !rules.owned);
+          _unitEdited = false;
+          _sentHash = null;
+          took = true;
+        }
+      } catch (_) {
+      } finally {
+        _askingUnit = false;
+      }
+      if (took) rulesChanged();     // and back to the unit, as ours now
+      return;
+    }
+    final doc = rules.encode(mutedKeys());
+    final hash = HiveRules.hashOf(doc);
+    if (hash == _unitHash) {
+      _sentHash = hash;
+      if (!rules.owned) rulesChanged();
+      return;
+    }
+    if (hash == _sentHash) return;      // on its way
+    _sentHash = hash;
+    for (final piece in rulesMessages(doc, board.maxWrite)) {
+      board.send(piece);
+    }
+    notifyListeners();
+    // For the unit to say it has them
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (unitHasRules) board.request('GET', '/api/state').catchError((_) => RemoteAnswer(0, ''));
+    });
+  }
+
+  // ----- Commands -----
+
   /// A command for [cap] that came, from [name] ([key] theirs, [who] who
   /// they are): logged, with how it came and what came of it; one the
-  /// board didn't take, a request if it was for want of being allowed.
+  /// unit didn't take, a request if it was for want of being allowed.
   /// [scope] is OthersCommand.scope*; [openChannel] that it came to the
-  /// open direct channel, which anyone nearby hears, so the board takes it
-  /// as to everyone.
+  /// open direct channel, which anyone nearby hears, so it's taken as to
+  /// everyone.
   void heard(int cap, List<int> key, String name, String who,
       {required bool done,
       required bool muted,
@@ -216,7 +275,6 @@ class Permissions extends ChangeNotifier {
     } else {
       outcome = refused(cap, key, name, who,
           everyone: scope == _scopeEveryone || openChannel, channel: scope == _scopeChannel, what: what);
-      onRefused?.call();
     }
     log(LogEntry(DateTime.now(), name, what,
         via: direct ? 'Direct' : 'Cloud',
@@ -226,24 +284,29 @@ class Permissions extends ChangeNotifier {
 
   static const _scopeEveryone = 0, _scopeChannel = 1;    // OthersCommand.scope*
 
-  /// A command for [cap] that the board didn't take: a request, if it's for
-  /// want of being allowed (the capability on Ask, not ignored for how it
-  /// came, they're not allowed) and they haven't been declined it.
-  /// [everyone] is whether it came to everyone who can hear them, as the
-  /// board's ignoring has it. Returns why it wasn't taken, for the log.
+  /// A command for [cap] that the unit didn't take: a request, if it's for
+  /// want of being allowed and they haven't been declined it. Returns why
+  /// it wasn't taken, for the log.
   String refused(int cap, List<int> key, String name, String who,
       {required bool everyone, required bool channel, required String what}) {
-    final c = policy?.caps[cap];
     final feature = capName(cap);
-    if (c == null) return 'Not done';
-    if (c.policy == Policy.off) return 'Not done: $feature is off';
-    if (c.policy == Policy.anyone) return 'Not done';
-    if (everyone && c.ignore & ignoreEveryone != 0) return 'Not done: you ignore commands sent to everyone';
-    if (channel && !everyone && c.ignore & ignoreChannel != 0) {
-      return 'Not done: you ignore commands sent to a channel';
-    }
     final hex = _hex(key);
-    if (c.person(hex.substring(0, 16))?.allowed ?? false) return 'Not done';
+    final listed = rules.people.containsKey(hex);
+    rules.note(hex, name);
+    if (!listed) rulesChanged();
+    switch (rules.decide(cap, hex, muted: false, everyone: everyone, channel: channel)) {
+      case Decision.off:
+        return 'Not done: $feature is off';
+      case Decision.ignoredEveryone:
+        return 'Not done: you ignore commands sent to everyone';
+      case Decision.ignoredChannel:
+        return 'Not done: you ignore commands sent to a channel';
+      case Decision.taken:
+      case Decision.muted:
+        return 'Not done';     // the unit hadn't the latest rules
+      case Decision.notAllowed:
+        break;
+    }
     if (declined.any((d) => d.key == hex && d.caps.contains(cap))) return 'Not done: you declined them before';
     final now = DateTime.now();
     for (final r in requests) {
@@ -283,27 +346,21 @@ class Permissions extends ChangeNotifier {
 
   static String _hex(List<int> key) => key.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
-  bool get boardReady => board.state == BoardState.connected && board.status != null;
+  // ----- Changing them -----
 
-  /// Allow someone [caps] on the board, by their whole key, added to its
-  /// list if they aren't on it. Those set to Off
-  /// keep it for when they're on again. Returns those the unit didn't take.
+  /// Allow someone [caps], by their whole key, listed if they aren't.
+  /// Those set to Off keep it for when they're on again. Returns those that
+  /// couldn't be (none: they're the app's, and go to the unit).
   Future<Set<int>> grant(String key, String name, Set<int> caps, {bool accepting = false}) async {
-    final id = key.substring(0, 16);
-    final q = 'key=$key&id=$id&name=${Uri.encodeQueryComponent(name)}';
-    String? state;
-    for (final cap in caps) {
-      state = await _post('kind=${boardKindOf[cap]}&$q&allow=1') ?? state;
-    }
-    final failed = _notAsAsked(state, id, {for (final c in caps) c: true});
-    final got = caps.difference(failed);
+    rules.note(key, name).allowed.addAll(caps);
     requests.removeWhere((r) => r.key == key);
-    if (got.isNotEmpty) declined.removeWhere((r) => r.key == key);
+    if (caps.isNotEmpty) declined.removeWhere((r) => r.key == key);
     _save();
-    final what = got.isEmpty ? 'nothing' : _names(got);
+    rulesChanged();
+    final what = caps.isEmpty ? 'nothing' : _names(caps);
     log(LogEntry(DateTime.now(), name, '',
         outcome: accepting ? "You accepted $name's request, allowing $what" : 'You allowed $name $what'));
-    return failed;
+    return const {};
   }
 
   Future<Set<int>> accept(PermissionRequest r, Set<int> caps) => grant(r.key, r.name, caps, accepting: true);
@@ -326,46 +383,53 @@ class Permissions extends ChangeNotifier {
     _save();
   }
 
-  /// Someone in the board's list: allowed or not for each capability.
-  /// Returns those the unit didn't take.
+  /// Someone listed: allowed or not for each capability.
   Future<Set<int>> setAllowed(String id, Map<int, bool> allowed) async {
-    String? state;
+    final p = rules.byId(id);
+    if (p == null) return allowed.keys.toSet();
     for (final MapEntry(key: cap, value: on) in allowed.entries) {
-      state = await _post('kind=${boardKindOf[cap]}&id=$id&allow=${on ? 1 : 0}') ?? state;
+      on ? p.allowed.add(cap) : p.allowed.remove(cap);
     }
-    return _notAsAsked(state, id, allowed);
+    p.seen = DateTime.now();
+    rulesChanged();
+    return const {};
   }
 
-  /// Those of [want] that the board's [state] doesn't have as asked: all of
-  /// them, if it didn't answer.
-  Set<int> _notAsAsked(String? state, String id, Map<int, bool> want) {
-    final p = state == null ? null : BoardPolicy.fromState(state);
-    return {
-      for (final MapEntry(key: cap, value: on) in want.entries)
-        if (p == null || (p.caps[cap]?.person(id)?.allowed ?? false) != on) cap
-    };
-  }
-
-  /// Out of the board's list, for every capability.
+  /// Out of the list, and allowed nothing.
   Future<void> forget(String id) async {
-    for (final kind in boardKindOf.values) {
-      await _post('kind=$kind&id=$id&forget=1');
-    }
+    final p = rules.byId(id);
+    if (p == null) return;
+    rules.people.remove(p.key);
+    rulesChanged();
   }
 
-  Future<void> setPolicy(int cap, Policy p) => _post('kind=${boardKindOf[cap]}&permission=${p.index}');
+  Future<void> setPolicy(int cap, Policy p) async {
+    rules.rule(cap).policy = p;
+    rulesChanged();
+  }
 
-  Future<void> setIgnore(int cap, int ignore) => _post('kind=${boardKindOf[cap]}&ignore=$ignore');
+  Future<void> setIgnore(int cap, int ignore) async {
+    rules.rule(cap).ignore = ignore;
+    rulesChanged();
+  }
 
-  /// The answer: the board's state, which comes back through
-  /// BoardLink.states too. Null if it didn't answer.
-  Future<String?> _post(String query) async {
-    try {
-      final a = await board.request('POST', '/api/others?$query');
-      return a.status == 200 ? a.body : null;
-    } catch (_) {
-      return null;
+  /// Our toys' layout, for Setup → Toys: the channel an output follows
+  /// (-1 for none), of a toy with [outputs] (their channels now), by its
+  /// address.
+  void mapOutput(String addr, List<int> outputs, int output, int channel) {
+    final m = rules.toys[addr] ?? [...outputs];
+    while (m.length <= output) {
+      m.add(-1);
     }
+    m[output] = channel;
+    rules.toys[addr] = m;
+    rulesChanged();
+  }
+
+  /// The unit's screen controls; null for one per mapped channel.
+  void setControls(List<ScreenControl>? controls) {
+    rules.controls = controls;
+    rulesChanged();
   }
 
   static String _names(Iterable<int> caps) => caps.map(capName).join(' and ');

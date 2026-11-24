@@ -101,7 +101,7 @@ Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
     builder: (sheet) => StatefulBuilder(
       builder: (sheet, setState) {
         String note(ControlKind k) {
-          return switch (perms.policy?.caps[k.id]?.policy) {
+          return switch (perms.policy.caps[k.id]?.policy) {
             Policy.off => '${k.name} is off. This takes effect when you turn it on',
             Policy.anyone => '${k.name} is open to everyone, so this only matters if you change that',
             _ => k.does,
@@ -162,7 +162,7 @@ class PermissionsPage extends StatelessWidget {
         listenable: Listenable.merge([comm, comm.permissions]),
         builder: (context, _) {
           final perms = comm.permissions;
-          final policy = perms.boardReady ? perms.policy : null;
+          final policy = perms.policy;
           Tab tab(String text, int count, {bool badge = false}) => Tab(
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Text(text),
@@ -192,18 +192,35 @@ class PermissionsPage extends StatelessWidget {
                   tabs: [
                     tab('Requests', perms.requests.length, badge: true),
                     tab('Features', 0),
-                    tab('People', policy?.everyone.length ?? 0),
+                    tab('People', policy.everyone.length),
                     tab('Declined', perms.declined.length),
                   ],
                 ),
               ),
               body: Column(children: [
-                if (policy == null)
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
-                    child: Text("Connect to your unit to see and change these. They're kept on the unit.",
-                        style: _small),
-                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  child: Row(children: [
+                    Icon(
+                        switch (perms.sync) {
+                          RulesSync.upToDate => Icons.check_circle_outline,
+                          RulesSync.sending => Icons.sync,
+                          RulesSync.noUnit => Icons.phone_android,
+                        },
+                        size: 16,
+                        color: Kc.muted),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                          switch (perms.sync) {
+                            RulesSync.upToDate => "Your unit has these, and goes by them while your phone's away.",
+                            RulesSync.sending => 'Sending these to your unit…',
+                            RulesSync.noUnit => 'Kept on your phone. Your unit gets them when it connects.',
+                          },
+                          style: _small),
+                    ),
+                  ]),
+                ),
                 Expanded(
                   child: TabBarView(children: [
                     _RequestsTab(comm: comm, policy: policy),
@@ -228,7 +245,7 @@ Widget _note(String text) => Padding(padding: const EdgeInsets.only(top: 8), chi
 
 class _RequestsTab extends StatelessWidget {
   final CommController comm;
-  final BoardPolicy? policy;
+  final PolicyView policy;
   const _RequestsTab({required this.comm, required this.policy});
 
   Future<void> _accept(BuildContext context, PermissionRequest r) async {
@@ -262,7 +279,7 @@ class _RequestsTab extends StatelessWidget {
                   TextButton(onPressed: () => perms.decline(r), child: const Text('Decline')),
                   const SizedBox(width: 8),
                   FilledButton(
-                      onPressed: policy == null ? null : () => _accept(context, r), child: const Text('Accept')),
+                      onPressed: () => _accept(context, r), child: const Text('Accept')),
                 ]),
               ]),
             ),
@@ -278,7 +295,7 @@ class _RequestsTab extends StatelessWidget {
 /// person on the unit's list, allowed it or not.
 class _FeaturesTab extends StatefulWidget {
   final CommController comm;
-  final BoardPolicy? policy;
+  final PolicyView policy;
   const _FeaturesTab({required this.comm, required this.policy});
 
   @override
@@ -297,8 +314,8 @@ class _FeaturesTabState extends State<_FeaturesTab> {
   Widget build(BuildContext context) {
     final perms = widget.comm.permissions;
     final kind = controlKinds.firstWhere((k) => k.id == _cap);
-    final p = widget.policy?.caps[_cap];
-    final people = widget.policy?.everyone ?? const <ListedPerson>[];
+    final p = widget.policy.caps[_cap];
+    final people = widget.policy.everyone;
     Widget ignoring(String title, String subtitle, int bit) => PanelRow(
           title: title,
           subtitle: subtitle,
@@ -379,10 +396,10 @@ class _FeaturesTabState extends State<_FeaturesTab> {
 /// it.
 class _PeopleTab extends StatelessWidget {
   final CommController comm;
-  final BoardPolicy? policy;
+  final PolicyView policy;
   const _PeopleTab({required this.comm, required this.policy});
 
-  Future<void> _edit(BuildContext context, BoardPolicy policy, ListedPerson p) async {
+  Future<void> _edit(BuildContext context, PolicyView policy, ListedPerson p) async {
     final now = {for (final e in policy.caps.entries) if (e.value.person(p.id)?.allowed ?? false) e.key};
     final caps = await showGrantSheet(context, comm,
         title: 'What ${p.name} can control', id: p.id, initial: now, action: 'Save', all: false);
@@ -412,9 +429,9 @@ class _PeopleTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final policy = this.policy;
-    final people = policy?.everyone ?? const <ListedPerson>[];
+    final people = policy.everyone;
     return ListView(padding: _tabPadding(context), children: [
-      if (policy == null || people.isEmpty)
+      if (people.isEmpty)
         const Panel(children: [PanelRow(title: 'Nobody yet')])
       else
         Panel(children: [
@@ -446,7 +463,7 @@ class _PeopleTab extends StatelessWidget {
 /// Those declined: taken off the list, or allowed after all.
 class _DeclinedTab extends StatelessWidget {
   final CommController comm;
-  final BoardPolicy? policy;
+  final PolicyView policy;
   const _DeclinedTab({required this.comm, required this.policy});
 
   Future<void> _allow(BuildContext context, PermissionRequest r) async {
@@ -475,7 +492,7 @@ class _DeclinedTab extends StatelessWidget {
                   onPressed: () => perms.removeDeclined(r),
                 ),
                 OutlinedButton(
-                    onPressed: policy == null ? null : () => _allow(context, r), child: const Text('Allow')),
+                    onPressed: () => _allow(context, r), child: const Text('Allow')),
               ],
             ),
         ]),
