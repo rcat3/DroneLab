@@ -50,7 +50,6 @@ static uint32_t layout_changes;
 static bool scanning;
 static uint32_t now;                // the time of the last poll
 static uint32_t last_poll;
-static uint16_t speed = 100;        // percent
 
 const char *toys_output_name(toy_output_kind_t kind)
 {
@@ -70,6 +69,7 @@ void toys_init(void)
     for (int c = 0; c < TOYS_CHANNELS; c++)
     {
         channels[c].pub.pattern = -1;
+        channels[c].pub.speed = 100;
     }
 }
 
@@ -185,6 +185,18 @@ void toys_set_screen_controls(const toys_control_t *new_controls, int count)
         controls[n] = new_controls[i];
         controls[n].channels &= TOYS_ALL_CHANNELS;
         controls[n].label[TOYS_LABEL_LEN - 1] = '\0';
+        if (controls[n].label[0] == '\0')
+        {
+            // By its channels, as many as fit: "V1+V2"
+            size_t at = 0;
+            for (uint8_t c = 0; c < TOYS_CHANNELS && at + 4 < TOYS_LABEL_LEN; c++)
+            {
+                if (controls[n].channels & (1u << c))
+                {
+                    at += (size_t)snprintf(controls[n].label + at, TOYS_LABEL_LEN - at, "%sV%u", at ? "+" : "", c + 1);
+                }
+            }
+        }
         n++;
     }
     control_count = n;
@@ -315,14 +327,28 @@ void toys_react(uint8_t mask, uint8_t mode)
     }
 }
 
-void toys_set_speed(uint16_t percent)
+void toys_set_speed(uint8_t mask, uint16_t percent)
 {
-    speed = percent < TOYS_SPEED_MIN ? TOYS_SPEED_MIN : percent > TOYS_SPEED_MAX ? TOYS_SPEED_MAX : percent;
+    percent = percent < TOYS_SPEED_MIN ? TOYS_SPEED_MIN : percent > TOYS_SPEED_MAX ? TOYS_SPEED_MAX : percent;
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
+    {
+        if (mask & (1u << c))
+        {
+            channels[c].pub.speed = percent;
+        }
+    }
 }
 
-uint16_t toys_speed(void)
+uint16_t toys_speed(uint8_t mask)
 {
-    return speed;
+    for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
+    {
+        if (mask & (1u << c))
+        {
+            return channels[c].pub.speed;
+        }
+    }
+    return channels[0].pub.speed;
 }
 
 void toys_stop_all(void)
@@ -351,7 +377,7 @@ static void run_channels(uint32_t dt_ms)
         float v = 1;
         if (ch->pub.pattern >= 0)
         {
-            ch->pattern_ms += dt_ms * speed / 100;
+            ch->pattern_ms += dt_ms * ch->pub.speed / 100;
             v = patterns_level((size_t)ch->pub.pattern, c, ch->pattern_ms);
         }
         if (ch->pub.react != 0)

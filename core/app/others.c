@@ -325,9 +325,10 @@ static int kind_of(const uint8_t *what, size_t len)
     case OTHERS_VIBE_PATTERN:
         return len >= 2 ? OTHERS_VIBE : -1;
     case OTHERS_VIBE_LEVEL:
-    case OTHERS_VIBE_SPEED:
     case OTHERS_VIBE_REACT:
         return len >= 3 ? OTHERS_VIBE : -1;
+    case OTHERS_VIBE_SPEED:
+        return len >= 4 ? OTHERS_VIBE : -1;
     case OTHERS_MESSAGE:
         return len > 3 ? OTHERS_TERMINAL : -1;
     case OTHERS_CLEAR:
@@ -363,7 +364,7 @@ static void run(const uint8_t *what, size_t len)
         play(arg[0] & TOYS_ALL_CHANNELS, arg + 1, len - 2);
         break;
     case OTHERS_VIBE_SPEED:
-        toys_set_speed((uint16_t)(arg[0] | (arg[1] << 8)));
+        toys_set_speed(arg[0] & TOYS_ALL_CHANNELS, (uint16_t)(arg[1] | (arg[2] << 8)));
         break;
     case OTHERS_VIBE_REACT:
         react(arg[0] & TOYS_ALL_CHANNELS, arg[1]);

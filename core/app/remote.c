@@ -20,7 +20,7 @@
  *     POST /api/level?c=<channels>&v=<level, 0 to 20>[&release=1]
  *     POST /api/play?c=<channels>&p=<pattern, or -1 to stop>
  *     POST /api/react?c=<channels>&m=<mode, 0 to stop>
- *     POST /api/speed?v=<percent>
+ *     POST /api/speed?c=<channels>&v=<percent>   patterns' speed, each channel's own
  *     POST /api/scan?on=<1 or 0>
  *     POST /api/connect?d=<slot>      connect, or disconnect if connected
  *     POST /api/stop                  everything, as the Stop button
@@ -438,7 +438,7 @@ static void write_state(json_t *j)
         reactive_status((reactive_mode_t)reaction, status, sizeof(status));
     }
     jprintf(j, "{\"scan\":%d,\"speed\":%u,\"hold\":%d,\"react\":%d,\"status\":", toys_scanning() ? 1 : 0,
-            toys_speed(), settings_get()->toy_release_to_zero ? 0 : 1, (int)reaction);
+            toys_speed(TOYS_ALL_CHANNELS), settings_get()->toy_release_to_zero ? 0 : 1, (int)reaction);
     jstring(j, status);
     jprintf(j, ",\"notice\":");
     jstring(j, notice != NULL ? notice : "");
@@ -540,8 +540,8 @@ static void write_state(json_t *j)
     for (uint8_t c = 0; c < TOYS_CHANNELS; c++)
     {
         const toy_channel_t *ch = toys_channel(c);
-        jprintf(j, "%s{\"level\":%u,\"out\":%u,\"pattern\":%d,\"react\":%d,\"driven\":%d}", c ? "," : "",
-                ch->level, ch->out, ch->pattern, ch->react, toys_driven(c) ? 1 : 0);
+        jprintf(j, "%s{\"level\":%u,\"out\":%u,\"pattern\":%d,\"react\":%d,\"speed\":%u,\"driven\":%d}", c ? "," : "",
+                ch->level, ch->out, ch->pattern, ch->react, ch->speed, toys_driven(c) ? 1 : 0);
     }
     toys_control_t controls[TOYS_SCREEN_CONTROLS];
     int control_count = toys_screen_controls(controls);
@@ -972,7 +972,7 @@ static bool run_command(const char *name, const char *query, const char *body, s
     }
     else if (strcmp(name, "speed") == 0)
     {
-        toys_set_speed((uint16_t)LV_CLAMP(TOYS_SPEED_MIN, query_int(query, "v", 100), TOYS_SPEED_MAX));
+        toys_set_speed(query_channels(query), (uint16_t)LV_CLAMP(TOYS_SPEED_MIN, query_int(query, "v", 100), TOYS_SPEED_MAX));
     }
     else if (strcmp(name, "scan") == 0)
     {

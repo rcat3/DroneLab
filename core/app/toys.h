@@ -91,6 +91,7 @@ typedef struct
     uint8_t out;            // what it's running at now
     int pattern;            // the pattern it's playing (see patterns.h), or -1
     uint8_t react;          // the reaction it follows (reactive_mode_t, reactive.h), 0 for none
+    uint16_t speed;         // how fast its pattern plays, in percent (100 is as written)
 } toy_channel_t;
 
 /* A control on the screen: the channels it drives, together. */
@@ -146,9 +147,12 @@ uint32_t toys_reactions(void);
 /* The reaction the lowest channel that reacts follows, or 0 for none. */
 uint8_t toys_reaction(void);
 
-/* How fast patterns play, in percent (100 is as written). */
-void toys_set_speed(uint16_t percent);
-uint16_t toys_speed(void);
+/* How fast patterns play on the channels, in percent (100 is as written,
+ * TOYS_SPEED_MIN to TOYS_SPEED_MAX): each channel has its own. */
+void toys_set_speed(uint8_t channels, uint16_t percent);
+
+/* How fast patterns play on the lowest of [channels]. */
+uint16_t toys_speed(uint8_t channels);
 
 /* Stop every pattern and reaction, and set every channel to 0. */
 void toys_stop_all(void);
@@ -178,7 +182,8 @@ int toys_custom_controls(toys_control_t out[TOYS_SCREEN_CONTROLS]);
 int toys_screen_controls(toys_control_t out[TOYS_SCREEN_CONTROLS]);
 
 /* Lay out the screen's controls, from the wearer's rules; none (count 0)
- * goes back to one for each mapped channel. */
+ * goes back to one for each mapped channel. One without a label is called
+ * by its channels, e.g. "V1+V2". */
 void toys_set_screen_controls(const toys_control_t *controls, int count);
 
 /* Goes up whenever the mapping or screen controls change, for screens to

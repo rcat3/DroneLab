@@ -58,8 +58,9 @@
  *     42 pattern:  42, the channels, then the pattern's name, in UTF-8:
  *                  played on them, in step, if this board has one by that
  *                  name; no name stops their patterns
- *     43 speed:    43, how fast patterns play, in percent (2 bytes, little
- *                  endian, 25 to 300)
+ *     43 speed:    43, the channels, how fast their patterns play, in
+ *                  percent (2 bytes, little endian, 25 to 300): each
+ *                  channel has its own
  *     44 react:    44, the channels, the reaction (reactive_mode_t, 0 for
  *                  none): to this board's wearer, if it can sense it. There's
  *                  one reaction for every channel that follows it.

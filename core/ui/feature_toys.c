@@ -14,7 +14,7 @@
  *   Patterns: plays a pattern on every channel, or on one control's. While
  *             one plays, each ring on the control page sets how high its
  *             channels go, and a thin ring inside it shows the level as it
- *             plays. The speed is under the list.
+ *             plays. The speed, of the channels picked, is under the list.
  *   React:    drives the channels from your voice or your movement (see
  *             reactive.h), on top of any pattern.
  *   Options:  Hold: on, a control keeps its level when you let go of its
@@ -621,9 +621,9 @@ static void show_patterns(void)
         lv_obj_set_style_border_color(pattern_rows[i], playing ? color : COLOR_OUTLINE, 0);
         lv_obj_set_style_text_color(pattern_row_labels[i], playing ? color : lv_color_white(), 0);
     }
-    if (toys_speed() != shown_speed)
+    if (toys_speed(target_channels()) != shown_speed)
     {
-        shown_speed = toys_speed();
+        shown_speed = toys_speed(target_channels());
         lv_label_set_text_fmt(speed_label, "Speed %d%%", shown_speed);
     }
 }
@@ -658,7 +658,8 @@ static void target_event_cb(lv_event_t *e)
 static void speed_event_cb(lv_event_t *e)
 {
     int step = (int)(intptr_t)lv_event_get_user_data(e);
-    toys_set_speed((uint16_t)LV_CLAMP(TOYS_SPEED_MIN, (int)toys_speed() + step * 25, TOYS_SPEED_MAX));
+    uint8_t channels = target_channels();
+    toys_set_speed(channels, (uint16_t)LV_CLAMP(TOYS_SPEED_MIN, (int)toys_speed(channels) + step * 25, TOYS_SPEED_MAX));
     show_patterns();
 }
 
