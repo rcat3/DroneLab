@@ -170,7 +170,7 @@ const char remote_page[] =
     "<button id=\"next\" aria-label=\"Next page\">&#9654;</button>\n"
     "</div>\n"
     "<div id=\"vis-box\" hidden>\n"
-    "<h2>Visualizer</h2>\n"
+    "<h2>Sound Visualizer</h2>\n"
     "<div class=\"chips\" id=\"visualizers\"></div>\n"
     "</div>\n"
     "<h2>Show on the display</h2>\n"

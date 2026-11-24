@@ -34,7 +34,7 @@
  *                                     shown at startup, and whether the
  *                                     remote starts at power-up, as in Settings
  *     POST /api/ring?[on=<1 or 0>][&c=<color>]   the voice ring
- *     POST /api/vis?v=<style>[&show=1]  the Visualizer's style, and bring
+ *     POST /api/vis?v=<style>[&show=1]  the Sound Visualizer's style, and bring
  *                                     it on screen
  *     GET  /api/tracks    the sound player's tracks, which don't change
  *     GET  /api/chime     whether a sound for something's playing (POST /api/sound?chime=)
@@ -1106,7 +1106,7 @@ static bool run_command(const char *name, const char *query, const char *body, s
     }
     else if (strcmp(name, "vis") == 0 && ui_visualizer_count() > 0)
     {
-        // As the Visualizer's own page does; it catches up and shows it
+        // As the Sound Visualizer's own page does; it catches up and shows it
         int style = query_int(query, "v", -1);
         if (style >= 0 && (size_t)style < ui_visualizer_count())
         {
@@ -1114,7 +1114,7 @@ static bool run_command(const char *name, const char *query, const char *body, s
         }
         for (size_t f = 0; query_int(query, "show", 0) && f < ui_feature_count(); f++)
         {
-            if (strcmp(ui_feature_name(f), "Visualizer") == 0)
+            if (strcmp(ui_feature_name(f), UI_SOUND_VISUALIZER) == 0)
             {
                 ui_show(f, 0);
             }

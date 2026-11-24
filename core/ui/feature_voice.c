@@ -3,9 +3,9 @@
  * the seal test (boards that can measure the speaker's echo), and the voice
  * lab (boards with WiFi).
  *
- * The voice ring's settings page is the last of the Visualizer's pages, as
+ * The voice ring's settings page is the last of the Sound Visualizer's pages, as
  * the ring is a picture of the voice too (feature_voice_add_ring_page). It
- * only comes here if the Visualizer is left out of a board with a
+ * only comes here if the Sound Visualizer is left out of a board with a
  * microphone, which none is now.
  *
  * The voice ring itself is drawn over the images feature, and over its own
@@ -641,7 +641,7 @@ static bool build(ui_feature_t *feature)
         return false;
     }
 
-    bool any = feature_voice_add_ring_page(feature);   // unless the Visualizer has it
+    bool any = feature_voice_add_ring_page(feature);   // unless the Sound Visualizer has it
     if (voice_fx_start())
     {
         any = true;
@@ -662,5 +662,5 @@ static bool build(ui_feature_t *feature)
         add_lab_page(feature);
         any = true;
     }
-    return any;     // left out if the Visualizer has the ring and there's nothing else
+    return any;     // left out if the Sound Visualizer has the ring and there's nothing else
 }

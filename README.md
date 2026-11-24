@@ -38,10 +38,10 @@ The DroneLab display unit screws into the mask's voice port: a glowing 1.75" rou
 <tr>
 <td width="190" align="center"><a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_halo.png" width="170" alt="The Halo visualizer"></a></td>
 <td>
-<h3>Visualizers</h3>
+<h3>Sound Visualizers</h3>
 <p>Seven animated displays of the wearer's voice and whatever the speaker is playing: KITT's voice box, a 3D spectrum terrain, an oscilloscope, a spinning halo, an aurora, orbits and ripples.</p>
 <p><a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_kitt.png" width="88" alt="KITT" title="KITT"></a> <a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_terrain.png" width="88" alt="Terrain" title="Terrain"></a> <a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_scope.png" width="88" alt="Scope" title="Scope"></a> <a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_orbit.png" width="88" alt="Orbit" title="Orbit"></a> <a href="docs/features/visualizer.md"><img src="docs/images/screens/visualizer_ripples.png" width="88" alt="Ripples" title="Ripples"></a></p>
-<p><a href="docs/features/visualizer.md">Visualizer →</a></p>
+<p><a href="docs/features/visualizer.md">Sound Visualizer →</a></p>
 </td>
 </tr>
 <tr>

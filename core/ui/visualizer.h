@@ -3,7 +3,7 @@
 
 /*
  * The visualizers: ways of showing the wearer's voice, and whatever the
- * speaker is playing. The Visualizer feature (feature_visualizer.c) shows
+ * speaker is playing. The Sound Visualizer feature (feature_visualizer.c) shows
  * one at a time on a full screen canvas, and analyses the sound for them
  * once a frame (vis_audio.c). Each one is a visualizer_t in its own
  * vis_<name>.c, listed in feature_visualizer.c.

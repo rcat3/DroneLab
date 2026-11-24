@@ -11,7 +11,7 @@ The *WiFi Hotspot Remote* page in [Settings](settings.md) lets people run the di
 
 The page has five tabs:
 
-- **Screen**: what's on the display now, with arrows to step through every page.  Under them, the [Visualizer](visualizer.md)'s styles, to switch to one and show it.  Then every feature's pages are listed, to jump straight to one.
+- **Screen**: what's on the display now, with arrows to step through every page.  Under them, the [Sound Visualizer](visualizer.md)'s styles, to switch to one and show it.  Then every feature's pages are listed, to jump straight to one.
 - **Toys**: a slider for each of the screen's [controls](toys.md#screen-controls), the patterns and their speed, the reactions, a list of toys to connect, with the [channel](toys.md#channels) each output follows, and a big **STOP** at the bottom that stops every toy the moment it's touched.
 - **Sound**: the voice effect, with *Play on speaker*, the presets, *Effect Volume* as a slider with buttons to step it by 1% or 5%, and *Loud room*.  Then the [voice ring](voice-ring.md), on or off and its color.  Under it, the sound player: the track playing, play and pause, the next and last tracks, a bar to move through the track, its volume, the repeat modes, *Play at startup*, and every track, to play one with a tap.
 - **Terminal**: type a message and *Send* it (or press Enter) to show it on the Terminal.  *Switch to it* (on to start with) brings the Terminal on screen when you send.  *Add a line* puts the message under what's there instead of replacing it, dropping the oldest lines when it's full.  *Clear* empties it, and *Letter size* picks how big it's shown.  The last few messages are listed under it, to send again with a tap.

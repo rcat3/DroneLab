@@ -1,5 +1,5 @@
 /*
- * Visualizer feature (boards with a microphone): a full screen picture of
+ * Sound Visualizer feature (boards with a microphone): a full screen picture of
  * the wearer's voice, and of whatever the speaker is playing, in one of
  * several styles (see visualizer.h). Its pages are the visualizer, a page to
  * choose the style, and the voice ring's settings (feature_voice.c), as the
@@ -40,7 +40,7 @@ static void on_navigate(void)
 }
 
 const ui_feature_def_t feature_visualizer = {
-    .name = "Visualizer",
+    .name = UI_SOUND_VISUALIZER,
     .build = build,
     .on_navigate = on_navigate,
 };
@@ -164,22 +164,22 @@ static bool add_visualizer_page(ui_feature_t *feature)
     pixels.size = LV_MIN(w, h);
     vis_clear(&pixels, LV_MAX(w, h));
 
-    lv_obj_t *page = ui_feature_add_page(feature, "Visualizer", true);
+    lv_obj_t *page = ui_feature_add_page(feature, UI_SOUND_VISUALIZER, true);
     canvas = lv_canvas_create(page);
     lv_canvas_set_draw_buf(canvas, buf);
     lv_obj_center(canvas);
     lv_obj_set_clickable(canvas, true);
     lv_obj_add_event_cb(canvas, canvas_clicked_cb, LV_EVENT_CLICKED, NULL);
-    ui_add_startup_choice(feature, page, "Visualizer", SETTINGS_STARTUP_VISUALIZER);
+    ui_add_startup_choice(feature, page, UI_SOUND_VISUALIZER, SETTINGS_STARTUP_VISUALIZER);
     return true;
 }
 
 static void add_chooser_page(ui_feature_t *feature)
 {
-    lv_obj_t *page = ui_feature_add_page(feature, "Choose Visualizer", false);
+    lv_obj_t *page = ui_feature_add_page(feature, "Choose Sound Visualizer", false);
 
     lv_obj_t *title = lv_label_create(page);
-    lv_label_set_text(title, "Visualizer");
+    lv_label_set_text(title, "Sound Visualizer");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(32));
 
     static char options[128];

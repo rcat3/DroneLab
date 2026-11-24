@@ -83,7 +83,7 @@ Put the card in the slot on the left side and restart the unit: it reads the car
 
 ## 9. Pick what it shows at startup
 
-In Settings, **Startup** picks what's on screen when the unit turns on: **Images**, **Visualizer**, **HiveMind** or **Terminal**.  With **Images**, pick which image in the list under them.
+In Settings, **Startup** picks what's on screen when the unit turns on: **Images**, **Sound Visualizer**, **HiveMind**, **Terminal** or **Toys** (its Toy Visualizer).  With **Images**, pick which image in the list under them.
 
 ## 10. Connect your phone (optional)
 

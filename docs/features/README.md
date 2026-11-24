@@ -22,7 +22,7 @@ Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp
 <td>
 <h3>Sound</h3>
 <p><i>Speaker model</i></p>
-<p>A music and sound effect player.  It plays WAV, MP3 and FLAC files from the micro SD card through the speaker, and keeps playing while you look at other features.  It repeats everything or one track, or plays once, and it can start playing as soon as the unit turns on.  The Visualizer dances to it.</p>
+<p>A music and sound effect player.  It plays WAV, MP3 and FLAC files from the micro SD card through the speaker, and keeps playing while you look at other features.  It repeats everything or one track, or plays once, and it can start playing as soon as the unit turns on.  The Sound Visualizer dances to it.</p>
 <p><a href="sound.md">Sound →</a></p>
 </td>
 </tr>
@@ -75,10 +75,10 @@ Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp
 <tr>
 <td width="190" align="center"><a href="visualizer.md"><img src="../images/screens/visualizer_halo.png" width="170" alt="The Halo visualizer"></a></td>
 <td>
-<h3>Visualizer</h3>
+<h3>Sound Visualizer</h3>
 <p>Seven animated pictures of the wearer's voice, and of whatever the speaker is playing: KITT's voice box, a 3D spectrum terrain, an oscilloscope, a spinning halo, an aurora, orbits and ripples.  Tap to move on to the next.</p>
 <p><a href="visualizer.md"><img src="../images/screens/visualizer_kitt.png" width="80" alt="KITT" title="KITT"></a> <a href="visualizer.md"><img src="../images/screens/visualizer_terrain.png" width="80" alt="Terrain" title="Terrain"></a> <a href="visualizer.md"><img src="../images/screens/visualizer_scope.png" width="80" alt="Scope" title="Scope"></a> <a href="visualizer.md"><img src="../images/screens/visualizer_aurora.png" width="80" alt="Aurora" title="Aurora"></a> <a href="visualizer.md"><img src="../images/screens/visualizer_orbit.png" width="80" alt="Orbit" title="Orbit"></a> <a href="visualizer.md"><img src="../images/screens/visualizer_ripples.png" width="80" alt="Ripples" title="Ripples"></a></p>
-<p><a href="visualizer.md">Visualizer →</a></p>
+<p><a href="visualizer.md">Sound Visualizer →</a></p>
 </td>
 </tr>
 <tr>

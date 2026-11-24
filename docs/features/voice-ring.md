@@ -2,7 +2,7 @@
 
 *Boards with a microphone: the ESP32-S3 boards*
 
-The Voice Ring's settings are the last page of the [Visualizer](visualizer.md), with the other pictures of your voice.  The Voice feature has the [Voice Effect](voice-effects.md) and its volume (on the ESP32-S3-Touch-AMOLED-1.75), and the [Voice Lab](voice-lab.md).
+The Voice Ring's settings are the last page of the [Sound Visualizer](visualizer.md), with the other pictures of your voice.  The Voice feature has the [Voice Effect](voice-effects.md) and its volume (on the ESP32-S3-Touch-AMOLED-1.75), and the [Voice Lab](voice-lab.md).
 
 ## Voice Ring
 

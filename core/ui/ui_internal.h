@@ -30,9 +30,9 @@ typedef struct
     void (*on_navigate)(void);
 } ui_feature_def_t;
 
-/* The voice ring's settings page (feature_voice.c), for the Visualizer to
+/* The voice ring's settings page (feature_voice.c), for the Sound Visualizer to
  * take as its own. Returns false if it's elsewhere already, or the board has
- * no microphone. The Visualizer then calls feature_voice_on_navigate. */
+ * no microphone. The Sound Visualizer then calls feature_voice_on_navigate. */
 bool feature_voice_add_ring_page(ui_feature_t *feature);
 void feature_voice_on_navigate(void);
 

@@ -107,7 +107,7 @@ static bool load(settings_t *out)
     out->startup_image[SETTINGS_NAME_LEN - 1] = '\0';
     if (strcmp(out->startup_image, SETTINGS_STARTUP_OLD_KITT) == 0)
     {
-        // KITT is one of the Visualizer's styles now, and the default one.
+        // KITT is one of the Sound Visualizer's styles now, and the default one.
         strcpy(out->startup_image, SETTINGS_STARTUP_VISUALIZER);
     }
     out->voice_ring = out->voice_ring ? 1 : 0;

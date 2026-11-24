@@ -12,7 +12,7 @@ screen, with the corners transparent.
 
     tools/screenshots.py --port /dev/ttyACM0 shot out.png
     tools/screenshots.py --port /dev/ttyACM0 api GET /api/info
-    tools/screenshots.py --port /dev/ttyACM0 show Visualizer 0 vis.png
+    tools/screenshots.py --port /dev/ttyACM0 show "Sound Visualizer" 0 vis.png
     tools/screenshots.py --port /dev/ttyACM0 docs docs/images/screens
 
 "docs" takes the set of pictures the documentation uses (see DOC_SHOTS).
