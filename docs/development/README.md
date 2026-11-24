@@ -16,7 +16,7 @@ The application doesn't know which board it's on.  Everything it does is in `cor
 flowchart TB
     subgraph core["core/ (the same on every board)"]
         ui["ui/: the features, one file each"]
-        app["app/: settings, Lovense, the phone remote, ..."]
+        app["app/: settings, toys, the phone remote, ..."]
         audio["audio/: microphone level, voice effects, sound player"]
         media["media/: images, built in and from the SD card"]
     end
@@ -43,7 +43,7 @@ A few ideas run through it:
 - `core/` - The application itself.  This code doesn't depend on any particular board.
   - `core/include/hal.h` - The functions each board has to provide.
   - `core/ui/` - The features (`feature_<name>.c`), the navigation between them, and shared UI parts.
-  - `core/app/` - Settings, the Lovense devices and patterns, the WiFi hotspot remote and its web page, comms and the talk button, messages for the Terminal.
+  - `core/app/` - Settings, the toys (`toys.c`, with a driver for each maker, `toy_lovense.c` the first) and patterns, the WiFi hotspot remote and its web page, comms and the talk button, messages for the Terminal.
   - `core/audio/` - The microphone level, voice effects, the Voice Lab stream, and the sound player and its decoders.
   - `core/media/` - The built-in images and the SD card's images.
   - `core/features.cmake` - The list of optional features.  Each platform's `features.cmake` picks which ones to build.
@@ -91,7 +91,7 @@ python3 tools/screenshots.py show Visualizer 0 vis.png    # a feature's page
 python3 tools/screenshots.py docs                         # the documentation's set
 ```
 
-`docs` plays a track on the speaker for the visualizers (one with "Roboto" in its name, if the card has it), uses a connected Lovense device if there is one, and puts the settings it changed back afterwards.  The Level wants the board standing upright.  The console isn't in release builds: it takes internal RAM, which the SD card and the radio need.
+`docs` plays a track on the speaker for the visualizers (one with "Roboto" in its name, if the card has it), uses a connected toy if there is one, and puts the settings it changed back afterwards.  The Level wants the board standing upright.  The console isn't in release builds: it takes internal RAM, which the SD card and the radio need.
 
 ## Releases
 
@@ -133,7 +133,7 @@ The workflow builds the release's firmware again, for the web installer and the 
 
 ## Threads
 
-The UI runs on a single loop, which just runs LVGL's timers (see `app_run()` in [`core/app/app.c`](../../core/app/app.c)).  Anything a feature does regularly, like drawing the Visualizer's frames or polling the Lovense devices, is an LVGL timer (`lv_timer_create()`), so it runs on that loop and can use LVGL freely.  The microphone and speaker callbacks run on the board's audio tasks, and Bluetooth on its own task, so they mustn't call LVGL.  They leave their results where the UI's timers pick them up.
+The UI runs on a single loop, which just runs LVGL's timers (see `app_run()` in [`core/app/app.c`](../../core/app/app.c)).  Anything a feature does regularly, like drawing the Visualizer's frames or polling the toys, is an LVGL timer (`lv_timer_create()`), so it runs on that loop and can use LVGL freely.  The microphone and speaker callbacks run on the board's audio tasks, and Bluetooth on its own task, so they mustn't call LVGL.  They leave their results where the UI's timers pick them up.
 
 ## Crashes and hangs
 

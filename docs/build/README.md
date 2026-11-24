@@ -26,7 +26,7 @@ DroneLab units aren't sold.  They're built by their owners, from a Waveshare dis
 | | [Speaker model](speaker-housing.md) | [Low-profile model](low-profile-housing.md) |
 |---|---|---|
 | Voice effects and sound | Yes | No speaker |
-| Everything else (images, visualizers, comms, Lovense, terminal, remote) | Yes | Yes |
+| Everything else (images, visualizers, comms, toys, terminal, remote) | Yes | Yes |
 | Battery | 2000 mAh, about 13.5 hours (9.5 with comms on) | 700-850 mAh, about 4.5-5.5 hours |
 | Stands out of the mask | About 33 mm | About 23 mm |
 | Levelling | A turning collar: hold the display level and screw the collar in | The whole housing screws in; set once in the design |
@@ -42,7 +42,7 @@ Each model's page has its own parts list.  On top of that:
 - **A 3D printer** (or [someone to print for you](#no-3d-printer)) that prints PLA, and ideally TPU for the speaker model's gasket and the optional USB port cover (they can be PLA at a pinch, or the gasket cut from craft foam).  No special settings, but the [test prints](speaker-housing.md#2-print-the-parts) are worth doing first on a printer you haven't used for these before.
 - **Small tools:** a hex key or screwdriver to fit M2 screws, a craft knife, scissors and a toothpick.
 - **A USB-C cable that carries data**, not just charging, and a computer (Linux, macOS or Windows) to [install the firmware](../building-firmware.md).
-- **A micro SD card** (optional), for your own images, sounds and Lovense patterns.
+- **A micro SD card** (optional), for your own images, sounds and toy patterns.
 - **A compatible gas mask**, of course: the housings are made to fit the voice port of the MSA Millennium (an MSA trademark; DroneLab isn't made or endorsed by MSA).  The housing screws into its voice port.  With it fitted, the mask is a costume, not a respirator: don't rely on it for protection.
 
 ## No 3D printer?
