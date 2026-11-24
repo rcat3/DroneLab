@@ -162,7 +162,7 @@ The DroneLab app is the phone's side of HiveMind: it joins the server, plays the
 
 - [Connecting](../app/connecting.md): pairing it with the unit, joining the server, your avatar.
 - [HiveMind](../app/voice.md): the two links, who's there, the ways to talk, hearing the hive, channels, and the talking settings.
-- [Text](../app/text.md) and [Control](../app/control.md): texts, words on displays and Lovense commands to others, and who may send you theirs.
+- [Text](../app/text.md) and [HiveMind Control](../app/control.md): texts, words on displays and toy commands to others, and who may send you theirs.
 - The [status strip](../app/README.md#the-status-strip) and the app's other signs.
 
 ## Trying it out

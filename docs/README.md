@@ -17,7 +17,7 @@ New here?  Start with the [project page](../README.md).
   - [Connecting](app/connecting.md): pairing the unit, joining the server, your avatar.
   - [HiveMind](app/voice.md): talking to other drones, over the server and direct, and hearing them.
   - [Text](app/text.md): texts with one drone, a channel or all of the hive, words on their displays, and who can put words on yours.
-  - [Control](app/control.md): others' displays and Lovense toys.
+  - [HiveMind Control](app/control.md): others' toys and displays, and your toys' channels.
   - [Permissions](app/permissions.md): who can control yours, requests, and the command log.
   - [Record](app/record.md): your voice effect to WAV files, for videos.
   - [Remote](app/remote.md): the unit's controls on the phone, and the WiFi hotspot for iPhones.

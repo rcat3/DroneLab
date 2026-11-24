@@ -4,7 +4,7 @@
 
 The *WiFi Hotspot Remote* page in [Settings](settings.md) lets people run the display from a phone's web browser, so nobody has to reach the display in the mask.  On the ESP32-S3-Touch-AMOLED-1.75, the [DroneLab app](#in-the-app) is the better way: it shows the same page over Bluetooth, and the phone stays on the internet, which it can't while it's joined to the hotspot.  The hotspot is for phones without the app, like iPhones for now.  They can pick what it shows, set its brightness and other settings, control the [toys](toys.md), run the voice ring, the [voice effect](voice-effects.md) and the [sound player](sound.md), and type messages onto the [Terminal](terminal.md).  The phone needs no app.
 
-1. Connect the devices on the display first (the Lovense feature's Devices page).  The phone can connect them too, but the display is quicker.
+1. Connect the devices on the display first (the Toys feature's Devices page).  The phone can connect them too, but the display is quicker.
 2. On the *WiFi Hotspot Remote* page, switch it on.  The board starts a WiFi hotspot of its own, called `DroneLab-` and four letters, and shows a QR code with its name and password under it.
 3. On the phone, point the camera at the QR code and tap *Join*.  (Or join the network in the phone's WiFi settings and type the password.)
 4. The remote's page opens on its own after a few seconds, the way a hotel's WiFi sign-in page does.  If it doesn't, open `http://192.168.4.1` in the phone's browser.

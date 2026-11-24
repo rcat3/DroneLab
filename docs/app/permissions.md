@@ -1,6 +1,6 @@
 # Permissions
 
-Others in the hive can control parts of your unit: put words on its [Terminal](../features/terminal.md), or run your [Lovense](../features/toys.md) toys.  **Permissions** is where you choose who can, see who's asking, and look back at every command that came.  The choices are kept on your unit, so they work whether or not your phone's with you.
+Others in the hive can control parts of your unit: put words on its [Terminal](../features/terminal.md), or run your [Vibe toys](../features/toys.md).  **Permissions** is where you choose who can, see who's asking, and look back at every command that came.  The choices are kept on your unit, so they work whether or not your phone's with you.
 
 Open it from *Setup*, or from the [links sheet](connecting.md#the-links-sheet) that pulls down from the status strip.  When someone's asking, a yellow raised hand with a count shows on the [status strip](README.md#the-status-strip), on the links sheet and in Setup.
 
@@ -10,7 +10,7 @@ Back to [the app](README.md).
 
 <img src="../images/app/permissions_features.png" width="300" alt="The Features tab for the Terminal: Nobody, Allowed or Anyone, Ignore broadcasts and Ignore channel commands, and each person with a switch">
 
-Pick a feature at the top, *TERMINAL* or *LOVENSE*, to see one at a time.
+Pick a feature at the top, *VIBE* or *TERMINAL*, to see one at a time.
 
 **Who can control it**:
 
@@ -68,7 +68,7 @@ Their commands for what you declined don't make new requests; the [log](#command
 
 The log button at the top of Permissions lists every command that came to you, newest first, with the time:
 
-- **Who and what**: *RCat-Linux2 put "Report to the hive" on your display*, or *set your toys to vibrate at 4*.
+- **Who and what**: *RCat-Linux2 put "Report to the hive" on your display*, or *set your toys on V1 to 4*.
 - **What came of it**: *Done* (green); *Not done: they asked for permission* or *their request is waiting* (yellow); or *Not done* and why (red): the feature's off, you ignore commands sent to everyone or to a channel, you declined them before, or you muted them.
 - **How it came**: *Cloud* (the server) or *Direct*, and whether it was sent *To you only*, *To the channel* or *To everyone*.
 
@@ -76,12 +76,12 @@ Accepting, declining and allowing are noted too, in pink.  It keeps the last 500
 
 ## What others see
 
-Each unit tells the others what its wearer lets others control: over the server through its app, and over direct mode in the unit's own hello.  It says each feature that's *ALLOWED* or *ANYONE*, and leaves out those set to *NOBODY*, and *Lovense* while no toy is paired.  It says nothing about who in particular you've allowed.
+Each unit tells the others what its wearer lets others control: over the server through its app, and over direct mode in the unit's own hello.  It says each feature that's *ALLOWED* or *ANYONE*, and leaves out those set to *NOBODY*, and *Vibe* while no toy is connected.  For Vibe, it also says which channels your toys follow, so their apps grey out the rest.  It says nothing about who in particular you've allowed.
 
 <img src="../images/app/person_capabilities.png" width="300" alt="What RCat-Linux lets others control: Terminal, only people they allow; Lovense, not available">
 
-On someone's card ([Voice](voice.md#whos-there)), *Lets others control* shows an icon for each.  Tap it for the whole list: *Anyone can control it*, *Only people they allow*, or *Not available*.  See [Control](control.md#sending) for how it's used.
+On someone's card ([Voice](voice.md#whos-there)), *Lets others control* shows an icon for each.  Tap it for the whole list: *Anyone can control it*, *Only people they allow*, or *Not available*.  See [HiveMind Control](control.md#sending) for how it's used.
 
 ## On the unit and the remote
 
-The same settings are on the unit itself, on each feature's *Others* pages (the Lovense feature's *Hive Commands*, the Terminal's *Hive Messages*), and under *From others* in the [Remote](remote.md) tab.  They're one set of settings, kept on the unit: change them anywhere and the others follow.
+The same settings are on the unit itself, on each feature's *Others* pages (the Toys feature's *Hive Commands*, the Terminal's *Hive Messages*), and under *From others* in the [Remote](remote.md) tab.  They're one set of settings, kept on the unit: change them anywhere and the others follow.

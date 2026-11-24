@@ -43,7 +43,7 @@ Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp
 <td width="190" align="center"><a href="comms.md"><img src="../images/screens/comm_status.png" width="170" alt="The HiveMind status screen"></a><br><a href="comms.md"><img src="../images/screens/comm_setup.png" width="80" alt="HiveMind Setup" title="HiveMind Setup"></a></td>
 <td>
 <h3>HiveMind (Comms)</h3>
-<p>Link every drone in the hive into one mind.  Push to talk, or just speak, and your voice, through the effect of your choice, goes into every other drone's headphones.  The display shows who's transmitting, with their avatar.  Messages for the Terminal and commands for Lovense toys travel the same link, if the drone receiving them has allowed it.  A cheap Bluetooth camera remote makes a talk button.</p>
+<p>Link every drone in the hive into one mind.  Push to talk, or just speak, and your voice, through the effect of your choice, goes into every other drone's headphones.  The display shows who's transmitting, with their avatar.  Messages for the Terminal and commands for toys travel the same link, if the drone receiving them has allowed it.  A cheap Bluetooth camera remote makes a talk button.</p>
 <ul>
 <li><b>Cloud mode:</b> through the wearer's phone to the hive's <a href="https://www.mumble.info">Mumble</a> server, so distance doesn't matter, and people without a mask join from any Mumble app.</li>
 <li><b>Direct mode</b> <i>(experimental)</i>: unit to unit over the radio, with no server, internet or phone signal.  For demos, scenes and drones close together, across a room at most: the board's small built-in antenna doesn't reach far (<a href="../hardware/direct-mode-range.md">why</a>).  Encrypted channels, and relaying through the drones in between.</li>
@@ -106,7 +106,7 @@ Every feature runs on the [ESP32-S3-Touch-AMOLED-1.75](../hardware/waveshare_esp
 <td width="190" align="center"><a href="phone-remote.md"><img src="../images/screens/feature_remote.png" width="170" alt="Remote control"></a></td>
 <td>
 <h3>Remote control</h3>
-<p>Run the whole unit from a phone, without seeing the display: what it shows, its brightness and settings, the Lovense toys, the voice ring, the voice effect, the sound player and the Terminal.  The <a href="../app/installing.md">DroneLab app</a> for Android does it over Bluetooth, and keeps the phone on the internet.  Phones without the app, iPhones included, join the unit's own WiFi hotspot and use a web browser.</p>
+<p>Run the whole unit from a phone, without seeing the display: what it shows, its brightness and settings, the toys, the voice ring, the voice effect, the sound player and the Terminal.  The <a href="../app/installing.md">DroneLab app</a> for Android does it over Bluetooth, and keeps the phone on the internet.  Phones without the app, iPhones included, join the unit's own WiFi hotspot and use a web browser.</p>
 <p><a href="phone-remote.md">WiFi Hotspot Remote →</a> · <a href="../app/remote.md">The app's Remote →</a></p>
 </td>
 </tr>

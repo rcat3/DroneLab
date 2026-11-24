@@ -1,6 +1,6 @@
 # Remote
 
-The Remote tab puts your unit's own controls on the phone: what its display shows, its settings, your Lovense toys, the voice effect, sounds and the Terminal.  Everything you'd do by touching the display, without touching it.
+The Remote tab puts your unit's own controls on the phone: what its display shows, its settings, your toys, the voice effect, sounds and the Terminal.  Everything you'd do by touching the display, without touching it.
 
 <img src="../images/app_remote.png" width="300" alt="The Remote tab: what the display shows, and buttons to change it">
 
