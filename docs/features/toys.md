@@ -4,7 +4,9 @@
 
 The Toys feature is the unit's side of **HiveMind Control**: the toys it runs itself, over Bluetooth, for you and for others in your hive.  It connects to up to three toys at once, and the connections stay up while you look at other features, so the levels stay as they were set.  Everything here can also be done from a phone, with the [WiFi Hotspot Remote](phone-remote.md) or the app's [Remote](../app/remote.md) tab.
 
-For now it runs **Lovense** toys, which it talks to over Bluetooth itself, without Lovense's app.  It isn't made, supported or endorsed by Lovense, and a firmware update on a toy could change how it responds.  More makers can be added, each with a driver of its own (see `core/app/toy_driver.h`).
+It runs **Lovense** toys, which it talks to over Bluetooth itself, without Lovense's app.  It also has drivers for **We-Vibe**, **Magic Motion** and **Kiiroo** (with OhMiBod) vibrators, *untested*: they follow the [Buttplug project](https://github.com/buttplugio/buttplug)'s descriptions of those toys, but nobody has tried one with a unit yet.  If you have one, please [open an issue](https://github.com/rcat3/DroneLab/issues) or post in [Discussions](https://github.com/rcat3/DroneLab/discussions) to say whether it works, with the toy's name as it shows under *Devices*.  Kiiroo's strokers (Keon, Onyx) aren't supported.
+
+None of this is made, supported or endorsed by those makers, and a firmware update on a toy could change how it responds.  More makers can be added, each with a driver of its own (see `core/app/toy_driver.h`).
 
 | ![Control](../images/screens/lovense_control.png) | ![Devices](../images/screens/lovense_devices.png) | ![Patterns](../images/screens/lovense_patterns.png) | ![React to](../images/screens/lovense_react.png) |
 |:-:|:-:|:-:|:-:|

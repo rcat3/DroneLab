@@ -54,6 +54,7 @@ typedef struct
     uint16_t conn_handle;
     char name[32];
     rcat_hal_ble_service_match_t service_match;
+    rcat_hal_ble_chr_match_t chr_match;     // NULL for any
     uint16_t svc_start, svc_end;
     uint16_t tx_handle, rx_handle, rx_end, cccd_handle;
     bool tx_no_rsp;
@@ -73,6 +74,7 @@ static uint8_t own_addr_type;
 
 static int scan_event_cb(struct ble_gap_event *event, void *arg);
 static int link_event_cb(struct ble_gap_event *event, void *arg);
+static void uuid_to_bytes(const ble_uuid_t *uuid, uint8_t out[16]);
 static void peer_register(void);
 static void peer_advertise(void);
 static bool button_finding(void);
@@ -295,12 +297,21 @@ static int chr_cb(uint16_t conn, const struct ble_gatt_error *error, const struc
         {
             link->rx_end = chr->def_handle - 1;
         }
-        if (link->tx_handle == 0 && (chr->properties & (BLE_GATT_CHR_PROP_WRITE | BLE_GATT_CHR_PROP_WRITE_NO_RSP)))
+        rcat_hal_ble_chr_use_t use = RCAT_HAL_BLE_CHR_ANY;
+        if (link->chr_match != NULL)
+        {
+            uint8_t uuid[16];
+            uuid_to_bytes(&chr->uuid.u, uuid);
+            use = link->chr_match(uuid);
+        }
+        if (link->tx_handle == 0 && (use == RCAT_HAL_BLE_CHR_ANY || use == RCAT_HAL_BLE_CHR_TX)
+            && (chr->properties & (BLE_GATT_CHR_PROP_WRITE | BLE_GATT_CHR_PROP_WRITE_NO_RSP)))
         {
             link->tx_handle = chr->val_handle;
             link->tx_no_rsp = (chr->properties & BLE_GATT_CHR_PROP_WRITE_NO_RSP) != 0;
         }
-        if (link->rx_handle == 0 && (chr->properties & BLE_GATT_CHR_PROP_NOTIFY))
+        if (link->rx_handle == 0 && (use == RCAT_HAL_BLE_CHR_ANY || use == RCAT_HAL_BLE_CHR_RX)
+            && (chr->properties & BLE_GATT_CHR_PROP_NOTIFY))
         {
             link->rx_handle = chr->val_handle;
         }
@@ -577,7 +588,8 @@ size_t rcat_hal_ble_scan_results(rcat_hal_ble_device_t *devices, size_t max)
     return n;
 }
 
-int rcat_hal_ble_connect(const rcat_hal_ble_device_t *device, rcat_hal_ble_service_match_t match)
+int rcat_hal_ble_connect(const rcat_hal_ble_device_t *device, rcat_hal_ble_service_match_t match,
+                         rcat_hal_ble_chr_match_t chr_match)
 {
     if (!started || !synced || match == NULL || ble_gap_conn_active())
     {
@@ -611,6 +623,7 @@ int rcat_hal_ble_connect(const rcat_hal_ble_device_t *device, rcat_hal_ble_servi
 
     ble_link_t *link = &links[free_link];
     link->service_match = match;
+    link->chr_match = chr_match;
     link->svc_start = link->svc_end = 0;
     link->tx_handle = link->rx_handle = link->rx_end = link->cccd_handle = 0;
     memcpy(link->name, device->name, sizeof(link->name));

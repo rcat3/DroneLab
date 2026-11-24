@@ -397,8 +397,10 @@ size_t rcat_hal_ble_scan_results(rcat_hal_ble_device_t *devices, size_t max)
     return n;
 }
 
-int rcat_hal_ble_connect(const rcat_hal_ble_device_t *device, rcat_hal_ble_service_match_t match)
+int rcat_hal_ble_connect(const rcat_hal_ble_device_t *device, rcat_hal_ble_service_match_t match,
+                         rcat_hal_ble_chr_match_t chr_match)
 {
+    (void)chr_match;        // the virtual toys' service has just the two
     // Lovense's usual service, 5a300001-0023-4bd4-bbd5-a6920e4c5653
     static const uint8_t service[16] = { 0x5a, 0x30, 0x00, 0x01, 0x00, 0x23, 0x4b, 0xd4,
                                          0xbb, 0xd5, 0xa6, 0x92, 0x0e, 0x4c, 0x56, 0x53 };

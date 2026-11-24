@@ -16,6 +16,9 @@
 
 static const toy_driver_t *const drivers[] = {
     &toy_lovense,
+    &toy_wevibe,
+    &toy_magicmotion,
+    &toy_kiiroo,
 };
 
 typedef struct
@@ -662,7 +665,7 @@ bool toys_toggle(size_t slot)
         {
             return false;
         }
-        s->link = rcat_hal_ble_connect(&s->ble, s->driver->service);
+        s->link = rcat_hal_ble_connect(&s->ble, s->driver->service, s->driver->characteristic);
         if (s->link < 0)
         {
             return false;

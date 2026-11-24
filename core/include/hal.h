@@ -261,6 +261,21 @@ typedef enum
  * LVGL or block. */
 typedef bool (*rcat_hal_ble_service_match_t)(const uint8_t uuid[16]);
 
+/* What a characteristic of the service is used for, for devices whose
+ * service has more than the two: RCAT_HAL_BLE_CHR_TX carries what's sent,
+ * RCAT_HAL_BLE_CHR_RX what's received, RCAT_HAL_BLE_CHR_ANY either (as it
+ * can), and RCAT_HAL_BLE_CHR_SKIP neither. Called on the Bluetooth task,
+ * like the service match. */
+typedef enum
+{
+    RCAT_HAL_BLE_CHR_ANY,
+    RCAT_HAL_BLE_CHR_TX,
+    RCAT_HAL_BLE_CHR_RX,
+    RCAT_HAL_BLE_CHR_SKIP,
+} rcat_hal_ble_chr_use_t;
+
+typedef rcat_hal_ble_chr_use_t (*rcat_hal_ble_chr_match_t)(const uint8_t uuid[16]);
+
 /* Start looking for devices, forgetting the ones found before. Only devices
  * that advertise a name are kept. It carries on while links are connected,
  * pausing while one connects. Returns false if the board has no Bluetooth. */
@@ -272,11 +287,13 @@ size_t rcat_hal_ble_scan_results(rcat_hal_ble_device_t *devices, size_t max);
 
 /* Connect to a device, using the first service that match accepts. In that
  * service, the first characteristic that can be written to carries what's
- * sent, and the first that notifies carries what's received. Returns the
- * link's number (0 to RCAT_HAL_BLE_MAX_LINKS - 1), or -1 if there's no free
- * link or another one is still connecting. If the connection fails, or there's
- * no such service, the link goes back to idle. */
-int rcat_hal_ble_connect(const rcat_hal_ble_device_t *device, rcat_hal_ble_service_match_t match);
+ * sent, and the first that notifies carries what's received, of those that
+ * chr_match allows (NULL allows any). Returns the link's number (0 to
+ * RCAT_HAL_BLE_MAX_LINKS - 1), or -1 if there's no free link or another one
+ * is still connecting. If the connection fails, or there's no such service,
+ * the link goes back to idle. */
+int rcat_hal_ble_connect(const rcat_hal_ble_device_t *device, rcat_hal_ble_service_match_t match,
+                         rcat_hal_ble_chr_match_t chr_match);
 void rcat_hal_ble_disconnect(int link);
 
 rcat_hal_ble_state_t rcat_hal_ble_link_state(int link);

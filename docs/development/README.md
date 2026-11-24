@@ -43,7 +43,7 @@ A few ideas run through it:
 - `core/` - The application itself.  This code doesn't depend on any particular board.
   - `core/include/hal.h` - The functions each board has to provide.
   - `core/ui/` - The features (`feature_<name>.c`), the navigation between them, and shared UI parts.
-  - `core/app/` - Settings, the toys (`toys.c`, with a driver for each maker, `toy_lovense.c` the first) and patterns, the WiFi hotspot remote and its web page, comms and the talk button, messages for the Terminal.
+  - `core/app/` - Settings, the toys (`toys.c`, with a driver for each maker, `toy_lovense.c`, `toy_wevibe.c`, `toy_magicmotion.c` and `toy_kiiroo.c`) and patterns, the WiFi hotspot remote and its web page, comms and the talk button, messages for the Terminal.
   - `core/audio/` - The microphone level, voice effects, the Voice Lab stream, and the sound player and its decoders.
   - `core/media/` - The built-in images and the SD card's images.
   - `core/features.cmake` - The list of optional features.  Each platform's `features.cmake` picks which ones to build.
