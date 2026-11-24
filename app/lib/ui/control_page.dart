@@ -81,8 +81,7 @@ class _ToysPageState extends State<ToysPage> {
   final List<double> _levels = List.filled(OthersCommand.vibeChannels, 0);
   final Map<int, DateTime> _sentAt = {};  // by the channels sent to
   bool _more = false;
-  bool _gang = false;
-  int _gangMask = 0x03;                   // V1 and V2
+  int _gangMask = 0;                      // the channels picked to move together
   final List<_Group> _groups = [_Group(), _Group(0)];
   bool _split = false;                    // two groups
   int _group = 0;                         // the group shown
@@ -312,20 +311,48 @@ class _ToysPageState extends State<ToysPage> {
   /// Whether we know nothing of theirs follows channel [c].
   bool _unmapped(int c) => _theirs != 0 && _theirs & (1 << c) == 0;
 
-  Widget _slider(String name, double value, int mask, {required bool canSend, bool dim = false}) {
+  /// The channels ganged: those picked that are shown and can be moved.
+  int get _ganged {
+    var m = _gangMask & _shownMask;
+    for (var c = 0; c < OthersCommand.vibeChannels; c++) {
+      if (_unmapped(c)) m &= ~(1 << c);
+    }
+    return m;
+  }
+
+  /// A channel's slider, its name a button to gang it: moving any ganged
+  /// slider moves them all, together, in one command.
+  Widget _slider(int c, {required bool canSend}) {
+    final name = 'V${c + 1}';
+    final value = _levels[c];
     // Nothing of theirs follows it: shown, but not to be moved
+    final dim = _unmapped(c);
     if (dim) canSend = false;
-    final row = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+    final ganged = !dim && _ganged & (1 << c) != 0;
+    final mask = ganged ? _ganged : 1 << c;
+    final row = Container(
+      color: ganged ? Kc.pink.withValues(alpha: 0.08) : null,
+      padding: const EdgeInsets.fromLTRB(12, 4, 16, 4),
       child: Row(children: [
-        SizedBox(width: 84, child: Text(name, style: Kc.term(16))),
+        SizedBox(
+          width: 72,
+          child: FilterChip(
+            label: Text(name),
+            labelStyle: Kc.term(16, color: ganged ? Kc.pink : Kc.text),
+            tooltip: ganged ? 'Ungang $name' : 'Gang $name with the others picked',
+            showCheckmark: false,
+            visualDensity: VisualDensity.compact,
+            selected: ganged,
+            onSelected: dim ? null : (on) => setState(() => _gangMask = on ? _gangMask | (1 << c) : _gangMask & ~(1 << c)),
+          ),
+        ),
         Expanded(
           child: Slider(
             value: value,
             max: OthersCommand.levelTop.toDouble(),
             divisions: OthersCommand.levelTop,
             label: '${value.round()}',
-            semanticFormatterCallback: (v) => '$name ${v.round()}',
+            semanticFormatterCallback: (v) => '$name${ganged ? ' and those ganged with it' : ''} ${v.round()}',
             onChanged: canSend ? (v) => _level(mask, v, done: false) : null,
             onChangeEnd: canSend ? (v) => _level(mask, v, done: true) : null,
           ),
@@ -353,34 +380,23 @@ class _ToysPageState extends State<ToysPage> {
     const small = TextStyle(color: Kc.muted, fontSize: 13);
     return switch (_section) {
       _Section.levels => [
+          Explained(
+            help: 'Tap channel names to gang them: moving any ganged slider moves them all to the same level, '
+                'sent as one command, so they change at the same moment. Tap a name again to take it out.',
+            helpPadding: const EdgeInsets.only(bottom: 6),
+            builder: (context, info) => Row(children: [
+              Expanded(
+                child: Text(
+                    _ganged == 0 ? 'Tap channel names to gang them' : '${channelNames(_ganged)} move together',
+                    style: small),
+              ),
+              if (_ganged != 0)
+                TextButton(onPressed: () => setState(() => _gangMask = 0), child: const Text('Ungang all')),
+              info,
+            ]),
+          ),
           Panel(children: [
-            Explained(
-              help: 'Gang channels to move them together, with one slider: sent as one command, so they '
-                  'change at the same moment.',
-              builder: (context, info) => PanelRow(
-                title: 'Gang channels',
-                trailing: [info, Switch(value: _gang, onChanged: (on) => setState(() => _gang = on))],
-              ),
-            ),
-            if (_gang) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                child: _channelPicker(_gangMask & _shownMask, (m) => setState(() => _gangMask = m), enabled: true),
-              ),
-              if (_gangMask & _shownMask != 0)
-                _slider('GANG', _levels[_firstOf(_gangMask & _shownMask)], _gangMask & _shownMask, canSend: canSend),
-            ],
-          ]),
-          const SizedBox(height: 12),
-          Panel(children: [
-            for (var c = 0; c < _shown; c++)
-              if (!_gang || _gangMask & (1 << c) == 0)
-                _slider('V${c + 1}', _levels[c], 1 << c, canSend: canSend, dim: _unmapped(c)),
-            if (_gang && _gangMask & _shownMask == _shownMask)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Every channel is ganged', style: small),
-              ),
+            for (var c = 0; c < _shown; c++) _slider(c, canSend: canSend),
           ]),
           _moreButton(),
           Explained(
@@ -504,13 +520,6 @@ class _ToysPageState extends State<ToysPage> {
 
   /// A dot on a group's tab while it plays or reacts.
   String _summary(_Group g) => g.playing != null || g.reacting != 0 ? ' ●' : '';
-
-  static int _firstOf(int mask) {
-    for (var c = 0; c < OthersCommand.vibeChannels; c++) {
-      if (mask & (1 << c) != 0) return c;
-    }
-    return 0;
-  }
 
   @override
   Widget build(BuildContext context) {
