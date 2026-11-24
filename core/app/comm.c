@@ -118,6 +118,7 @@
 #define RECORD_BEEP         0x02    // with a sync beep to start
 #define MSG_COMMAND         0x0B    // from the phone: a command for others, in from the server or out over direct
 #define COMMAND_FROM_SERVER 0x01
+#define COMMAND_OWN         0x02
 #define MSG_RULES           0x10    // from the phone: who's muted there, whose commands are ignored
 #define MSG_FAVOURITES      0x19    // from the phone: the wearer's favourite patterns, in pieces
 #define RULES_FIRST         0x01
@@ -1834,7 +1835,11 @@ static void receive_command(const uint8_t *msg, size_t len)
     {
         return;
     }
-    if (msg[1] & COMMAND_FROM_SERVER)
+    if (msg[1] & COMMAND_OWN)
+    {
+        others_run_own(msg + 2, len - 2);
+    }
+    else if (msg[1] & COMMAND_FROM_SERVER)
     {
         size_t n = msg[2];
         if (3 + n > len || n >= COMM_NAME_MAX)

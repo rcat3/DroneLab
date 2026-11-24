@@ -78,6 +78,7 @@ const commVersionPhoneMic = 15;  // the phone's mic in place of the board's (0x1
 const commVersionRules = 16;    // the wearer's rules from the app (0x10), in place of who's muted
 const commVersionPatterns = 17; // Vibe toys set as a whole (0x41), custom patterns in parts (0x45)
 const commVersionFavourites = 18;   // the wearer's favourite patterns (0x19), /api/state's "favs"
+const commVersionFollow = 19;   // the wearer's own Vibe commands, for their toys to follow along (0x0B's bit 1)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
 const boardSampleRate = 16000;
@@ -805,6 +806,10 @@ Uint8List commandFromServer(String from, List<int> cmd) {
   final name = _cut(utf8.encode(from), hearingNameMax);
   return Uint8List.fromList([_msgCommand, 1, name.length, ...name, ...cmd]);
 }
+
+/// What we send others' Vibe toys, for the board's own to follow along:
+/// what to do on alone, as the wearer's, so the rules don't come into it.
+Uint8List commandOwn(List<int> what) => Uint8List.fromList([_msgCommand, 2, ...what]);
 
 /// A command for the board to send over direct comms, to the boards with
 /// these ids, or to all of them with none.

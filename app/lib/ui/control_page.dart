@@ -24,6 +24,10 @@ import 'widgets.dart';
 /// one command); patterns and their speed; and reactions; each on the
 /// channels picked. The channels can be split into two groups, each with a
 /// pattern, speed and reaction of its own.
+///
+/// With Follow along, the sender's own unit's toys do as theirs are told,
+/// on the channels they mapped: channels only theirs follow can be moved
+/// still, greyed out, when the one sent to has nothing on them.
 class ToysPage extends StatefulWidget {
   final CommController comm;
   final Conversation target;
@@ -101,8 +105,12 @@ class _ToysPageState extends State<ToysPage> {
   /// known (a group, or they haven't said).
   int get _theirs => capabilitiesOfConversation(comm, widget.target)?.vibeChannels ?? 0;
 
+  /// The channels our own toys follow, while they follow along; 0 if not.
+  int get _mine => comm.followingAlong ? comm.myVibeChannels : 0;
+
   /// How many channels show.
-  int get _shown => _more || _theirs >> _usualChannels != 0 ? OthersCommand.vibeChannels : _usualChannels;
+  int get _shown =>
+      _more || (_theirs | _mine) >> _usualChannels != 0 ? OthersCommand.vibeChannels : _usualChannels;
   int get _shownMask => (1 << _shown) - 1;
 
   _Group get _g => _groups[_split ? _group : 0];
@@ -112,22 +120,38 @@ class _ToysPageState extends State<ToysPage> {
 
   int _maskOf(_Group g) => (g.mask ?? _shownMask) & _shownMask;
 
-  void _send(OthersCommand what) => comm.sendCommandTo(widget.target, comm.newCommand(what));
+  void _send(OthersCommand what) {
+    final cmd = comm.newCommand(what);
+    comm.sendCommandTo(widget.target, cmd);
+    comm.runOwn(cmd);
+  }
 
   /// A group's channels, as a whole: each one's level, its pattern (a
   /// custom one's definition first, with [parts]), speed and reaction. Sent
   /// again a little later, in case it was lost, unless [again] is false
-  /// (while a slider's dragged).
-  void _sendGroup(int i, {bool again = true, bool parts = false}) {
+  /// (while a slider's dragged). Our own toys follow along, if they do;
+  /// with [ownOnly], only they're sent it.
+  void _sendGroup(int i, {bool again = true, bool parts = false, bool ownOnly = false}) {
     final g = _groups[i];
     final mask = _maskOf(g);
     if (mask == 0) return;
     final target = widget.target;
     final custom = g.playing?.custom;
-    if (custom != null && parts) comm.sendPattern(target, custom);
     final cmd = comm.newCommand(OthersCommand.setVibe(mask, [for (final l in _levels) l.round()],
         speed: g.speed, react: g.reacting, builtIn: g.playing?.builtIn, hash: custom?.hash));
+    if (ownOnly) {
+      if (custom != null) {
+        final def = custom.encode();
+        for (final part in OthersCommand.patternParts(def, VibePattern.hashOf(def))) {
+          comm.runOwn(comm.newCommand(part));
+        }
+      }
+      comm.runOwn(cmd);
+      return;
+    }
+    if (custom != null && parts) comm.sendPattern(target, custom, own: true);
     comm.sendCommandTo(target, cmd);
+    comm.runOwn(cmd);
     _again.remove(i)?.cancel();
     if (again) _again[i] = Timer(_againAfter, () => comm.sendCommandTo(target, cmd, log: false));
     _playingChanged();
@@ -272,6 +296,19 @@ class _ToysPageState extends State<ToysPage> {
         _split = on;
       });
 
+  /// Our own toys following along, or not: they start at what's playing
+  /// now, and stop when they're let go.
+  void _setFollow(bool on) {
+    if (!on) comm.runOwn(comm.newCommand(OthersCommand.stopAll()));
+    comm.setFollowAlong(on);
+    final going = _levels.any((l) => l > 0) || _groups.any((g) => g.playing != null || g.reacting != 0);
+    if (on && going) {
+      for (var i = 0; i < (_split ? 2 : 1); i++) {
+        _sendGroup(i, ownOnly: true);
+      }
+    }
+  }
+
   void _setSpeed(int percent) {
     setState(() => _g.speed = percent.clamp(25, 300));
     _sendGroup(_gi);
@@ -311,11 +348,15 @@ class _ToysPageState extends State<ToysPage> {
   /// Whether we know nothing of theirs follows channel [c].
   bool _unmapped(int c) => _theirs != 0 && _theirs & (1 << c) == 0;
 
+  /// Whether moving channel [c] would do nothing: nothing of theirs, nor of
+  /// ours following along, is on it.
+  bool _unmovable(int c) => _unmapped(c) && _mine & (1 << c) == 0;
+
   /// The channels ganged: those picked that are shown and can be moved.
   int get _ganged {
     var m = _gangMask & _shownMask;
     for (var c = 0; c < OthersCommand.vibeChannels; c++) {
-      if (_unmapped(c)) m &= ~(1 << c);
+      if (_unmovable(c)) m &= ~(1 << c);
     }
     return m;
   }
@@ -325,10 +366,12 @@ class _ToysPageState extends State<ToysPage> {
   Widget _slider(int c, {required bool canSend}) {
     final name = 'V${c + 1}';
     final value = _levels[c];
-    // Nothing of theirs follows it: shown, but not to be moved
+    // Nothing of theirs follows it: shown greyed out, and not to be moved
+    // unless ours, following along, do
     final dim = _unmapped(c);
-    if (dim) canSend = false;
-    final ganged = !dim && _ganged & (1 << c) != 0;
+    final still = _unmovable(c);
+    if (still) canSend = false;
+    final ganged = !still && _ganged & (1 << c) != 0;
     final mask = ganged ? _ganged : 1 << c;
     final row = Container(
       color: ganged ? Kc.pink.withValues(alpha: 0.08) : null,
@@ -343,7 +386,7 @@ class _ToysPageState extends State<ToysPage> {
             showCheckmark: false,
             visualDensity: VisualDensity.compact,
             selected: ganged,
-            onSelected: dim ? null : (on) => setState(() => _gangMask = on ? _gangMask | (1 << c) : _gangMask & ~(1 << c)),
+            onSelected: still ? null : (on) => setState(() => _gangMask = on ? _gangMask | (1 << c) : _gangMask & ~(1 << c)),
           ),
         ),
         Expanded(
@@ -368,7 +411,7 @@ class _ToysPageState extends State<ToysPage> {
 
   Widget _moreButton() => Align(
         alignment: Alignment.centerLeft,
-        child: _theirs >> _usualChannels != 0
+        child: (_theirs | _mine) >> _usualChannels != 0
             ? const SizedBox.shrink()
             : TextButton(
                 onPressed: () => setState(() => _more = !_more),
@@ -407,9 +450,12 @@ class _ToysPageState extends State<ToysPage> {
             builder: (context, info) => Row(children: [
               Expanded(
                 child: Text(
-                    _theirs != 0
-                        ? "Their toys follow ${channelNames(_theirs)}; greyed out: nothing on it, so it can't be moved"
-                        : 'Each toy runs on the channels its owner chose',
+                    _theirs == 0
+                        ? 'Each toy runs on the channels its owner chose'
+                        : _mine & ~_theirs & _shownMask != 0
+                            ? 'Their toys follow ${channelNames(_theirs)}; greyed out: nothing of theirs on it, '
+                                'only yours'
+                            : "Their toys follow ${channelNames(_theirs)}; greyed out: nothing on it, so it can't be moved",
                     style: small),
               ),
               info,
@@ -518,6 +564,24 @@ class _ToysPageState extends State<ToysPage> {
     return _chip(p.name.toUpperCase(), on, canSend && _on != 0 ? () => _play(on ? null : p) : null);
   }
 
+  /// Follow along: our own toys do as theirs are told.
+  Widget _followRow() => Explained(
+        help: 'Your own toys do what you send, on the channels you mapped them to (Setup → Toys). '
+            "Channels the one you're sending to has nothing on can still be moved for yours; "
+            'they stay greyed out. Your rules for others make no difference to it.',
+        helpPadding: const EdgeInsets.only(bottom: 6),
+        builder: (context, info) => Row(children: [
+          Checkbox(value: comm.followAlong, onChanged: (v) => _setFollow(v ?? false)),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _setFollow(!comm.followAlong),
+              child: Text('Follow along on my toys (${channelNames(comm.myVibeChannels)})'),
+            ),
+          ),
+          info,
+        ]),
+      );
+
   /// A dot on a group's tab while it plays or reacts.
   String _summary(_Group g) => g.playing != null || g.reacting != 0 ? ' ●' : '';
 
@@ -566,6 +630,7 @@ class _ToysPageState extends State<ToysPage> {
                       selected: const {_ToyClass.vibe},
                       onSelectionChanged: (_) {},
                     ),
+                    if (comm.canFollowAlong) _followRow(),
                   ],
                 ),
               ),

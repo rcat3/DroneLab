@@ -72,6 +72,10 @@
  *                  the wearer's, to send over direct comms: how many boards
  *                  it's for (1, 0 for all of them), their ids (4 bytes each,
  *                  little endian, as 0x08's), then the command, signed.
+ *                  With bit 1 (from COMM_VERSION 19), the wearer's own, for
+ *                  this board's Vibe toys to follow along with what they
+ *                  send others: what to do on alone (others_run_own), right
+ *                  after the flags.
  *     0x11 identity: 11, then the wearer's public key (32 bytes): who
  *                  they are to the others, for commands sent to this board
  *                  alone (others_set_owner). Each time it connects (from
@@ -301,8 +305,10 @@
  *  17  Vibe toys set as a whole (others.h 0x41), and custom patterns sent
  *      in parts (0x45)
  *  18  the wearer's favourite patterns from the app (0x19), with
- *      /version's "favs" and "favmax" */
-#define COMM_VERSION            18
+ *      /version's "favs" and "favmax"
+ *  19  the wearer's own Vibe commands, for their toys to follow along
+ *      (0x0B's bit 1) */
+#define COMM_VERSION            19
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

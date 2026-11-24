@@ -610,6 +610,15 @@ void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
     receive(via, from, cmd, len);
 }
 
+void others_run_own(const uint8_t *what, size_t len)
+{
+    if (list == NULL || len == 0 || len > OTHERS_WHAT_MAX || kind_of(what, len) != OTHERS_VIBE)
+    {
+        return;
+    }
+    run(what, len);
+}
+
 /* Whether this very command, signature and all, has been checked lately:
  * a copy, sent again in case one was lost, is as good as the first. */
 static bool known(const queued_t *q)

@@ -154,6 +154,12 @@ void others_init(void);
  * the UI loop. */
 void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, size_t len);
 
+/* What the wearer sends others' Vibe toys, for their own to follow along,
+ * from their app: what to do on, as a command's, with nothing before it. As
+ * it's theirs, the rules don't come into it, and nobody's told. Vibe
+ * commands only. From the UI loop. */
+void others_run_own(const uint8_t *what, size_t len);
+
 /* How a command came over direct comms: the broadcast it came in (the
  * sending board's counter for it, the same in a copy another board passed
  * on), how strong (dBm, from the last board it came from), how many times

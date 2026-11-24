@@ -356,11 +356,13 @@ class CommController extends ChangeNotifier {
     _recordSub = board.recorded.listen((s) => _recorder?.add(s));
     recordSpeakerVoice = p.getBool('recordSpeakerVoice') ?? true;
     recordBeep = p.getBool('recordBeep') ?? false;
+    followAlong = p.getBool('followAlong') ?? false;
     _directPeerSub = board.directPeers.listen(_onDirectPeer);
     _directCapsSub = board.directCaps.listen(_onDirectCaps);
     _statesSub = board.states.listen((json) {
       final c = Capabilities.fromBoardState(json);
       if (c != null) _setMyCaps(c);
+      _myVibeState(json);
       permissions.boardState(json);
       _favouritesState(json);
     });
@@ -505,6 +507,7 @@ class CommController extends ChangeNotifier {
       boardSettings = null;
       _boardNameSent = null;
       _setMyCaps(null);
+      myVibeChannels = 0;
       permissions.boardGone();
       _unitFavourites = null;
       _sentFavourites = null;
@@ -2870,6 +2873,47 @@ class CommController extends ChangeNotifier {
     return sent;
   }
 
+  // ----- Following along, on our own toys -----
+
+  /// The Vibe channels our own unit's toys follow, those connected, as
+  /// /api/state's "mapped" says, whatever we let others do; 0 for none.
+  int myVibeChannels = 0;
+
+  void _myVibeState(String json) {
+    try {
+      final j = jsonDecode(json);
+      if (j is! Map<String, dynamic> || j['mapped'] is! num) return;
+      final mapped = (j['mapped'] as num).toInt() & OthersCommand.allChannels;
+      if (mapped == myVibeChannels) return;
+      myVibeChannels = mapped;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Whether our own toys can follow along with what we send others'.
+  bool get canFollowAlong =>
+      board.state == BoardState.connected &&
+      (board.status?.version ?? 0) >= commVersionFollow &&
+      myVibeChannels != 0;
+
+  /// Whether they do, as picked on the Toys page: kept.
+  bool followAlong = false;
+
+  void setFollowAlong(bool on) {
+    followAlong = on;
+    _prefs?.setBool('followAlong', on);
+    notifyListeners();
+  }
+
+  /// Whether what's sent others' toys now goes to ours too.
+  bool get followingAlong => followAlong && canFollowAlong;
+
+  /// A Vibe command for our own toys, as we send it others, when we follow
+  /// along.
+  void runOwn(OthersCommand cmd) {
+    if (followingAlong) board.send(commandOwn(cmd.what));
+  }
+
   // ----- Favourite patterns, on the unit -----
 
   /// The hash of the favourites the unit has, as /api/state says, and how
@@ -2937,10 +2981,13 @@ class CommController extends ChangeNotifier {
 
   /// Send a custom pattern's definition to a conversation, in parts, before
   /// the set that plays it.
-  void sendPattern(Conversation c, VibePattern p) {
+  /// With [own], to our own toys as well, following along.
+  void sendPattern(Conversation c, VibePattern p, {bool own = false}) {
     final def = p.encode();
     for (final part in OthersCommand.patternParts(def, VibePattern.hashOf(def))) {
-      sendCommandTo(c, newCommand(part), log: false);
+      final cmd = newCommand(part);
+      sendCommandTo(c, cmd, log: false);
+      if (own) runOwn(cmd);
     }
   }
 
