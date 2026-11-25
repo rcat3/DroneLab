@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../comm/app_profile.dart';
@@ -16,6 +17,9 @@ import 'widgets.dart';
 
 /// The project's home, behind the logo.
 const projectUrl = 'https://github.com/rcat3/DroneLab';
+
+/// The latest release's page: the app, firmware and 3D printed parts.
+const downloadUrl = '$projectUrl/releases/latest';
 
 /// The app, the phone it's on, and the unit it's linked to: versions, the
 /// link's signal, MAC addresses, housing, uptime and battery. The unit's
@@ -164,6 +168,13 @@ class _AboutPageState extends State<AboutPage> {
                 _Fact('OS', _os ?? '...'),
                 if ((_phone ?? '').isNotEmpty) _Fact('Device', _phone!),
                 if (AppProfile.name != null) _Fact('Profile', AppProfile.name!),
+                PanelRow(
+                  leading: const Icon(Icons.qr_code_2, color: Kc.pink),
+                  title: 'Share the app',
+                  subtitle: 'A QR code for the download page',
+                  trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
+                  onTap: _shareApp,
+                ),
               ]),
               const SectionHeader('Display unit'),
               Panel(children: [
@@ -234,6 +245,44 @@ class _AboutPageState extends State<AboutPage> {
       say('$left tap${left == 1 ? '' : 's'} from developer options');
     }
   }
+
+  /// The download page as a QR code, for someone else's phone to scan.
+  void _shareApp() => showDialog<void>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          backgroundColor: Kc.panel,
+          shape: RoundedRectangleBorder(
+              side: const BorderSide(color: Kc.pink), borderRadius: BorderRadius.circular(16)),
+          title: Text('> GET DRONELAB', style: Kc.term(16, color: Kc.pink, shadows: Kc.glow(Kc.pink))),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(12),
+              child: QrImageView(data: downloadUrl, size: 220, backgroundColor: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            SelectableText(downloadUrl.replaceFirst('https://', ''),
+                textAlign: TextAlign.center, style: Kc.term(13, color: Kc.pink)),
+            const SizedBox(height: 8),
+            const Text("Scan it with a phone's camera for the latest release: the app, firmware and 3D printed parts.",
+                textAlign: TextAlign.center, style: TextStyle(color: Kc.muted, fontSize: 13)),
+          ]),
+          actions: [
+            TextButton.icon(
+              icon: const Icon(Icons.copy, size: 18),
+              label: const Text('Copy link'),
+              onPressed: () {
+                Clipboard.setData(const ClipboardData(text: downloadUrl));
+                Navigator.of(dialog).pop();
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(const SnackBar(content: Text('Link copied'), duration: Duration(seconds: 1)));
+              },
+            ),
+            TextButton(onPressed: () => Navigator.of(dialog).pop(), child: const Text('Close')),
+          ],
+        ),
+      );
 
   void _openSite() => launchUrl(Uri.parse(projectUrl), mode: LaunchMode.externalApplication);
 
