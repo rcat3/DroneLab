@@ -60,6 +60,10 @@ typedef struct
 /* Reset the trackers, for a fresh start. */
 void vis_audio_reset(void);
 
+/* Draw from the speaker alone, ignoring the microphone, until turned off
+ * again. Resetting doesn't turn it off. */
+void vis_audio_speaker_only(bool on);
+
 /* Bring a up to date with the newest sound. */
 void vis_audio_update(vis_audio_t *a, float dt);
 

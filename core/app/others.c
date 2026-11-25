@@ -406,8 +406,8 @@ static int kind_of(const uint8_t *what, size_t len)
                    ? OTHERS_DISPLAY
                    : -1;
     case OTHERS_SOUND:
-        // what to do, then its hash
-        return len == 1 + SOUNDS_HASH_LEN ? OTHERS_SOUNDS : -1;
+        // what to do, the visualizer, then its hash
+        return len == 2 + SOUNDS_HASH_LEN ? OTHERS_SOUNDS : -1;
     case OTHERS_TEXT:
         return len > 1 ? OTHERS_KIND_COUNT : -1;
     case OTHERS_TEXT_PART:
@@ -449,7 +449,7 @@ static void run(const uint8_t *what, size_t len, const char *from)
         show_picture(arg, len - 1);
         break;
     case OTHERS_SOUND:
-        sounds_play_sent(arg, from);
+        sounds_play_sent(arg + 1, from, arg[0]);
         break;
     }
 }

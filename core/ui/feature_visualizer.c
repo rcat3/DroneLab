@@ -14,6 +14,7 @@
 
 #include "app/settings.h"
 #include "audio/audio_level.h"
+#include "audio/audio_player.h"
 #include "audio/audio_tap.h"
 #include "ui/ui.h"
 #include "ui/ui_internal.h"
@@ -22,6 +23,10 @@
 #define FRAME_MS        33      // 30 frames a second, if the display keeps up
 #define SYNC_MS         250     // how often the chooser catches up with the phone remote
 #define MAX_DT_S        0.1f    // longer gaps (a slow frame) count as this long
+#define OVERRIDE_MS     100     // how often a sound others sent is checked on
+#define OVERRIDE_START_MS   2000    // how long its sound has to start playing
+#define OVERRIDE_SHOWN_MS   500     // before then, the page may still be sliding in
+#define OVERRIDE_LIMIT_MS   (AUDIO_SENT_MAX_MS + 2000)  // however long it goes on
 
 // The styles, in the order they're listed. New ones go on the end, so the
 // saved choice still means the same one.
@@ -52,6 +57,13 @@ static vis_audio_t *audio;      // allocated, to keep it out of internal RAM
 static size_t current;
 static bool running;            // false to start the current one afresh on the next frame
 static uint32_t last_frame;
+
+// A sound others sent can bring the visualizer on screen, in the style they
+// chose and drawing only the sound, until it's been played (see
+// ui_visualizer_show_for_sound). The saved choice isn't touched.
+static bool override_on;
+static bool override_started;   // its sound has been heard playing
+static uint32_t override_since;
 
 static size_t saved_choice(void)
 {
@@ -88,6 +100,14 @@ static void invalidate(uint8_t extent)
         .y2 = LV_MIN(y + side - 1, coords.y2),
     };
     lv_obj_invalidate_area(canvas, &area);
+}
+
+/* Stop showing a sound others sent: all the sound again, in the saved style. */
+static void end_override(void)
+{
+    override_on = false;
+    vis_audio_speaker_only(false);
+    choose(saved_choice(), false);
 }
 
 static void frame_timer_cb(lv_timer_t *t)
@@ -129,14 +149,45 @@ static void frame_timer_cb(lv_timer_t *t)
 /* Show what the phone remote chose. */
 static void sync_timer_cb(lv_timer_t *t)
 {
-    if (saved_choice() != current)
+    if (!override_on && saved_choice() != current)
     {
         choose(saved_choice(), false);
     }
 }
 
+/* Watch for the end of the sound shown. chiming only turns true a little
+ * after it's handed to the speaker's task, so it's waited for first. */
+static void override_timer_cb(lv_timer_t *t)
+{
+    if (!override_on)
+    {
+        return;
+    }
+    uint32_t elapsed = lv_tick_diff(lv_tick_get(), override_since);
+    if (audio_player_chiming())
+    {
+        override_started = true;
+    }
+    bool done = elapsed > OVERRIDE_LIMIT_MS || (override_started ? !audio_player_chiming() : elapsed > OVERRIDE_START_MS);
+    if (done)
+    {
+        end_override();
+        ui_go_back();       // only goes back if this is still what's showing
+    }
+    else if (elapsed > OVERRIDE_SHOWN_MS && !lv_obj_is_visible(canvas))
+    {
+        end_override();     // swiped away: the sound finishes on its own
+    }
+}
+
 static void canvas_clicked_cb(lv_event_t *e)
 {
+    if (override_on)
+    {
+        // Their choice is the wearer's now: keep the screen, and all the sound
+        override_on = false;
+        vis_audio_speaker_only(false);
+    }
     choose((current + 1) % VISUALIZER_COUNT, true);
 }
 
@@ -226,6 +277,7 @@ static bool build(ui_feature_t *feature)
 #endif
     lv_timer_create(frame_timer_cb, FRAME_MS, NULL);
     lv_timer_create(sync_timer_cb, SYNC_MS, NULL);
+    lv_timer_create(override_timer_cb, OVERRIDE_MS, NULL);
     return true;
 }
 
@@ -237,4 +289,20 @@ size_t ui_visualizer_count(void)
 const char *ui_visualizer_name(size_t index)
 {
     return index < ui_visualizer_count() ? visualizers[index]->name : "";
+}
+
+void ui_visualizer_show_for_sound(size_t index)
+{
+    if (canvas == NULL || index >= VISUALIZER_COUNT)
+    {
+        return;
+    }
+    override_on = true;
+    override_started = false;
+    override_since = lv_tick_get();
+    choose(index, false);       // not saved: it's only for this sound
+    vis_audio_speaker_only(true);
+    // The canvas sits straight on its page. Zero seconds: it stays until the
+    // timer above sends it back.
+    ui_show_page_for(lv_obj_get_parent(canvas), 0);
 }

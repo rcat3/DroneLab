@@ -40,8 +40,9 @@ bool sounds_finish(void);
 uint32_t sounds_received(void);     // bytes of it so far
 
 /* Play a sent one, by its hash, from the one named, waiting for it to come
- * if it hasn't. From the UI loop. */
-void sounds_play_sent(const uint8_t hash[SOUNDS_HASH_LEN], const char *from);
+ * if it hasn't. visualizer is 0 for none, or 1 and up for the Sound
+ * Visualizer style (index + 1) to show while it plays, as it starts. From the UI loop. */
+void sounds_play_sent(const uint8_t hash[SOUNDS_HASH_LEN], const char *from, uint8_t visualizer);
 
 /* Whether sounds can be played here: there's a speaker. */
 bool sounds_available(void);

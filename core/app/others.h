@@ -95,8 +95,11 @@
  *                  the firmware, its name (image_list.c), in UTF-8, which
  *                  every board has, so it works over direct comms too
  *   For the Display unit's speaker:
- *     13 sound:    13, its SHA-256 (32): played once, as it comes, and kept
- *                  (sounds.h). The sound itself comes to this board from
+ *     13 sound:    13, visualizer (1), its SHA-256 (32): played once, as it comes, and kept
+ *                  (sounds.h). The visualizer is 0 for none, or 1 and up
+ *                  for a Sound Visualizer style (its list order, from 1),
+ *                  shown on the screen while the sound plays. The sound
+ *                  itself comes to this board from
  *                  its phone (comm.h 0x1B), which has it from the server,
  *                  and the command waits up to SOUNDS_WAIT_MS for it. Over
  *                  the server only: one heard over direct comms is dropped

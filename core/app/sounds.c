@@ -12,6 +12,7 @@
 #include "audio/audio_player.h"
 #include "hal.h"
 #include "mbedtls/sha256.h"
+#include "ui/ui.h"
 
 typedef struct
 {
@@ -29,6 +30,7 @@ static struct
     bool on;
     uint8_t hash[SOUNDS_HASH_LEN];
     char from[AUDIO_SENT_NAME_LEN - 5];     // room for "From "
+    uint8_t visualizer;                     // 0 for none, else style + 1
     uint32_t since;
 } wanted;                                       // a command, its sound not yet
 
@@ -42,12 +44,17 @@ static void drop(sound_t *s)
 }
 
 /* Play it and keep it, as the player does. Takes the sound's data. */
-static void play(sound_t *s, const char *from)
+static void play(sound_t *s, const char *from, uint8_t visualizer)
 {
     char name[AUDIO_SENT_NAME_LEN];
     snprintf(name, sizeof(name), "From %.*s", (int)sizeof(name) - 6, from);
-    audio_player_add_sent(s->data, s->len, s->kind, s->hash, name);
+    bool started = audio_player_add_sent(s->data, s->len, s->kind, s->hash, name);
     memset(s, 0, sizeof(*s));
+    if (started && visualizer > 0)
+    {
+        // The screen changes now the sound does, not when its command came
+        ui_visualizer_show_for_sound(visualizer - 1u);
+    }
 }
 
 bool sounds_available(void)
@@ -109,7 +116,7 @@ bool sounds_finish(void)
     if (wanted.on && memcmp(wanted.hash, hash, SOUNDS_HASH_LEN) == 0)
     {
         wanted.on = false;
-        play(&incoming, wanted.from);
+        play(&incoming, wanted.from, wanted.visualizer);
         return true;
     }
     // To wait for its command, in place of the one that's waited longest
@@ -133,19 +140,20 @@ bool sounds_finish(void)
     return true;
 }
 
-void sounds_play_sent(const uint8_t hash[SOUNDS_HASH_LEN], const char *from)
+void sounds_play_sent(const uint8_t hash[SOUNDS_HASH_LEN], const char *from, uint8_t visualizer)
 {
     for (int w = 0; w < SOUNDS_WAITING; w++)
     {
         if (waiting[w].data != NULL && memcmp(waiting[w].hash, hash, SOUNDS_HASH_LEN) == 0)
         {
-            play(&waiting[w], from);
+            play(&waiting[w], from, visualizer);
             return;
         }
     }
     // Not here yet: it waits for it. The phone gives it again even if it's
     // kept, as only the player knows what's kept, and it's played from there.
     wanted.on = true;
+    wanted.visualizer = visualizer;
     memcpy(wanted.hash, hash, SOUNDS_HASH_LEN);
     snprintf(wanted.from, sizeof(wanted.from), "%s", from);
     wanted.since = rcat_hal_millis();

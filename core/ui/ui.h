@@ -43,4 +43,7 @@ void ui_offer_first_pairing(void);
 size_t ui_visualizer_count(void);
 const char *ui_visualizer_name(size_t index);
 
+/* Show style index for a sound others sent, speaker only, until it's played. */
+void ui_visualizer_show_for_sound(size_t index);
+
 #endif

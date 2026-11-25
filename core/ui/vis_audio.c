@@ -80,6 +80,7 @@ typedef struct
 
 static buffers_t *buf;
 static float loudest_band;
+static bool speaker_only;       // skip the microphone (a sound others sent is showing)
 
 static bool make_tables(void)
 {
@@ -103,6 +104,11 @@ static bool make_tables(void)
         buf->window[i] = 0.5f - 0.5f * cosf(2.0f * (float)M_PI * i / (FFT_SIZE - 1));
     }
     return true;
+}
+
+void vis_audio_speaker_only(bool on)
+{
+    speaker_only = on;
 }
 
 void vis_audio_reset(void)
@@ -322,7 +328,7 @@ void vis_audio_update(vis_audio_t *a, float dt)
     {
         source_state_t *st = &buf->states[s];
         float *wave = a->wave[s];
-        uint32_t rate = read_source((vis_source_t)s, wave);
+        uint32_t rate = speaker_only && s == VIS_MIC ? 0 : read_source((vis_source_t)s, wave);
         a->wave_on[s] = rate != 0;
         if (rate == 0)
         {
@@ -355,7 +361,7 @@ void vis_audio_update(vis_audio_t *a, float dt)
         levels[s] = st->level;
         st->started = true;
     }
-    a->level = fmaxf(levels[VIS_MIC], levels[VIS_SPEAKER]);
+    a->level = speaker_only ? levels[VIS_SPEAKER] : fmaxf(levels[VIS_MIC], levels[VIS_SPEAKER]);
 
     int loudest = 0;
     for (int b = 0; b < VIS_BANDS; b++)

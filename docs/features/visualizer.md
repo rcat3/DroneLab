@@ -2,7 +2,7 @@
 
 *Boards with a microphone: the ESP32-S3 boards*
 
-The Sound Visualizer fills the screen with a moving picture of your voice, and of whatever the speaker is playing while it's on: the [voice effect](voice-effects.md) or a [sound](sound.md) file.  Its pages, left to right, are the visualizer itself, a page to choose which one, and the [Voice Ring](voice-ring.md)'s settings, as the ring is a picture of your voice too.  Tapping the visualizer also moves on to the next one.  The choice is saved, and the visualizer can be picked to show when the display turns on, in [Settings](settings.md#startup).  The [WiFi Hotspot Remote](phone-remote.md) lists them on its Screen tab, and shows the one you tap.
+The Sound Visualizer fills the screen with a moving picture of your voice, and of whatever the speaker is playing while it's on: the [voice effect](voice-effects.md) or a [sound](sound.md) file.  Its pages, left to right, are the visualizer itself, a page to choose which one, and the [Voice Ring](voice-ring.md)'s settings, as the ring is a picture of your voice too.  Tapping the visualizer also moves on to the next one.  The choice is saved, and the visualizer can be picked to show when the display turns on, in [Settings](settings.md#startup).  The [WiFi Hotspot Remote](phone-remote.md) lists them on its Screen tab, and shows the one you tap.  A [sound someone sends](../app/control.md#sounds) can also bring a visualizer on screen while it plays, showing just that sound, and then go back to what you were looking at.
 
 | ![KITT](../images/screens/visualizer_kitt.png) | ![Terrain](../images/screens/visualizer_terrain.png) | ![Scope](../images/screens/visualizer_scope.png) | ![Halo](../images/screens/visualizer_halo.png) |
 |:-:|:-:|:-:|:-:|
