@@ -3105,7 +3105,8 @@ class CommController extends ChangeNotifier {
   /// base64, with the rest of the text.
   int get soundRoom {
     final chars = mumble?.imageMessageLength ?? 0;
-    return chars <= 0 ? soundMaxBytes : min(soundMaxBytes, (chars - 160) * 3 ~/ 4);
+    // Less the speaker picture it goes in, and the words (sent_sounds.dart)
+    return chars <= 0 ? soundMaxBytes : min(soundMaxBytes, (chars - 3072) * 3 ~/ 4);
   }
 
   /// Play a sound of ours ([soundFor] made it) from the speakers of those

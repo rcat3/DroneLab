@@ -50,6 +50,7 @@ Picking **Sounds** plays a sound from their unit's speaker: one of your [recordi
 - It plays for **10 seconds** at most.  Recordings longer than that are greyed out: switch on [Stop at 10 s](record.md#recording) in the Record tab to make one that fits.  A longer sound file is cut off after 10 seconds.
 - It's kept on their unit, as a track at the end of its [Sound](../features/sound.md#sounds-from-others) player, for them to play again or delete.
 - It goes **over the server only**, as it's too big for direct mode.  A recording, or a 16-bit WAV file, is made small on the way (about 60 KB for 10 seconds), and made loud, to about the level of a song: recordings come at HiveMind's level, which the unit's player would play far quieter than the voice effect.  An MP3 or FLAC file goes as it is, so it must be small enough already, 96 KB at most, less if the server's limit for pictures is lower, and plays as loud as it was made.  A file that can't go says why under the list as soon as it's picked.
+- Someone on plain Mumble (not DroneLab) sees a small pink speaker and *🔊 A sound for DroneLab units*: the sound travels inside that picture, and only DroneLab plays it.
 
 ## Who can control your toys
 

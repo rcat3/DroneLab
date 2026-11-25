@@ -7,20 +7,24 @@
 /// s. It's made loud first ([_loudened]): recordings come at HiveMind's
 /// level, well under full scale, where the unit's player, at its 100%,
 /// plays them as they are, far quieter than its voice effect, which drives
-/// the speaker hard. Other files (MP3, FLAC, or a WAV that isn't 16-bit) go as they are,
-/// if they're small enough: [soundMaxBytes], and what the server takes.
-/// The unit plays [soundMaxMs] of any of them at most.
+/// the speaker hard. Other files (MP3, FLAC, or a WAV that isn't 16-bit)
+/// go as they are, if they're small enough: [soundMaxBytes], and what the
+/// server takes. The unit plays [soundMaxMs] of any of them at most.
 ///
-/// Over the server, a sound is a text with it in an image tag (as Mumble's
-/// limit for such texts is the one for pictures), its type
-/// audio/x-dronelab-opus for Opus packets, each after its length (1 byte),
-/// else the file's own.
+/// Over the server, a sound is a text with a picture: a small speaker, a
+/// real PNG, with the sound in a chunk of its own ([_chunk]), which picture
+/// viewers leave alone. Plain Mumble shows the speaker and a line saying
+/// what it is; DroneLab takes the sound out. In a picture, as Mumble's limit
+/// for a text with one is the one for pictures, far more than for words.
+/// The chunk is what the sound is ([soundOpus], Opus packets each after
+/// its length, 1 byte; or [soundFile]), then its bytes.
 library;
 
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:image/image.dart' as img;
 import 'package:opus_codec_dart/opus_dart.dart';
 import 'package:opus_codec_dart/wrappers/opus_defines.dart' as od;
 
@@ -37,7 +41,6 @@ class SentSound {
 
 const _bitrate = 48000;
 const _frameMs = 20;
-const _opusType = 'x-dronelab-opus';
 
 /// The rates Opus codes at; a WAV at any other is made 48 kHz first.
 const _opusRates = [8000, 12000, 16000, 24000, 48000];
@@ -190,25 +193,34 @@ Future<Uint8List> _codeOpus(Int16List pcm, int rate) async {
   return out.takeBytes();
 }
 
-/// What it is, as its type over the server.
-String _typeOf(SentSound s) {
-  if (s.kind == soundOpus) return _opusType;
-  if (_isFlac(s.bytes)) return 'flac';
-  if (_isRiff(s.bytes)) return 'wav';
-  return 'mpeg';
+/// The PNG chunk the sound goes in: "dlSn", ancillary (a viewer may skip
+/// it), private, and safe to copy, by the case of its letters.
+const _chunk = 'dlSn';
+
+/// The line beside it, for plain Mumble.
+const _caption = '🔊 A sound for DroneLab units';
+
+/// A sound, as it goes in a server text: in the speaker picture, and the
+/// line beside it.
+String soundMessage(SentSound s) {
+  final png = _withChunk(_speakerPng, _chunk, Uint8List.fromList([s.kind, ...s.bytes]));
+  return '<img src="data:image/png;base64,${base64Encode(png)}" /> $_caption';
 }
 
-/// A sound, as it goes in a server text.
-String soundMessage(SentSound s) => '<img src="data:audio/${_typeOf(s)};base64,${base64Encode(s.bytes)}" />';
-
-final _soundTag = RegExp(r'''<img[^>]*src\s*=\s*["']data:audio/([a-zA-Z0-9.+-]+);base64,([^"']+)["'][^>]*>''');
+final _pngTag = RegExp(r'''<img[^>]*src\s*=\s*["']data:image/png;base64,([^"']+)["'][^>]*>''');
 
 /// The sounds in a server text: what each is ([soundOpus] or [soundFile])
-/// and its bytes.
-List<(int, Uint8List)> soundsIn(String html) => [
-      for (final m in _soundTag.allMatches(html))
-        if (_decode(m.group(2)!) case final bytes?) (m.group(1) == _opusType ? soundOpus : soundFile, bytes),
-    ];
+/// and its bytes, from the pictures that carry one.
+List<(int, Uint8List)> soundsIn(String html) {
+  final out = <(int, Uint8List)>[];
+  for (final m in _pngTag.allMatches(html)) {
+    final png = _decode(m.group(1)!);
+    final data = png == null ? null : _chunkOf(png, _chunk);
+    if (data == null || data.length < 2 || data[0] > soundFile) continue;
+    out.add((data[0], Uint8List.sublistView(data, 1)));
+  }
+  return out;
+}
 
 Uint8List? _decode(String b64) {
   try {
@@ -216,4 +228,78 @@ Uint8List? _decode(String b64) {
   } catch (_) {
     return null;
   }
+}
+
+// ----- The picture -----
+
+const _pngSignature = 8;
+
+/// A speaker with sound coming from it, 48 px, pink on clear: made once.
+final Uint8List _speakerPng = () {
+  const size = 48;
+  final im = img.Image(width: size, height: size, numChannels: 4);
+  final pink = img.ColorRgba8(0xFF, 0x40, 0xC0, 0xFF);
+  img.fillRect(im, x1: 6, y1: 18, x2: 15, y2: 30, color: pink);
+  img.fillPolygon(im,
+      vertices: [img.Point(15, 18), img.Point(27, 8), img.Point(27, 40), img.Point(15, 30)], color: pink);
+  // The sound: two arcs, thick, opening to the right
+  for (final r in [8.0, 15.0]) {
+    for (var a = -50.0; a <= 50.0; a += 1) {
+      final t = a * math.pi / 180;
+      for (var w = -1.5; w <= 1.5; w += 0.5) {
+        final x = (27 + (r + w) * math.cos(t)).round(), y = (24 + (r + w) * math.sin(t)).round();
+        if (x >= 0 && x < size && y >= 0 && y < size) im.setPixel(x, y, pink);
+      }
+    }
+  }
+  return img.encodePng(im);
+}();
+
+/// [png] with a chunk of [type] and [data] put in before its end (IEND).
+Uint8List _withChunk(Uint8List png, String type, Uint8List data) {
+  final end = png.length - 12;    // IEND: its length, type and CRC, no data
+  final typeBytes = ascii.encode(type);
+  final chunk = BytesBuilder(copy: false)
+    ..add((ByteData(4)..setUint32(0, data.length)).buffer.asUint8List())
+    ..add(typeBytes)
+    ..add(data)
+    ..add((ByteData(4)..setUint32(0, _crc32([...typeBytes, ...data]))).buffer.asUint8List());
+  return Uint8List.fromList([...png.sublist(0, end), ...chunk.takeBytes(), ...png.sublist(end)]);
+}
+
+/// The data of [png]'s first chunk of [type], if its CRC's right; null
+/// for none.
+Uint8List? _chunkOf(Uint8List png, String type) {
+  if (png.length < _pngSignature + 12 || png[1] != 0x50 || png[2] != 0x4E || png[3] != 0x47) return null;
+  final d = ByteData.sublistView(png);
+  for (var at = _pngSignature; at + 12 <= png.length;) {
+    final len = d.getUint32(at);
+    if (at + 12 + len > png.length) return null;
+    final t = ascii.decode(png.sublist(at + 4, at + 8), allowInvalid: true);
+    if (t == type) {
+      final body = Uint8List.sublistView(png, at + 8, at + 8 + len);
+      final crc = d.getUint32(at + 8 + len);
+      return crc == _crc32(Uint8List.sublistView(png, at + 4, at + 8 + len)) ? body : null;
+    }
+    if (t == 'IEND') return null;
+    at += 12 + len;
+  }
+  return null;
+}
+
+final List<int> _crcTable = List.generate(256, (n) {
+  var c = n;
+  for (var k = 0; k < 8; k++) {
+    c = c & 1 != 0 ? 0xEDB88320 ^ (c >> 1) : c >> 1;
+  }
+  return c;
+});
+
+/// PNG's CRC-32.
+int _crc32(List<int> bytes) {
+  var c = 0xFFFFFFFF;
+  for (final b in bytes) {
+    c = _crcTable[(c ^ b) & 0xFF] ^ (c >> 8);
+  }
+  return c ^ 0xFFFFFFFF;
 }
