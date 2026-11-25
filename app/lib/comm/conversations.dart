@@ -389,7 +389,11 @@ String describeCommand(Uint8List op, {required bool mine}) {
     case OthersCommand.clear:
       return 'cleared $your display';
     case OthersCommand.sound:
-      return "played a sound from $your unit's speaker";
+      final style = op.length > 1 && op[1] > 0 && op[1] <= OthersCommand.soundVisualizers.length
+          ? OthersCommand.soundVisualizers[op[1] - 1]
+          : null;
+      return "played a sound from $your unit's speaker"
+          '${style == null ? '' : ', with $style on its display'}';
     default:
       return 'sent a command';
   }

@@ -802,8 +802,14 @@ class OthersCommand {
 
   /// A sound from their unit's speaker, by its SHA-256: sent over the
   /// server, beside the command, as a picture is. Played once, and kept on
-  /// their unit for them to play again.
-  static OthersCommand playSound(List<int> hash) => _make([sound, ...hash]);
+  /// their unit for them to play again. [visualizer] is 0 for nothing, or 1
+  /// and up for a style from [soundVisualizers] (its index + 1), shown on
+  /// their display while it plays.
+  static OthersCommand playSound(List<int> hash, {int visualizer = 0}) => _make([sound, visualizer, ...hash]);
+
+  /// The Sound Visualizer styles a sent sound can show, in the order of
+  /// visualizers[] in core/ui/feature_visualizer.c: it must match.
+  static const soundVisualizers = ['KITT', 'Terrain', 'Scope', 'Halo', 'Aurora', 'Orbit', 'Ripples'];
 
   /// Empty their Terminal, and take off what we put on their display: it
   /// goes back to what it was showing.

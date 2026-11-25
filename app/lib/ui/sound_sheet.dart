@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
-import '../comm/board_protocol.dart' show soundMaxMs;
+import '../comm/board_protocol.dart' show OthersCommand, soundMaxMs;
 import '../comm/capabilities.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
@@ -23,6 +23,7 @@ Future<void> showSoundSheet(BuildContext context, CommController comm, Conversat
   XFile? file;
   SentSound? fileSound;     // the file, made ready to send, once it's checked
   String? problem;          // why the last one picked or sent can't go
+  var visualizer = 0;       // the style to show on their display, 0 for none
   var sending = false;
   comm.loadRecordings();
   return showModalBottomSheet<void>(
@@ -87,7 +88,7 @@ Future<void> showSoundSheet(BuildContext context, CommController comm, Conversat
                 sound = made;
                 why = whyNot;
               }
-              if (sound != null) why = await comm.sendSound(c, sound);
+              if (sound != null) why = await comm.sendSound(c, sound, visualizer: visualizer);
             } catch (e) {
               why = "Couldn't send it: $e";
             }
@@ -173,7 +174,20 @@ Future<void> showSoundSheet(BuildContext context, CommController comm, Conversat
                     ),
                   ]),
                 ),
-                const SizedBox(height: 8),
+                Row(children: [
+                  const Expanded(child: Text('On their display')),
+                  DropdownButton<int>(
+                    value: visualizer,
+                    underline: const SizedBox.shrink(),
+                    dropdownColor: Kc.raised,
+                    onChanged: sending || !canSend ? null : (v) => setState(() => visualizer = v ?? 0),
+                    items: [
+                      const DropdownMenuItem(value: 0, child: Text('Nothing')),
+                      for (var i = 0; i < OthersCommand.soundVisualizers.length; i++)
+                        DropdownMenuItem(value: i + 1, child: Text(OthersCommand.soundVisualizers[i])),
+                    ],
+                  ),
+                ]),
                 Row(children: [
                   Expanded(
                     child: Text(problem ?? (canSend ? '' : 'Not on the server just now'),

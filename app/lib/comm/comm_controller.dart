@@ -3113,7 +3113,7 @@ class CommController extends ChangeNotifier {
   /// in a conversation: over the server only, as a text with the sound,
   /// then the command that plays it, by its hash. Returns why not, or null
   /// once it's gone.
-  Future<String?> sendSound(Conversation c, SentSound sound) async {
+  Future<String?> sendSound(Conversation c, SentSound sound, {int visualizer = 0}) async {
     if (!canSendPhoto(c)) return 'Sounds go over the server: not on it just now';
     final m = mumble!;
     final html = soundMessage(sound) + _soundMark;
@@ -3133,7 +3133,8 @@ class CommController extends ChangeNotifier {
         return 'Sounds go over the server only';
     }
     // After the sound, which the server passes on first
-    sendCommandTo(c, newCommand(OthersCommand.playSound(sha256.convert(sound.bytes).bytes)), serverOnly: true);
+    sendCommandTo(c, newCommand(OthersCommand.playSound(sha256.convert(sound.bytes).bytes, visualizer: visualizer)),
+        serverOnly: true);
     return null;
   }
 
@@ -3165,9 +3166,9 @@ class CommController extends ChangeNotifier {
   /// Our unit took a command to play a sound sent it: it's given the
   /// sound, now or once it comes.
   void _onSoundPlayed(Uint8List op) {
-    if (op.length != 1 + 32 || op[0] != OthersCommand.sound) return;
+    if (op.length != 1 + 1 + 32 || op[0] != OthersCommand.sound) return;
     _pruneSounds();
-    final key = op.sublist(1).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final key = op.sublist(2).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
     if (_sentSounds.containsKey(key)) {
       _giveSound(key);
     } else {
