@@ -81,7 +81,7 @@ The DroneLab display unit screws into the mask's voice port: a glowing 1.75" rou
 <a href="docs/app/remote.md"><img src="docs/images/app_remote.png" width="270" alt="The DroneLab app's Remote tab, running the display unit's screen over Bluetooth"></a>
 </p>
 
-- **Sound:** plays WAV, MP3 and FLAC files from the SD card through the speaker.  [Sound](docs/features/sound.md)
+- **Sound:** plays WAV, MP3 and FLAC files from the SD card through the speaker.  Send short sounds to play from other drones' speakers, and they can send sounds to yours, if you allow them.  [Sound](docs/features/sound.md)
 - **Recording:** records voice effect output to the phone or a computer for videos, or feeds it to a video call or streaming software as a microphone.  [Voice Lab](docs/features/voice-lab.md)
 - **All-day battery:** the speaker model runs about 13.5 hours on a charge, or about 9.5 with HiveMind comms on, and charges over USB-C without leaving the mask.
 
