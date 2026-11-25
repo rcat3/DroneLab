@@ -12,9 +12,10 @@ import 'dart:typed_data';
 /// over the server by the app, in Mumble's plugin data ([dataId]), worked
 /// out from the board's own /api/state.
 class Capabilities {
-  /// The ids, as OTHERS_CAP_*: the display (words and pictures) and Vibe
-  /// toys. 3, 4 and 6 are kept for E-stim, Machines and Sounds.
-  static const display = 1, vibe = 2;
+  /// The ids, as OTHERS_CAP_*: the display (words and pictures), Vibe
+  /// toys, and sounds from the unit's speaker. 3 and 4 are kept for E-stim
+  /// and Machines.
+  static const display = 1, vibe = 2, sounds = 6;
 
   /// The plugin data's id over the server.
   static const dataId = 'dronelab-caps';
@@ -59,26 +60,21 @@ class Capabilities {
     return Capabilities(open, more);
   }
 
-  /// Ours, from the board's /api/state: the display and Vibe toys as their
-  /// permissions have them (Off left out), and Vibe toys only with one
-  /// connected, with the channels they follow ("mapped"), as the board
-  /// itself works it out. Null if it isn't the state.
+  /// Ours, from the board's /api/state: each kind as the board offers it
+  /// ("offered": Off left out, Vibe toys only with one connected, sounds
+  /// only with a speaker), and Vibe toys with the channels they follow
+  /// ("mapped"). Null if it isn't the state.
   static Capabilities? fromBoardState(String json) {
     try {
       final j = jsonDecode(json);
       if (j is! Map<String, dynamic>) return null;
       final others = j['others'];
-      if (others is! List || others.length < 2) return null;
-      CapOpen? how(Object? kind) => switch ((kind as Map<String, dynamic>)['permission']) {
-            2 => CapOpen.open,
-            1 => CapOpen.ask,
-            _ => null,
-          };
-      final devices = j['devices'] as List<dynamic>? ?? const [];
-      final toys = devices.any((d) => const ['connected', 'connecting', 'lost'].contains((d as Map)['state']));
-      final term = how(others[1]), toy = toys ? how(others[0]) : null;
+      if (others is! List || others.length < 3) return null;
+      CapOpen? offered(int at) => CapOpen.of(((others[at] as Map<String, dynamic>)['offered'] as num?)?.toInt() ?? 0);
+      final toy = offered(0);
       final mapped = (j['mapped'] as num?)?.toInt() ?? 0;
-      return Capabilities({display: ?term, vibe: ?toy}, {if (toy != null && mapped != 0) vibe: mapped});
+      return Capabilities({display: ?offered(1), vibe: ?toy, sounds: ?offered(2)},
+          {if (toy != null && mapped != 0) vibe: mapped});
     } catch (_) {
       return null;
     }

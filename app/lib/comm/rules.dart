@@ -16,8 +16,8 @@ import 'capabilities.dart';
 
 /// The classes, by the capabilities' ids (RULES_CLASS_*).
 class RuleClass {
-  static const display = Capabilities.display, vibe = Capabilities.vibe;
-  static const estim = 3, machine = 4, sounds = 6;    // 5 was to be pictures, which display covers
+  static const display = Capabilities.display, vibe = Capabilities.vibe, sounds = Capabilities.sounds;
+  static const estim = 3, machine = 4;    // 5 was to be pictures, which display covers
   static const all = [display, vibe, estim, machine, sounds];
 
   /// Where a class starts, before it's been set.

@@ -44,6 +44,7 @@ class MessageDetailsPage extends StatelessWidget {
                   ConversationEntry.text => 'Text',
                   ConversationEntry.photo => 'Photo',
                   ConversationEntry.display => 'Display command',
+                  ConversationEntry.sound => 'Sound command',
                   _ => 'Toy command',
                 }),
                 if (e.kind == ConversationEntry.text)

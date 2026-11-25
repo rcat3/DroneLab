@@ -29,11 +29,17 @@
 #include <sys/stat.h>
 
 #include "audio/audio_decoders.h"
+#include "opus.h"
 
 #define SOUNDS_FOLDER       "sounds"
 #define MAX_TRACKS          100
 #define MAX_FOLDER_LEN      64
 #define MAX_PATH_LEN        320
+
+// Sent sounds' Opus is decoded at this rate: plenty for the small speaker,
+// and lighter than 48 kHz.
+#define OPUS_RATE           24000
+#define OPUS_FRAME_MAX      (OPUS_RATE * 120 / 1000)    // the longest a packet can be
 
 // Files are decoded this many frames at a time, at most.
 #define SCRATCH_FRAMES      256
@@ -56,7 +62,18 @@ typedef enum
     DECODER_WAV,
     DECODER_MP3,
     DECODER_FLAC,
+    DECODER_OPUS,
 } decoder_kind_t;
+
+/* A sent sound's Opus packets, in memory (AUDIO_SENT_OPUS). */
+typedef struct
+{
+    const uint8_t *data;
+    size_t len;
+    size_t at;              // the next packet's length byte
+    int16_t pcm[OPUS_FRAME_MAX];
+    int pcm_len, pcm_at;    // decoded from the last packet, and handed out
+} opus_stream_t;
 
 typedef struct
 {
@@ -68,6 +85,7 @@ typedef struct
         drwav wav;
         drmp3 mp3;
         drflac *flac;
+        opus_stream_t opus;
     } u;
 } decoder_t;
 
@@ -75,7 +93,30 @@ static bool available;
 static char folder[MAX_FOLDER_LEN];
 static char *file_names[MAX_TRACKS];
 static char *track_names[MAX_TRACKS];
-static size_t track_count;
+static size_t track_count;      // the SD card's; the sent ones are after them
+
+/* The sounds sent, the oldest first: changed by the speaker's task alone,
+ * which takes them in from pending_add and deletes them from
+ * pending_delete, so one's never freed while it plays. Their names and
+ * serials are copied out for the UI, which reads them as they are. */
+typedef struct
+{
+    uint8_t *data;
+    size_t len;
+    uint8_t kind;
+    uint8_t hash[32];
+    uint32_t serial;
+    char name[AUDIO_SENT_NAME_LEN];
+} sent_t;
+static sent_t *sent[AUDIO_SENT_KEPT];
+static char sent_names[AUDIO_SENT_KEPT][AUDIO_SENT_NAME_LEN];
+static volatile uint32_t sent_serials[AUDIO_SENT_KEPT];
+static volatile uint8_t sent_count;
+static sent_t *pending_add;         // from the UI, swapped atomically
+static uint32_t pending_delete;     // a serial, from the UI; 0 for none
+static uint32_t next_serial = 1;
+static uint32_t tracks_changes;     // by the speaker's task, read by anyone
+static OpusDecoder *opus_decoder;   // made the first time, in PSRAM (it's over the internal RAM limit)
 
 // Written by the UI, read by the speaker task. The command and its track are
 // written first, then cmd_seq is bumped to post it.
@@ -146,6 +187,7 @@ static void decoder_close(void)
         case DECODER_FLAC:
             drflac_close(decoder->u.flac);
             break;
+        case DECODER_OPUS:
         case DECODER_NONE:
             break;
     }
@@ -178,8 +220,22 @@ static uint32_t decoder_length(void)
         case DECODER_FLAC:
             frames = decoder->u.flac->totalPCMFrameCount;
             break;
+        case DECODER_OPUS:
+        {
+            const opus_stream_t *o = &decoder->u.opus;
+            for (size_t at = 0; at < o->len && at + 1 + o->data[at] <= o->len; at += 1 + o->data[at])
+            {
+                int n = o->data[at] > 0 ? opus_packet_get_nb_samples(o->data + at + 1, o->data[at], OPUS_RATE) : 0;
+                frames += n > 0 ? (uint64_t)n : 0;
+            }
+            break;
+        }
         case DECODER_NONE:
             break;
+    }
+    if (track >= track_count && frames > (uint64_t)decoder->sample_rate * AUDIO_SENT_MAX_MS / 1000)
+    {
+        frames = (uint64_t)decoder->sample_rate * AUDIO_SENT_MAX_MS / 1000;     // a sent one's cut short
     }
     return frames > UINT32_MAX ? 0 : (uint32_t)frames;
 }
@@ -206,9 +262,87 @@ static uint32_t estimate_mp3_length(void)
     return frames > UINT32_MAX ? 0 : (uint32_t)frames;
 }
 
+static size_t total_tracks(void)
+{
+    return track_count + sent_count;
+}
+
+/* A sent one, from memory. */
+static bool sent_open(const sent_t *s)
+{
+    const uint8_t *d = s->data;
+    size_t len = s->len;
+    if (s->kind == AUDIO_SENT_OPUS)
+    {
+        if (opus_decoder == NULL)
+        {
+            opus_decoder = malloc((size_t)opus_decoder_get_size(1));
+            if (opus_decoder == NULL || opus_decoder_init(opus_decoder, OPUS_RATE, 1) != OPUS_OK)
+            {
+                free(opus_decoder);
+                opus_decoder = NULL;
+                return false;
+            }
+        }
+        opus_decoder_ctl(opus_decoder, OPUS_RESET_STATE);
+        opus_stream_t *o = &decoder->u.opus;
+        o->data = d;
+        o->len = len;
+        o->at = 0;
+        o->pcm_len = o->pcm_at = 0;
+        decoder->kind = DECODER_OPUS;
+        decoder->sample_rate = OPUS_RATE;
+        decoder->channels = 1;
+    }
+    // A file as it is, by what it starts with
+    else if (len >= 4 && memcmp(d, "RIFF", 4) == 0 && drwav_init_memory(&decoder->u.wav, d, len, NULL))
+    {
+        decoder->kind = DECODER_WAV;
+        decoder->sample_rate = decoder->u.wav.sampleRate;
+        decoder->channels = decoder->u.wav.channels;
+    }
+    else if (len >= 4 && memcmp(d, "fLaC", 4) == 0 && (decoder->u.flac = drflac_open_memory(d, len, NULL)) != NULL)
+    {
+        decoder->kind = DECODER_FLAC;
+        decoder->sample_rate = decoder->u.flac->sampleRate;
+        decoder->channels = decoder->u.flac->channels;
+    }
+    else if (drmp3_init_memory(&decoder->u.mp3, d, len, NULL))
+    {
+        decoder->kind = DECODER_MP3;
+        decoder->sample_rate = decoder->u.mp3.sampleRate;
+        decoder->channels = decoder->u.mp3.channels;
+    }
+    else
+    {
+        return false;
+    }
+    file_bytes = len;
+    return true;
+}
+
 static bool decoder_open(size_t index)
 {
     char path[MAX_PATH_LEN];
+    if (index >= track_count)
+    {
+        const sent_t *s = index < total_tracks() ? sent[index - track_count] : NULL;
+        if (s == NULL || !sent_open(s))
+        {
+            printf("sound: can't play the one sent\n");
+            return false;
+        }
+        if (decoder->sample_rate == 0 || decoder->channels == 0 || decoder->channels > MAX_CHANNELS)
+        {
+            decoder_close();
+            return false;
+        }
+        progress_rate = decoder->sample_rate;
+        progress_frames = 0;
+        length_frames = decoder_length();
+        printf("sound: playing %s\n", s->name);
+        return true;
+    }
     const char *name = file_names[index];
     if (snprintf(path, sizeof(path), "%s/%s", folder, name) >= (int)sizeof(path))
     {
@@ -255,6 +389,8 @@ static bool decoder_open(size_t index)
     return true;
 }
 
+static size_t opus_read(int16_t *dest, size_t frames);
+
 /* Move the open track to a frame. Returns false if it can't. */
 static bool decoder_seek(uint32_t frame)
 {
@@ -293,10 +429,76 @@ static bool decoder_seek(uint32_t frame)
             drmp3_bind_seek_table(mp3, 0, NULL);
             return ok;
         }
+        case DECODER_OPUS:
+        {
+            // From the start, packet by packet, to the one it's in: they're
+            // in memory, and a sent one's short
+            opus_stream_t *o = &decoder->u.opus;
+            opus_decoder_ctl(opus_decoder, OPUS_RESET_STATE);
+            o->at = 0;
+            o->pcm_len = o->pcm_at = 0;
+            uint32_t skipped = 0;
+            while (o->at < o->len && o->at + 1 + o->data[o->at] <= o->len)
+            {
+                size_t n = o->data[o->at];
+                int frames = n > 0 ? opus_packet_get_nb_samples(o->data + o->at + 1, (opus_int32)n, OPUS_RATE) : 0;
+                if (frames > 0 && skipped + (uint32_t)frames > frame)
+                {
+                    break;
+                }
+                skipped += frames > 0 ? (uint32_t)frames : 0;
+                o->at += 1 + n;
+            }
+            // Decoded from there, the part before the frame left out
+            for (uint32_t extra = frame - skipped; extra > 0;)
+            {
+                size_t got = opus_read(scratch, extra < SCRATCH_FRAMES ? extra : SCRATCH_FRAMES);
+                if (got == 0)
+                {
+                    break;
+                }
+                extra -= (uint32_t)got;
+            }
+            return true;
+        }
         case DECODER_NONE:
             break;
     }
     return false;
+}
+
+/* Up to frames frames of a sent sound's Opus, mono. */
+static size_t opus_read(int16_t *dest, size_t frames)
+{
+    opus_stream_t *o = &decoder->u.opus;
+    size_t got = 0;
+    while (got < frames)
+    {
+        if (o->pcm_at == o->pcm_len)
+        {
+            if (o->at >= o->len)
+            {
+                break;      // the end
+            }
+            size_t n = o->data[o->at];
+            const uint8_t *pkt = o->data + o->at + 1;
+            o->at += 1 + n;
+            if (o->at > o->len)
+            {
+                break;      // cut short: the end
+            }
+            int r = n > 0 ? opus_decode(opus_decoder, pkt, (opus_int32)n, o->pcm, OPUS_FRAME_MAX, 0) : 0;
+            o->pcm_len = r > 0 ? r : 0;
+            o->pcm_at = 0;
+            continue;
+        }
+        size_t take = (size_t)(o->pcm_len - o->pcm_at);
+        take = take < frames - got ? take : frames - got;
+        memcpy(dest + got, o->pcm + o->pcm_at, take * sizeof(int16_t));
+        o->pcm_at += (int)take;
+        got += take;
+    }
+    return got;
 }
 
 /* Decode up to max_frames frames as stereo. Returns 0 at the end. */
@@ -317,6 +519,9 @@ static size_t decoder_read(int16_t *out, size_t max_frames)
             break;
         case DECODER_FLAC:
             got = drflac_read_pcm_frames_s16(decoder->u.flac, frames, dest);
+            break;
+        case DECODER_OPUS:
+            got = opus_read(dest, frames);
             break;
         case DECODER_NONE:
             break;
@@ -386,6 +591,139 @@ static void stop(void)
     publish();
 }
 
+/* Play a track once, over what's there, which comes back after. */
+static void start_chime(size_t index)
+{
+    if (!chiming)
+    {
+        saved_track = track;
+        saved_active = active;
+        saved_open = decoder->kind != DECODER_NONE;
+        saved_frame = frames_this_track;
+        saved_progress = progress_frames;
+        saved_length = length_frames;
+        saved_rate = progress_rate;
+    }
+    decoder_close();
+    track = (uint16_t)((index < total_tracks()) ? index : 0);
+    active = true;
+    chiming = true;
+}
+
+/* ----- Sent ones, on the speaker's task ----- */
+
+static void copy_out_sent(void)
+{
+    for (int i = 0; i < AUDIO_SENT_KEPT; i++)
+    {
+        snprintf(sent_names[i], sizeof(sent_names[i]), "%s", i < sent_count ? sent[i]->name : "");
+        sent_serials[i] = i < sent_count ? sent[i]->serial : 0;
+    }
+}
+
+static void free_sent(sent_t *s)
+{
+    free(s->data);
+    free(s);
+}
+
+/* Take away the one in slot i, stopping it first if it's playing, or what
+ * it's under; the tracks after it move down one. */
+static void remove_sent(int i)
+{
+    uint16_t index = (uint16_t)(track_count + i);
+    if (chiming && saved_track == index)
+    {
+        // What the chime's over is going: nothing to go back to
+        saved_track = 0;
+        saved_active = false;
+        saved_open = false;
+        saved_progress = saved_length = 0;
+    }
+    if (track == index)
+    {
+        if (chiming)
+        {
+            end_chime();
+        }
+        else
+        {
+            decoder_close();
+            active = false;
+            track = 0;
+        }
+    }
+    free_sent(sent[i]);
+    memmove(&sent[i], &sent[i + 1], (size_t)(sent_count - i - 1) * sizeof(sent[0]));
+    sent[--sent_count] = NULL;
+    if (track > index)
+    {
+        track--;
+    }
+    if (saved_track > index)
+    {
+        saved_track--;
+    }
+}
+
+/* What the UI's sent or deleted since. */
+static void take_sent(void)
+{
+    uint32_t serial = __atomic_exchange_n(&pending_delete, 0, __ATOMIC_ACQ_REL);
+    sent_t *s = __atomic_exchange_n(&pending_add, NULL, __ATOMIC_ACQ_REL);
+    if (serial == 0 && s == NULL)
+    {
+        return;
+    }
+    for (int i = 0; serial != 0 && i < sent_count; i++)
+    {
+        if (sent[i]->serial == serial)
+        {
+            remove_sent(i);
+            break;
+        }
+    }
+    if (s != NULL)
+    {
+        int at = -1;
+        for (int i = 0; i < sent_count; i++)
+        {
+            if (memcmp(sent[i]->hash, s->hash, sizeof(s->hash)) == 0)
+            {
+                at = i;     // had it already: played again
+                break;
+            }
+        }
+        if (at >= 0)
+        {
+            free_sent(s);
+        }
+        else
+        {
+            if (sent_count == AUDIO_SENT_KEPT)
+            {
+                remove_sent(0);
+            }
+            at = sent_count;
+            sent[sent_count++] = s;
+        }
+        start_chime(track_count + (size_t)at);
+    }
+    copy_out_sent();
+    __atomic_add_fetch(&tracks_changes, 1, __ATOMIC_RELEASE);
+    publish();
+}
+
+bool audio_player_sent_playing(void)
+{
+    if (decoder == NULL)
+    {
+        return false;
+    }
+    take_sent();
+    return chiming && track >= track_count;
+}
+
 static void handle_commands(void)
 {
     uint32_t seq = __atomic_load_n(&cmd_seq, __ATOMIC_ACQUIRE);
@@ -409,29 +747,16 @@ static void handle_commands(void)
             }
             break;
         case CMD_CHIME:
-            if (!chiming)
-            {
-                saved_track = track;
-                saved_active = active;
-                saved_open = decoder->kind != DECODER_NONE;
-                saved_frame = frames_this_track;
-                saved_progress = progress_frames;
-                saved_length = length_frames;
-                saved_rate = progress_rate;
-            }
-            decoder_close();
-            track = (cmd_track < track_count) ? cmd_track : 0;
-            active = true;
-            chiming = true;
+            start_chime(cmd_track);
             break;
         case CMD_PLAY:
             decoder_close();
-            track = (cmd_track < track_count) ? cmd_track : 0;
+            track = (cmd_track < total_tracks()) ? cmd_track : 0;
             active = true;
             break;
         case CMD_CUE:
             decoder_close();
-            track = (cmd_track < track_count) ? cmd_track : 0;
+            track = (cmd_track < total_tracks()) ? cmd_track : 0;
             active = false;
             break;
         case CMD_PAUSE:
@@ -499,12 +824,12 @@ size_t audio_player_fill(int16_t *frames, size_t max_frames, uint32_t *sample_ra
                     continue;
                 }
                 // Skip files that can't be played, unless they all fail.
-                if (repeat != AUDIO_REPEAT_ALL || ++failures >= track_count)
+                if (repeat != AUDIO_REPEAT_ALL || ++failures >= total_tracks())
                 {
                     stop();
                     break;
                 }
-                track = (track + 1) % track_count;
+                track = (track + 1) % total_tracks();
                 publish();
                 continue;
             }
@@ -522,7 +847,15 @@ size_t audio_player_fill(int16_t *frames, size_t max_frames, uint32_t *sample_ra
             break;
         }
 
-        size_t got = decoder_read(frames + 2 * done, max_frames - done);
+        // A sent one stops at AUDIO_SENT_MAX_MS, however long it is
+        size_t want = max_frames - done;
+        if (track >= track_count)
+        {
+            uint32_t most = (uint32_t)((uint64_t)decoder->sample_rate * AUDIO_SENT_MAX_MS / 1000);
+            uint32_t left = frames_this_track < most ? most - frames_this_track : 0;
+            want = want < left ? want : left;
+        }
+        size_t got = want > 0 ? decoder_read(frames + 2 * done, want) : 0;
         if (got > 0)
         {
             done += got;
@@ -554,7 +887,7 @@ size_t audio_player_fill(int16_t *frames, size_t max_frames, uint32_t *sample_ra
         // Stop if tracks keep ending without playing anything, rather than
         // opening them over and over.
         decoder_close();
-        if (frames_this_track == 0 && ++failures > track_count)
+        if (frames_this_track == 0 && ++failures > total_tracks())
         {
             stop();
             break;
@@ -566,7 +899,7 @@ size_t audio_player_fill(int16_t *frames, size_t max_frames, uint32_t *sample_ra
         }
         if (repeat == AUDIO_REPEAT_ALL)
         {
-            track = (track + 1) % track_count;
+            track = (track + 1) % total_tracks();
         }
         publish();
     }
@@ -642,12 +975,62 @@ bool audio_player_init(const char *storage_path)
 
 size_t audio_player_track_count(void)
 {
-    return track_count;
+    return total_tracks();
 }
 
 const char *audio_player_track_name(size_t index)
 {
-    return (index < track_count) ? track_names[index] : "";
+    return index < track_count ? track_names[index] : index < total_tracks() ? sent_names[index - track_count] : "";
+}
+
+bool audio_player_is_sent(size_t index)
+{
+    return index >= track_count && index < total_tracks();
+}
+
+size_t audio_player_sent_count(void)
+{
+    return sent_count;
+}
+
+uint32_t audio_player_tracks_changes(void)
+{
+    return __atomic_load_n(&tracks_changes, __ATOMIC_ACQUIRE);
+}
+
+bool audio_player_add_sent(uint8_t *data, size_t len, uint8_t kind, const uint8_t hash[32], const char *name)
+{
+    sent_t *s = available && data != NULL ? calloc(1, sizeof(*s)) : NULL;
+    if (s == NULL)
+    {
+        free(data);
+        return false;
+    }
+    s->data = data;
+    s->len = len;
+    s->kind = kind;
+    memcpy(s->hash, hash, sizeof(s->hash));
+    s->serial = next_serial++;
+    snprintf(s->name, sizeof(s->name), "%s", name);
+    // One the speaker's task hasn't taken yet gives way to this
+    sent_t *old = __atomic_exchange_n(&pending_add, s, __ATOMIC_ACQ_REL);
+    if (old != NULL)
+    {
+        free_sent(old);
+    }
+    return true;
+}
+
+void audio_player_delete_sent(size_t index)
+{
+    if (audio_player_is_sent(index))
+    {
+        uint32_t serial = sent_serials[index - track_count];
+        if (serial != 0)
+        {
+            __atomic_store_n(&pending_delete, serial, __ATOMIC_RELEASE);
+        }
+    }
 }
 
 static void post(command_t command, size_t index)
@@ -659,22 +1042,22 @@ static void post(command_t command, size_t index)
 
 void audio_player_play(size_t index)
 {
-    if (track_count == 0)
+    if (total_tracks() == 0)
     {
         return;
     }
-    current = (uint16_t)(index % track_count);
+    current = (uint16_t)(index % total_tracks());
     playing = true;
     post(CMD_PLAY, current);
 }
 
 void audio_player_cue(size_t index)
 {
-    if (track_count == 0)
+    if (total_tracks() == 0)
     {
         return;
     }
-    current = (uint16_t)(index % track_count);
+    current = (uint16_t)(index % total_tracks());
     playing = false;
     post(CMD_CUE, current);
 }
@@ -700,7 +1083,7 @@ bool audio_player_chiming(void)
 
 void audio_player_seek(uint32_t position_ms)
 {
-    if (track_count == 0)
+    if (total_tracks() == 0)
     {
         return;
     }
@@ -716,7 +1099,7 @@ void audio_player_pause(void)
 
 void audio_player_resume(void)
 {
-    if (track_count == 0)
+    if (total_tracks() == 0)
     {
         return;
     }
@@ -757,6 +1140,28 @@ size_t audio_player_fill(int16_t *frames, size_t max_frames, uint32_t *sample_ra
 }
 
 void audio_player_play(size_t index) {}
+bool audio_player_add_sent(uint8_t *data, size_t len, uint8_t kind, const uint8_t hash[32], const char *name)
+{
+    free(data);
+    return false;
+}
+bool audio_player_is_sent(size_t index)
+{
+    return false;
+}
+void audio_player_delete_sent(size_t index) {}
+size_t audio_player_sent_count(void)
+{
+    return 0;
+}
+uint32_t audio_player_tracks_changes(void)
+{
+    return 0;
+}
+bool audio_player_sent_playing(void)
+{
+    return false;
+}
 void audio_player_cue(size_t index) {}
 void audio_player_chime(size_t index) {}
 void audio_player_chime_stop(void) {}

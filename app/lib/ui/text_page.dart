@@ -618,7 +618,14 @@ class _Entry extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(e.kind == ConversationEntry.display ? Icons.monitor : Icons.vibration, size: 14, color: Kc.muted),
+          Icon(
+              switch (e.kind) {
+                ConversationEntry.display => Icons.monitor,
+                ConversationEntry.sound => Icons.volume_up_outlined,
+                _ => Icons.vibration,
+              },
+              size: 14,
+              color: Kc.muted),
           const SizedBox(width: 6),
           Flexible(
             child: Column(mainAxisSize: MainAxisSize.min, children: [

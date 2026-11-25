@@ -16,6 +16,7 @@
 
 #include "app/settings.h"
 #include "audio/audio_level.h"
+#include "audio/audio_player.h"
 #include "audio/seal_test.h"
 #include "audio/speaker.h"
 #include "audio/voice_fx.h"
@@ -289,11 +290,18 @@ static void sync_timer_cb(lv_timer_t *t)
 }
 
 /* The board's spare button (BOOT) switches Play on speaker on and off, to
- * stop feedback quickly without finding the switch. */
+ * stop feedback quickly without finding the switch; or, while a sound plays
+ * once over the rest (one someone sent, or the app's for something that
+ * happened), stops that. */
 static void button_timer_cb(lv_timer_t *t)
 {
     if (rcat_hal_button_pressed())
     {
+        if (audio_player_chiming())
+        {
+            audio_player_chime_stop();
+            return;
+        }
         voice_fx_set_speaker(!voice_fx_speaker_on());
         sync_timer_cb(NULL);
     }

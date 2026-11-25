@@ -329,16 +329,24 @@ class _FeaturesTabState extends State<_FeaturesTab> {
           ],
         );
     return ListView(padding: _tabPadding(context), children: [
-      // Which feature
-      SegmentedButton<int>(
-        showSelectedIcon: false,
-        segments: [
-          for (final k in controlKinds)
-            ButtonSegment(value: k.id, icon: Icon(k.icon), label: Text(k.name.toUpperCase())),
-        ],
-        selected: {_cap},
-        onSelectionChanged: (sel) => setState(() => _cap = sel.first),
-      ),
+      // Which feature: a chip each, wrapping onto more lines as there are
+      // more of them; the icon dimmed for one that's set to Nobody
+      Wrap(spacing: 8, runSpacing: 4, children: [
+        for (final k in controlKinds)
+          ChoiceChip(
+            showCheckmark: false,
+            avatar: Icon(k.icon,
+                size: 18,
+                color: k.id == _cap
+                    ? Kc.pink
+                    : (widget.policy.caps[k.id]?.policy ?? Policy.off) == Policy.off
+                        ? Kc.muted
+                        : Kc.text),
+            label: Text(k.name.toUpperCase()),
+            selected: k.id == _cap,
+            onSelected: (_) => setState(() => _cap = k.id),
+          ),
+      ]),
       SectionHeader('Who can control ${kind.name}'),
       Panel(children: [
         Padding(

@@ -5,6 +5,7 @@ import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
 import 'control_page.dart';
 import 'display_sheet.dart';
+import 'sound_sheet.dart';
 import 'people.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -36,10 +37,12 @@ class ControlKind {
 }
 
 /// Each one this app knows, by area, in the order they're shown. New ones
-/// (E-stim, Machines, the Display unit's sounds) go here.
+/// (E-stim, Machines) go here.
 const controlKinds = [
   ControlKind(Capabilities.vibe, ControlArea.toys, 'Vibe', Icons.vibration, 'Their vibrating toys, by channel'),
   ControlKind(Capabilities.display, ControlArea.display, 'Display', Icons.monitor, 'Put words or pictures on their display'),
+  ControlKind(Capabilities.sounds, ControlArea.display, 'Sounds', Icons.volume_up_outlined,
+      "Play a sound from their unit's speaker"),
 ];
 
 /// Those of one area.
@@ -73,6 +76,8 @@ void openControl(BuildContext context, CommController comm, Conversation c, int 
   switch (id) {
     case Capabilities.display:
       showDisplaySheet(context, comm, c);
+    case Capabilities.sounds:
+      showSoundSheet(context, comm, c);
     case Capabilities.vibe:
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => ToysPage(comm: comm, target: c)));
   }

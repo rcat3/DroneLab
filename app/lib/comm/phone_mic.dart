@@ -77,6 +77,11 @@ class PhoneMic {
   /// full scale (-60 for silence), falling back slowly.
   final ValueNotifier<double> level = ValueNotifier(-60);
 
+  /// What the mic hears, as others would get it (after the boost and the
+  /// effect): each 20 ms, at its rate (48 kHz, or the effect's 16), while
+  /// the mic's open, sending or not. For recording it (recorder.dart).
+  void Function(Int16List pcm, int rate)? onAudio;
+
   /// Why the mic couldn't open, last time; null once it did.
   String? error;
 
@@ -239,6 +244,7 @@ class PhoneMic {
         // Through the effect, and coded at its 16 kHz, as the board does
         final voice = fx.process(samples);
         _measure(voice);
+        onAudio?.call(voice, voiceFxRate);
         final e16 = _encoder16 ??= _newEncoder(voiceFxRate, _bitrate);
         if (_sending && voice.length == _frame16) {
           e16.inputBuffer.buffer.asInt16List(e16.inputBuffer.offsetInBytes, _frame16).setAll(0, voice);
@@ -250,6 +256,7 @@ class PhoneMic {
         continue;
       }
       _measure(samples);
+      onAudio?.call(samples, _rate);
       if (_sending) {
         enc.inputBufferIndex = _frameBytes;
         onPacket(enc.encode(), last: false);

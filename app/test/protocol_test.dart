@@ -184,8 +184,10 @@ void main() {
   });
 
   test('recording messages', () {
-    expect(recordMessage(true, speakerVoice: true, beep: true), [0x0A, 1, 3]);
-    expect(recordMessage(false), [0x0A, 0, 0]);
+    expect(recordMessage(true, beep: true), [0x0A, 1, 3]);
+    expect(recordMessage(true, preset: 4), [0x0A, 1, 1, 4]);
+    expect(recordMessage(false), [0x0A, 0, 1]);
+    expect((parseBoardMessage(Uint8List.fromList([0x1C, 0xF4])) as VoiceLevel).db, -12);
     final r = parseBoardMessage(Uint8List.fromList([0x0A, 0x34, 0x12, 1, 7, 8])) as RecordedSound;
     expect([r.sound.seq, r.sound.first, r.sound.opus], [0x1234, true, [7, 8]]);
     final st = parseBoardMessage(Uint8List.fromList([0x02, 3, 0, 8])) as BoardStatus;

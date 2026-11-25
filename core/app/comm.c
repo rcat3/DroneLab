@@ -33,6 +33,7 @@
 #include "app/rules.h"
 #include "app/remote.h"
 #include "app/settings.h"
+#include "app/sounds.h"
 #include "app/talk_button.h"
 #include "app/updater.h"
 #include "audio/speaker.h"
@@ -116,6 +117,10 @@
 #define UPDATE_INSTALLING   0x04    // in the ack: it's all here, and being installed
 #define MSG_RECORD          0x0A    // both ways: start or stop recording, and what's recorded
 #define RECORD_SPEAKER      0x01    // the speaker's voice effect, not the comm voice
+#define RECORD_SPEAKER_ONLY 0x04    // not recording: the speaker's effect held at the preset, for the phone's mic
+#define MSG_LEVEL           0x1C    // both ways: the phone wants the voice's level, and the level
+#define LEVEL_EVERY_MS      100
+#define LEVEL_FOR_MS        5000    // sent for this long after the phone asks
 #define RECORD_BEEP         0x02    // with a sync beep to start
 #define MSG_COMMAND         0x0B    // from the phone: a command for others, in from the server or out over direct
 #define COMMAND_FROM_SERVER 0x01
@@ -123,6 +128,7 @@
 #define MSG_RULES           0x10    // from the phone: who's muted there, whose commands are ignored
 #define MSG_FAVOURITES      0x19    // from the phone: the wearer's favourite patterns, in pieces
 #define MSG_PICTURE         0x1A    // both ways: a picture for the screen, in pieces, and the ack
+#define MSG_SENT_SOUND      0x1B    // both ways: a sound for the speaker, in pieces, and the ack, as a picture's
 #define PICTURE_START       0x01
 #define PICTURE_END         0x02
 #define PICTURE_ACK         0x04
@@ -312,6 +318,8 @@ static float agc_db = AGC_START_DB;
 static float agc_gain;                  // agc_db as a factor, smoothed per sample
 static int frame_count;
 static int loud_frames;
+static volatile float level_peak;       // the loudest since the last level sent, of full scale
+static volatile uint32_t level_until;   // the phone wants levels till then (rcat_hal_millis)
 #if COMM_DEBUG
 static volatile float debug_peak;
 static volatile float debug_level_db = -120;    // the loudest frame
@@ -336,6 +344,10 @@ static void voice_cb(const int16_t *samples, size_t count, void *user_data)
         agc_gain += (gain_target - agc_gain) * 0.002f;     // about 30 ms
         float v = tanhf(x * agc_gain);  // rounds peaks off instead of clipping them
         ring[w++ & RING_MASK] = (int16_t)(v * 32767.0f);
+        if (fabsf(v) > level_peak)
+        {
+            level_peak = fabsf(v);
+        }
 #if COMM_DEBUG
         if (fabsf(v) > debug_peak)
         {
@@ -1523,13 +1535,35 @@ static void receive_avatar(const uint8_t *msg, size_t len)
     }
 }
 
-static void set_recording(bool on, bool speaker, bool beep)
+/* The speaker's effect held at a preset (>= 0) for a recording, or the
+ * wearer's own back (-1): it isn't saved. Returns whether it's held. */
+static bool hold_preset(int preset)
+{
+    static bool held;
+    if (preset >= 0 && (size_t)preset < voice_fx_preset_count())
+    {
+        voice_fx_set_preset((size_t)preset);
+        held = true;
+    }
+    else if (held)
+    {
+        voice_fx_set_preset(settings_get()->voice_effect);
+        held = false;
+    }
+    return held;
+}
+
+/* Start or stop recording: the speaker's effect, or the comm channel's;
+ * or, given a preset (>= 0), that one, on the speaker's effect for as long
+ * as it records, the wearer's own coming back after. */
+static void set_recording(bool on, bool speaker, bool beep, int preset)
 {
     if (on != recording)
     {
         printf("comm: recording %s\n", on ? "on" : "off");
     }
-    voice_fx_listen_to_speaker(on && speaker);
+    bool given = hold_preset(on ? preset : -1);
+    voice_fx_listen_to_speaker(on && (speaker || given));
     recording = on;
     if (on && beep)
     {
@@ -1545,7 +1579,7 @@ static void forget_phone(void)
     phone_mic_sending = false;
     if (recording)
     {
-        set_recording(false, false, false);     // nor recording
+        set_recording(false, false, false, -1);     // nor recording
     }
     app_os[0] = '\0';
     app_version[0] = '\0';
@@ -1983,33 +2017,35 @@ static void receive_update(const uint8_t *msg, size_t len)
     }
 }
 
-/* A picture for the screen, from the phone (pictures.h), in pieces: see
- * comm.h's 0x1A. */
-static void receive_picture(const uint8_t *msg, size_t len)
+/* A picture for the screen (pictures.h) or a sound for the speaker
+ * (sounds.h), from the phone, in pieces: see comm.h's 0x1A and 0x1B. */
+static void receive_media(const uint8_t *msg, size_t len)
 {
+    bool sound = msg[0] == MSG_SENT_SOUND;
     uint8_t flags = msg[1];
     static bool well;
     if (flags & PICTURE_START)
     {
         uint32_t length = 0;
-        if (len >= 7 + PICTURES_HASH_LEN)
+        bool whole = len >= 7 + PICTURES_HASH_LEN;
+        if (whole)
         {
             memcpy(&length, msg + 2, 4);
         }
-        well = len >= 7 + PICTURES_HASH_LEN && pictures_begin(length, msg[6], msg + 7);
+        well = whole && (sound ? sounds_begin(length, msg[6], msg + 7) : pictures_begin(length, msg[6], msg + 7));
     }
     else if (flags & PICTURE_END)
     {
-        well = well && pictures_finish();
+        well = well && (sound ? sounds_finish() : pictures_finish());
     }
     else
     {
-        well = well && pictures_write(msg + 2, len - 2);
+        well = well && (sound ? sounds_write(msg + 2, len - 2) : pictures_write(msg + 2, len - 2));
     }
     if (flags & (PICTURE_ACK | PICTURE_END))
     {
-        uint32_t got = pictures_received();
-        uint8_t out[6] = { MSG_PICTURE, (uint8_t)((flags & PICTURE_END ? PICTURE_DONE : 0) | (well ? PICTURE_WELL : 0)),
+        uint32_t got = sound ? sounds_received() : pictures_received();
+        uint8_t out[6] = { msg[0], (uint8_t)((flags & PICTURE_END ? PICTURE_DONE : 0) | (well ? PICTURE_WELL : 0)),
                            (uint8_t)got, (uint8_t)(got >> 8), (uint8_t)(got >> 16), (uint8_t)(got >> 24) };
         send_retrying(out, sizeof(out));
     }
@@ -2044,6 +2080,20 @@ void comm_poll(uint32_t now_ms)
         speaker_set_muted(mute);
     }
     update_audio();
+    // The voice's level, as it's sent or recorded, while the phone wants it
+    // (by rcat_hal_millis, as level_until is: now_ms is LVGL's tick)
+    static uint32_t level_sent_ms;
+    uint32_t millis = rcat_hal_millis();
+    if ((int32_t)(level_until - millis) > 0 && millis - level_sent_ms >= LEVEL_EVERY_MS
+        && rcat_hal_ble_peer_connected())
+    {
+        level_sent_ms = millis;
+        float peak = level_peak;
+        level_peak = 0;
+        float db = peak > 0.001f ? 20.0f * log10f(peak) : -60.0f;
+        uint8_t out[2] = { MSG_LEVEL, (uint8_t)(int8_t)(db < -60.0f ? -60 : db > 0.0f ? 0 : (int)lroundf(db)) };
+        rcat_hal_ble_peer_send(out, sizeof(out));
+    }
     if (!running || !rcat_hal_ble_peer_connected())
     {
         forget_phone();
@@ -2090,9 +2140,9 @@ void comm_poll(uint32_t now_ms)
         {
             patterns_receive_favourites((msg[1] & RULES_FIRST) != 0, (msg[1] & RULES_LAST) != 0, msg + 2, len - 2);
         }
-        else if (msg[0] == MSG_PICTURE && len >= 2)
+        else if ((msg[0] == MSG_PICTURE || msg[0] == MSG_SENT_SOUND) && len >= 2)
         {
-            receive_picture(msg, len);
+            receive_media(msg, len);
         }
         else if (msg[0] == MSG_IDENTITY && len >= 1 + OTHERS_KEY_LEN)
         {
@@ -2127,9 +2177,19 @@ void comm_poll(uint32_t now_ms)
                 __atomic_store_n(&refused_ms, rcat_hal_millis() | 1, __ATOMIC_RELEASE);
             }
         }
+        else if (msg[0] == MSG_RECORD && len >= 3 && (msg[2] & RECORD_SPEAKER_ONLY))
+        {
+            // The phone's mic records: the speaker's effect to match, alone
+            hold_preset(msg[1] != 0 && len >= 4 ? msg[3] : -1);
+        }
+        else if (msg[0] == MSG_LEVEL && len >= 2)
+        {
+            level_until = msg[1] ? rcat_hal_millis() + LEVEL_FOR_MS : 0;
+        }
         else if (msg[0] == MSG_RECORD && len >= 3)
         {
-            set_recording(msg[1] != 0, (msg[2] & RECORD_SPEAKER) != 0, (msg[2] & RECORD_BEEP) != 0);
+            set_recording(msg[1] != 0, (msg[2] & RECORD_SPEAKER) != 0, (msg[2] & RECORD_BEEP) != 0,
+                          len >= 4 ? msg[3] : -1);
         }
     }
     merge_hearing();

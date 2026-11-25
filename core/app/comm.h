@@ -37,7 +37,17 @@
  *     0x02 mode:   02, then a comm_mode_t
  *     0x0A record: 0A, 1 to start recording or 0 to stop, flags (bit 0 the
  *                  speaker's voice effect rather than the comm voice, bit 1
- *                  a sync beep to start). While it records, the board sends
+ *                  a sync beep to start), and optionally a preset to record
+ *                  through: the speaker's effect is that one while it
+ *                  records, and the wearer's own after, which isn't changed
+ *                  (from COMM_VERSION 22). With flags bit 2, it doesn't
+ *                  record, but holds the speaker's effect at the preset
+ *                  (1) or lets it go (0): the phone's mic is recording,
+ *                  and the speaker's to sound the same (from COMM_VERSION
+ *                  22).
+ *     0x1C level:  1C, 1 to have the voice's level (0x1C below) for the
+ *                  next 5 s, sent again to keep it coming, or 0 to stop
+ *                  (from COMM_VERSION 22). While it records, the board sends
  *                  what it hears, the whole time, as 0x0A below, at a higher
  *                  bitrate, and nothing else: no talking, to the server or
  *                  direct, and nothing heard directly passed on. It stops if
@@ -136,6 +146,10 @@
  *                  been taken (0x0F heard, done). Sent as avatars are, a
  *                  few pieces at a time, waiting for the ack of the last of
  *                  each few (from COMM_VERSION 20).
+ *     0x1B sound:  1B, as 0x1A, but a sound for the speaker (sounds.h):
+ *                  its length's at most SOUNDS_MAX_BYTES, and what it is
+ *                  AUDIO_SENT_OPUS or AUDIO_SENT_FILE; given once the
+ *                  command to play it's been taken (from COMM_VERSION 21).
  *     0x0E update: 0E, flags (bit 0 the start, bit 1 the end, bit 2 asks
  *                  for an ack), then for the start: the firmware's length
  *                  (4, little endian), the board it's for
@@ -161,7 +175,13 @@
  *                  well: for the end, it's here and came to its hash), then
  *                  how much of it's come (4, little endian). For each piece
  *                  that asks, and the end.
+ *     0x1B sound ack: 1B, then as 0x1A's, for a sound's pieces (from
+ *                  COMM_VERSION 21).
  *     0x0A recorded sound: as 0x01 sound, while recording, at 48 kb/s.
+ *     0x1C level:  1C, the loudest of the voice in the last 100 ms, as it's
+ *                  sent or recorded (after the effect and the gain), in dB
+ *                  of full scale, signed, -60 to 0: every 100 ms while the
+ *                  phone wants it (from COMM_VERSION 22).
  *     0x07 direct sound: 07, the sender's id (32 bits, little endian), seq
  *                  (16), flags, then the Opus packet: another board's voice,
  *                  heard over direct comms (see direct.h), as 0x01's; flags
@@ -323,8 +343,12 @@
  *  19  the wearer's own Vibe commands, for their toys to follow along
  *      (0x0B's bit 1)
  *  20  Display commands (others.h): words and pictures on screen for a
- *      while, and pictures sent over the server, from the phone (0x1A) */
-#define COMM_VERSION            20
+ *      while, and pictures sent over the server, from the phone (0x1A)
+ *  21  Sounds others play from the speaker (others.h 0x13), sent over the
+ *      server, from the phone (0x1B)
+ *  22  a preset to record through, or to hold the speaker at (0x0A); the
+ *      voice's level (0x1C) */
+#define COMM_VERSION            22
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4
@@ -426,6 +450,7 @@ typedef enum
     COMM_HEARD_CALL,        // a call's signal (OTHERS_CALL), for the app
     COMM_HEARD_INVITE,      // an invitation to a direct channel (OTHERS_INVITE), for the app
     COMM_HEARD_REACTION,    // a reaction to a message (OTHERS_REACTION), for the app
+    COMM_HEARD_SOUND,       // a command to play a sound from the speaker (from COMM_VERSION 21)
 } comm_heard_t;
 
 /* Pass on to the app what someone sent: a text, or a command and whether it

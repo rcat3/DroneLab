@@ -4,6 +4,7 @@
 /// its panels, in an order that stays put as rows come and go.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../comm/board_link.dart';
@@ -15,24 +16,55 @@ import 'widgets.dart';
 
 /// Which mic talks: the unit's (while one's connected), the phone's, or a
 /// Bluetooth headset's (Android). See [shown] for when there's a choice.
+///
+/// Headset can't be picked while there's no headset: greyed out, or with
+/// [compact] (the Record tab's dropdown, without the help), left out.
 class MicSourceRow extends StatelessWidget {
   final CommController comm;
   final bool unitUp;
-  const MicSourceRow({super.key, required this.comm, required this.unitUp});
+  final bool compact;
+  final bool enabled;
+  const MicSourceRow({super.key, required this.comm, required this.unitUp, this.compact = false, this.enabled = true});
 
   /// Whether there's more than one mic to pick from.
   static bool shown(bool unitUp) => unitUp || Headset.supported;
 
   @override
   Widget build(BuildContext context) {
+    final headsetThere = comm.headsetThere != null;
     final options = [
       if (unitUp) (MicSource.unit, 'UNIT'),
       (MicSource.phone, thisDevice.toUpperCase()),
-      if (Headset.supported) (MicSource.headset, 'HEADSET'),
+      if (Headset.supported && (headsetThere || !compact || comm.micSource == MicSource.headset))
+        (MicSource.headset, 'HEADSET'),
     ];
 
     // The unit's picked but not there: the phone's talks, and shows so
     final shown = !unitUp && comm.micSource == MicSource.unit ? MicSource.phone : comm.micSource;
+    final segmented = SegmentedButton<MicSource>(
+      showSelectedIcon: false,
+      segments: [
+        for (final (v, label) in options)
+          ButtonSegment(value: v, label: Text(label), enabled: v != MicSource.headset || headsetThere),
+      ],
+      selected: {shown},
+      onSelectionChanged: enabled ? (sel) => comm.setMicSource(sel.first) : null,
+    );
+    // The Record tab's: a dropdown, as its Effect, which fits on a phone
+    if (compact) {
+      String name(String label) => label[0] + label.substring(1).toLowerCase();
+      return DropdownButton<MicSource>(
+        value: shown,
+        isDense: true,
+        underline: const SizedBox.shrink(),
+        dropdownColor: Kc.raised,
+        onChanged: enabled ? (v) => v == null ? null : comm.setMicSource(v) : null,
+        items: [
+          for (final (v, label) in options)
+            DropdownMenuItem(value: v, enabled: v != MicSource.headset || headsetThere, child: Text(name(label))),
+        ],
+      );
+    }
     return Explained(
       help:
           "The unit's mic talks through your voice effect, with its own talk button and voice mode. "
@@ -43,7 +75,8 @@ class MicSourceRow extends StatelessWidget {
           "button talk from it, to the server, or through the unit to its direct channel, and so does the unit's "
           "own talk button (with older firmware, that talks through the unit). The unit's voice mode is off till "
           "you pick the unit's mic again, as it would send what it heard too. Without a unit, the unit choice "
-          "goes away and the $thisDevice's mic talks.",
+          "goes away and the $thisDevice's mic talks. Headset can only be picked while a Bluetooth headset "
+          'is connected.',
       // The label over the choices, as Talk with: three don't leave it
       // room beside them on a phone
       builder: (context, info) => Padding(
@@ -60,12 +93,7 @@ class MicSourceRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            SegmentedButton<MicSource>(
-              showSelectedIcon: false,
-              segments: [for (final (v, label) in options) ButtonSegment(value: v, label: Text(label))],
-              selected: {shown},
-              onSelectionChanged: (sel) => comm.setMicSource(sel.first),
-            ),
+            segmented,
           ],
         ),
       ),
@@ -165,33 +193,31 @@ class MicBoostRow extends StatelessWidget {
   }
 }
 
-/// The mic's level as others get it, while trying it (nothing's sent) or
-/// while talking.
+/// The mic's level as others get it, live while it's on screen: the phone
+/// mic's, opened for it (nothing's sent); or, given [level], that, which
+/// whoever gave it keeps live (the Record tab's).
 class MicMeter extends StatefulWidget {
   final CommController comm;
-  const MicMeter({super.key, required this.comm});
+  final ValueListenable<double>? level;
+  final String? hint;       // in place of the usual words
+  const MicMeter({super.key, required this.comm, this.level, this.hint});
 
   @override
   State<MicMeter> createState() => _MicMeterState();
 }
 
 class _MicMeterState extends State<MicMeter> {
-  bool _trying = false;
+  bool get _own => widget.level == null;
 
-  Future<void> _toggle() async {
-    if (_trying) {
-      setState(() => _trying = false);
-      await widget.comm.stopMicMeter();
-    } else {
-      setState(() => _trying = true);
-      final ok = await widget.comm.startMicMeter();
-      if (!ok && mounted) setState(() => _trying = false);
-    }
+  @override
+  void initState() {
+    super.initState();
+    if (_own) widget.comm.startMicMeter('setup');
   }
 
   @override
   void dispose() {
-    if (_trying) widget.comm.stopMicMeter();
+    if (_own) widget.comm.stopMicMeter('setup');
     super.dispose();
   }
 
@@ -203,28 +229,17 @@ class _MicMeterState extends State<MicMeter> {
   @override
   Widget build(BuildContext context) {
     final comm = widget.comm;
-    final live = _trying || comm.sendingNow;
-    final err = comm.phoneMicError;
+    final err = _own ? comm.phoneMicError : null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 8, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text('Mic level', style: TextStyle(fontWeight: FontWeight.w600)),
-              ),
-              _trying
-                  ? OutlinedButton(onPressed: _toggle, child: const Text('Stop'))
-                  : FilledButton(onPressed: _toggle, child: const Text('Try it')),
-            ],
-          ),
+          const Text('Mic level', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           ValueListenableBuilder<double>(
-            valueListenable: comm.micLevel,
-            builder: (context, db, _) {
-              final v = live ? db : -60.0;
+            valueListenable: widget.level ?? comm.micLevel,
+            builder: (context, v, _) {
               final frac = ((v - _floor) / -_floor).clamp(0.0, 1.0);
               final color = v >= PhoneMic.kneeDb
                   ? Kc.warn
@@ -232,7 +247,7 @@ class _MicMeterState extends State<MicMeter> {
                   ? Kc.green
                   : Kc.darkGreen;
               return Semantics(
-                label: live ? 'Mic level ${v.round()} dB' : 'Mic level, not listening',
+                label: 'Mic level ${v.round()} dB',
                 child: SizedBox(
                   height: 14,
                   child: Stack(
@@ -261,10 +276,9 @@ class _MicMeterState extends State<MicMeter> {
           const SizedBox(height: 6),
           Text(
             err ??
-                (live
-                    ? 'Talk as you would. Peaks in the green band sound right to others; mostly in the dark part, '
-                          'add boost; yellow is being eased down, so take some off. Nothing is sent while trying.'
-                    : "Try it to see your level as others get it, after the $thisDevice's own processing and the boost."),
+                widget.hint ??
+                'Talk as you would. Peaks in the green band sound right to others; mostly in the dark part, '
+                    'add boost; yellow is being eased down, so take some off. Nothing is sent.',
             style: TextStyle(color: err != null ? Kc.softRed : Kc.muted, fontSize: 13),
           ),
         ],

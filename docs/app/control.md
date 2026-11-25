@@ -1,6 +1,6 @@
 # HiveMind Control
 
-HiveMind Control runs parts of other drones' units, through those units: over the server or over direct mode, wherever they are.  It has areas: **Toys**, their [Vibe toys](../features/toys.md) for now (e-stim and machines are planned), and **Display unit**, words and pictures on their [display](text.md#their-display) (sounds are planned).  It only works on what their wearers have allowed you (see [Permissions](permissions.md)); if they haven't, your first command asks them.
+HiveMind Control runs parts of other drones' units, through those units: over the server or over direct mode, wherever they are.  It has areas: **Toys**, their [Vibe toys](../features/toys.md) for now (e-stim and machines are planned), and **Display unit**, words and pictures on their [display](text.md#their-display), and sounds from their unit's speaker.  It only works on what their wearers have allowed you (see [Permissions](permissions.md)); if they haven't, your first command asks them.
 
 <img src="../images/app/control.png" width="300" alt="Toys for RCat-Linux2: the Vibe tab, STOP, and Levels with V1 and V2 ganged at 12, V3 at 6, and V4 greyed out">
 
@@ -8,11 +8,11 @@ Back to [the app](README.md).  Running *your own* toys is on your unit's [Toys](
 
 ## Sending
 
-The **HiveMind Control button** (a remote) at the top of a [Text](text.md) conversation opens a menu of what you can control, by area: under *Toys*, **Vibe**, their toys; under *Display unit*, **Display**, words or a picture on their display.  It's for whoever that conversation is with, which it says at the top.  From a person's conversation it's their unit, sent both ways they can be reached (their unit does each once, by whichever way it allows); from a channel's, the units of everyone in it; from *Broadcast*, everyone who can hear you.
+The **HiveMind Control button** (a remote) at the top of a [Text](text.md) conversation opens a menu of what you can control, by area: under *Toys*, **Vibe**, their toys; under *Display unit*, **Display**, words or a picture on their display, and **Sounds**, a sound from their speaker.  It's for whoever that conversation is with, which it says at the top.  From a person's conversation it's their unit, sent both ways they can be reached (their unit does each once, by whichever way it allows); from a channel's, the units of everyone in it; from *Broadcast*, everyone who can hear you.
 
 <img src="../images/app/control_menu.png" width="300" alt="The HiveMind Control menu in a conversation: Vibe under Toys, Terminal under Display unit">
 
-For one person, what they don't let others control is greyed out: they've set it to *Nobody*, or for Vibe, have no toy connected.  Each unit says what it lets others control (see [What others see](permissions.md#what-others-see)).  In a channel, everything is, as each person in it may allow different things.
+For one person, what they don't let others control is greyed out: they've set it to *Nobody*, or for Vibe, have no toy connected, or for Sounds, have a unit without a speaker.  Each unit says what it lets others control (see [What others see](permissions.md#what-others-see)).  In a channel, everything is, as each person in it may allow different things.
 
 The **Control** button on someone's card, from the [Voice](voice.md#whos-there) list, opens the same choice as a screen, by area: each one, whether anyone can control it or only people they allow, and what's greyed out.
 
@@ -41,6 +41,15 @@ What you set stays set on their toys until it's changed or stopped, even once yo
 ## Display unit
 
 Picking **Display** puts words or a picture on their unit's display, for a while or until they move on: see [Their display](text.md#their-display).
+
+### Sounds
+
+Picking **Sounds** plays a sound from their unit's speaker: one of your [recordings](record.md), with your voice effect, or a sound file (WAV, MP3 or FLAC) from your phone.  Pick one and tap **Send**.  ▶ beside a recording plays it on your phone first.
+
+- It plays **once**, as it comes, over whatever their unit is playing, which carries on after.  Nothing shows on their display.  It plays at **their** volume: you can't make it louder.
+- It plays for **10 seconds** at most.  Recordings longer than that are greyed out: switch on [Stop at 10 s](record.md#recording) in the Record tab to make one that fits.  A longer sound file is cut off after 10 seconds.
+- It's kept on their unit, as a track at the end of its [Sound](../features/sound.md#sounds-from-others) player, for them to play again or delete.
+- It goes **over the server only**, as it's too big for direct mode.  A recording, or a 16-bit WAV file, is made small on the way (about 60 KB for 10 seconds), and made loud, to about the level of a song: recordings come at HiveMind's level, which the unit's player would play far quieter than the voice effect.  An MP3 or FLAC file goes as it is, so it must be small enough already, 96 KB at most, less if the server's limit for pictures is lower, and plays as loud as it was made.  A file that can't go says why under the list as soon as it's picked.
 
 ## Who can control your toys
 

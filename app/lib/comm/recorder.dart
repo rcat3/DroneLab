@@ -1,5 +1,6 @@
 /// Recording the board's voice, after its effect, to WAV files on the phone,
-/// for videos and the like.
+/// for videos and the like; or, with the phone's mic picked, the phone's
+/// voice, after its effect, as it's sent ([Recorder.addPcm]).
 ///
 /// The board sends what it hears the whole time it records, as Opus packets
 /// (core/app/comm.h, 0x0A). They're decoded as they come, lost ones made up
@@ -80,19 +81,23 @@ Uint8List wavHeader(int dataBytes) {
   return h.buffer.asUint8List();
 }
 
-/// One recording as it's made.
+/// One recording as it's made: at most [limit] of it, if there's one.
 class Recorder {
   final RandomAccessFile _file;
   final File file;
   final VoiceDecoder _decoder;
+  final Duration? limit;
   int _bytes = 0;
   int? _lastSeq;
   int lost = 0;               // packets made up
 
-  Recorder._(this.file, this._file, this._decoder);
+  Recorder._(this.file, this._file, this._decoder, this.limit);
+
+  /// Whether it's as long as it can be.
+  bool get full => limit != null && length >= limit!;
 
   /// Start a new file, named for when it starts.
-  static Future<Recorder> start(VoiceDecoder decoder) async {
+  static Future<Recorder> start(VoiceDecoder decoder, {Duration? limit}) async {
     final dir = await recordingsDir();
     final t = DateTime.now();
     String two(int n) => n.toString().padLeft(2, '0');
@@ -100,7 +105,7 @@ class Recorder {
     final file = File('${dir.path}/$name.wav');
     final raf = await file.open(mode: FileMode.write);
     await raf.writeFrom(wavHeader(0));    // filled in at the end
-    return Recorder._(file, raf, decoder);
+    return Recorder._(file, raf, decoder, limit);
   }
 
   Duration get length => Duration(milliseconds: (_bytes ~/ 2) * 1000 ~/ outputRate);
@@ -120,7 +125,32 @@ class Recorder {
     if (s.opus.isNotEmpty) _write(_decoder.decode(s.opus));
   }
 
+  /// Samples from the phone's mic, at [rate]: made 48 kHz, as the file is.
+  void addPcm(Int16List pcm, int rate) {
+    if (rate == outputRate) {
+      _write(pcm);
+      return;
+    }
+    final n = pcm.length * outputRate ~/ rate;
+    final out = Int16List(n);
+    for (var i = 0; i < n; i++) {
+      final pos = i * rate / outputRate;
+      final j = pos.floor();
+      final f = pos - j;
+      final a = pcm[j < pcm.length ? j : pcm.length - 1];
+      final b = j + 1 < pcm.length ? pcm[j + 1] : a;
+      out[i] = (a + (b - a) * f).round();
+    }
+    _write(out);
+  }
+
   void _write(Int16List pcm) {
+    final l = limit;
+    if (l != null) {
+      final room = l.inMilliseconds * outputRate ~/ 1000 - _bytes ~/ 2;
+      if (room <= 0) return;
+      if (pcm.length > room) pcm = Int16List.sublistView(pcm, 0, room);
+    }
     if (pcm.isEmpty) return;
     final bytes = pcm.buffer.asUint8List(pcm.offsetInBytes, pcm.lengthInBytes);
     _file.writeFromSync(bytes);

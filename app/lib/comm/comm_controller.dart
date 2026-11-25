@@ -24,6 +24,7 @@ import 'board_protocol.dart';
 import 'calls.dart';
 import 'capabilities.dart';
 import 'invites.dart';
+import 'sent_sounds.dart';
 import 'server_invites.dart';
 import 'conversations.dart';
 import 'notifier.dart';
@@ -354,8 +355,9 @@ class CommController extends ChangeNotifier {
     _directSoundSub = board.directSounds.listen(_onDirectSound);
     _directGroupSub = board.directGroups.listen(_onDirectGroup);
     _recordSub = board.recorded.listen((s) => _recorder?.add(s));
-    recordSpeakerVoice = p.getBool('recordSpeakerVoice') ?? true;
+    recordEffect = p.getString('recordEffect');
     recordBeep = p.getBool('recordBeep') ?? false;
+    recordForSending = p.getBool('recordForSending') ?? false;
     followAlong = p.getBool('followAlong') ?? false;
     _directPeerSub = board.directPeers.listen(_onDirectPeer);
     _directCapsSub = board.directCaps.listen(_onDirectCaps);
@@ -365,6 +367,7 @@ class CommController extends ChangeNotifier {
       _myVibeState(json);
       permissions.boardState(json);
       _favouritesState(json);
+      _unitVoiceState(json);
     });
     _directAvatarSub = board.directAvatars.listen(_onDirectAvatar);
     _heardSub = board.heard.listen(_onHeard);
@@ -372,6 +375,10 @@ class CommController extends ChangeNotifier {
     _talkedSub = board.talked.listen(_onTalked);
     _talkHeldSub = board.talkHeld.listen((t) => _onUnitTalkHeld(t.held));
     _callTimer = Timer.periodic(const Duration(seconds: 1), (_) => _callTick());
+    if (Headset.supported) {
+      _findHeadset();
+      _headsetTimer = Timer.periodic(const Duration(seconds: 3), (_) => _findHeadset());
+    }
     await conversations.load();
     await patterns.load();
     patterns.addListener(_syncFavourites);
@@ -480,7 +487,7 @@ class CommController extends ChangeNotifier {
   }
 
   void _onBoardChanged() {
-    if (recording && board.state != BoardState.connected) stopRecording();    // the board's gone
+    if (recording && !recordingFromPhone && board.state != BoardState.connected) stopRecording();    // the board's gone
     _checkDirectSince();
     if (board.state != BoardState.connected) _unitTracks = null;
     _checkBattery();
@@ -1186,14 +1193,17 @@ class CommController extends ChangeNotifier {
   bool get unitCanPlay =>
       board.state == BoardState.connected && board.status != null && (boardSettings?.hasSpeaker ?? false);
 
-  /// The unit's sound files, asked for again if [fresh].
+  /// The unit's sound files, asked for again if [fresh]: the SD card's, not
+  /// the sounds others sent, which come after them.
   Future<List<String>> unitTracks({bool fresh = false}) async {
     if (!fresh && _unitTracks != null) return _unitTracks!;
     try {
       final a = await board.request('GET', '/api/tracks');
       if (a.status == 200) {
         final v = jsonDecode(a.body) as Map<String, dynamic>;
-        _unitTracks = [for (final t in v['tracks'] as List<dynamic>? ?? const []) t as String];
+        final all = [for (final t in v['tracks'] as List<dynamic>? ?? const []) t as String];
+        final sent = ((v['sent'] as num?)?.toInt() ?? 0).clamp(0, all.length);
+        _unitTracks = all.sublist(0, all.length - sent);
       }
     } catch (_) {}
     return _unitTracks ?? const [];
@@ -1745,10 +1755,46 @@ class CommController extends ChangeNotifier {
 
   // ----- Recording -----
 
-  /// Record the speaker's voice effect (or the comm voice), with a sync beep
-  /// to start (or not). Kept for next time.
-  bool recordSpeakerVoice = true;
+  /// A sync beep to start a recording from the unit's mic (or not). Kept
+  /// for next time.
   bool recordBeep = false;
+
+  /// The voice effect recorded through, by name, or null for the one the
+  /// mic has now ([recordEffectShown]). Comms are off while it records, so
+  /// it's the recording's own, whether the speaker's or HiveMind's is set
+  /// to another: the unit runs it on its speaker's effect while it records
+  /// (commVersion 22), and the phone's mic on its own. Kept for next time.
+  String? recordEffect;
+
+  /// The effects there are to record through, from the mic that talks: the
+  /// unit's, or the phone's (none on a platform without them).
+  List<String> get recordEffects => phoneMicTalks
+      ? (VoiceFx.available ? VoiceFx.presets : const [])
+      : boardSettings?.voices ?? const [];
+
+  /// The one it records through: [recordEffect], or else what the mic has
+  /// now, the unit speaker's or the phone's (Natural, for none).
+  String? get recordEffectShown {
+    final list = recordEffects;
+    if (list.isEmpty) return null;
+    if (recordEffect != null && list.contains(recordEffect)) return recordEffect;
+    final now = phoneMicTalks ? phoneVoice : (unitPreset != null && unitPreset! < list.length ? list[unitPreset!] : null);
+    return now != null && list.contains(now) ? now : list.first;
+  }
+
+  Future<void> setRecordEffect(String? name) async {
+    recordEffect = name;
+    if (name == null) {
+      await _prefs?.remove('recordEffect');
+    } else {
+      await _prefs?.setString('recordEffect', name);
+    }
+    notifyListeners();
+  }
+
+  /// Stop recording at [soundMaxMs], the longest a sound sent to others'
+  /// speakers plays. Kept for next time.
+  bool recordForSending = false;
 
   Recorder? _recorder;
   StreamSubscription<BoardSound>? _recordSub;
@@ -1758,14 +1804,54 @@ class CommController extends ChangeNotifier {
   bool get recording => _recorder != null;
   Duration get recordingLength => _recorder?.length ?? Duration.zero;
 
+  /// The recording's from the phone's mic (or the headset's), as Setup's
+  /// Mic has it, not the unit's.
+  bool recordingFromPhone = false;
+  int _phoneVoiceBefore = -1;
+
+  // ----- The unit's voice effect on its speaker, from its /api/state -----
+
+  /// The speaker's preset, and whether it's playing the voice effect (Play
+  /// on speaker); null till the unit's said, or without a speaker.
+  int? unitPreset;
+  bool? unitSpeakerOn;
+
+  void _unitVoiceState(String json) {
+    try {
+      final v = (jsonDecode(json) as Map<String, dynamic>)['voice'] as Map<String, dynamic>?;
+      final fitted = v != null && v['fitted'] == 1;
+      final preset = fitted ? (v['preset'] as num?)?.toInt() : null;
+      final on = fitted ? v['speaker'] == 1 : null;
+      if (preset == unitPreset && on == unitSpeakerOn) return;
+      unitPreset = preset;
+      unitSpeakerOn = on;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Play the voice effect on the unit's speaker, or not (its Play on
+  /// speaker): off, it can't feed back into the mic.
+  Future<void> setUnitSpeaker(bool on) async {
+    unitSpeakerOn = on;
+    notifyListeners();
+    try {
+      await board.request('POST', '/api/voice?speaker=${on ? 1 : 0}');
+    } catch (_) {}
+    _askBoardState();
+  }
+
+  /// How loud it is, as it records or would: the phone mic's level (after
+  /// its effect), or the unit's ([watchRecordLevel]).
+  ValueListenable<double> get recordLevel => (recording ? recordingFromPhone : phoneMicTalks) ? micLevel : unitLevel;
+
   /// The recording last made, and those before it.
   List<Recording> recordings = [];
 
-  Future<void> setRecordOptions({bool? speakerVoice, bool? beep}) async {
-    if (speakerVoice != null) recordSpeakerVoice = speakerVoice;
+  Future<void> setRecordOptions({bool? beep, bool? forSending}) async {
     if (beep != null) recordBeep = beep;
-    await _prefs?.setBool('recordSpeakerVoice', recordSpeakerVoice);
+    if (forSending != null) recordForSending = forSending;
     await _prefs?.setBool('recordBeep', recordBeep);
+    await _prefs?.setBool('recordForSending', recordForSending);
     notifyListeners();
   }
 
@@ -1774,20 +1860,59 @@ class CommController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Start recording. Comms stop meanwhile (the server and direct comms),
-  /// and start again afterwards. Returns why not, or null.
+  /// Start recording, from the mic that talks (Setup's Mic): the unit's,
+  /// through its effect, or the phone's (or the headset's), through the
+  /// phone's. Comms stop meanwhile (the server and direct comms), and start
+  /// again afterwards. Returns why not, or null.
   Future<String?> startRecording() async {
     if (recording) return null;
-    if (board.state != BoardState.connected || board.status == null) return 'Connect to the board first';
-    if (board.status!.version < 3) return "The board's firmware is too old to record";
+    final phone = phoneMicTalks;
+    if (!phone) {
+      if (board.state != BoardState.connected || board.status == null) return 'Connect to the board first';
+      if (board.status!.version < 3) return "The board's firmware is too old to record";
+    }
     holdToTalk(false);
     _resumeServer = _serverWanted;
     _resumeDirect = boardSettings?.direct?.on ?? false;
     if (_serverWanted) await disconnectServer(forGood: false);
     if (_resumeDirect) await setDirect(false);
-    _recorder = await Recorder.start(OpusVoiceDecoder());
-    await board.send(recordMessage(true, speakerVoice: recordSpeakerVoice, beep: recordBeep));
-    _recordTick = Timer.periodic(const Duration(milliseconds: 250), (_) => notifyListeners());
+    final r = _recorder = await Recorder.start(OpusVoiceDecoder(),
+        limit: recordForSending ? const Duration(milliseconds: soundMaxMs) : null);
+    recordingFromPhone = phone;
+    final effect = recordEffectShown;
+    if (phone) {
+      // Through the recording's effect, the phone's own back after
+      _phoneVoiceBefore = _phoneMic.voicePreset;
+      if (effect != null) _phoneMic.voicePreset = VoiceFx.presets.indexOf(effect);
+      _phoneMic.onAudio = r.addPcm;
+      // The unit's speaker sounds the same, so it doesn't spoil it
+      if (effect != null && board.state == BoardState.connected) {
+        final list = boardSettings?.voices ?? const <String>[];
+        await board.send(recordMessage(true, preset: list.indexOf(effect), speakerOnly: true));
+      }
+      if (!await startMicMeter('recording')) {
+        if (board.state == BoardState.connected) await board.send(recordMessage(false, speakerOnly: true));
+        _phoneMic.onAudio = null;
+        _phoneMic.voicePreset = _phoneVoiceBefore;
+        _recorder = null;
+        await r.finish();
+        await r.file.delete();
+        if (_resumeDirect && board.state == BoardState.connected) await setDirect(true);
+        if (_resumeServer) await connectServer();
+        notifyListeners();
+        return phoneMicError ?? 'The microphone would not open';
+      }
+    } else {
+      final list = boardSettings?.voices ?? const <String>[];
+      await board.send(recordMessage(true, preset: effect == null ? null : list.indexOf(effect), beep: recordBeep));
+    }
+    _recordTick = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (_recorder?.full ?? false) {
+        stopRecording();
+      } else {
+        notifyListeners();
+      }
+    });
     notifyListeners();
     return null;
   }
@@ -1795,11 +1920,19 @@ class CommController extends ChangeNotifier {
   /// Stop, finish the file, and start comms again as they were.
   Future<void> stopRecording() async {
     final r = _recorder;
-    if (r == null) return;
-    await board.send(recordMessage(false));
-    await Future<void>.delayed(const Duration(milliseconds: 300));   // the last few packets
-    _recorder = null;
+    if (r == null || _recordTick == null) return;     // none, or stopping already
     _recordTick?.cancel();
+    _recordTick = null;
+    if (recordingFromPhone) {
+      _phoneMic.onAudio = null;
+      _phoneMic.voicePreset = _phoneVoiceBefore;
+      if (board.state == BoardState.connected) await board.send(recordMessage(false, speakerOnly: true));
+      await stopMicMeter('recording');
+    } else {
+      await board.send(recordMessage(false));
+      await Future<void>.delayed(const Duration(milliseconds: 300));   // the last few packets
+    }
+    _recorder = null;
     await r.finish();
     if (_resumeDirect && board.state == BoardState.connected) await setDirect(true);
     if (_resumeServer) await connectServer();
@@ -2320,6 +2453,26 @@ class CommController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A Bluetooth headset there is to talk from, by name; null for none.
+  /// Looked for every few seconds (Android), for Setup's Mic and the Record
+  /// tab to offer it only while there's one.
+  String? headsetThere;
+  Timer? _headsetTimer;
+
+  /// Picked and gone (turned off, or out of reach), the phone's mic is
+  /// picked in its place, rather than a headset that isn't there.
+  Future<void> _findHeadset() async {
+    final found = await Headset.find();
+    if (found == null && micSource == MicSource.headset) {
+      headsetThere = null;
+      await setMicSource(MicSource.phone);
+      return;
+    }
+    if (found == headsetThere) return;
+    headsetThere = found;
+    notifyListeners();
+  }
+
   /// The headset in call mode for its mic just now, by name.
   String? get headsetMicName => Headset.active;
 
@@ -2348,20 +2501,59 @@ class CommController extends ChangeNotifier {
         notifyListeners();
       });
 
-  /// Try the phone mic's level in Setup: [micLevel] moves, nothing's sent.
-  Future<bool> startMicMeter() async {
+  /// Open the phone's mic for its level, for [why] ('setup', 'record' or
+  /// 'recording'): [micLevel] moves, nothing's sent. It stays open while
+  /// any of them wants it.
+  Future<bool> startMicMeter(String why) async {
+    _meterWanted.add(why);
     final ok = await _phoneMic.startMeter();
     phoneMicError = ok ? null : _phoneMic.error;
+    if (!ok) _meterWanted.remove(why);
     await _updateHeadsetMic();
     if (ok && await _phoneMic.hasPermission()) await _updateBackground();
     notifyListeners();
     return ok;
   }
 
-  Future<void> stopMicMeter() async {
+  Future<void> stopMicMeter(String why) async {
+    if (!_meterWanted.remove(why) || _meterWanted.isNotEmpty) return;
     await _phoneMic.stopMeter();
     await _updateHeadsetMic();
     notifyListeners();
+  }
+
+  final Set<String> _meterWanted = {};
+
+  /// The unit's voice level, as it's sent or recorded (after its effect and
+  /// gain), while it's asked for ([watchRecordLevel]); -60 for nothing.
+  final unitLevel = ValueNotifier<double>(-60);
+  StreamSubscription<VoiceLevel>? _levelSub;
+  Timer? _levelAsk;
+  bool _levelPhone = false;     // the phone mic's meter's open for the Record tab
+
+  /// The Record tab's showing, or not: its meter's live while it is, from
+  /// whichever mic records, the phone's (opened for it) or the unit's
+  /// (asked for its level every few seconds). Called as it builds, and
+  /// again as the mic changes.
+  void watchRecordLevel(bool on) {
+    final phone = on && phoneMicTalks;
+    final unit = on && !phoneMicTalks && board.state == BoardState.connected;
+    if (phone != _levelPhone) {
+      _levelPhone = phone;
+      phone ? startMicMeter('record') : stopMicMeter('record');
+    }
+    if (unit && _levelAsk == null) {
+      _levelSub ??= board.levels.listen((l) => unitLevel.value = max(l.db, unitLevel.value - 6));
+      board.send(levelMessage(true));
+      _levelAsk = Timer.periodic(const Duration(seconds: 3), (_) {
+        if (board.state == BoardState.connected) board.send(levelMessage(true));
+      });
+    } else if (!unit && _levelAsk != null) {
+      _levelAsk!.cancel();
+      _levelAsk = null;
+      if (board.state == BoardState.connected) board.send(levelMessage(false));
+      unitLevel.value = -60;
+    }
   }
 
   ValueListenable<double> get micLevel => _phoneMic.level;
@@ -2882,7 +3074,7 @@ class CommController extends ChangeNotifier {
       final pieces = pictureMessages(p.$1, p.$2, hash, board.maxWrite);
       for (final piece in pieces) {
         final wantsAck = piece[1] & 4 != 0 || piece[1] & 2 != 0;
-        final ack = wantsAck ? board.pictureAcks.first.timeout(const Duration(seconds: 5)) : null;
+        final ack = wantsAck ? board.pictureAcks.firstWhere((a) => !a.sound).timeout(const Duration(seconds: 5)) : null;
         if (!await board.sendFast(piece)) {
           ack?.ignore();
           return;
@@ -2896,6 +3088,114 @@ class CommController extends ChangeNotifier {
             }
           } catch (_) {
             debugPrint('picture: the unit didn\'t answer');
+            return;
+          }
+        }
+      }
+    });
+  }
+
+  // ----- Sounds from others' speakers -----
+
+  /// Marks a server text as a sound for units' speakers, which the
+  /// receiving app gives its unit rather than putting in the conversation.
+  static const _soundMark = '<!-- dl-sound -->';
+
+  /// The most a sound can be: what the unit takes, and the server too, in
+  /// base64, with the rest of the text.
+  int get soundRoom {
+    final chars = mumble?.imageMessageLength ?? 0;
+    return chars <= 0 ? soundMaxBytes : min(soundMaxBytes, (chars - 160) * 3 ~/ 4);
+  }
+
+  /// Play a sound of ours ([soundFor] made it) from the speakers of those
+  /// in a conversation: over the server only, as a text with the sound,
+  /// then the command that plays it, by its hash. Returns why not, or null
+  /// once it's gone.
+  Future<String?> sendSound(Conversation c, SentSound sound) async {
+    if (!canSendPhoto(c)) return 'Sounds go over the server: not on it just now';
+    final m = mumble!;
+    final html = soundMessage(sound) + _soundMark;
+    if (m.imageMessageLength > 0 && html.length > m.imageMessageLength) {
+      return "That's too big for the server (it takes ${m.imageMessageLength ~/ 1365} KB at most)";
+    }
+    switch (c.kind) {
+      case ConversationKind.everyone:
+        m.sendText(html + _everyoneMark);
+      case ConversationKind.server:
+        m.sendText(html);
+      case ConversationKind.person:
+        final u = serverUser(personOf(c));
+        if (u == null) return 'They aren\'t on the server just now';
+        m.sendTextTo(u.session, html);
+      case ConversationKind.direct:
+        return 'Sounds go over the server only';
+    }
+    // After the sound, which the server passes on first
+    sendCommandTo(c, newCommand(OthersCommand.playSound(sha256.convert(sound.bytes).bytes)), serverOnly: true);
+    return null;
+  }
+
+  /// Sounds for our unit that have come over the server, by their hash
+  /// (hex), as pictures are: what they are, and when they came; and the
+  /// commands that came first, waiting for theirs.
+  final Map<String, (Uint8List, int, int)> _sentSounds = {};
+  final Map<String, int> _soundsWanted = {};
+  Future<void> _soundsSending = Future.value();
+
+  void _pruneSounds() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _sentSounds.removeWhere((_, v) => now - v.$3 > _picturesFor);
+    _soundsWanted.removeWhere((_, at) => now - at > _picturesFor);
+    while (_sentSounds.length > 4) {
+      _sentSounds.remove(_sentSounds.keys.first);
+    }
+  }
+
+  /// A sound for our unit, as it came over the server.
+  void _onSentSound(Uint8List bytes, int kind) {
+    if (bytes.isEmpty || bytes.length > soundMaxBytes) return;
+    _pruneSounds();
+    final key = sha256.convert(bytes).toString();
+    _sentSounds[key] = (bytes, kind, DateTime.now().millisecondsSinceEpoch);
+    if (_soundsWanted.remove(key) != null) _giveSound(key);
+  }
+
+  /// Our unit took a command to play a sound sent it: it's given the
+  /// sound, now or once it comes.
+  void _onSoundPlayed(Uint8List op) {
+    if (op.length != 1 + 32 || op[0] != OthersCommand.sound) return;
+    _pruneSounds();
+    final key = op.sublist(1).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    if (_sentSounds.containsKey(key)) {
+      _giveSound(key);
+    } else {
+      _soundsWanted[key] = DateTime.now().millisecondsSinceEpoch;
+    }
+  }
+
+  /// Give the unit a sound, as a picture's given, one at a time.
+  void _giveSound(String key) {
+    final p = _sentSounds[key];
+    if (p == null) return;
+    _soundsSending = _soundsSending.then((_) async {
+      if (board.state != BoardState.connected || (board.status?.version ?? 0) < commVersionSounds) return;
+      final hash = [for (var i = 0; i < key.length; i += 2) int.parse(key.substring(i, i + 2), radix: 16)];
+      for (final piece in soundMessages(p.$1, p.$2, hash, board.maxWrite)) {
+        final wantsAck = piece[1] & 4 != 0 || piece[1] & 2 != 0;
+        final ack = wantsAck ? board.pictureAcks.firstWhere((a) => a.sound).timeout(const Duration(seconds: 5)) : null;
+        if (!await board.sendFast(piece)) {
+          ack?.ignore();
+          return;
+        }
+        if (ack != null) {
+          try {
+            if (!(await ack).ok) {
+              debugPrint('sound: the unit didn\'t take it');
+              return;
+            }
+          } catch (_) {
+            debugPrint('sound: the unit didn\'t answer');
             return;
           }
         }
@@ -3126,10 +3426,22 @@ class CommController extends ChangeNotifier {
     }
   }
 
-  static String _kindOf(Uint8List op) => op.isNotEmpty &&
-          (op[0] == OthersCommand.message || op[0] == OthersCommand.clear || op[0] == OthersCommand.picture)
-      ? ConversationEntry.display
-      : ConversationEntry.vibe;
+  static String _kindOf(Uint8List op) => op.isEmpty
+      ? ConversationEntry.vibe
+      : op[0] == OthersCommand.message || op[0] == OthersCommand.clear || op[0] == OthersCommand.picture
+          ? ConversationEntry.display
+          : op[0] == OthersCommand.sound
+              ? ConversationEntry.sound
+              : ConversationEntry.vibe;
+
+  /// A command's capability, by what the board heard (Heard.*); null for a
+  /// text and the like.
+  static int? _capOf(int what) => switch (what) {
+        Heard.display => Capabilities.display,
+        Heard.vibe => Capabilities.vibe,
+        Heard.sound => Capabilities.sounds,
+        _ => null,
+      };
 
   // ----- Texts' details: how each came or went (message_details.dart) -----
 
@@ -3287,6 +3599,13 @@ class CommController extends ChangeNotifier {
     final u = t.session == null ? null : mumble?.users[t.session];
     final who = u == null ? people.named(t.from) : personOfUser(u);
     if (who.muted) return;
+    if (t.message.contains(_soundMark)) {
+      // For our unit's speaker, not the conversation: what plays it says so
+      for (final (kind, bytes) in soundsIn(t.message)) {
+        _onSentSound(bytes, kind);
+      }
+      return;
+    }
     final (photos, rest) = photosIn(t.message);
     if (t.message.contains(_displayMark)) {
       // For our display, not the conversation: what shows it says so
@@ -3394,9 +3713,10 @@ class CommController extends ChangeNotifier {
     }
     // Who, by the key they signed it with
     final who = people.byKey(h.key, h.from);
+    final cap = _capOf(h.what);
     if (who.muted) {
-      if (h.what == Heard.display || h.what == Heard.vibe) {
-        permissions.heard(h.what == Heard.display ? Capabilities.display : Capabilities.vibe, h.key, h.from, who.id,
+      if (cap != null) {
+        permissions.heard(cap, h.key, h.from, who.id,
             done: h.done, muted: true, direct: h.direct, scope: h.scope, what: describeCommand(h.data, mine: false));
       }
       return;
@@ -3414,8 +3734,8 @@ class CommController extends ChangeNotifier {
       return;
     }
     // Logged, and one not taken for want of being allowed is a request
-    if (h.what == Heard.display || h.what == Heard.vibe) {
-      permissions.heard(h.what == Heard.display ? Capabilities.display : Capabilities.vibe, h.key, h.from, who.id,
+    if (cap != null) {
+      permissions.heard(cap, h.key, h.from, who.id,
           done: h.done,
           muted: false,
           direct: h.direct,
@@ -3452,7 +3772,7 @@ class CommController extends ChangeNotifier {
             from: h.from,
             who: who.id,
             mine: false,
-            kind: h.what == Heard.display ? ConversationEntry.display : ConversationEntry.vibe,
+            kind: _kindOf(h.data),
             body: describeCommand(h.data, mine: false),
             done: h.done);
     // Refused by one way, then done when it came the other: done, once
@@ -3472,6 +3792,7 @@ class CommController extends ChangeNotifier {
     if (e.done && h.what == Heard.display && h.data.isNotEmpty && h.data[0] == OthersCommand.picture) {
       _onPictureShown(h.data);
     }
+    if (e.done && h.what == Heard.sound) _onSoundPlayed(h.data);
     if (h.what == Heard.text) _notifyText(c);
     textResponder.received(c, e);
     if (e.done && h.what == Heard.vibe) playUnitSound(UnitSoundEvent.vibe);
@@ -3654,6 +3975,9 @@ class CommController extends ChangeNotifier {
     _directPeerSub?.cancel();
     _directCapsSub?.cancel();
     _statesSub?.cancel();
+    _headsetTimer?.cancel();
+    _levelAsk?.cancel();
+    _levelSub?.cancel();
     _heardSub?.cancel();
     _copySub?.cancel();
     _talkedSub?.cancel();

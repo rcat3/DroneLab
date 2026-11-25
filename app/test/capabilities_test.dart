@@ -17,11 +17,13 @@ void main() {
   });
 
   test("ours, from the board's state", () {
-    String state(int toys, int term, String device) =>
-        '{"mapped":3,"devices":[{"slot":0,"state":"$device"}],"others":[{"permission":$toys},{"permission":$term}]}';
-    expect(Capabilities.fromBoardState(state(2, 1, 'connected')),
-        const Capabilities({Capabilities.display: CapOpen.ask, Capabilities.vibe: CapOpen.open}, {Capabilities.vibe: 3}));
-    expect(Capabilities.fromBoardState(state(2, 0, 'found')), Capabilities.none);
+    // What the board offers each kind: Vibe toys, the display, sounds
+    String state(int toys, int term, int sounds) =>
+        '{"mapped":3,"others":[{"offered":$toys},{"offered":$term},{"offered":$sounds}]}';
+    expect(Capabilities.fromBoardState(state(2, 1, 1)),
+        const Capabilities({Capabilities.display: CapOpen.ask, Capabilities.vibe: CapOpen.open, Capabilities.sounds: CapOpen.ask},
+            {Capabilities.vibe: 3}));
+    expect(Capabilities.fromBoardState(state(0, 0, 0)), Capabilities.none);
     expect(Capabilities.fromBoardState('{"comm":1}'), isNull);
   });
 

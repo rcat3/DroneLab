@@ -141,7 +141,7 @@ lv_obj_t *ui_others_page_add(ui_feature_t *feature, others_kind_t kind)
     lv_obj_set_style_text_color(p->page, lv_color_white(), 0);
 
     lv_obj_t *title = lv_label_create(p->page);
-    lv_label_set_text(title, kind == OTHERS_VIBE ? "Hive Commands" : "Hive Display");
+    lv_label_set_text(title, kind == OTHERS_VIBE ? "Hive Commands" : kind == OTHERS_SOUNDS ? "Hive Sounds" : "Hive Display");
     lv_obj_set_style_text_color(title, COLOR_MUTED, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(28));
 

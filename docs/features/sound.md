@@ -4,10 +4,11 @@
 
 <img src="../images/screens/sound_player.png" width="220" alt="The Sound player">
 
-The Sound feature plays sound files from the SD card.  Its pages are:
+The Sound feature plays sound files from the SD card, and sounds others in the hive have sent.  Its pages are:
 
 - **Player**: the track that's playing, with how far through it is in the middle, and previous, play/pause and next buttons below.  Drag the bar to move through the track; the times either side show where it'll go.  In an MP3, it goes to the same share of the file, which is exact if the bitrate is constant, and close if not.  Sound keeps playing in the background while you look at images or anything else.
 - **Options**: the volume, what happens at the end of a track (*Repeat all*, *Repeat one* or *Play once*), and *Play at startup*, which starts playing the last track as soon as the display turns on.
+- **Hive Sounds**: who may send you sounds, as the [Others pages](../app/permissions.md#your-phone-and-your-unit) of the other features show it, with **Turn off**.
 
 ## Sounds on the SD card
 
@@ -25,3 +26,9 @@ Limits:
 - The card is only read when the board starts, so restart it after changing the card.
 
 While the [Voice Effect](voice-effects.md) is playing on the speaker, the player waits.
+
+## Sounds from others
+
+Someone you've allowed (in the app's [Permissions](../app/permissions.md), under *Sounds*) can send you a sound from [HiveMind Control](../app/control.md#sounds), over the server.  It plays once, as it comes, over whatever's playing, at your volume, for 10 seconds at most, and nothing shows on the screen.  It plays over the voice effect too, which comes back after.  Press `BOOT` to stop it.
+
+Each one is then a track at the end of the player, named for who sent it (*From Hal*), after the SD card's.  The last two are kept, the oldest going first, in the unit's memory only, so they're gone when it restarts.  While one is the track shown, the 🗑 button under the controls deletes it.  With no SD card, the player appears once a sound has come.

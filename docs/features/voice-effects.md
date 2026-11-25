@@ -38,7 +38,7 @@ Measured worn, with music played loud nearby:
 
 Louder music, or a quieter voice, moves those along a step.  It takes a few seconds to catch up when a steady noise changes, so leave it off where it's quiet.  It's saved, unlike *Play on speaker*.
 
-The board's **BOOT** button switches *Play on speaker* off and on, to stop feedback quickly.  (BOOT only matters at startup: held while the board starts, it waits for new firmware over USB.)  The [WiFi Hotspot Remote](phone-remote.md) has all of these too, with the volume in exact steps.
+The board's **BOOT** button switches *Play on speaker* off and on, to stop feedback quickly.  While a sound is playing once over the rest (a [sound someone sent](sound.md#sounds-from-others), or one the app plays for [something that happened](../app/voice.md#setup-sounds)), it stops that instead.  (BOOT only matters at startup: held while the board starts, it waits for new firmware over USB.)  The [WiFi Hotspot Remote](phone-remote.md) has all of these too, with the volume in exact steps.
 
 *Play on speaker* is always off at startup, in case it feeds back.  The speaker in the board's housing faces away from the mask, but some of it still reaches the microphones.  The board cancels most of that, because its audio chip hears what the speaker is playing (see its [board notes](../hardware/waveshare_esp32s3_touch_amoled_1_75.md#board-notes)), so every preset holds at 100% in a finished housing.  If it feeds back at low volume, run the [Seal Test](../build/seal-test.md), which says what to check.
 

@@ -9,7 +9,7 @@
  * Control's, by area: the Toys, Vibe toys for now (toys.h), which they set
  * by channel as the Toys feature's own controls do, and stay set until
  * they're changed or Stop's touched; the Display unit's screen, words on its
- * Terminal and pictures;
+ * Terminal and pictures; its speaker, sounds (sounds.h);
  * and besides those, texts and the like, for the wearer's app only.
  *
  * Everyone is known by their identity key: an Ed25519 key pair their app
@@ -94,6 +94,12 @@
  *                  PICTURES_WAIT_MS for it (pictures.h); for one built into
  *                  the firmware, its name (image_list.c), in UTF-8, which
  *                  every board has, so it works over direct comms too
+ *   For the Display unit's speaker:
+ *     13 sound:    13, its SHA-256 (32): played once, as it comes, and kept
+ *                  (sounds.h). The sound itself comes to this board from
+ *                  its phone (comm.h 0x1B), which has it from the server,
+ *                  and the command waits up to SOUNDS_WAIT_MS for it. Over
+ *                  the server only: one heard over direct comms is dropped
  *   For the wearer's app:
  *     20 text:     20, then the text, in UTF-8: a text, only passed on to
  *                  the app, whoever it's from
@@ -129,6 +135,7 @@
 #define OTHERS_MESSAGE          0x10    // the Display unit
 #define OTHERS_CLEAR            0x11
 #define OTHERS_PICTURE          0x12
+#define OTHERS_SOUND            0x13
 #define OTHERS_TEXT             0x20
 #define OTHERS_TEXT_PART        0x21
 #define OTHERS_CALL             0x30    // a call's signal, for the app: op, call id (4)
@@ -150,11 +157,12 @@
 #define OTHERS_SCOPE_ONE        2       // this board alone
 
 /* What can be controlled here, each a class in the rules (others_class).
- * E-stim, Machines, and the Display unit's sounds, are to come. */
+ * E-stim and Machines are to come. */
 typedef enum
 {
     OTHERS_VIBE,            // Vibe toys
     OTHERS_DISPLAY,         // the Display unit's screen: words on its Terminal, and pictures
+    OTHERS_SOUNDS,          // the Display unit's speaker: sounds
     OTHERS_KIND_COUNT,
 } others_kind_t;
 
@@ -246,15 +254,20 @@ const char *others_last(others_kind_t kind, uint32_t now_ms, uint32_t *age_ms);
  * connected toy follows; otherwise 0. One the wearer hasn't got (Vibe toys,
  * with none connected), or lets nobody control (Off), is left out. Worked
  * out on the UI loop, by others_poll(); from any task. Returns its length,
- * 1 for none. Ids 3, 4 and 6 are kept for E-stim, Machines and Sounds (5
- * was to be Pictures, which Display covers). */
+ * 1 for none. Sounds only with a speaker. Ids 3 and 4 are kept for E-stim
+ * and Machines (5 was to be Pictures, which Display covers). */
 #define OTHERS_CAP_DISPLAY      1       // words and pictures
 #define OTHERS_CAP_VIBE         2
+#define OTHERS_CAP_SOUNDS       6
 #define OTHERS_CAP_ASK          1
 #define OTHERS_CAP_OPEN         2
 #define OTHERS_CAP_ENTRY        3
 #define OTHERS_CAPS_MAX         (1 + OTHERS_CAP_ENTRY * OTHERS_KIND_COUNT)
 size_t others_capabilities(uint8_t out[OTHERS_CAPS_MAX]);
+
+/* How a kind's offered in the capabilities: OTHERS_CAP_ASK or
+ * OTHERS_CAP_OPEN, or 0 for not at all. From any task. */
+uint8_t others_offered(others_kind_t kind);
 
 /* Goes up whenever any of the above changes, or the rules do, for screens
  * to redraw. */

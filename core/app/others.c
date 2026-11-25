@@ -21,6 +21,7 @@
 #include "app/reactive.h"
 #include "app/rules.h"
 #include "app/settings.h"
+#include "app/sounds.h"
 #include "app/toys.h"
 #include "crypto/monocypher-ed25519.h"
 #include "hal.h"
@@ -404,6 +405,9 @@ static int kind_of(const uint8_t *what, size_t len)
                        || (what[3] == OTHERS_PICTURE_BUILT_IN && len < 4 + MEDIA_NAME_LEN)
                    ? OTHERS_DISPLAY
                    : -1;
+    case OTHERS_SOUND:
+        // what to do, then its hash
+        return len == 1 + SOUNDS_HASH_LEN ? OTHERS_SOUNDS : -1;
     case OTHERS_TEXT:
         return len > 1 ? OTHERS_KIND_COUNT : -1;
     case OTHERS_TEXT_PART:
@@ -419,8 +423,8 @@ static int kind_of(const uint8_t *what, size_t len)
     }
 }
 
-/* Do it. */
-static void run(const uint8_t *what, size_t len)
+/* Do it, for the one named. */
+static void run(const uint8_t *what, size_t len, const char *from)
 {
     const uint8_t *arg = what + 1;
     switch (what[0])
@@ -443,6 +447,9 @@ static void run(const uint8_t *what, size_t len)
         break;
     case OTHERS_PICTURE:
         show_picture(arg, len - 1);
+        break;
+    case OTHERS_SOUND:
+        sounds_play_sent(arg, from);
         break;
     }
 }
@@ -541,9 +548,9 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
     const uint8_t *what = cmd + OP;
     size_t what_len = len - OP;
     int which = kind_of(what, what_len);
-    if (which < 0)
+    if (which < 0 || (which == OTHERS_SOUNDS && via == COMM_TALK_DIRECT))
     {
-        return;
+        return;     // not a command; or a sound over direct comms, which can't bring it
     }
     const uint8_t *key = cmd + KEY_AT;
     uint64_t counter = 0;
@@ -597,7 +604,9 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
         comm_heard_to_phone(via, from, key, counter, kind, scope, true, what + 1, what_len - 1);
         return;
     }
-    comm_heard_t heard = which == OTHERS_VIBE ? COMM_HEARD_VIBE : COMM_HEARD_DISPLAY;
+    comm_heard_t heard = which == OTHERS_VIBE      ? COMM_HEARD_VIBE
+                         : which == OTHERS_SOUNDS  ? COMM_HEARD_SOUND
+                                                   : COMM_HEARD_DISPLAY;
     bool done = false;
     // To everyone nearby, if it's to the channel in the open direct group
     bool open = via == COMM_TALK_DIRECT && !settings_get()->direct_keyed;
@@ -613,7 +622,8 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
         done = policy == RULES_ANYONE || (p != NULL && (p->allowed & (1u << cls)));
         if (!done)
         {
-            printf("others: %s commands from %s (%s), not allowed\n", which == OTHERS_VIBE ? "Vibe" : "Display",
+            printf("others: %s commands from %s (%s), not allowed\n",
+                   which == OTHERS_VIBE ? "Vibe" : which == OTHERS_SOUNDS ? "Sounds" : "Display",
                    from, via == COMM_TALK_DIRECT ? "direct" : "server");
         }
     }
@@ -624,7 +634,7 @@ static void receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
     if (done)
     {
         seen_as->done = true;
-        run(what, what_len);
+        run(what, what_len, from);
         snprintf(last_from[which], sizeof(last_from[which]), "%s", from);
         last_ms[which] = rcat_hal_millis();
         changes++;
@@ -644,7 +654,7 @@ void others_run_own(const uint8_t *what, size_t len)
     {
         return;
     }
-    run(what, len);
+    run(what, len, "");
 }
 
 /* Whether this very command, signature and all, has been checked lately:
@@ -785,7 +795,10 @@ void others_queue(const char *from, const uint8_t *cmd, size_t len, const others
 
 uint8_t others_class(others_kind_t kind)
 {
-    return kind == OTHERS_VIBE ? RULES_CLASS_VIBE : kind == OTHERS_DISPLAY ? RULES_CLASS_DISPLAY : 0;
+    return kind == OTHERS_VIBE      ? RULES_CLASS_VIBE
+           : kind == OTHERS_DISPLAY ? RULES_CLASS_DISPLAY
+           : kind == OTHERS_SOUNDS  ? RULES_CLASS_SOUNDS
+                                    : 0;
 }
 
 others_permission_t others_permission(others_kind_t kind)
@@ -845,15 +858,25 @@ static void update_capabilities(void)
             how = toys_any() ? how : 0;
             data = toys_channels_mapped();
         }
+        if (k == OTHERS_SOUNDS && !sounds_available())
+        {
+            how = 0;    // no speaker
+        }
         __atomic_store_n(&caps_how[k], how, __ATOMIC_RELAXED);
         __atomic_store_n(&caps_data[k], data, __ATOMIC_RELAXED);
     }
 }
 
+uint8_t others_offered(others_kind_t kind)
+{
+    return kind < OTHERS_KIND_COUNT ? __atomic_load_n(&caps_how[kind], __ATOMIC_RELAXED) : 0;
+}
+
 size_t others_capabilities(uint8_t out[OTHERS_CAPS_MAX])
 {
     static const uint8_t ids[OTHERS_KIND_COUNT] = { [OTHERS_VIBE] = OTHERS_CAP_VIBE,
-                                                    [OTHERS_DISPLAY] = OTHERS_CAP_DISPLAY };
+                                                    [OTHERS_DISPLAY] = OTHERS_CAP_DISPLAY,
+                                                    [OTHERS_SOUNDS] = OTHERS_CAP_SOUNDS };
     size_t at = 1;
     out[0] = 0;
     for (int k = 0; k < OTHERS_KIND_COUNT; k++)
@@ -874,6 +897,7 @@ void others_poll(uint32_t now_ms)
 {
     update_capabilities();
     pictures_poll(now_ms);
+    sounds_poll();
     if (list == NULL)
     {
         return;

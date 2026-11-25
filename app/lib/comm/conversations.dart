@@ -14,10 +14,10 @@ import 'patterns.dart';
 /// server or over direct comms), or one person.
 enum ConversationKind { everyone, server, direct, person }
 
-/// A line in a conversation: a text, or a command for a display or Vibe toys
-/// devices, ours or someone else's.
+/// A line in a conversation: a text, or a command for a display, its
+/// speaker or Vibe toys devices, ours or someone else's.
 class ConversationEntry {
-  static const text = 'text', display = 'display', vibe = 'vibe';
+  static const text = 'text', display = 'display', vibe = 'vibe', sound = 'sound';
   static const photo = 'photo';     // body: the picture's file, in Conversations.photosPath
 
   final DateTime time;
@@ -388,6 +388,8 @@ String describeCommand(Uint8List op, {required bool mine}) {
       return 'put $which on $your display${_forHowLong(op[1] | (op[2] << 8))}';
     case OthersCommand.clear:
       return 'cleared $your display';
+    case OthersCommand.sound:
+      return "played a sound from $your unit's speaker";
     default:
       return 'sent a command';
   }

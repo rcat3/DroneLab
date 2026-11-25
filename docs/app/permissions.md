@@ -1,6 +1,6 @@
 # Permissions
 
-Others in the hive can control parts of your unit: put words on its [Terminal](../features/terminal.md), or run your [Vibe toys](../features/toys.md).  **Permissions** is where you choose who can, see who's asking, and look back at every command that came.  The choices are kept in the app, which gives them to your unit: your unit goes by the last it was given, so they work whether or not your phone's with you.
+Others in the hive can control parts of your unit: put words on its [Terminal](../features/terminal.md), play a [sound](../features/sound.md#sounds-from-others) from its speaker, or run your [Vibe toys](../features/toys.md).  **Permissions** is where you choose who can, see who's asking, and look back at every command that came.  The choices are kept in the app, which gives them to your unit: your unit goes by the last it was given, so they work whether or not your phone's with you.
 
 Open it from *Setup*, or from the [links sheet](connecting.md#the-links-sheet) that pulls down from the status strip.  When someone's asking, a yellow raised hand with a count shows on the [status strip](README.md#the-status-strip), on the links sheet and in Setup.
 
@@ -10,7 +10,7 @@ Back to [the app](README.md).
 
 <img src="../images/app/permissions_features.png" width="300" alt="The Features tab for the Terminal: Nobody, Allowed or Anyone, Ignore broadcasts and Ignore channel commands, and each person with a switch">
 
-Pick a feature at the top, *VIBE* or *TERMINAL*, to see one at a time.
+Pick a feature from the chips at the top, *VIBE*, *DISPLAY*, *SOUNDS* and any more to come, to see one at a time.  A feature set to *NOBODY* has its icon greyed.
 
 **Who can control it**:
 
@@ -76,7 +76,7 @@ Accepting, declining and allowing are noted too, in pink.  It keeps the last 500
 
 ## What others see
 
-Each unit tells the others what its wearer lets others control: over the server through its app, and over direct mode in the unit's own hello.  It says each feature that's *ALLOWED* or *ANYONE*, and leaves out those set to *NOBODY*, and *Vibe* while no toy is connected.  For Vibe, it also says which channels your toys follow, so their apps grey out the rest.  It says nothing about who in particular you've allowed.
+Each unit tells the others what its wearer lets others control: over the server through its app, and over direct mode in the unit's own hello.  It says each feature that's *ALLOWED* or *ANYONE*, and leaves out those set to *NOBODY*, *Vibe* while no toy is connected, and *Sounds* on a unit without a speaker.  For Vibe, it also says which channels your toys follow, so their apps grey out the rest.  It says nothing about who in particular you've allowed.
 
 <img src="../images/app/person_capabilities.png" width="300" alt="What RCat-Linux2 lets others control: under Toys, Vibe, and under Display unit, Terminal, both only people they allow">
 
@@ -86,6 +86,6 @@ On someone's card ([Voice](voice.md#whos-there)), *Lets others control* shows an
 
 Your permissions, who you've muted, and how your toys are [set up](control.md#setup-pairing-and-mapping) are kept in the app, and sent to your unit whenever they change and each time it connects.  The unit keeps the last it was given and goes by them on its own, so commands still work while your phone's away.  The line at the top of Permissions says whether your unit has them: *Your unit has these*, *Sending these to your unit*, or *Kept on your phone* while it isn't connected.
 
-On the unit itself, each feature's *Others* page (the Toys feature's *Hive Commands*, the Terminal's *Hive Display*) shows its setting and who's allowed, but you change them here.  The one thing you can do on the unit is **Turn off**: it stops that feature taking anyone's commands straight away, without your phone.  The app picks that up as soon as it's connected, and you switch it back on here.
+On the unit itself, each feature's *Others* page (the Toys feature's *Hive Commands*, the Terminal's *Hive Display*, the Sound feature's *Hive Sounds*) shows its setting and who's allowed, but you change them here.  The one thing you can do on the unit is **Turn off**: it stops that feature taking anyone's commands straight away, without your phone.  The app picks that up as soon as it's connected, and you switch it back on here.
 
 A new phone, or the app installed again, takes on the unit's permissions the first time it connects, rather than starting afresh.

@@ -36,7 +36,9 @@
  *     POST /api/ring?[on=<1 or 0>][&c=<color>]   the voice ring
  *     POST /api/vis?v=<style>[&show=1]  the Sound Visualizer's style, and bring
  *                                     it on screen
- *     GET  /api/tracks    the sound player's tracks, which don't change
+ *     GET  /api/tracks    the sound player's tracks: the SD card's, then the
+ *                         "sent" sounds others sent, which come and go (the
+ *                         state's sound "tracks" changes when they do)
  *     GET  /api/chime     whether a sound for something's playing (POST /api/sound?chime=)
  *     GET  /api/hotspot   (the app only, over Bluetooth) the hotspot: on,
  *                                     its name, password and join text,
@@ -530,10 +532,10 @@ static void write_state(json_t *j)
         uint32_t position, length;
         audio_player_progress(&position, &length);
         jprintf(j, ",\"sound\":{\"track\":%u,\"playing\":%d,\"position\":%lu,\"length\":%lu,\"volume\":%u,"
-                   "\"repeat\":%u,\"autoplay\":%u,\"chime\":%d}",
+                   "\"repeat\":%u,\"autoplay\":%u,\"chime\":%d,\"tracks\":%lu}",
                 (unsigned)audio_player_current(), audio_player_is_playing() ? 1 : 0, (unsigned long)position,
                 (unsigned long)length, s->sound_volume, s->sound_repeat, s->sound_autoplay,
-                audio_player_chiming() ? 1 : 0);
+                audio_player_chiming() ? 1 : 0, (unsigned long)audio_player_tracks_changes());
     }
     // The toys' channels, V1 first, and the screen's controls
     jprintf(j, ",\"channels\":[");
@@ -592,9 +594,9 @@ static void write_state(json_t *j)
     {
         uint32_t age = 0;
         const char *last = others_last((others_kind_t)k, now, &age);
-        jprintf(j, "%s{\"class\":%d,\"permission\":%d,\"ignore\":%d,\"last\":", k ? "," : "",
+        jprintf(j, "%s{\"class\":%d,\"permission\":%d,\"ignore\":%d,\"offered\":%d,\"last\":", k ? "," : "",
                 others_class((others_kind_t)k), (int)others_permission((others_kind_t)k),
-                (int)others_ignoring((others_kind_t)k));
+                (int)others_ignoring((others_kind_t)k), (int)others_offered((others_kind_t)k));
         jstring(j, last != NULL ? last : "");
         jprintf(j, ",\"age\":%lu}", (unsigned long)(age / 1000));
     }
@@ -765,7 +767,9 @@ static void write_tracks(json_t *j)
         jprintf(j, "%s", i ? "," : "");
         jstring(j, name);
     }
-    jprintf(j, "],\"more\":%d}", i < count ? 1 : 0);
+    // The last so many are sounds others sent (sounds.h), not the SD card's
+    jprintf(j, "],\"more\":%d,\"sent\":%u}", i < count ? 1 : 0,
+            (unsigned)(audio_player_available() ? audio_player_sent_count() : 0));
 }
 
 /* ----- Requests ----- */

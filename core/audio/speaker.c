@@ -192,11 +192,13 @@ static size_t fill_test_noise(int16_t *frames, size_t max_frames, uint32_t *samp
 static size_t fill_cb(int16_t *frames, size_t max_frames, uint32_t *sample_rate, void *user_data)
 {
     size_t count;
+    // A sound someone sent plays over the voice effect, for its few seconds
+    bool sent = audio_player_sent_playing();
     if (test_noise)
     {
         count = fill_test_noise(frames, max_frames, sample_rate);
     }
-    else if (voice_fx_speaker_on())
+    else if (voice_fx_speaker_on() && !sent)
     {
         count = voice_fx_speaker_fill(frames, max_frames, sample_rate);
     }

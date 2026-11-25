@@ -134,8 +134,13 @@ abstract final class Kc {
         showCheckmark: false,
       ),
       switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? bg : muted),
-        // Dimmed when it can't be changed, as Mute speaker on Tx while it's forced
+        // Dimmed when it can't be changed, as Mute speaker on Tx while it's
+        // forced, the thumb too, so off and can't-change don't look alike
+        thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
+            ? bg
+            : s.contains(WidgetState.disabled)
+                ? muted.withValues(alpha: 0.3)
+                : muted),
         trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled)
             ? (s.contains(WidgetState.selected) ? pink.withValues(alpha: 0.35) : line.withValues(alpha: 0.5))
             : s.contains(WidgetState.selected)

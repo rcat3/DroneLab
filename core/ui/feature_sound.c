@@ -1,13 +1,16 @@
 /*
  * Sound feature (boards with a speaker): a player for the sound files on the
- * SD card, then a page of sound options. Sound keeps playing in the
- * background while you look at other pages.
+ * SD card, and the sounds others have sent (app/sounds.h), then a page of
+ * sound options, and who may send sounds. Sound keeps playing in the
+ * background while you look at other pages. A sent one can be deleted from
+ * the player, while it's the track shown.
  */
 #include <stdio.h>
 #include <string.h>
 
 #include "app/settings.h"
 #include "audio/audio_player.h"
+#include "ui/others_page.h"
 #include "ui/ui_internal.h"
 
 // How often the player page catches up with the speaker task (the track
@@ -24,6 +27,12 @@ const ui_feature_def_t feature_sound = {
     .build = build,
 };
 
+static lv_obj_t *player_page;
+static lv_obj_t *help_label;        // with no tracks, in place of the player
+static lv_obj_t *controls;          // the player, with tracks
+static lv_obj_t *delete_button;     // for a sent one
+static lv_obj_t *asking;            // whether to delete it, while it asks
+static size_t shown_count;
 static lv_obj_t *track_label;
 static lv_obj_t *position_label;
 static lv_obj_t *play_label;
@@ -136,17 +145,44 @@ static void seek_release_event_cb(lv_event_t *e)
     }
 }
 
+static void close_asking(void)
+{
+    if (asking != NULL)
+    {
+        lv_obj_delete(asking);
+        asking = NULL;
+    }
+}
+
 static void show_status(void)
 {
+    size_t count = audio_player_track_count();
+    if ((count == 0) != lv_obj_is_hidden(controls))
+    {
+        lv_obj_set_hidden(controls, count == 0);
+        lv_obj_set_hidden(help_label, count != 0);
+    }
+    if (count == 0)
+    {
+        close_asking();
+        return;
+    }
     size_t index = audio_player_current();
     const char *name = audio_player_track_name(index);
+    bool sent = audio_player_is_sent(index);
 
-    if (strcmp(lv_label_get_text(track_label), name) != 0)
+    if (strcmp(lv_label_get_text(track_label), name) != 0 || count != shown_count)
     {
+        close_asking();     // it's another track now
+        shown_count = count;
         lv_label_set_text(track_label, name);
-        lv_label_set_text_fmt(position_label, "%d / %d", (int)index + 1, (int)audio_player_track_count());
-        settings_set_sound_track(name);
+        lv_label_set_text_fmt(position_label, "%d / %d", (int)index + 1, (int)count);
+        if (!sent)
+        {
+            settings_set_sound_track(name);     // a sent one's gone when it restarts
+        }
     }
+    lv_obj_set_hidden(delete_button, !sent);
     lv_label_set_text(play_label, audio_player_is_playing() ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
     show_progress();
 }
@@ -173,6 +209,10 @@ static void skip_event_cb(lv_event_t *e)
 {
     int step = (int)(intptr_t)lv_event_get_user_data(e);
     size_t count = audio_player_track_count();
+    if (count == 0)
+    {
+        return;
+    }
     size_t index = (audio_player_current() + count + step) % count;
     if (audio_player_is_playing())
     {
@@ -183,6 +223,77 @@ static void skip_event_cb(lv_event_t *e)
         audio_player_cue(index);
     }
     show_status();
+}
+
+/* ----- Deleting a sent one ----- */
+
+/* Done after the button's event, which can't delete what it's in. */
+static void delete_later(void *arg)
+{
+    (void)arg;
+    if (asking == NULL)
+    {
+        return;     // gone meanwhile
+    }
+    close_asking();
+    audio_player_delete_sent(audio_player_current());
+}
+
+static void keep_later(void *arg)
+{
+    (void)arg;
+    close_asking();
+}
+
+static void delete_cb(lv_event_t *e)
+{
+    lv_async_call(delete_later, NULL);
+}
+
+static void keep_cb(lv_event_t *e)
+{
+    lv_async_call(keep_later, NULL);
+}
+
+static lv_obj_t *add_text_button(lv_obj_t *parent, const char *text, bool pink, lv_event_cb_t cb)
+{
+    lv_obj_t *b = lv_button_create(parent);
+    lv_obj_set_size(b, ui_px(84), ui_px(36));
+    if (!pink)
+    {
+        lv_obj_set_style_bg_color(b, lv_color_hex(0x2a2a2a), 0);
+    }
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *l = lv_label_create(b);
+    lv_label_set_text(l, text);
+    lv_obj_center(l);
+    return b;
+}
+
+/* Ask whether to delete the sent one shown, over the player, as the Images
+ * feature does a sent picture. */
+static void ask_delete_cb(lv_event_t *e)
+{
+    if (asking != NULL)
+    {
+        return;
+    }
+    asking = lv_obj_create(player_page);
+    lv_obj_remove_style_all(asking);
+    lv_obj_set_size(asking, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_bg_color(asking, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(asking, LV_OPA_80, 0);
+    lv_obj_set_clickable(asking, true);     // so touching round the buttons doesn't reach the player
+
+    lv_obj_t *q = lv_label_create(asking);
+    lv_label_set_text(q, "Delete this sound?");
+    lv_obj_set_style_text_color(q, lv_color_white(), 0);
+    lv_obj_align(q, LV_ALIGN_CENTER, 0, -ui_px(30));
+
+    lv_obj_t *del = add_text_button(asking, "Delete", true, delete_cb);
+    lv_obj_align(del, LV_ALIGN_CENTER, -ui_px(46), ui_px(20));
+    lv_obj_t *keep = add_text_button(asking, "Keep", false, keep_cb);
+    lv_obj_align(keep, LV_ALIGN_CENTER, ui_px(46), ui_px(20));
 }
 
 static lv_obj_t *add_button(lv_obj_t *page, const char *symbol, int32_t size, int32_t x)
@@ -200,22 +311,29 @@ static lv_obj_t *add_button(lv_obj_t *page, const char *symbol, int32_t size, in
 
 static void add_player_page(ui_feature_t *feature)
 {
-    lv_obj_t *page = ui_feature_add_page(feature, "Player", false);
+    player_page = ui_feature_add_page(feature, "Player", false);
 
-    lv_obj_t *title = lv_label_create(page);
+    lv_obj_t *title = lv_label_create(player_page);
     lv_label_set_text(title, "Sound");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, ui_px(32));
 
-    if (audio_player_track_count() == 0)
-    {
-        lv_obj_t *help = lv_label_create(page);
-        lv_label_set_text(help, "Put WAV, MP3 or FLAC files in a folder called \"sounds\" on the SD card.");
-        lv_label_set_long_mode(help, LV_LABEL_LONG_MODE_WRAP);
-        lv_obj_set_width(help, ui_px(170));
-        lv_obj_set_style_text_align(help, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_center(help);
-        return;
-    }
+    // Shown while there's nothing to play: the sounds others send come
+    // later, and show the player
+    help_label = lv_label_create(player_page);
+    lv_label_set_text(help_label, "Put WAV, MP3 or FLAC files in a folder called \"sounds\" on the SD card.");
+    lv_label_set_long_mode(help_label, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_width(help_label, ui_px(170));
+    lv_obj_set_style_text_align(help_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_center(help_label);
+
+    // The player, in a layer of its own the size of the page, to hide while
+    // there's nothing to play
+    lv_obj_t *page = controls = lv_obj_create(player_page);
+    lv_obj_remove_style_all(page);
+    lv_obj_set_size(page, lv_pct(100), lv_pct(100));
+    lv_obj_set_scrollable(page, false);
+    lv_obj_set_clickable(page, false);      // touches between the controls reach the page
+    lv_obj_set_hidden(page, true);
 
     track_label = lv_label_create(page);
     lv_label_set_text(track_label, "");
@@ -262,6 +380,18 @@ static void add_player_page(ui_feature_t *feature)
     lv_obj_set_style_text_align(remaining_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_color(remaining_label, lv_palette_main(LV_PALETTE_GREY), 0);
     lv_obj_align_to(remaining_label, progress_slider, LV_ALIGN_OUT_RIGHT_MID, ui_px(8), 0);
+
+    // Delete, under the buttons, for a sent one
+    delete_button = lv_button_create(page);
+    lv_obj_set_size(delete_button, ui_px(40), ui_px(32));
+    lv_obj_set_style_radius(delete_button, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(delete_button, lv_color_hex(0x2a2a2a), 0);
+    lv_obj_align(delete_button, LV_ALIGN_CENTER, 0, ui_px(102));
+    lv_obj_add_event_cb(delete_button, ask_delete_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *trash = lv_label_create(delete_button);
+    lv_label_set_text(trash, LV_SYMBOL_TRASH);
+    lv_obj_center(trash);
+    lv_obj_set_hidden(delete_button, true);
 
     show_status();
     lv_timer_create(status_timer_cb, STATUS_UPDATE_MS, NULL);
@@ -392,5 +522,6 @@ static bool build(ui_feature_t *feature)
     add_player_page(feature);
     add_options_page(feature);
     lv_timer_create(options_sync_timer_cb, STATUS_UPDATE_MS, NULL);
+    ui_others_page_add(feature, OTHERS_SOUNDS);
     return true;
 }

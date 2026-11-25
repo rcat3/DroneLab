@@ -79,6 +79,7 @@ const commVersionRules = 16;    // the wearer's rules from the app (0x10), in pl
 const commVersionPatterns = 17; // Vibe toys set as a whole (0x41), custom patterns in parts (0x45)
 const commVersionFavourites = 18;   // the wearer's favourite patterns (0x19), /api/state's "favs"
 const commVersionPictures = 20; // Display commands: words and pictures for a while (others.h 0x10, 0x12), pictures from the phone (0x1A)
+const commVersionSounds = 21;   // sounds others play from the speaker (others.h 0x13), sounds from the phone (0x1B)
 const commVersionFollow = 19;   // the wearer's own Vibe commands, for their toys to follow along (0x0B's bit 1)
 
 /// The board's sound: 20 ms Opus packets of 16 kHz mono.
@@ -102,6 +103,8 @@ const _msgHeard = 0x0F;
 const _msgRules = 0x10;
 const _msgFavourites = 0x19;
 const _msgPicture = 0x1A;     // both ways: a picture for the screen, in pieces, and the ack
+const _msgSentSound = 0x1B;
+const _msgLevel = 0x1C;       // to the board: send the voice's level; from it, the level   // both ways: a sound for the speaker, in pieces, and the ack, as a picture's
 const _msgIdentity = 0x11;
 const _msgBinding = 0x12;
 const _msgTalkTo = 0x13;      // to the board: who talking goes to
@@ -218,7 +221,7 @@ class DirectAvatarPiece {
 /// What someone sent the board, passed on as it came (commVersion 8): a
 /// text, or a command for its display or Vibe toys, done or not.
 class Heard {
-  static const text = 0, display = 1, vibe = 2, textPart = 3, call = 4, invite = 5, reaction = 6;    // comm_heard_t
+  static const text = 0, display = 1, vibe = 2, textPart = 3, call = 4, invite = 5, reaction = 6, sound = 7;    // comm_heard_t
   final bool direct;        // heard over direct comms, not the server
   final bool done;          // a command: taken, by the permission for its kind
   final int what;
@@ -270,6 +273,7 @@ class AnswerPiece {
 /// [AnswerPiece], an [AvatarAck], or null.
 Object? parseBoardMessage(Uint8List data) {
   if (data.length == 2 && data[0] == _msgTalkHeld) return TalkHeld(data[1] != 0);
+  if (data.length == 2 && data[0] == _msgLevel) return VoiceLevel(data[1].toSigned(8).toDouble());
   if (data.length >= 3 && data[0] == _msgTalked) {
     return Talked(data[1], data[2] & 1 != 0, data[2] & 2 != 0, data[2] & 4 != 0);
   }
@@ -344,8 +348,8 @@ Object? parseBoardMessage(Uint8List data) {
     return UpdateAck(data[1] & 1 != 0, data[1] & 2 != 0, data[2],
         data[3] | (data[4] << 8) | (data[5] << 16) | (data[6] << 24), data[1] & 4 != 0);
   }
-  if (data[0] == _msgPicture && data.length >= 6) {
-    return PictureAck(data[1] & 1 != 0, data[1] & 2 != 0, le32(2));
+  if ((data[0] == _msgPicture || data[0] == _msgSentSound) && data.length >= 6) {
+    return PictureAck(data[1] & 1 != 0, data[1] & 2 != 0, le32(2), sound: data[0] == _msgSentSound);
   }
   if (data[0] == _msgAvatar && data.length >= 7) {
     final got = data[3] | (data[4] << 8) | (data[5] << 16) | (data[6] << 24);
@@ -449,8 +453,28 @@ List<Uint8List> pairsMessages(List<(Uint8List, Uint8List)> pairs, int maxWrite) 
   return out;
 }
 Uint8List modeMessage(BoardMode mode) => Uint8List.fromList([_msgMode, mode.index]);
-Uint8List recordMessage(bool on, {bool speakerVoice = false, bool beep = false}) =>
-    Uint8List.fromList([_msgRecord, on ? 1 : 0, (speakerVoice ? 1 : 0) | (beep ? 2 : 0)]);
+/// Start or stop recording: through the speaker's effect, with [preset]
+/// in place of the wearer's own for as long as it records (commVersion
+/// 22), and a sync beep to start if [beep]. With [speakerOnly], it doesn't
+/// record: the speaker's effect is held at [preset], or let go, while the
+/// phone's mic records.
+Uint8List recordMessage(bool on, {int? preset, bool beep = false, bool speakerOnly = false}) => Uint8List.fromList([
+      _msgRecord,
+      on ? 1 : 0,
+      1 | (beep ? 2 : 0) | (speakerOnly ? 4 : 0),
+      if (on && preset != null && preset >= 0) preset,
+    ]);
+
+/// Have the board send the voice's level for the next 5 s, or stop
+/// (commVersion 22).
+Uint8List levelMessage(bool on) => Uint8List.fromList([_msgLevel, on ? 1 : 0]);
+
+/// The board's voice, how loud, as it's sent or recorded: the loudest of
+/// the last 100 ms, in dB of full scale (-60 to 0).
+class VoiceLevel {
+  final double db;
+  const VoiceLevel(this.db);
+}
 
 enum ServerLink { off, connecting, connected }
 
@@ -538,17 +562,29 @@ List<Uint8List> avatarMessages(int slot, Uint8List rgb565, int maxWrite, {int wi
 const pictureJpeg = 0, pictureGif = 1;
 const pictureMaxBytes = 256 * 1024;     // PICTURES_MAX_BYTES
 
-List<Uint8List> pictureMessages(Uint8List bytes, int kind, List<int> hash, int maxWrite, {int window = 8}) {
+List<Uint8List> pictureMessages(Uint8List bytes, int kind, List<int> hash, int maxWrite, {int window = 8}) =>
+    _mediaMessages(_msgPicture, bytes, kind, hash, maxWrite, window);
+
+/// A sound for the board's speaker (core/app/sounds.h), [kind] a
+/// [soundOpus] or [soundFile], in messages as a picture's (commVersion 21).
+const soundOpus = 0, soundFile = 1;
+const soundMaxBytes = 96 * 1024;    // SOUNDS_MAX_BYTES
+const soundMaxMs = 10000;           // AUDIO_SENT_MAX_MS: the most of it that plays
+
+List<Uint8List> soundMessages(Uint8List bytes, int kind, List<int> hash, int maxWrite, {int window = 8}) =>
+    _mediaMessages(_msgSentSound, bytes, kind, hash, maxWrite, window);
+
+List<Uint8List> _mediaMessages(int op, Uint8List bytes, int kind, List<int> hash, int maxWrite, int window) {
   final n = bytes.length;
   final out = <Uint8List>[
-    Uint8List.fromList([_msgPicture, 1 | 4, n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF, (n >> 24) & 0xFF, kind, ...hash]),
+    Uint8List.fromList([op, 1 | 4, n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF, (n >> 24) & 0xFF, kind, ...hash]),
   ];
   final room = maxWrite - 2;
   for (var at = 0, i = 1; at < n; at += room, i++) {
     final end = at + room < n ? at + room : n;
-    out.add(Uint8List.fromList([_msgPicture, i % window == 0 ? 4 : 0, ...Uint8List.sublistView(bytes, at, end)]));
+    out.add(Uint8List.fromList([op, i % window == 0 ? 4 : 0, ...Uint8List.sublistView(bytes, at, end)]));
   }
-  out.add(Uint8List.fromList([_msgPicture, 2]));
+  out.add(Uint8List.fromList([op, 2]));
   return out;
 }
 
@@ -559,7 +595,8 @@ class PictureAck {
   final bool done;
   final bool ok;
   final int received;
-  PictureAck(this.done, this.ok, this.received);
+  final bool sound;     // a sound's pieces' (0x1B), not a picture's
+  PictureAck(this.done, this.ok, this.received, {this.sound = false});
 }
 
 /// A direct comms group's key, from its name and passphrase, as 32 hex
@@ -602,13 +639,14 @@ int fnv1a(List<int> bytes) {
 /// board only does it if its wearer has allowed us, and only once, by our
 /// key and the counter. HiveMind Control's, by area: Vibe toys, by
 /// channel (V1 to V6, a bit for each in a byte, V1 the lowest), and the
-/// Display unit's screen, words on its Terminal and pictures; and texts
-/// and the like, for the app.
+/// Display unit's screen, words on its Terminal and pictures, and its
+/// speaker, sounds; and texts and the like, for the app.
 class OthersCommand {
   static const version = 3;
   static const message = 0x10;
   static const clear = 0x11;
   static const picture = 0x12;
+  static const sound = 0x13;
   static const text = 0x20;
   static const textPart = 0x21;
   static const call = 0x30;
@@ -761,6 +799,11 @@ class OthersCommand {
         seconds.clamp(0, 0xFFFF) >> 8,
         if (hash != null) ...[pictureSent, ...hash] else ...[pictureBuiltIn, ..._cut(utf8.encode(builtIn ?? ''), 23)],
       ]);
+
+  /// A sound from their unit's speaker, by its SHA-256: sent over the
+  /// server, beside the command, as a picture is. Played once, and kept on
+  /// their unit for them to play again.
+  static OthersCommand playSound(List<int> hash) => _make([sound, ...hash]);
 
   /// Empty their Terminal, and take off what we put on their display: it
   /// goes back to what it was showing.

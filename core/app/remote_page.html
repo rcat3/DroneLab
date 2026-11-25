@@ -747,6 +747,10 @@ function buildSound() {
     b.onclick = () => command("voice", { p });
     box.append(b);
   });
+  buildTracks();
+}
+
+function buildTracks() {
   const list = $("tracks");
   list.replaceChildren();
   tracks.forEach((name, t) => {
@@ -755,6 +759,16 @@ function buildSound() {
     b.onclick = () => command("sound", { t });
     list.append(b);
   });
+}
+
+// The tracks change when someone sends a sound, or one's deleted: asked for
+// again then
+let tracksSeen = null, tracksAsking = false;
+function checkTracks(s) {
+  if (s.tracks === undefined || s.tracks === tracksSeen || tracksAsking) return;
+  tracksAsking = true;
+  api("tracks").then(t => { tracks = t.tracks; tracksSeen = s.tracks; buildTracks(); showSound(); })
+    .catch(() => {}).finally(() => { tracksAsking = false; });
 }
 
 function showSound() {
@@ -781,6 +795,7 @@ function showSound() {
     for (const b of $("loud").children) b.classList.toggle("on", +b.dataset.l === fx.loud);
   }
   if (s) {
+    checkTracks(s);
     $("track").textContent = tracks[s.track] || (tracks.length ? "" : "No sound files on the SD card");
     $("track-pos").textContent = tracks.length ? (s.track + 1) + " / " + tracks.length : "";
     $("sound-play").innerHTML = s.playing ? "&#10074;&#10074;" : "&#9654;";
