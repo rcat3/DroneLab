@@ -36,7 +36,7 @@ The unit's microphone hears the beep from its own speaker, so the recording leav
 Each recording is listed under *Recordings*, named for when it started (*DroneLab 2026-11-18 15.58.44*), with its length:
 
 - **Play** it on the phone.
-- **Send** it (🔊), up to 10 seconds long, to play from someone's speaker: pick *Broadcast*, your server channel, or someone on the server.  Those who don't let others play sounds are greyed out.  See [Sounds](control.md#sounds).
+- **Send** it (🔊), up to 10 seconds long, to play from someone's speaker: pick *Broadcast*, your server channel, or someone on the server.  Those who don't let others play sounds are greyed out.  **On their display** can pick a Sound Visualizer to show while it plays.  See [Sounds](control.md#sounds).
 - **Share** it (⋮): Android's share sheet sends it to Google Drive, email, a messaging app, your computer, or wherever the phone can.  That's how to get it into a video editor, or keep a copy outside the app.
 - **Delete** it (⋮).
 
