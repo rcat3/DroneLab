@@ -210,8 +210,23 @@ void settings_set_brightness(uint8_t percent)
 
 void settings_set_rotation(uint8_t quarter_turns)
 {
-    current.rotation = quarter_turns & 3;
+    current.rotation = settings_allowed_rotation(quarter_turns);
     schedule_save();
+}
+
+bool settings_quarter_turns_allowed(void)
+{
+#if RCAT_HALF_TURNS_ONLY
+    return false;
+#else
+    return true;
+#endif
+}
+
+uint8_t settings_allowed_rotation(uint8_t quarter_turns)
+{
+    quarter_turns &= 3;
+    return (quarter_turns & 1) != 0 && !settings_quarter_turns_allowed() ? 2 : quarter_turns;
 }
 
 void settings_set_speaker(uint8_t speaker)

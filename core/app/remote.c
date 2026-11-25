@@ -450,9 +450,9 @@ static void write_state(json_t *j)
     jstring(j, message_text());
     const settings_t *s = settings_get();
     jprintf(j, ",\"display\":{\"brightness\":%u,\"rotation\":%u,\"startup\":%d,\"remote_auto\":%u,\"uptime\":%lu,"
-            "\"speaker\":%u",
+            "\"speaker\":%u,\"quarter_turns\":%d",
             s->brightness, s->rotation, ui_find_startup_choice(s->startup_image), s->remote_autostart,
-            (unsigned long)(now / 1000), s->speaker);
+            (unsigned long)(now / 1000), s->speaker, settings_quarter_turns_allowed() ? 1 : 0);
     battery_status_t battery;
     if (battery_latest(&battery))
     {
@@ -1057,6 +1057,10 @@ static bool run_command(const char *name, const char *query, const char *body, s
             settings_set_brightness((uint8_t)brightness);
         }
         int rotation = query_int(query, "rot", -1);
+        if (rotation >= 0 && rotation <= 3)
+        {
+            rotation = settings_allowed_rotation((uint8_t)rotation);
+        }
         if (rotation >= 0 && rotation <= 3 && rotation != settings_get()->rotation)
         {
             rcat_hal_display_set_rotation((uint8_t)rotation);

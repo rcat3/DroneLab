@@ -100,6 +100,12 @@ const settings_t *settings_get(void);
  * to be initialised. */
 void settings_set_brightness(uint8_t percent);
 void settings_set_rotation(uint8_t quarter_turns);
+/* Whether the display can be turned a quarter turn: not on a board that only
+ * turns half way round (RCAT_HALF_TURNS_ONLY, in its .cmake file). */
+bool settings_quarter_turns_allowed(void);
+/* The rotation to use for quarter_turns: 180 degrees for a quarter turn the
+ * board doesn't allow. */
+uint8_t settings_allowed_rotation(uint8_t quarter_turns);
 void settings_set_speaker(uint8_t speaker);
 
 /* Whether there's a speaker to play to: always, on boards where it isn't a

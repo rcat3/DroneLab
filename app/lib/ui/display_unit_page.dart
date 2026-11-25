@@ -271,6 +271,8 @@ class _DisplayUnitPageState extends State<DisplayUnitPage> {
     final choices = _startupChoices;
     final brightness = (_dragging ?? (d['brightness'] as num? ?? 50).toDouble()).clamp(1.0, 100.0);
     final rotation = d['rotation'] as int? ?? 0;
+    // Some units' displays turn only half way round (the 1.75"'s housings turn the unit instead)
+    final quarterTurns = (d['quarter_turns'] as int? ?? 1) != 0;
     // One it doesn't know is the first, as on the display's Settings
     final startup = d['startup'] as int? ?? 0;
     return Panel(children: [
@@ -295,7 +297,10 @@ class _DisplayUnitPageState extends State<DisplayUnitPage> {
           const SizedBox(height: 8),
           SegmentedButton<int>(
             showSelectedIcon: false,
-            segments: [for (var r = 0; r < 4; r++) ButtonSegment(value: r, label: Text('${r * 90}°'))],
+            segments: [
+              for (var r = 0; r < 4; r++)
+                if (quarterTurns || r.isEven) ButtonSegment(value: r, label: Text('${r * 90}°')),
+            ],
             selected: {rotation},
             onSelectionChanged: (sel) => _send({'rot': sel.first}),
           ),

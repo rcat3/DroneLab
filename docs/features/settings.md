@@ -40,7 +40,7 @@ Everything for fitting the display in the mask, on one page.
 
 ### Rotation
 
-Turns the whole display, touch included, in 90 degree steps: tap **0°**, **90°**, **180°** or **270°**.  It helps when the display ends up sitting at an angle in the mask, and some housings turn the board a quarter turn, which this puts right (each board's build guide says which).  On the ESP32-S3-Touch-AMOLED-1.75 it starts at 180 degrees, to suit its housings.
+Turns the whole display, touch included, in 90 degree steps: tap **0°**, **90°**, **180°** or **270°**.  It helps when the display ends up sitting at an angle in the mask, and some housings turn the board a quarter turn, which this puts right (each board's build guide says which).  On the ESP32-S3-Touch-AMOLED-1.75 it starts at 180 degrees, to suit its housings.  The 1.75" only has **0°** and **180°**: its housings' collars turn the whole unit upright, and the speaker model's speaker sits below the display.
 
 ### Model
 

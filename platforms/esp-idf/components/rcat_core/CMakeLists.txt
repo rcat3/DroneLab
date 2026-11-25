@@ -62,6 +62,12 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
         target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_DEFAULT_ROTATION=${default_rotation})
     endif()
 
+    # Whether the display turns only half way round, 0 or 180 degrees (see board.cmake)
+    idf_build_get_property(half_turns_only RCAT_HALF_TURNS_ONLY)
+    if(half_turns_only)
+        target_compile_definitions(${COMPONENT_LIB} PRIVATE RCAT_HALF_TURNS_ONLY=1)
+    endif()
+
     # Whether a housing may have no speaker, so a new board asks (see board.cmake)
     idf_build_get_property(speaker_optional RCAT_SPEAKER_OPTIONAL)
     if(speaker_optional)

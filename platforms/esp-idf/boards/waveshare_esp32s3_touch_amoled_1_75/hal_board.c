@@ -221,7 +221,6 @@ static lv_display_t *display;
 static uint8_t rotation_turns;      // clockwise quarter turns
 static uint8_t *draw_buf1;
 static uint8_t *draw_buf2;
-static uint8_t *rotate_buf;
 static SemaphoreHandle_t clear_done;
 
 static void i2c_init(void);
@@ -266,17 +265,10 @@ void rcat_hal_lvgl_register(void)
 
 void rcat_hal_display_set_rotation(uint8_t quarter_turns)
 {
-    // LVGL rotates in software (see disp_flush_cb) and remaps touch to match,
-    // as on the 1.46" board. LVGL counts rotation counter-clockwise, so 90
-    // degrees clockwise is its ROTATION_270.
-    static const lv_display_rotation_t rotations[4] = {
-        LV_DISPLAY_ROTATION_0,
-        LV_DISPLAY_ROTATION_270,
-        LV_DISPLAY_ROTATION_180,
-        LV_DISPLAY_ROTATION_90,
-    };
-    lv_display_set_rotation(display, rotations[quarter_turns & 3]);
-    rotation_turns = quarter_turns & 3;
+    // 0 or 180 degrees (RCAT_HALF_TURNS_ONLY, board.cmake): LVGL turns the
+    // picture over in disp_flush_cb, in place, and remaps touch to match.
+    rotation_turns = (quarter_turns & 3) >= 2 ? 2 : 0;
+    lv_display_set_rotation(display, rotation_turns == 2 ? LV_DISPLAY_ROTATION_180 : LV_DISPLAY_ROTATION_0);
 }
 
 void rcat_hal_backlight_set(uint8_t percent)
@@ -1345,12 +1337,13 @@ static void panel_init(void)
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel));
     ESP_ERROR_CHECK(esp_lcd_panel_set_gap(panel, LCD_X_GAP, 0));
 
-    // LVGL's draw buffers, plus one for rotated output. They have to be in
-    // internal RAM so the SPI DMA can read them.
+    // LVGL's draw buffers. They have to be in internal RAM so the SPI DMA can
+    // read them. There's no third for turning the picture: 180 degrees, the
+    // housings' way up, is turned in place (disp_flush_cb), which leaves 30 KB
+    // for the voice effects (audio_iram.lf).
     draw_buf1 = heap_caps_malloc(DRAW_BUF_BYTES, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     draw_buf2 = heap_caps_malloc(DRAW_BUF_BYTES, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    rotate_buf = heap_caps_malloc(DRAW_BUF_BYTES, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    assert(draw_buf1 && draw_buf2 && rotate_buf);
+    assert(draw_buf1 && draw_buf2);
 
     panel_clear();
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel, true));
@@ -1427,28 +1420,34 @@ parameter:
 ********************************************************************************/
 static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
-    lv_display_rotation_t rotation = lv_display_get_rotation(disp);
+    uint16_t *p = (uint16_t *)px_map;
+    size_t n = lv_area_get_size(area);
     lv_area_t phys_area = *area;
-    uint8_t *data = px_map;
-
-    if (rotation != LV_DISPLAY_ROTATION_0)
-    {
-        int32_t w = lv_area_get_width(area);
-        int32_t h = lv_area_get_height(area);
-        int32_t rotated_w = (rotation == LV_DISPLAY_ROTATION_180) ? w : h;
-        uint32_t src_stride = lv_draw_buf_width_to_stride(w, LV_COLOR_FORMAT_RGB565);
-        uint32_t dest_stride = lv_draw_buf_width_to_stride(rotated_w, LV_COLOR_FORMAT_RGB565);
-
-        lv_draw_sw_rotate(px_map, rotate_buf, w, h, src_stride, dest_stride, rotation, LV_COLOR_FORMAT_RGB565);
-        lv_display_rotate_area(disp, &phys_area);
-        data = rotate_buf;
-    }
 
     // LVGL renders little-endian RGB565 but the panel wants the high byte first.
-    lv_draw_sw_rgb565_swap(data, lv_area_get_size(&phys_area));
+    if (lv_display_get_rotation(disp) == LV_DISPLAY_ROTATION_180)
+    {
+        // Upside down is the pixels in reverse order: swapped end for end in
+        // place, with their bytes swapped on the way.
+        for (size_t i = 0, j = n > 0 ? n - 1 : 0; i < j; i++, j--)
+        {
+            uint16_t a = p[i], b = p[j];
+            p[i] = (uint16_t)((b << 8) | (b >> 8));
+            p[j] = (uint16_t)((a << 8) | (a >> 8));
+        }
+        if (n % 2 == 1)
+        {
+            p[n / 2] = (uint16_t)((p[n / 2] << 8) | (p[n / 2] >> 8));
+        }
+        lv_display_rotate_area(disp, &phys_area);
+    }
+    else
+    {
+        lv_draw_sw_rgb565_swap(px_map, n);
+    }
 
     // The end coordinates are exclusive. Completion is reported by color_trans_done_cb.
-    esp_lcd_panel_draw_bitmap(panel, phys_area.x1, phys_area.y1, phys_area.x2 + 1, phys_area.y2 + 1, data);
+    esp_lcd_panel_draw_bitmap(panel, phys_area.x1, phys_area.y1, phys_area.x2 + 1, phys_area.y2 + 1, px_map);
 }
 
 /********************************************************************************

@@ -200,6 +200,10 @@ void app_run(void)
 
     lv_init();
     rcat_hal_lvgl_register();
+    if (settings_allowed_rotation(settings_get()->rotation) != settings_get()->rotation)
+    {
+        settings_set_rotation(settings_get()->rotation);    // a quarter turn, saved by older firmware
+    }
     rcat_hal_display_set_rotation(settings_get()->rotation);
     bool new_unit = ask_speaker();     // and once the UI's up, offer to pair a phone
     splash_t splash;

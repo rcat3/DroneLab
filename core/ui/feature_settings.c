@@ -192,10 +192,19 @@ static void add_brightness_page(ui_feature_t *feature)
 
 static lv_obj_t *rotation_buttons;
 static const char *const rotation_map[] = { "0°", "90°", "180°", "270°", "" };
+// On a board that only turns half way round (settings_quarter_turns_allowed)
+static const char *const half_rotation_map[] = { "0°", "180°", "" };
+static bool quarter_turns;
+
+static uint32_t rotation_button(uint8_t rotation)
+{
+    return quarter_turns ? rotation : rotation / 2;
+}
 
 static void rotation_event_cb(lv_event_t *e)
 {
-    uint8_t rotation = (uint8_t)lv_buttonmatrix_get_selected_button(rotation_buttons);
+    uint32_t button = lv_buttonmatrix_get_selected_button(rotation_buttons);
+    uint8_t rotation = (uint8_t)(quarter_turns ? button : button * 2);
     if (rotation <= 3 && rotation != settings_get()->rotation)
     {
         rcat_hal_display_set_rotation(rotation);
@@ -276,8 +285,10 @@ static void add_setup_page(ui_feature_t *feature)
     int32_t y = model ? (level ? -84 : -62) : (level ? -60 : -26);
 
     add_label(page, "Rotation", y);
-    rotation_buttons = ui_add_choices(page, rotation_map, ui_px(196), ui_px(34), ui_px(y + 26));
-    ui_check_choice(rotation_buttons, settings_get()->rotation);
+    quarter_turns = settings_quarter_turns_allowed();
+    rotation_buttons = ui_add_choices(page, quarter_turns ? rotation_map : half_rotation_map,
+                                      ui_px(quarter_turns ? 196 : 120), ui_px(34), ui_px(y + 26));
+    ui_check_choice(rotation_buttons, rotation_button(settings_get()->rotation));
     lv_obj_add_event_cb(rotation_buttons, rotation_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     y += 62;
 
@@ -1159,7 +1170,7 @@ static void sync_timer_cb(lv_timer_t *t)
         lv_label_set_text_fmt(brightness_value_label, "%d%%", s->brightness);
         lv_obj_align_to(brightness_value_label, brightness_slider, LV_ALIGN_OUT_BOTTOM_MID, 0, ui_px(10));
     }
-    ui_check_choice(rotation_buttons, s->rotation);
+    ui_check_choice(rotation_buttons, rotation_button(s->rotation));
     show_startup();
 }
 
