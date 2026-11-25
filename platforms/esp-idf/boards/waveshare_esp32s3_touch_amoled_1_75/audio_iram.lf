@@ -1,0 +1,48 @@
+# The voice effects and the sound path run from internal RAM, not flash.
+# From flash, their code goes through the 16 KB instruction cache the two
+# cores share, and whatever the display is drawing on the other core pushes
+# it out, so the heavier effects ran late and garbled with the Voice Ring or
+# a Visualizer on screen. About 20 KB, from the room the 180-degree screen
+# turn gave back (disp_flush_cb).
+
+[mapping:rcat_audio_core]
+archive: librcat_core.a
+entries:
+    voice_fx_chain (noflash)
+    voice_fx (noflash)
+    fft (noflash)
+    speaker:fill_cb (noflash)
+
+[mapping:rcat_audio_board]
+archive: libwaveshare_esp32s3_touch_amoled_1_75.a
+entries:
+    hal_board:audio_task (noflash)
+    hal_board:half_fir_out (noflash)
+    hal_board:speaker_task (noflash)
+
+# The maths the effects call for each sample or block
+[mapping:rcat_audio_libm]
+archive: libm.a
+entries:
+    libm_a-sf_tanh (noflash)
+    libm_a-sf_expm1 (noflash)
+    libm_a-sf_sin (noflash)
+    libm_a-sf_cos (noflash)
+    libm_a-kf_sin (noflash)
+    libm_a-kf_cos (noflash)
+    libm_a-ef_rem_pio2 (noflash)
+    libm_a-sf_floor (noflash)
+    libm_a-sf_round (noflash)
+    libm_a-sf_fmax (noflash)
+    libm_a-sf_fmin (noflash)
+    libm_a-sf_fabs (noflash)
+    libm_a-wf_pow (noflash)
+    libm_a-ef_pow (noflash)
+    libm_a-wf_log10 (noflash)
+    libm_a-ef_log10 (noflash)
+    libm_a-wf_sqrt (noflash)
+    libm_a-sf_scalbn (noflash)
+    libm_a-s_llround (noflash)
+    libm_a-wf_log2 (noflash)
+    libm_a-wf_log (noflash)
+    libm_a-ef_log (noflash)
