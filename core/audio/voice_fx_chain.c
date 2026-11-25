@@ -89,9 +89,11 @@ static const fx_preset_t presets[] = {
     { "Robot", 2, { GATE, { FX_VOCODER, { 110, 1 } } }, -7.5f },
     { "Deep", 2, { GATE, { FX_PITCH, { 0.75f } } }, -2.5f },
     // A Dalek: a 30 Hz ring modulator, on a voice that's higher, thinner and
-    // driven hard
+    // driven hard. The loudest after its drive: at its old +2.5 dB, with the
+    // speaker 3 dB louder, it fed itself through the gate as a hiss that
+    // didn't stop; 10 dB less holds at 100%, only just
     { "Dalek", 7, { GATE, { FX_HIGHPASS, { 400 } }, { FX_PITCH, { 1.26f } }, { FX_DRIVE, { 24 } }, { FX_RING, { 30, 1 } },
-                    { FX_LOWPASS, { 3500 } }, { FX_GAIN, { 8 } } }, 2.5f },
+                    { FX_LOWPASS, { 3500 } }, { FX_GAIN, { 8 } } }, -7.5f },
     { "Drone", 4, { GATE, { FX_PITCH, { 0.85f } }, { FX_RING, { 60, 0.6f } }, { FX_CRUSH, { 10, 1 } } }, 2.5f },
     // The Borg: a crowd speaking in unison, one voice a little higher than
     // yours and two lower, with a slow flanger for a hollow, metallic sheen
