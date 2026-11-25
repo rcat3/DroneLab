@@ -10,6 +10,57 @@ The voice effects run in real time on one core of an ESP32-S3, beside the echo c
 - **Core 0** has LVGL (the UI loop), Bluetooth and WiFi.
 - The two cores share the **caches**: 16 KB for code and 64 KB for data.  Anything run from flash, or kept in PSRAM, is read through them.  So the cores are independent for computing but not for memory: a busy display on core 0 slows the audio on core 1.
 
+## The voice's path
+
+From the microphones to the speaker, and to comms, with the gains and levels on the way.  Levels are dBFS (decibels below full scale): worn, a voice peaks around -22 dBFS in the microphones and speech is mostly -17 to -31.  The dotted lines are what the echo canceller hears: the speaker's own signal, wired back into the microphone chip, and the speaker's sound coming back through the housing and the mask.
+
+```mermaid
+flowchart TB
+    subgraph board["hal_board.c: audio task, core 1"]
+        mics["MIC1 + MIC2, averaged<br>ES7210 at +30 dB, 32 kHz<br>voice peaks about -22 dBFS"]
+        ref["MIC3: the speaker's own signal<br>+24 dB"]
+        half["Halved to 16 kHz<br>(31 taps), both"]
+        aec["Echo canceller<br>NLMS, 128 taps = 8 ms, pre-emphasis 0.75<br>takes out about 30 dB of the speaker"]
+        eq["EQ for the mask<br>-10 dB at 1.45 kHz, the feedback band<br>-8 dB at 240 Hz, the diaphragm's boom<br>+8 dB above 2.2 kHz, the consonants"]
+        up["Doubled back to 32 kHz"]
+    end
+    subgraph fx["voice_fx.c and voice_fx_chain.c: audio task, core 1"]
+        dec["Halved to 16 kHz again<br>(63 taps, flat to 6 kHz)"]
+        chain["The preset's chain, 10 ms blocks<br>gate first: opens above -45 dBFS<br>(Loud room: -40 to -28, or 12 dB over the room)<br>then its steps, e.g. Dalek's drive and +8 dB<br>while sending with its own HiveMind effect,<br>that chain instead, and the speaker silent"]
+    end
+    subgraph spk["To the speaker"]
+        vol["Effect Volume: +10 dB at 50%, +35 dB at 100%<br>plus the preset's trim, -10 to +2.5 dB<br>(Natural -10, Dalek -7.5), then a tanh limiter"]
+        buf["Speaker buffer, 16 kHz<br>at most 30 ms behind"]
+        fill["speaker.c, speaker task (core 1)<br>mute fade, beeps, Visualizer's tap<br>resampled to 32 kHz"]
+        dac["ES8311 at volume 86: -7 dB<br>NS4150B amplifier"]
+        speaker(("Speaker"))
+    end
+    subgraph comm["To comms: comm.c"]
+        pcm["16-bit, at the effect's own level<br>(the Voice Lab and recording<br>get this too)"]
+        agc["Automatic gain, 0 to +30 dB<br>aims for -12 dBFS on loud parts<br>up 3 dB/s, down fast, tanh limiter"]
+        vox["Voice-activated talk: above -46 dBFS<br>(before the gain), 800 ms hang"]
+        opus["Opus, 20 ms frames, encoder task (core 0)<br>24 kbit/s direct, 32 to the server,<br>48 recording"]
+        ble["Bluetooth to the phone:<br>the Mumble server, or Record"]
+        now["ESP-NOW: direct comms"]
+    end
+    mics --> half
+    ref --> half
+    half --> aec --> eq --> up --> dec --> chain
+    chain --> vol --> buf --> fill --> dac --> speaker
+    chain --> pcm --> agc --> vox --> opus
+    opus --> ble
+    opus --> now
+    dac -.->|"its own signal"| ref
+    speaker -.->|"through the housing and mask"| mics
+```
+
+Things it shows:
+
+- **The loop.**  Whatever the effect plays comes back into the microphones.  The echo canceller takes most of it out, but what's left goes round again, gained up by the Effect Volume and the preset.  If the loop's gain gets past 1 anywhere, it feeds back.  That's why each preset has a trim, and why a preset with a lot of gain of its own, like Dalek, needs a big cut.
+- **Comms don't depend on the Effect Volume.**  The speaker's gain is added after the chain, on its way to the speaker only.  Comms get the effect at the microphones' level and bring it up with their own automatic gain.
+- **The speaker's level is set in two places**: the ES8311's volume, fixed in the firmware, and the Effect Volume.  Changing the first changes every preset's loop gain at once.
+- **The chain sees only what's left after the echo canceller.**  The gate measures that, so echo the canceller misses can hold the gate open.
+
 ## Feedback or overload
 
 Before tuning anything, find out which it is:
