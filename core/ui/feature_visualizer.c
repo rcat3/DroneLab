@@ -26,7 +26,8 @@
 #define OVERRIDE_MS     100     // how often a sound others sent is checked on
 #define OVERRIDE_START_MS   2000    // how long its sound has to start playing
 #define OVERRIDE_SHOWN_MS   500     // before then, the page may still be sliding in
-#define OVERRIDE_LIMIT_MS   (AUDIO_SENT_MAX_MS + 2000)  // however long it goes on
+#define OVERRIDE_HOLD_MS    2000    // kept showing after the sound ends, to see its end
+#define OVERRIDE_LIMIT_MS   (AUDIO_SENT_MAX_MS + OVERRIDE_HOLD_MS + 2000)  // however long it goes on
 
 // The styles, in the order they're listed. New ones go on the end, so the
 // saved choice still means the same one.
@@ -63,6 +64,8 @@ static uint32_t last_frame;
 // ui_visualizer_show_for_sound). The saved choice isn't touched.
 static bool override_on;
 static bool override_started;   // its sound has been heard playing
+static bool override_ended;     // and then heard to stop
+static uint32_t override_ended_at;
 static uint32_t override_since;
 
 static size_t saved_choice(void)
@@ -167,8 +170,15 @@ static void override_timer_cb(lv_timer_t *t)
     if (audio_player_chiming())
     {
         override_started = true;
+        override_ended = false;     // another sound came straight after
     }
-    bool done = elapsed > OVERRIDE_LIMIT_MS || (override_started ? !audio_player_chiming() : elapsed > OVERRIDE_START_MS);
+    else if (override_started && !override_ended)
+    {
+        override_ended = true;
+        override_ended_at = lv_tick_get();
+    }
+    bool done = elapsed > OVERRIDE_LIMIT_MS || (override_ended ? lv_tick_diff(lv_tick_get(), override_ended_at) >= OVERRIDE_HOLD_MS
+                                                              : !override_started && elapsed > OVERRIDE_START_MS);
     if (done)
     {
         end_override();
@@ -299,6 +309,7 @@ void ui_visualizer_show_for_sound(size_t index)
     }
     override_on = true;
     override_started = false;
+    override_ended = false;
     override_since = lv_tick_get();
     choose(index, false);       // not saved: it's only for this sound
     vis_audio_speaker_only(true);

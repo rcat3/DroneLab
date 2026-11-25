@@ -220,6 +220,7 @@ Future<void> showSoundSheet(BuildContext context, CommController comm, Conversat
 Future<void> showSendRecording(BuildContext context, CommController comm, Recording r) {
   String? problem;
   Conversation? sendingTo;
+  var visualizer = 0;       // the style to show on their display, 0 for none
   final messenger = ScaffoldMessenger.of(context);
   return showModalBottomSheet<void>(
     context: context,
@@ -240,7 +241,7 @@ Future<void> showSendRecording(BuildContext context, CommController comm, Record
           try {
             final (sound, whyNot) =
                 await soundFor(Uint8List.fromList(await r.file.readAsBytes()), maxBytes: comm.soundRoom);
-            why = sound == null ? whyNot : await comm.sendSound(c, sound);
+            why = sound == null ? whyNot : await comm.sendSound(c, sound, visualizer: visualizer);
           } catch (e) {
             why = "Couldn't send it: $e";
           }
@@ -278,7 +279,20 @@ Future<void> showSendRecording(BuildContext context, CommController comm, Record
                   '${r.name} plays once from their unit\'s speaker, at their volume, if allowed by their '
                   'permissions, and is kept on their unit. Over the cloud server only.',
                   style: const TextStyle(color: Kc.muted, fontSize: 13)),
-              const SizedBox(height: 8),
+              Row(children: [
+                const Expanded(child: Text('On their display')),
+                DropdownButton<int>(
+                  value: visualizer,
+                  underline: const SizedBox.shrink(),
+                  dropdownColor: Kc.raised,
+                  onChanged: sendingTo != null ? null : (v) => setState(() => visualizer = v ?? 0),
+                  items: [
+                    const DropdownMenuItem(value: 0, child: Text('Nothing')),
+                    for (var i = 0; i < OthersCommand.soundVisualizers.length; i++)
+                      DropdownMenuItem(value: i + 1, child: Text(OthersCommand.soundVisualizers[i])),
+                  ],
+                ),
+              ]),
               if (channel == null)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
