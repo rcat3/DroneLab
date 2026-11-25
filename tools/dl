@@ -1,0 +1,881 @@
+#!/usr/bin/env python3
+"""Build, flash and install DroneLab, from one command.
+
+  tools/dl list                        what's connected, with short aliases
+  tools/dl build fw app desktop        build (or: build all)
+  tools/dl clean fw app desktop        clean build outputs (or: clean all)
+  tools/dl flash u1 u3                 flash display units over USB, in parallel (or: flash all)
+  tools/dl install d1 d2               install the app on Android devices (or: all, usb, wifi)
+  tools/dl wifi                        find wireless-debugging devices; wifi connect | pair | disconnect
+  tools/dl name u3 low-profile         give an alias a label
+
+Words are run in order, so steps chain:
+
+  tools/dl build fw app flash all install all
+  tools/dl wifi connect install wifi
+
+Units are u1, u2, ... and Android devices d1, d2, ...  Their numbers are kept in
+~/.config/dronelab-dl/aliases.json, so they stay the same when something is
+unplugged.  Flash and install need a target: they never default to "all".
+Run "tools/dl help" for the details.
+"""
+import glob
+import json
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+REPO = os.path.realpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
+BOARD = "waveshare_esp32s3_touch_amoled_1_75"
+FW_BUILD = os.path.join(REPO, "build-s3-175-ptt")   # BLE security on; build-s3-175 is stale
+APP = os.path.join(REPO, "app")
+APK_DIR = os.path.join(APP, "build/app/outputs/flutter-apk")
+APK_NAME = {"arm64-v8a": "app-arm64-v8a-release.apk",
+            "armeabi-v7a": "app-armeabi-v7a-release.apk",
+            "x86_64": "app-x86_64-release.apk"}
+CONF_DIR = os.path.expanduser("~/.config/dronelab-dl")
+CACHE_DIR = os.path.expanduser("~/.cache/dronelab-dl")
+ALIASES = os.path.join(CONF_DIR, "aliases.json")
+
+VERBOSE = False
+BUNDLE = False
+DRY = False
+SERIAL = False
+FAILED = []
+
+
+class Fail(Exception):
+    pass
+
+
+# ---------------------------------------------------------------- helpers
+
+def say(msg=""):
+    print(msg, flush=True)
+
+
+def step(msg):
+    say("== " + msg)
+
+
+def which_first(*paths):
+    for p in paths:
+        p = os.path.expanduser(p)
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return None
+
+
+def adb_path():
+    # The SDK's adb has "mdns"; Debian's old one doesn't. Use one adb throughout,
+    # since two versions take turns restarting the server.
+    p = os.environ.get("ADB") or which_first("~/Android/Sdk/platform-tools/adb")
+    if p:
+        return p
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        c = os.path.join(d, "adb")
+        if os.access(c, os.X_OK):
+            return c
+    raise Fail("adb not found (set ADB=/path/to/adb)")
+
+
+def run(cmd, timeout=30, env=None, cwd=None):
+    """Run quietly, return (rc, output)."""
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                           env=env, cwd=cwd)
+        return p.returncode, (p.stdout + p.stderr).strip()
+    except subprocess.TimeoutExpired:
+        return 124, "timed out: " + " ".join(cmd)
+
+
+def adb(*args, timeout=30):
+    return run([adb_path(), *args], timeout=timeout)
+
+
+def long_run(label, cmd, env=None, cwd=None):
+    """A long step: quiet by default (log file, tail on failure), streamed with -v."""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    log = os.path.join(CACHE_DIR, re.sub(r"\W+", "-", label).strip("-") + ".log")
+    step(label + (" ..." if not VERBOSE else ""))
+    if DRY:
+        say("   would run: %s%s" % (" ".join(cmd), "  (in %s)" % cwd if cwd else ""))
+        return
+    t0 = time.time()
+    with open(log, "w") as f:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, env=env, cwd=cwd)
+        tail = []
+        for line in p.stdout:
+            f.write(line)
+            if VERBOSE:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+            tail.append(line)
+            del tail[:-40]
+        rc = p.wait()
+    dt = time.time() - t0
+    if rc != 0:
+        if not VERBOSE:
+            sys.stdout.write("".join(tail))
+        raise Fail("%s failed (exit %d, %.0fs); full log: %s" % (label, rc, dt, log))
+    say("   ok (%.0fs, log %s)" % (dt, log))
+
+
+def git_version():
+    rc, out = run(["git", "describe", "--tags", "--always", "--dirty"], cwd=REPO)
+    return out if rc == 0 else "unknown"
+
+
+_idf_env = None
+
+
+def idf_env():
+    """Environment with ESP-IDF's export.sh applied (found once, reused)."""
+    global _idf_env
+    if _idf_env is not None:
+        return _idf_env
+    if run(["bash", "-c", "command -v idf.py"])[0] == 0 and os.environ.get("IDF_PATH"):
+        _idf_env = dict(os.environ)
+        return _idf_env
+    root = os.environ.get("IDF_PATH")
+    if not root:
+        found = sorted(glob.glob(os.path.expanduser("~/esp/esp-idf*/export.sh")))
+        if not found:
+            raise Fail("ESP-IDF not found: set IDF_PATH or install it in ~/esp/")
+        root = os.path.dirname(found[-1])
+    rc, out = run(["bash", "-c", 'source "$1/export.sh" >/dev/null 2>&1 && env -0', "_", root],
+                  timeout=120)
+    if rc != 0 or "IDF_PATH" not in out:
+        raise Fail("sourcing %s/export.sh failed" % root)
+    env = {}
+    for item in out.split("\0"):
+        if "=" in item:
+            k, v = item.split("=", 1)
+            env[k] = v
+    _idf_env = env
+    return env
+
+
+def flutter_env():
+    env = dict(os.environ)
+    fl = os.path.expanduser("~/sdk/flutter/bin")
+    if os.path.isdir(fl):
+        env["PATH"] = fl + os.pathsep + env.get("PATH", "")
+    if run(["bash", "-c", "command -v flutter"], env=env)[0] != 0:
+        raise Fail("flutter not found (expected ~/sdk/flutter/bin or on PATH)")
+    return env
+
+
+# ---------------------------------------------------------------- aliases
+
+def load_aliases():
+    try:
+        with open(ALIASES) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        data = {}
+    data.setdefault("units", {})
+    data.setdefault("devices", {})
+    return data
+
+
+def save_aliases(data):
+    os.makedirs(CONF_DIR, exist_ok=True)
+    with open(ALIASES, "w") as f:
+        json.dump(data, f, indent=2, sort_keys=True)
+
+
+def alias_for(data, kind, key):
+    """Number for a unit MAC / device serial, given the next free one if new."""
+    table = data[kind]
+    if key not in table:
+        used = {e["n"] for e in table.values()}
+        n = 1
+        while n in used:
+            n += 1
+        table[key] = {"n": n, "name": ""}
+    return table[key]
+
+
+# ---------------------------------------------------------------- units
+
+def find_units():
+    """USB display units: Espressif USB-JTAG serial ports, by MAC."""
+    data = load_aliases()
+    units = []
+    for path in sorted(glob.glob("/dev/serial/by-id/usb-Espressif_*")):
+        m = re.search(r"_([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})-if", path)
+        mac = m.group(1).upper() if m else os.path.basename(path)
+        e = alias_for(data, "units", mac)
+        units.append({"id": "u%d" % e["n"], "n": e["n"], "name": e["name"],
+                      "mac": mac, "port": path,
+                      "tty": os.path.basename(os.path.realpath(path))})
+    save_aliases(data)
+    units.sort(key=lambda u: u["n"])
+    return units
+
+
+# ---------------------------------------------------------------- android devices
+
+def parse_adb_devices():
+    rc, out = adb("devices", "-l")
+    rows = []
+    for line in out.splitlines()[1:]:
+        parts = line.split()
+        if len(parts) < 2 or line.startswith("*"):
+            continue
+        serial, state = parts[0], parts[1]
+        wifi = ":" in serial or "_adb-tls" in serial
+        rows.append({"transport": serial, "state": state, "wifi": wifi})
+    return rows
+
+
+def probe(row):
+    if row["state"] != "device":
+        return row
+    rc, out = adb("-s", row["transport"], "shell",
+                  "getprop ro.serialno; getprop ro.product.model; getprop ro.product.cpu.abi",
+                  timeout=15)
+    lines = [l.strip() for l in out.splitlines()]
+    if rc == 0 and len(lines) >= 3:
+        row["hw"], row["model"], row["abi"] = lines[0], lines[1], lines[2]
+    return row
+
+
+def find_devices():
+    """Android devices, one entry each, with their USB and/or wireless transport."""
+    rows = parse_adb_devices()
+    with ThreadPoolExecutor(8) as ex:
+        rows = list(ex.map(probe, rows))
+    data = load_aliases()
+    by_hw = {}
+    for r in rows:
+        hw = r.get("hw")
+        if not hw:
+            by_hw["?" + r["transport"]] = {"hw": None, "model": "?", "abi": "?", "usb": None,
+                                          "wifi": None, "states": {r["transport"]: r["state"]},
+                                          "n": 999, "id": "?", "name": ""}
+            d = by_hw["?" + r["transport"]]
+            d["wifi" if r["wifi"] else "usb"] = r["transport"]
+            continue
+        d = by_hw.setdefault(hw, {"hw": hw, "model": r["model"], "abi": r["abi"],
+                                  "usb": None, "wifi": None, "states": {}})
+        d["wifi" if r["wifi"] else "usb"] = r["transport"]
+        d["states"][r["transport"]] = r["state"]
+    for hw, d in by_hw.items():
+        if d["hw"]:
+            e = alias_for(data, "devices", hw)
+            d.update(n=e["n"], id="d%d" % e["n"], name=e["name"])
+            data["devices"][hw]["model"] = d["model"]
+    save_aliases(data)
+    return sorted(by_hw.values(), key=lambda d: d["n"])
+
+
+# ---------------------------------------------------------------- selection
+
+def pick(items, words, kind, prefix):
+    """Resolve words (u1, 1, name, all) against items."""
+    if not words:
+        raise Fail("%s needs a target: %s (see 'tools/dl list')" %
+                   (kind, "all or e.g. %s1" % prefix))
+    out = []
+    for w in words:
+        lw = w.lower()
+        if lw == "all":
+            hits = list(items)
+        else:
+            hits = [i for i in items if lw in (i["id"], str(i["n"]), i["name"].lower())
+                    or (i.get("name") and lw == i["name"].lower())]
+            if not hits:
+                known = ", ".join(i["id"] for i in items) or "none connected"
+                raise Fail("no %s '%s' connected (have: %s)" % (kind, w, known))
+        for h in hits:
+            if h not in out:
+                out.append(h)
+    if not out:
+        raise Fail("no %s connected" % kind)
+    return out
+
+
+# ---------------------------------------------------------------- verbs
+
+def cmd_list(args):
+    units = find_units()
+    devices = find_devices()
+    data = load_aliases()
+    step("Display units (USB)")
+    for u in units:
+        say("  %-3s %s  %s -> %s%s" % (u["id"], u["mac"], u["tty"], u["port"],
+                                      "  [%s]" % u["name"] if u["name"] else ""))
+    present = {u["mac"] for u in units}
+    for mac, e in sorted(data["units"].items(), key=lambda kv: kv[1]["n"]):
+        if mac not in present:
+            say("  u%-2d %s  (not connected)%s" % (e["n"], mac, "  [%s]" % e["name"] if e["name"] else ""))
+    if not units:
+        say("  none connected")
+    step("Android devices")
+    for d in devices:
+        how = []
+        if d["usb"]:
+            how.append("usb %s" % d["usb"] if d["states"][d["usb"]] == "device"
+                       else "usb (%s)" % d["states"][d["usb"]])
+        if d["wifi"]:
+            how.append("wifi %s" % d["wifi"] if d["states"][d["wifi"]] == "device"
+                       else "wifi %s (%s)" % (d["wifi"], d["states"][d["wifi"]]))
+        say("  %-3s %-10s %-12s %-12s %s%s" % (d["id"], d["model"], d["hw"] or "?", d["abi"],
+                                              ", ".join(how), "  [%s]" % d["name"] if d["name"] else ""))
+    present = {d["hw"] for d in devices}
+    for hw, e in sorted(data["devices"].items(), key=lambda kv: kv[1]["n"]):
+        if hw not in present:
+            say("  d%-2d %-10s %-12s (not connected)%s" % (e["n"], e.get("model", "?"), hw,
+                                                           "  [%s]" % e["name"] if e["name"] else ""))
+    if not devices:
+        say("  none connected  (tools/dl wifi  to look for wireless ones)")
+    step("Firmware build: %s, app APK: %s, source: %s" % (
+        built_fw_version() or "not built", apk_state(), git_version()))
+
+
+def built_fw_version():
+    try:
+        with open(os.path.join(FW_BUILD, "project_description.json")) as f:
+            v = json.load(f)["project_version"]
+    except (OSError, ValueError, KeyError):
+        return None
+    t = time.strftime("%m-%d %H:%M", time.localtime(os.path.getmtime(os.path.join(FW_BUILD, "dronelab.bin"))))
+    return "%s (%s)" % (v, t) if os.path.exists(os.path.join(FW_BUILD, "dronelab.bin")) else None
+
+
+def apk_state():
+    p = os.path.join(APK_DIR, APK_NAME["arm64-v8a"])
+    if not os.path.exists(p):
+        return "not built"
+    return "built " + time.strftime("%m-%d %H:%M", time.localtime(os.path.getmtime(p)))
+
+
+def build_fw():
+    env = idf_env()
+    sd = os.path.join(FW_BUILD, "sdkconfig")
+    if os.path.exists(sd):
+        defaults = [os.path.join(REPO, "platforms/esp-idf/sdkconfig.defaults"),
+                    os.path.join(REPO, "platforms/esp-idf/boards", BOARD, "sdkconfig.defaults")]
+        if any(os.path.exists(d) and os.path.getmtime(d) > os.path.getmtime(sd) for d in defaults):
+            # An existing build dir doesn't pick up changed defaults; regenerate it
+            say("   sdkconfig.defaults changed: regenerating the build's sdkconfig (old one kept as sdkconfig.old)")
+            os.replace(sd, sd + ".old")
+    long_run("firmware (build-s3-175-ptt)",
+             ["idf.py", "-C", "platforms/esp-idf", "-B", FW_BUILD, "-DBOARD=" + BOARD, "build"],
+             env=env, cwd=REPO)
+    say("   firmware: %s" % built_fw_version())
+
+
+def build_app():
+    env = flutter_env()
+    if BUNDLE:
+        long_run("bundle firmware into app (--dev)",
+                 [os.path.join(REPO, "tools/release/bundle_firmware.sh"), "--dev", FW_BUILD], env=env)
+    long_run("android app (release, split per abi)",
+             ["flutter", "build", "apk", "--release", "--split-per-abi"], env=env, cwd=APP)
+
+
+def build_desktop():
+    env = flutter_env()
+    # Reconfigure first so the virtual unit reports the current version, then rebuild it:
+    # flutter copies build-host/dronelab-unit into the bundle.
+    long_run("virtual unit (configure)", ["cmake", "-S", "platforms/host", "-B", "build-host"],
+             env=env, cwd=REPO)
+    long_run("virtual unit (build)", ["cmake", "--build", "build-host", "-j", str(os.cpu_count() or 4)],
+             env=env, cwd=REPO)
+    long_run("linux desktop app", ["flutter", "build", "linux", "--release"], env=env, cwd=APP)
+    say("   bundle: %s" % os.path.join(APP, "build/linux/x64/release/bundle"))
+
+
+BUILDS = {"fw": ("fw", build_fw), "firmware": ("fw", build_fw),
+          "app": ("app", build_app), "apk": ("app", build_app), "android": ("app", build_app),
+          "desktop": ("desktop", build_desktop), "linux": ("desktop", build_desktop)}
+
+
+def cmd_build(args):
+    if not args:
+        raise Fail("build what? fw, app, desktop or all")
+    todo = []
+    for a in args:
+        if a == "all":
+            names = ["fw", "app", "desktop"]
+        elif a in BUILDS:
+            names = [BUILDS[a][0]]
+        else:
+            raise Fail("don't know how to build '%s' (fw, app, desktop, all)" % a)
+        for n in names:
+            if n not in todo:
+                todo.append(n)
+    fns = {"fw": build_fw, "app": build_app, "desktop": build_desktop}
+    errors = []
+    for n in todo:
+        try:
+            fns[n]()
+        except Fail as e:
+            errors.append(str(e))   # the others don't depend on it: carry on
+            say("!! " + str(e))
+    if errors:
+        # stops a chain like "build fw flash all", so old firmware isn't flashed
+        raise Fail("build failed: " + "; ".join(errors))
+
+
+def clean_fw():
+    if not os.path.isdir(FW_BUILD):
+        say("== firmware: nothing to clean (no build-s3-175-ptt)")
+        return
+    # fullclean empties the build folder (sdkconfig too, so it's regenerated from the
+    # defaults); idf.py refuses to touch a folder that isn't an ESP-IDF build
+    long_run("clean firmware (build-s3-175-ptt)",
+             ["idf.py", "-C", "platforms/esp-idf", "-B", FW_BUILD, "-DBOARD=" + BOARD, "fullclean"],
+             env=idf_env(), cwd=REPO)
+
+
+def clean_flutter():
+    # flutter has no per-platform clean: this removes app/build for Android and Linux both
+    long_run("clean app (flutter clean: Android and Linux outputs)", ["flutter", "clean"],
+             env=flutter_env(), cwd=APP)
+
+
+def clean_host():
+    if not os.path.isfile(os.path.join(REPO, "build-host/Makefile")):
+        say("== virtual unit: nothing to clean (no build-host)")
+        return
+    long_run("clean virtual unit (build-host)", ["cmake", "--build", "build-host", "--target", "clean"],
+             cwd=REPO)
+
+
+def cmd_clean(args):
+    if not args:
+        raise Fail("clean what? fw, app, desktop or all")
+    todo = []
+    for a in args:
+        if a == "all":
+            names = ["fw", "app", "desktop"]
+        elif a in BUILDS:
+            names = [BUILDS[a][0]]
+        else:
+            raise Fail("don't know how to clean '%s' (fw, app, desktop, all)" % a)
+        for n in names:
+            if n not in todo:
+                todo.append(n)
+    errors = []
+    flutter_done = False
+    for n in todo:
+        try:
+            if n == "fw":
+                clean_fw()
+            else:
+                if n == "desktop":
+                    clean_host()
+                if not flutter_done:     # app and desktop share one flutter clean
+                    clean_flutter()
+                    flutter_done = True
+        except Fail as e:
+            errors.append(str(e))
+            say("!! " + str(e))
+    if errors:
+        raise Fail("clean failed: " + "; ".join(errors))
+
+
+class FlashJob(threading.Thread):
+    """One esptool run to one unit, with progress parsed from its output."""
+    ADDR = re.compile(r"Writing at 0x([0-9a-fA-F]+)\.\.\. \((\d+) %\)")
+
+    def __init__(self, unit, regions, cmd, env, log):
+        super().__init__(daemon=True)
+        self.unit, self.regions, self.cmd, self.env, self.log = unit, regions, cmd, env, log
+        self.total = sum(r[2] for r in regions) or 1
+        self.frac = 0.0
+        self.phase = "waiting"
+        self.rc = None
+        self.error = ""
+        self.started = self.ended = None
+        self.lines = []
+        self.done_regions = set()
+        self.cur = 0
+
+    def region_of(self, addr):
+        for i, (start, _, size) in enumerate(self.regions):
+            if start <= addr < start + max(size, 1):
+                return i
+        return self.cur
+
+    def update(self, pct=None):
+        done = sum(self.regions[i][2] for i in self.done_regions)
+        part = self.regions[self.cur][2] * (pct or 0) / 100.0 if self.cur not in self.done_regions else 0
+        self.frac = min(1.0, (done + part) / self.total)
+
+    def feed(self, line):
+        m = self.ADDR.search(line)
+        if m:
+            self.cur = self.region_of(int(m.group(1), 16))
+            self.phase = "writing"
+            self.update(int(m.group(2)))
+            return
+        self.lines.append(line)
+        del self.lines[:-30]
+        if "Connecting" in line:
+            self.phase = "connecting"
+        elif line.startswith("Wrote "):
+            self.done_regions.add(self.cur)
+            self.update()
+        elif "Hash of data verified" in line:
+            self.phase = "verifying"
+        elif "Hard resetting" in line:
+            self.phase = "resetting"
+
+    def run(self):
+        self.started = time.time()
+        self.phase = "starting"
+        try:
+            with open(self.log, "w") as f:
+                p = subprocess.Popen(self.cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                     env=self.env, cwd=FW_BUILD, bufsize=0)
+                buf = ""
+                deadline = time.time() + 600
+                while True:
+                    chunk = os.read(p.stdout.fileno(), 4096)
+                    if not chunk:
+                        break
+                    text = buf + chunk.decode(errors="replace")
+                    *lines, buf = re.split(r"[\r\n]", text)
+                    for line in lines:
+                        if line.strip():
+                            if not self.ADDR.search(line):
+                                f.write(line + "\n")
+                            self.feed(line.strip())
+                    if time.time() > deadline:
+                        p.kill()
+                        self.error = "timed out"
+                self.rc = p.wait()
+        except OSError as e:
+            self.rc, self.error = 1, str(e)
+        self.ended = time.time()
+        if self.rc == 0:
+            self.frac, self.phase = 1.0, "done"
+        else:
+            self.phase = "FAILED"
+
+
+def bar(frac, width=24):
+    n = int(round(frac * width))
+    return "[" + "#" * n + "-" * (width - n) + "]"
+
+
+def show_progress(jobs):
+    """One line per unit and an overall line; redrawn in place on a terminal, milestone
+    lines otherwise (so a captured log stays short)."""
+    tty = sys.stdout.isatty()
+    t0 = time.time()
+    last_mark = {j: 0 for j in jobs}
+    drawn = 0
+
+    def lines():
+        overall = sum(j.frac for j in jobs) / len(jobs)
+        out = ["Flashing %d unit%s  %s %3d%%  %3.0fs" % (len(jobs), "" if len(jobs) == 1 else "s",
+                                                       bar(overall), overall * 100, time.time() - t0)]
+        for j in jobs:
+            out.append("  %-3s %s %3d%%  %s" % (j.unit["id"], bar(j.frac), j.frac * 100, j.phase))
+        return out
+
+    while True:
+        finished = all(not j.is_alive() and j.started for j in jobs)
+        if tty:
+            ls = lines()
+            if drawn:
+                sys.stdout.write("\x1b[%dA" % drawn)
+            sys.stdout.write("".join("\x1b[2K" + l + "\n" for l in ls))
+            sys.stdout.flush()
+            drawn = len(ls)
+        else:
+            for j in jobs:
+                mark = int(j.frac * 4) * 25
+                if j.phase in ("done", "FAILED"):
+                    mark = 100
+                if mark > last_mark[j] or (j.phase == "FAILED" and last_mark[j] != -1):
+                    last_mark[j] = -1 if j.phase == "FAILED" else mark
+                    say("  %s %d%% %s" % (j.unit["id"], j.frac * 100, j.phase))
+        if finished:
+            break
+        time.sleep(0.2)
+
+
+def cmd_flash(args):
+    units = pick(find_units(), args, "unit", "u")
+    flash_args = os.path.join(FW_BUILD, "flash_args")
+    if not os.path.exists(flash_args):
+        raise Fail("no firmware built: run 'tools/dl build fw' first")
+    regions = []   # (address, file, size), as the build lists them
+    with open(flash_args) as f:
+        for line in f:
+            w = line.split()
+            if len(w) == 2 and w[0].startswith("0x"):
+                regions.append((int(w[0], 16), w[1], os.path.getsize(os.path.join(FW_BUILD, w[1]))))
+    regions.sort()
+    bin_ = os.path.join(FW_BUILD, "dronelab.bin")
+    rc, out = run(["git", "ls-files", "core", "platforms/esp-idf", "platforms/host"], cwd=REPO)
+    newest = max((os.path.getmtime(os.path.join(REPO, p)) for p in out.splitlines()
+                  if os.path.exists(os.path.join(REPO, p))), default=0)
+    if newest > os.path.getmtime(bin_):
+        say("!! warning: sources are newer than the firmware build; 'tools/dl build fw' first if that matters")
+    ids = ", ".join(u["id"] for u in units)
+    say("Flashing %s with %s, %s" % (ids, built_fw_version(), "one at a time" if SERIAL or len(units) == 1
+                                     else "in parallel"))
+    env = idf_env()
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    jobs = []
+    for u in units:
+        # What idf.py flash runs, without its build check: parallel runs can't share that
+        cmd = ["python", "-m", "esptool", "--chip", "esp32s3", "-p", u["port"], "-b", "460800",
+               "--before", "default_reset", "--after", "hard_reset", "write_flash", "@flash_args"]
+        jobs.append(FlashJob(u, regions, cmd, env, os.path.join(CACHE_DIR, "flash-%s.log" % u["id"])))
+    if DRY:
+        for j in jobs:
+            say("   would run: %s  (in %s)" % (" ".join(j.cmd), FW_BUILD))
+        return
+    if SERIAL:
+        for j in jobs:
+            j.start()
+            show_progress([j])
+    else:
+        for j in jobs:
+            j.start()
+        show_progress(jobs)
+    for j in jobs:
+        if j.rc == 0:
+            say("  %s ok (%.0fs)" % (j.unit["id"], j.ended - j.started))
+        else:
+            msg = "flash %s failed (%s); log %s" % (j.unit["id"], j.error or "exit %s" % j.rc, j.log)
+            FAILED.append(msg)
+            say("!! " + msg)
+            say("\n".join("   " + l for l in j.lines[-12:]))
+            say("   (is a serial monitor or logger using %s?)" % j.unit["tty"])
+
+
+def cmd_install(args):
+    devices = [d for d in find_devices() if d["hw"]]
+    sel = [a for a in args]
+    # usb / wifi pick by transport; otherwise by alias
+    if sel in (["usb"], ["wifi"]):
+        key = sel[0]
+        chosen = [d for d in devices if d[key] and d["states"][d[key]] == "device"]
+        if not chosen:
+            raise Fail("no %s-connected Android devices" % key)
+        route = {d["hw"]: d[key] for d in chosen}
+    else:
+        chosen = pick(devices, sel, "device", "d")
+        route = {}
+        for d in chosen:
+            for t in (d["usb"], d["wifi"]):
+                if t and d["states"][t] == "device":
+                    route[d["hw"]] = t
+                    break
+    for d in chosen:
+        t = route.get(d["hw"])
+        if not t:
+            msg = "%s (%s): not ready (%s)" % (d["id"], d["model"], ", ".join(d["states"].values()))
+            FAILED.append(msg)
+            say("!! " + msg)
+            continue
+        apk = os.path.join(APK_DIR, APK_NAME.get(d["abi"], ""))
+        if not os.path.isfile(apk):
+            msg = "no APK for %s's %s: run 'tools/dl build app'" % (d["id"], d["abi"])
+            FAILED.append(msg)
+            say("!! " + msg)
+            continue
+        step("install on %s %s (%s) via %s" % (d["id"], d["model"], d["hw"], t))
+        # adb install -r keeps the app's settings; never "flutter install", which uninstalls first
+        if DRY:
+            say("   would run: adb -s %s install -r %s" % (t, apk))
+            continue
+        rc, out = adb("-s", t, "install", "-r", apk, timeout=300)
+        if rc == 0 and "Success" in out:
+            say("   ok (%s)" % os.path.basename(apk))
+        else:
+            msg = "install on %s failed: %s" % (d["id"], out.splitlines()[-1] if out else rc)
+            FAILED.append(msg)
+            say("!! " + msg)
+            if "DOWNGRADE" in out:
+                say("   (the phone has a higher version code, e.g. a split build; build with the same options)")
+
+
+def mdns_services():
+    rc, out = adb("mdns", "services", timeout=15)
+    svc = []
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[1].startswith("_adb"):
+            m = re.match(r"adb-([^-]+)-", parts[0])
+            svc.append({"name": parts[0], "kind": parts[1], "addr": parts[2],
+                        "hw": m.group(1) if m else None})
+    return svc
+
+
+def cmd_wifi(args):
+    sub = args[0] if args else "scan"
+    rest = args[1:]
+    data = load_aliases()
+    if sub == "scan":
+        connected = {r["transport"] for r in parse_adb_devices()}
+        found = mdns_services()
+        step("Wireless debugging devices on the network")
+        for s in found:
+            if s["kind"] != "_adb-tls-connect._tcp":
+                say("  (other)  %s  %s" % (s["addr"], s["kind"]))
+                continue
+            e = data["devices"].get(s["hw"] or "")
+            say("  %-3s %-14s %-22s %s" % ("d%d" % e["n"] if e else "new", s["hw"], s["addr"],
+                                         "connected" if s["addr"] in connected else "not connected"))
+        if not found:
+            say("  none found (Developer options > Wireless debugging on, same network)")
+        say("Connect them with: tools/dl wifi connect    (new device: tools/dl wifi pair IP:PORT CODE)")
+    elif sub == "connect":
+        targets = []
+        if rest:
+            for a in rest:
+                targets.append(a)
+        else:
+            connected = {r["transport"] for r in parse_adb_devices() if r["state"] == "device"}
+            targets = [s["addr"] for s in mdns_services()
+                       if s["kind"] == "_adb-tls-connect._tcp" and s["addr"] not in connected]
+            if not targets:
+                say("Nothing new to connect (already connected, or none advertising; try 'tools/dl wifi')")
+        for t in targets:
+            ok = False
+            for attempt in (1, 2):   # the first try after a while often fails
+                rc, out = adb("connect", t, timeout=15)
+                if "connected to" in out and "failed" not in out:
+                    ok = True
+                    break
+                time.sleep(1)
+            say("  %s: %s" % (t, "connected" if ok else out))
+            if not ok:
+                FAILED.append("connect %s: %s" % (t, out))
+    elif sub == "pair":
+        if len(rest) != 2:
+            raise Fail("usage: tools/dl wifi pair IP:PORT CODE   (from Wireless debugging > Pair device with pairing code)")
+        rc, out = adb("pair", rest[0], rest[1], timeout=30)
+        say(out)
+        if rc != 0 or "Successfully" not in out:
+            raise Fail("pairing failed")
+        say("Now: tools/dl wifi connect")
+    elif sub == "disconnect":
+        rc, out = adb("disconnect", *( [] if not rest or rest == ["all"] else rest))
+        say(out or "disconnected")
+    else:
+        raise Fail("wifi: scan | connect [IP:PORT] | pair IP:PORT CODE | disconnect [IP:PORT]")
+
+
+def cmd_name(args):
+    if len(args) < 1:
+        raise Fail("usage: tools/dl name u3 low-profile   (empty label clears it)")
+    target, label = args[0].lower(), " ".join(args[1:])
+    data = load_aliases()
+    m = re.fullmatch(r"([ud])(\d+)", target)
+    if not m:
+        raise Fail("name an alias like u3 or d1")
+    table = data["units" if m.group(1) == "u" else "devices"]
+    for key, e in table.items():
+        if e["n"] == int(m.group(2)):
+            e["name"] = label
+            save_aliases(data)
+            say("%s%s (%s) is now %s" % (m.group(1), m.group(2), key, "'%s'" % label if label else "unnamed"))
+            return
+    raise Fail("no alias %s yet (run 'tools/dl list' with it connected first)" % target)
+
+
+HELP = __doc__ + """
+Words
+  list                       units (u1..), Android devices (d1.., usb and wifi), what's built
+  build fw|app|desktop|all   fw: build-s3-175-ptt (the 1.75" board); app: release APKs, split
+                             per abi; desktop: virtual unit + Linux app.  Needs ESP-IDF at
+                             $IDF_PATH or ~/esp/, flutter at ~/sdk/flutter/bin or on PATH.
+  clean fw|app|desktop|all   fw: idf.py fullclean of build-s3-175-ptt (next build is a full one,
+                             sdkconfig regenerated); app: flutter clean (also clears the Linux
+                             app's output, flutter can't do one platform); desktop: build-host's
+                             clean target plus the same flutter clean.  Then run 'build'.
+  flash <u1 u2|all>          esptool write_flash of build-s3-175-ptt (what idf.py flash runs, minus
+                             its build check) by /dev/serial/by-id path; units flash in parallel
+                             with one progress display. Doesn't build: run 'build fw' first.
+  install <d1 d2|all|usb|wifi>
+                             adb install -r of the right APK for each device's ABI.
+                             all: each device once, USB preferred.  usb / wifi: every device
+                             on that transport.  Keeps the app's settings.
+  wifi [scan]                list wireless-debugging devices found by mDNS
+  wifi connect [IP:PORT]     connect all found (paired) ones, or one address
+  wifi pair IP:PORT CODE     first-time pairing
+  wifi disconnect [IP:PORT]  drop wireless connections (all if none given)
+  name <alias> [label]       label an alias, shown in 'list' and usable as a target
+
+Options
+  -v, --verbose              stream build output (default: log file, tail on failure)
+  -n, --dry-run              show the commands build/clean/flash/install would run, run nothing
+  --serial                   flash one unit at a time
+  --bundle                   with 'build app': first bundle the built firmware into the app
+                             (tools/release/bundle_firmware.sh --dev), so it can update units
+Logs: ~/.cache/dronelab-dl/.  Exit status is non-zero if any step failed.
+"""
+
+VERBS = {"list": cmd_list, "build": cmd_build, "clean": cmd_clean, "flash": cmd_flash, "install": cmd_install,
+         "wifi": cmd_wifi, "name": cmd_name}
+
+
+def main(argv):
+    global VERBOSE, BUNDLE, DRY, SERIAL
+    words = []
+    for a in argv:
+        if a in ("-v", "--verbose"):
+            VERBOSE = True
+        elif a == "--bundle":
+            BUNDLE = True
+        elif a == "--serial":
+            SERIAL = True
+        elif a in ("-n", "--dry-run"):
+            DRY = True
+        elif a in ("-h", "--help", "help"):
+            print(HELP)
+            return 0
+        else:
+            words.append(a)
+    if not words:
+        print(__doc__)
+        return 2
+    plan, cur = [], None
+    for w in words:
+        if w in VERBS and (cur is None or cur[0] != "name"):
+            cur = (w, [])
+            plan.append(cur)
+        elif cur is None:
+            print("unknown word '%s'; try 'tools/dl help'" % w, file=sys.stderr)
+            return 2
+        else:
+            cur[1].append(w)
+    for verb, args in plan:
+        try:
+            VERBS[verb](args)
+        except Fail as e:
+            FAILED.append(str(e))
+            print("!! " + str(e), file=sys.stderr)
+            break   # a bad request or missing tool stops the chain
+    if FAILED:
+        say("\nFAILED:")
+        for f in FAILED:
+            say("  - " + f)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        sys.exit(130)
+    except BrokenPipeError:
+        sys.exit(0)
