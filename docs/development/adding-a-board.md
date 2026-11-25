@@ -8,7 +8,7 @@ A new display means a board folder with its HAL and its screen size, without cop
 
 Add `platforms/esp-idf/boards/<board>/`, named after the board, with:
 
-- `board.cmake` - Sets `IDF_TARGET`, `RCAT_IMAGE_SIZE`, `RCAT_LARGE_IMAGES` and `RCAT_VOICE_FX` (whether voice effects are built in: only for a board whose speaker can play them without feeding back), and optionally `RCAT_DEFAULT_ROTATION` (the display's rotation on a new board, in clockwise quarter turns, if its housing turns it) and `RCAT_SPEAKER_OPTIONAL` (on if the speaker plugs in, so a housing may have none).
+- `board.cmake` - Sets `IDF_TARGET`, `RCAT_IMAGE_SIZE`, `RCAT_LARGE_IMAGES` and `RCAT_VOICE_FX` (whether voice effects are built in: only for a board whose speaker can play them without feeding back), and optionally `RCAT_DEFAULT_ROTATION` (the display's rotation on a new board, in clockwise quarter turns, if its housing turns it) `RCAT_HALF_TURNS_ONLY` (on if the display only turns to 0 or 180 degrees) and `RCAT_SPEAKER_OPTIONAL` (on if the speaker plugs in, so a housing may have none).
 - `CMakeLists.txt` - Registers the board's component, which requires `rcat_core` and `rcat_esp32`.
 - `hal_board.c` - The board's own HAL: display, touch, audio, battery, accelerometer axes and the SD card's pins.  Everything else is in `components/rcat_esp32/` already.
 - `idf_component.yml` - The drivers it needs from Espressif's component registry.  The first build makes `dependencies.lock`, which pins their versions; commit it.

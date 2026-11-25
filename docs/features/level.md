@@ -6,4 +6,4 @@ Opened with the **Level** button on Settings' [Setup](settings.md#setup) page.  
 
 <img src="../images/screens/settings_level.png" width="220" alt="The Level, two degrees off, in amber">
 
-Use it with the [Rotation](settings.md#rotation) buttons above it on the Setup page, which turn the picture in 90 degree steps.
+Use it with the [Rotation](settings.md#rotation) buttons above it on the Setup page, which turn the picture in 90 degree steps (0° and 180° on the ESP32-S3-Touch-AMOLED-1.75).

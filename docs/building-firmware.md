@@ -135,11 +135,12 @@ If something doesn't seem to change after an update, delete the `build-s3-175` f
 
 Each of the display's [features](features/README.md) can be left out of the build, in `platforms/esp-idf/features.cmake`.  Set a feature to `OFF` to leave it out, or `ON` to build it in, then build as usual.  The build prints the features it's building, for example `-- Features: IMAGES, VOICE, SOUND`.  Settings is always built in.  A feature that needs hardware the board doesn't have, like a microphone or a speaker, hides itself even when it's built in.
 
-Two more settings are fixed when the firmware is built:
+A few more settings are fixed when the firmware is built:
 
 - `RCAT_VOICE_FX`, in the board's `board.cmake`, picks whether [voice effects](features/voice-effects.md) are built in.  They're on for the ESP32-S3-Touch-AMOLED-1.75, whose echo canceller lets them play on the speaker without feeding back.
 - `RCAT_LARGE_IMAGES`, in the board's `board.cmake`, picks whether full screen animated GIFs are built in (see [Animated GIF memory use](features/images.md#animated-gif-memory-use)).
 - `RCAT_DEFAULT_ROTATION`, in the board's `board.cmake`, sets the display's [Rotation](features/settings.md#rotation) on a new board, in clockwise quarter turns, to suit the way its housing holds it.  It's 2 (180 degrees) for the ESP32-S3-Touch-AMOLED-1.75, and 0 when it isn't set.  A board that already has saved settings keeps its own.
+- `RCAT_HALF_TURNS_ONLY`, in the board's `board.cmake`, leaves the quarter turns out of [Rotation](features/settings.md#rotation), so the display turns only to 0 or 180 degrees.  It's on for the ESP32-S3-Touch-AMOLED-1.75, whose housings turn the whole unit upright, and which turns the picture over in place, without the extra buffer a quarter turn needs (see [Voice effects and the processor](development/voice-effects-cpu.md)).
 - `RCAT_SPEAKER_OPTIONAL`, in the board's `board.cmake`, is for a board whose speaker plugs in, so a housing may not have one.  A new board then asks which model it is at its first start, and Settings has a [Model](features/settings.md#model) page.  It's on for the ESP32-S3-Touch-AMOLED-1.75.
 
 ## Former boards

@@ -52,4 +52,13 @@ Playing the effect out loud needs the [speaker model](../build/speaker-housing.m
 
 The presets are the same as the effects in `tools/voice_monitor.py`, so they can be tried and tuned on a computer first.  The pitch-following presets add about 15-20 ms of delay, the others less.
 
+## Feedback, or the processor running behind
+
+Two different things can spoil an effect, and they sound different:
+
+- **Feedback** gets worse the louder the speaker is, and stops when *Play on speaker* is off or the volume's turned down.  It's a howl or a ringing, or on the ring modulated presets like Dalek, a hiss that carries on after you stop talking.  Turn it down, or see the [Seal Test](../build/seal-test.md).
+- **The processor running behind** sounds garbled or noisy, even at a low volume, and it's in a recording of the effect too ([Record](../app/record.md) in the app).  The effects are very sensitive to how busy the processor is: the heavier ones, which shift your voice or rebuild it (Female, Synthetic, AI, Android, Robot, Borg), take a lot of it, and anything else the board does at the same time, like drawing the display, eats into what's left.  The firmware is built so that every preset keeps up with any display page, the [Voice Ring](voice-ring.md) and the [Sound Visualizer](visualizer.md) included, and with comms on.  If one doesn't, please report it, saying what was on the screen.
+
+Lessons from tuning them on the board, for anyone changing them, are in [Voice effects and the processor](../development/voice-effects-cpu.md).
+
 Expect Natural to feed back at a lower volume than the others: the effects that change the pitch or ring modulate move the sound off the frequencies that feed back, and Natural doesn't.
