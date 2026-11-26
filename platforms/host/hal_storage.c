@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <unistd.h>
 
 #include "hal.h"
@@ -247,5 +248,24 @@ bool rcat_hal_storage_mount(const char **path)
     }
     printf("SD card: %s\n", dir);
     *path = dir;
+    return true;
+}
+
+bool rcat_hal_storage_space(uint64_t *total, uint64_t *free_bytes)
+{
+    const char *dir = host_options.sdcard;
+    char own[512];
+    if (dir == NULL)
+    {
+        host_data_path(own, sizeof(own), "sdcard");
+        dir = own;
+    }
+    struct statvfs fs;
+    if (statvfs(dir, &fs) != 0)
+    {
+        return false;
+    }
+    *total = (uint64_t)fs.f_blocks * fs.f_frsize;
+    *free_bytes = (uint64_t)fs.f_bavail * fs.f_frsize;
     return true;
 }

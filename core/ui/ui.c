@@ -509,6 +509,19 @@ void ui_add_startup_choice(ui_feature_t *feature, lv_obj_t *page, const char *la
     }
 }
 
+void ui_startup_choice_page_gone(const lv_obj_t *page)
+{
+    // The choice stays, so the Settings roller and the remote's list keep their
+    // places till the next start; it just has nowhere to go
+    for (size_t i = 0; i < startup_choice_count; i++)
+    {
+        if (startup_choices[i].page == page)
+        {
+            startup_choices[i].page = NULL;
+        }
+    }
+}
+
 size_t ui_startup_choice_count(void)
 {
     return startup_choice_count;
@@ -559,6 +572,10 @@ static void show_startup_page(void)
     }
 
     startup_choice_t *choice = &startup_choices[index];
+    if (choice->page == NULL)
+    {
+        return;     // a picture deleted since
+    }
     lv_tileview_set_tile(features_view, choice->feature->row, LV_ANIM_OFF);
     lv_tileview_set_tile(choice->feature->pages, choice->page, LV_ANIM_OFF);
 }

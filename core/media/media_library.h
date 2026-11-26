@@ -28,6 +28,22 @@ size_t media_load_folder(const char *path, int32_t screen_size);
 size_t media_count(void);
 const media_item_t *media_get(size_t index);
 
+/* Pictures on storage (not the built-in ones), added and taken away while
+ * it runs, for the app's saving to the card. There's room for
+ * MEDIA_STORAGE_MAX of them. */
+#define MEDIA_STORAGE_MAX 32
+size_t media_storage_count(void);
+
+/* Load the picture file at path (named file_name, which has its extension)
+ * and put it among the storage ones, by name. Returns where it went (an
+ * index for media_get), or -1 if it can't be shown or there's no room. Call
+ * it from the UI loop. */
+int media_add_file(const char *path, const char *file_name, int32_t screen_size);
+
+/* Forget the storage picture called name (no extension) and free it.
+ * Returns where it was, or -1. The file's the caller's. */
+int media_remove_file(const char *name);
+
 /* Index of the image with the given name, or -1 if there isn't one. */
 int media_find(const char *name);
 

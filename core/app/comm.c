@@ -33,6 +33,7 @@
 #include "app/rules.h"
 #include "app/remote.h"
 #include "app/settings.h"
+#include "app/storage_save.h"
 #include "app/sounds.h"
 #include "app/talk_button.h"
 #include "app/updater.h"
@@ -129,6 +130,8 @@
 #define MSG_FAVOURITES      0x19    // from the phone: the wearer's favourite patterns, in pieces
 #define MSG_PICTURE         0x1A    // both ways: a picture for the screen, in pieces, and the ack
 #define MSG_SENT_SOUND      0x1B    // both ways: a sound for the speaker, in pieces, and the ack, as a picture's
+#define MSG_STORAGE         0x1D    // both ways: a picture or sound to save to the SD card, in pieces, and the ack
+#define STORAGE_ABORT       0x08    // in 0x1D: give up on the file, deleting what's there of it
 #define PICTURE_START       0x01
 #define PICTURE_END         0x02
 #define PICTURE_ACK         0x04
@@ -1574,6 +1577,7 @@ static void set_recording(bool on, bool speaker, bool beep, int preset)
 static void forget_phone(void)
 {
     updater_app_cancel();   // an update from it that hasn't finished
+    storage_save_abort();   // and a file for the card
     phone_talk = false;     // so a phone that's gone doesn't leave it talking
     phone_mic = false;      // and the board's own mic talks again
     phone_mic_sending = false;
@@ -2051,9 +2055,61 @@ static void receive_media(const uint8_t *msg, size_t len)
     }
 }
 
+/* A picture or sound to save to the SD card (storage_save.h), from the
+ * phone, in pieces: see comm.h's 0x1D. */
+static void receive_storage(const uint8_t *msg, size_t len)
+{
+    uint8_t flags = msg[1];
+    save_result_t result = SAVE_OK;
+    bool ack = (flags & PICTURE_ACK) != 0;
+    bool done = false;
+    storage_save_touch();
+    if (flags & STORAGE_ABORT)
+    {
+        storage_save_abort();
+        done = true;
+    }
+    else if (flags & PICTURE_START)
+    {
+        ack = true;
+        if (len < 7 + SAVE_HASH_LEN + 1)
+        {
+            result = SAVE_BAD_NAME;
+        }
+        else
+        {
+            uint32_t length;
+            memcpy(&length, msg + 3, 4);
+            result = storage_save_begin(msg[2], length, msg + 7, (const char *)msg + 7 + SAVE_HASH_LEN,
+                                        len - 7 - SAVE_HASH_LEN);
+        }
+    }
+    else if (flags & PICTURE_END)
+    {
+        ack = true;
+        done = true;
+        result = storage_save_finish();
+    }
+    else if (len >= 7)
+    {
+        uint32_t offset;
+        memcpy(&offset, msg + 2, 4);
+        result = storage_save_write(offset, msg + 6, len - 6);
+    }
+    if (ack)
+    {
+        uint32_t got = storage_save_received();
+        uint8_t out[7] = { MSG_STORAGE, (uint8_t)((done ? PICTURE_DONE : 0) | (result == SAVE_OK ? PICTURE_WELL : 0)),
+                           (uint8_t)got, (uint8_t)(got >> 8), (uint8_t)(got >> 16), (uint8_t)(got >> 24),
+                           (uint8_t)result };
+        send_retrying(out, sizeof(out));
+    }
+}
+
 void comm_poll(uint32_t now_ms)
 {
     others_poll(now_ms);
+    storage_save_poll(rcat_hal_millis());
     send_heard();
 
     // Shut pairing when its time's up, or once a phone's paired with a code
@@ -2143,6 +2199,10 @@ void comm_poll(uint32_t now_ms)
         else if ((msg[0] == MSG_PICTURE || msg[0] == MSG_SENT_SOUND) && len >= 2)
         {
             receive_media(msg, len);
+        }
+        else if (msg[0] == MSG_STORAGE && len >= 2)
+        {
+            receive_storage(msg, len);
         }
         else if (msg[0] == MSG_IDENTITY && len >= 1 + OTHERS_KEY_LEN)
         {

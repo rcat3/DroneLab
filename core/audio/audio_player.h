@@ -27,6 +27,17 @@ bool audio_player_available(void);
 size_t audio_player_track_count(void);
 const char *audio_player_track_name(size_t index);
 
+/* A sound file's been saved to the card's sounds folder (app/storage_save.h),
+ * or is to be deleted from it: the track's added after the card's others, or
+ * stopped, taken away and its file deleted, while whatever plays carries on.
+ * Done by the speaker's task; false if it's not taken (no speaker, or too
+ * many waiting). From the UI loop. */
+bool audio_player_file_added(const char *file_name);
+bool audio_player_remove_file(const char *file_name);
+
+/* How many more sound files from the card the list has room for. */
+size_t audio_player_file_room(void);
+
 /* Play a track from the start. */
 void audio_player_play(size_t index);
 

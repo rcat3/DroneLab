@@ -348,6 +348,21 @@ static const void *load_static(const char *path, int32_t screen_size)
     return decode_static(lv_path, path, prepared_size_of_file(path), screen_size);
 }
 
+/* Load one picture file into item. */
+static bool load_item(const char *file_path, const char *file_name, int32_t screen_size, media_item_t *item)
+{
+    item->is_gif = is_gif_file(file_name);
+    item->scale = LV_SCALE_NONE;
+    item->src = item->is_gif ? load_gif(file_path, screen_size, &item->scale)
+                             : load_static(file_path, screen_size);
+    if (item->src == NULL)
+    {
+        return false;
+    }
+    set_name(item, file_name);
+    return true;
+}
+
 size_t media_load_folder(const char *path, int32_t screen_size)
 {
     // Use the "images" folder if there is one, otherwise the folder itself.
@@ -393,14 +408,8 @@ size_t media_load_folder(const char *path, int32_t screen_size)
             continue;
         }
 
-        media_item_t *item = &loaded[loaded_count];
-        item->is_gif = is_gif_file(names[i]);
-        item->scale = LV_SCALE_NONE;
-        item->src = item->is_gif ? load_gif(file_path, screen_size, &item->scale)
-                                 : load_static(file_path, screen_size);
-        if (item->src != NULL)
+        if (load_item(file_path, names[i], screen_size, &loaded[loaded_count]))
         {
-            set_name(item, names[i]);
             printf("images: loaded %s\n", file_path);
             loaded_count++;
         }
@@ -415,6 +424,85 @@ size_t media_load_folder(const char *path, int32_t screen_size)
     return loaded_count;
 }
 
+/* Free a picture loaded from storage: a GIF's data's its own. */
+static void media_free_loaded(media_item_t *item)
+{
+    if (item->is_gif)
+    {
+        lv_free((void *)((const lv_image_dsc_t *)item->src)->data);
+    }
+    media_free_decoded(item->src, item->is_gif);
+}
+
+size_t media_storage_count(void)
+{
+    return item_count - builtin_image_count;
+}
+
+int media_add_file(const char *path, const char *file_name, int32_t screen_size)
+{
+    if (!is_image_file(file_name) || media_storage_count() >= MEDIA_STORAGE_MAX)
+    {
+        return -1;
+    }
+    media_item_t item;
+    if (!load_item(path, file_name, screen_size, &item))
+    {
+        return -1;
+    }
+    // Among the storage ones, by name
+    size_t stored = media_storage_count();
+    size_t at = 0;
+    while (at < stored && strcasecmp(items[at].name, item.name) < 0)
+    {
+        at++;
+    }
+    media_item_t *grown = lv_realloc(items, (item_count + 1) * sizeof(media_item_t));
+    if (grown == NULL)
+    {
+        media_free_decoded(item.src, item.is_gif);
+        return -1;
+    }
+    items = grown;
+    memmove(&items[at + 1], &items[at], (item_count - at) * sizeof(media_item_t));
+    items[at] = item;
+    item_count++;
+    return (int)at;
+}
+
+int media_remove_file(const char *name)
+{
+    size_t stored = media_storage_count();
+    for (size_t i = 0; i < stored; i++)
+    {
+        if (strcasecmp(items[i].name, name) == 0)
+        {
+            media_free_loaded(&items[i]);
+            memmove(&items[i], &items[i + 1], (item_count - i - 1) * sizeof(media_item_t));
+            item_count--;
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+#endif
+
+#if !RCAT_HAVE_FILESYSTEM
+size_t media_storage_count(void)
+{
+    return 0;
+}
+
+int media_add_file(const char *path, const char *file_name, int32_t screen_size)
+{
+    return -1;
+}
+
+int media_remove_file(const char *name)
+{
+    return -1;
+}
 #endif
 
 #if RCAT_HAVE_FILESYSTEM && LV_USE_FS_MEMFS

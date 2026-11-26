@@ -150,6 +150,19 @@
  *                  its length's at most SOUNDS_MAX_BYTES, and what it is
  *                  AUDIO_SENT_OPUS or AUDIO_SENT_FILE; given once the
  *                  command to play it's been taken (from COMM_VERSION 21).
+ *     0x1D storage: 1D, flags (bit 0 the start, bit 1 the end, bit 2 asks
+ *                  for an ack, bit 3 gives up on the file: nothing follows,
+ *                  and the unit deletes what it has), then for the start: what it is (0 a picture,
+ *                  1 a sound), its length (4, little endian), its SHA-256
+ *                  (32) and its name, with its extension (ASCII, at most 64
+ *                  bytes: storage_save.h says what's allowed); for the end,
+ *                  nothing; or else where this piece goes (4, little endian,
+ *                  from 0) and the piece itself, in order: a file for the SD
+ *                  card's pictures or sounds folder, kept as a file, added to
+ *                  the unit's lists and used from then on like any other
+ *                  there. A piece that isn't where the file's got to is
+ *                  left out, for the phone to send again from there (the
+ *                  ack says where). From COMM_VERSION 24.
  *     0x0E update: 0E, flags (bit 0 the start, bit 1 the end, bit 2 asks
  *                  for an ack), then for the start: the firmware's length
  *                  (4, little endian), the board it's for
@@ -177,6 +190,11 @@
  *                  that asks, and the end.
  *     0x1B sound ack: 1B, then as 0x1A's, for a sound's pieces (from
  *                  COMM_VERSION 21).
+ *     0x1D storage ack: 1D, flags (bit 0 done: it's the end's, bit 1 all's
+ *                  well), how much of the file's come (4, little endian),
+ *                  then what came of it (save_result_t, storage_save.h). For
+ *                  the start, each piece that asks, and the end (from
+ *                  COMM_VERSION 24).
  *     0x0A recorded sound: as 0x01 sound, while recording, at 48 kb/s.
  *     0x1C level:  1C, the loudest of the voice in the last 100 ms, as it's
  *                  sent or recorded (after the effect and the gain), in dB
@@ -349,8 +367,10 @@
  *  22  a preset to record through, or to hold the speaker at (0x0A); the
  *      voice's level (0x1C)
  *  23  the app's own remote: GET /api/screen (a snapshot of the screen),
- *      POST /api/nav and /api/picture, and the state's "pages" and "recv" */
-#define COMM_VERSION            23
+ *      POST /api/nav and /api/picture, and the state's "pages" and "recv"
+ *  24  pictures and sounds saved to the SD card (0x1D), GET and POST
+ *      /api/storage */
+#define COMM_VERSION            24
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

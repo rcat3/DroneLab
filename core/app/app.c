@@ -8,6 +8,7 @@
 #include "app/rules.h"
 #include "app/patterns.h"
 #include "app/settings.h"
+#include "app/storage_save.h"
 #include "app/toys.h"
 #include "app/updater.h"
 #include "app/screenshot.h"
@@ -217,6 +218,7 @@ void app_run(void)
     load_images(storage_path);
     audio_level_start();                // does nothing on boards without a microphone
     audio_player_init(storage_path);    // or a speaker
+    storage_save_init(storage_path);    // for the app to save pictures and sounds to
     voice_lab_init(storage_path);
     patterns_init();                    // for the toys
     toys_init();

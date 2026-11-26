@@ -71,6 +71,15 @@
  *                                     pieces that fit an answer: {"w","h",
  *                                     "n","p","d"}. Piece 0 takes the picture.
  *
+ *     GET  /api/storage               (the app only) the SD card: {"present",
+ *                                     "total_kb", "free_kb", "busy" (a file's coming),
+ *                                     "result" (what the last delete came to:
+ *                                     save_result_t), "pictures" and "sounds":
+ *                                     the files' names, with extensions, and
+ *                                     "more" if there's too many to list}
+ *     POST /api/storage?kind=<0 pictures, 1 sounds>&del=<name>   delete a file
+ *                                     from it, and answer the same
+ *
  *   The POSTs answer with the state, so the page shows the change at once.
  *   Each request has its own connection ("Connection: close"), which keeps
  *   this simple, and is quick enough on the board's own network.
@@ -94,6 +103,7 @@
 #include "app/reactive.h"
 #include "app/remote.h"
 #include "app/settings.h"
+#include "app/storage_save.h"
 #include "app/utf8.h"
 #include "audio/audio_player.h"
 #include "audio/seal_test.h"
@@ -803,6 +813,64 @@ static void write_tracks(json_t *j)
     // The last so many are sounds others sent (sounds.h), not the SD card's
     jprintf(j, "],\"more\":%d,\"sent\":%u}", i < count ? 1 : 0,
             (unsigned)(audio_player_available() ? audio_player_sent_count() : 0));
+}
+
+/* ----- The SD card, for the app's saving to it ----- */
+
+static int query_int(const char *query, const char *name, int fallback);
+static bool query_str(const char *query, const char *name, char *out, size_t cap);
+
+static int storage_result;      // of the last delete
+
+typedef struct
+{
+    json_t *j;
+    bool first;
+    bool full;
+} listing_t;
+
+static void list_name(const char *name, void *user)
+{
+    listing_t *l = user;
+    // Room for this one escaped, at worst, and the end
+    if (l->full || l->j->len + 6 * strlen(name) + 96 > l->j->cap)
+    {
+        l->full = true;
+        return;
+    }
+    jprintf(l->j, "%s", l->first ? "" : ",");
+    jstring(l->j, name);
+    l->first = false;
+}
+
+static void write_storage(json_t *j)
+{
+    uint64_t total = 0, free_bytes = 0;
+    bool present = storage_save_present();
+    if (present && !storage_save_space(&total, &free_bytes))
+    {
+        total = free_bytes = 0;
+    }
+    jprintf(j, "{\"present\":%d,\"total_kb\":%lu,\"free_kb\":%lu,\"busy\":%d,\"result\":%d,\"pictures\":[",
+            present ? 1 : 0, (unsigned long)(total / 1024), (unsigned long)(free_bytes / 1024),
+            storage_save_busy() ? 1 : 0, storage_result);
+    listing_t l = { j, true, false };
+    storage_save_list(SAVE_PICTURE, list_name, &l);
+    jprintf(j, "],\"sounds\":[");
+    l.first = true;
+    storage_save_list(SAVE_SOUND, list_name, &l);
+    jprintf(j, "],\"more\":%d}", l.full ? 1 : 0);
+}
+
+/* POST /api/storage?kind=&del=<name> */
+static void set_storage(const char *query)
+{
+    char name[SAVE_NAME_MAX + 1];
+    int kind = query_int(query, "kind", -1);
+    if (kind >= 0 && query_str(query, "del", name, sizeof(name)))
+    {
+        storage_result = storage_save_delete((uint8_t)kind, name);
+    }
 }
 
 /* ----- Requests ----- */
@@ -1572,6 +1640,14 @@ int remote_api(const char *method, const char *target, const char *body, size_t 
             set_hotspot(query);
         }
         write = write_hotspot;
+    }
+    else if (strcmp(path, "/api/storage") == 0)
+    {
+        if (strcmp(method, "POST") == 0)
+        {
+            set_storage(query);
+        }
+        write = write_storage;
     }
     else if (strcmp(path, "/api/comm") == 0)
     {

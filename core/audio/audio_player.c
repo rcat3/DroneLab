@@ -33,7 +33,7 @@
 
 #define SOUNDS_FOLDER       "sounds"
 #define MAX_TRACKS          100
-#define MAX_FOLDER_LEN      64
+#define MAX_FOLDER_LEN      192
 #define MAX_PATH_LEN        320
 
 // Sent sounds' Opus is decoded at this rate: plenty for the small speaker,
@@ -116,6 +116,20 @@ static sent_t *pending_add;         // from the UI, swapped atomically
 static uint32_t pending_delete;     // a serial, from the UI; 0 for none
 static uint32_t next_serial = 1;
 static uint32_t tracks_changes;     // by the speaker's task, read by anyone
+
+/* Files saved to the card, or deleted, while it runs (audio_player_file_added
+ * and audio_player_remove_file): queued by the UI, taken by the speaker's
+ * task, in order. */
+#define FILE_OPS            8
+#define FILE_NAME_LEN       80
+typedef struct
+{
+    char name[FILE_NAME_LEN];
+    bool add;
+} file_op_t;
+static file_op_t file_ops[FILE_OPS];
+static uint32_t file_ops_head;      // written by the UI
+static uint32_t file_ops_tail;      // written by the speaker's task
 static OpusDecoder *opus_decoder;   // made the first time, in PSRAM (it's over the internal RAM limit)
 
 // Written by the UI, read by the speaker task. The command and its track are
@@ -666,9 +680,134 @@ static void remove_sent(int i)
     }
 }
 
+/* A file saved to the card: a track after the card's others, the sent ones'
+ * indexes moving up one. Whatever plays carries on. */
+static void add_file_track(const char *name)
+{
+    if (track_count >= MAX_TRACKS || !is_sound_file(name))
+    {
+        return;
+    }
+    for (size_t i = 0; i < track_count; i++)
+    {
+        if (strcasecmp(file_names[i], name) == 0)
+        {
+            return;     // had it
+        }
+    }
+    char *file = strdup(name);
+    char *shown = strdup(name);
+    if (file == NULL || shown == NULL)
+    {
+        free(file);
+        free(shown);
+        return;
+    }
+    *strrchr(shown, '.') = '\0';
+    file_names[track_count] = file;
+    track_names[track_count] = shown;
+    if (track >= track_count)
+    {
+        track++;
+    }
+    if (saved_track >= track_count)
+    {
+        saved_track++;
+    }
+    track_count++;
+    printf("sound: added %s\n", name);
+}
+
+/* A file deleted from the card: stopped first if it plays, or what it's
+ * under, then the file itself, with the tracks after it moving down one. */
+static void remove_file_track(const char *name)
+{
+    char path[MAX_PATH_LEN];
+    for (size_t i = 0; i < track_count; i++)
+    {
+        if (strcasecmp(file_names[i], name) != 0)
+        {
+            continue;
+        }
+        uint16_t index = (uint16_t)i;
+        if (chiming && saved_track == index)
+        {
+            saved_track = 0;
+            saved_active = false;
+            saved_open = false;
+            saved_progress = saved_length = 0;
+        }
+        if (track == index)
+        {
+            if (chiming)
+            {
+                end_chime();
+            }
+            else
+            {
+                decoder_close();
+                active = false;
+            }
+        }
+        if (snprintf(path, sizeof(path), "%s/%s", folder, file_names[i]) < (int)sizeof(path))
+        {
+            remove(path);
+        }
+        free(file_names[i]);
+        free(track_names[i]);
+        memmove(&file_names[i], &file_names[i + 1], (track_count - i - 1) * sizeof(file_names[0]));
+        memmove(&track_names[i], &track_names[i + 1], (track_count - i - 1) * sizeof(track_names[0]));
+        track_count--;
+        if (track > index)
+        {
+            track--;
+        }
+        if (track >= total_tracks())
+        {
+            track = 0;
+        }
+        if (saved_track > index)
+        {
+            saved_track--;
+        }
+        return;
+    }
+    // Not a track (the list was full, say): the file's still to go
+    if (snprintf(path, sizeof(path), "%s/%s", folder, name) < (int)sizeof(path))
+    {
+        remove(path);
+    }
+}
+
+static bool take_file_ops(void)
+{
+    bool any = false;
+    while (file_ops_tail != __atomic_load_n(&file_ops_head, __ATOMIC_ACQUIRE))
+    {
+        const file_op_t *op = &file_ops[file_ops_tail % FILE_OPS];
+        if (op->add)
+        {
+            add_file_track(op->name);
+        }
+        else
+        {
+            remove_file_track(op->name);
+        }
+        __atomic_store_n(&file_ops_tail, file_ops_tail + 1, __ATOMIC_RELEASE);
+        any = true;
+    }
+    return any;
+}
+
 /* What the UI's sent or deleted since. */
 static void take_sent(void)
 {
+    bool files = take_file_ops();
+    if (files)
+    {
+        publish();
+        __atomic_add_fetch(&tracks_changes, 1, __ATOMIC_RELEASE);
+    }
     uint32_t serial = __atomic_exchange_n(&pending_delete, 0, __ATOMIC_ACQ_REL);
     sent_t *s = __atomic_exchange_n(&pending_add, NULL, __ATOMIC_ACQ_REL);
     if (serial == 0 && s == NULL)
@@ -983,6 +1122,36 @@ const char *audio_player_track_name(size_t index)
     return index < track_count ? track_names[index] : index < total_tracks() ? sent_names[index - track_count] : "";
 }
 
+static bool queue_file_op(const char *file_name, bool add)
+{
+    uint32_t head = file_ops_head;
+    if (!available || strlen(file_name) >= FILE_NAME_LEN
+        || head - __atomic_load_n(&file_ops_tail, __ATOMIC_ACQUIRE) >= FILE_OPS)
+    {
+        return false;
+    }
+    file_op_t *op = &file_ops[head % FILE_OPS];
+    snprintf(op->name, sizeof(op->name), "%s", file_name);
+    op->add = add;
+    __atomic_store_n(&file_ops_head, head + 1, __ATOMIC_RELEASE);
+    return true;
+}
+
+bool audio_player_file_added(const char *file_name)
+{
+    return queue_file_op(file_name, true);
+}
+
+bool audio_player_remove_file(const char *file_name)
+{
+    return queue_file_op(file_name, false);
+}
+
+size_t audio_player_file_room(void)
+{
+    return track_count < MAX_TRACKS ? MAX_TRACKS - track_count : 0;
+}
+
 bool audio_player_is_sent(size_t index)
 {
     return index >= track_count && index < total_tracks();
@@ -1122,6 +1291,21 @@ void audio_player_set_repeat(audio_repeat_t r)
 bool audio_player_init(const char *storage_path)
 {
     return false;
+}
+
+bool audio_player_file_added(const char *file_name)
+{
+    return false;
+}
+
+bool audio_player_remove_file(const char *file_name)
+{
+    return false;
+}
+
+size_t audio_player_file_room(void)
+{
+    return 0;
 }
 
 size_t audio_player_track_count(void)

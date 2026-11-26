@@ -60,6 +60,11 @@ bool rcat_esp32_sd_mount(int clk, int cmd, int d0, const char **path)
     return true;
 }
 
+bool rcat_hal_storage_space(uint64_t *total, uint64_t *free_bytes)
+{
+    return esp_vfs_fat_info(SD_MOUNT_POINT, total, free_bytes) == ESP_OK;
+}
+
 uint32_t rcat_hal_millis(void)
 {
     return (uint32_t)(esp_timer_get_time() / 1000);

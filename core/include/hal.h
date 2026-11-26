@@ -231,6 +231,10 @@ const char *rcat_hal_firmware_built(void);
  * false if the board has no card slot or no readable card. */
 bool rcat_hal_storage_mount(const char **path);
 
+/* How much room the mounted storage has, in bytes: its size and what's
+ * free. Returns false if it can't tell. */
+bool rcat_hal_storage_space(uint64_t *total, uint64_t *free_bytes);
+
 /*
  * Bluetooth LE, as a central that talks to a few devices at once, each over
  * a serial-style link: a service with a characteristic it writes to and one

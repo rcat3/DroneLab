@@ -87,6 +87,9 @@ bool level_is_open(void);
  * Both must stay valid for as long as the UI exists.
  */
 void ui_add_startup_choice(ui_feature_t *feature, lv_obj_t *page, const char *label, const char *value);
+/* A page that's been deleted (a picture on the card): its startup choice
+ * stays in the lists, but has nowhere to go. */
+void ui_startup_choice_page_gone(const lv_obj_t *page);
 size_t ui_startup_choice_count(void);
 const char *ui_startup_choice_label(size_t index);
 const char *ui_startup_choice_value(size_t index);
@@ -106,5 +109,9 @@ bool feature_images_on_screen(void);
 lv_obj_t *feature_images_built_in_page(const char *name);
 lv_obj_t *feature_images_add_received(const void *src, bool is_gif, uint16_t scale);
 void feature_images_remove_received(lv_obj_t *page);
+/* A picture on the card, added or taken away while it runs: its place in
+ * media_get()'s order. */
+void feature_images_add_stored(size_t index);
+void feature_images_remove_stored(size_t index);
 
 #endif

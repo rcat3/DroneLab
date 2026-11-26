@@ -61,11 +61,15 @@ static lv_obj_t *add_picture(lv_obj_t *page, const void *src, bool is_gif, uint1
     return img;
 }
 
+/* The media list moves as pictures are saved to the card and deleted, so
+ * its names can't be kept: a page keeps a copy of its own, freed with it,
+ * and its startup choice another, which stays as the choices do. */
 static void add_image_page(ui_feature_t *feature, const media_item_t *pic)
 {
-    lv_obj_t *page = ui_feature_add_page(feature, pic->name, true);
+    lv_obj_t *page = ui_feature_add_page(feature, lv_strdup(pic->name), true);
     add_picture(page, pic->src, pic->is_gif, pic->scale);
-    ui_add_startup_choice(feature, page, pic->name, pic->name);
+    const char *choice = lv_strdup(pic->name);
+    ui_add_startup_choice(feature, page, choice, choice);
 }
 
 bool feature_images_on_screen(void)
@@ -89,6 +93,38 @@ lv_obj_t *feature_images_built_in_page(const char *name)
         }
     }
     return NULL;
+}
+
+/* ----- Pictures saved to the card, or deleted from it, while it runs ----- */
+
+void feature_images_add_stored(size_t index)
+{
+    const media_item_t *pic = media_get(index);
+    if (images_feature == NULL || pic == NULL)
+    {
+        return;
+    }
+    // No startup choice till the next start: the lists of them are fixed
+    lv_obj_t *page = ui_feature_insert_page(images_feature, index, lv_strdup(pic->name), true);
+    add_picture(page, pic->src, pic->is_gif, pic->scale);
+}
+
+void feature_images_remove_stored(size_t index)
+{
+    // Called before media_remove_file(), while the page's still there
+    lv_obj_t *page = images_feature != NULL ? ui_page_of(images_feature, index) : NULL;
+    if (page == NULL)
+    {
+        return;
+    }
+    ui_startup_choice_page_gone(page);
+    if (last_page == page)
+    {
+        last_page = NULL;
+    }
+    void *name = lv_obj_get_user_data(page);
+    ui_feature_remove_page(images_feature, page);
+    lv_free(name);
 }
 
 /* ----- Deleting a sent one ----- */
