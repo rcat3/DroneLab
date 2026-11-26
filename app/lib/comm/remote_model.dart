@@ -6,6 +6,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 
 import 'board_link.dart';
+import 'board_protocol.dart' show StorageResult, commVersionStorage;
+import 'unit_storage.dart';
 
 /// The unit's remote, for the app's own Remote tab: what the board's remote
 /// page (core/app/remote_page.html) keeps, as the board's API gives it
@@ -15,7 +17,12 @@ import 'board_link.dart';
 /// them while [active], sends commands, and fetches snapshots of the screen.
 class RemoteModel extends ChangeNotifier {
   final BoardLink board;
-  RemoteModel(this.board) {
+
+  /// Files on their way to the unit's SD card, kept by the app; its progress
+  /// shows on the tabs, and the lists ask again when one's saved.
+  final UnitStorage? saver;
+  RemoteModel(this.board, {this.saver}) {
+    saver?.addListener(_onSaver);
     _sub = board.states.listen(_onState);
     board.addListener(_onBoard);
     _timer = Timer.periodic(const Duration(milliseconds: 700), (_) => _tick());
@@ -25,10 +32,15 @@ class RemoteModel extends ChangeNotifier {
   StreamSubscription<String>? _sub;
   Timer? _timer;
   Timer? _snapLater;
+  int _ticks = 0;
+  int _savedSeen = 0;
 
   Map<String, dynamic> state = const {};
   Map<String, dynamic> info = const {};
   List<String> tracks = const [];
+
+  /// How many of the last [tracks] are sounds others sent, not the card's.
+  int tracksSent = 0;
   int? _tracksSeen;
   bool _asking = false;
   bool _askingInfo = false;
@@ -52,6 +64,8 @@ class RemoteModel extends ChangeNotifier {
       info = const {};
       state = const {};
       _tracksSeen = null;
+      storage = const {};
+      refreshStorage();
       _askInfo();
       _askState(full: true);
     } else if (!up && _wasUp) {
@@ -62,6 +76,8 @@ class RemoteModel extends ChangeNotifier {
 
   void _tick() {
     if (!active || !up) return;
+    // Slower while a file's on its way and voice is on: the link has more to do
+    if (saver != null && saver!.active && saver!.paused && _ticks++ % 3 != 0) return;
     _askState();
     if (screenShown) {
       final every = _lastSnap == null || DateTime.now().difference(_lastSnap!) > const Duration(seconds: 4);
@@ -105,6 +121,7 @@ class RemoteModel extends ChangeNotifier {
       final a = await board.request('GET', '/api/info', '', const Duration(seconds: 15));
       if (a.status == 200) {
         info = jsonDecode(a.body) as Map<String, dynamic>;
+        _showSaved();
         notifyListeners();
       }
     } catch (_) {
@@ -131,11 +148,104 @@ class RemoteModel extends ChangeNotifier {
       final seen = sound['tracks'] as int?;
       board.request('GET', '/api/tracks', '', const Duration(seconds: 10)).then((a) {
         if (a.status != 200) return;
-        tracks = [for (final t in (jsonDecode(a.body) as Map<String, dynamic>)['tracks'] as List) t as String];
+        final d = jsonDecode(a.body) as Map<String, dynamic>;
+        tracks = [for (final t in d['tracks'] as List) t as String];
+        tracksSent = d['sent'] as int? ?? 0;
         _tracksSeen = seen;
+        _showSaved();
         notifyListeners();
       }).catchError((_) {}).whenComplete(() => _askingTracks = false);
     }
+  }
+
+  // ----- The SD card -----
+
+  /// GET /api/storage: whether there's a card, its room and the pictures and
+  /// sounds the app has saved to it or the wearer's put there. Empty until
+  /// asked, and for units without it.
+  Map<String, dynamic> storage = const {};
+  bool _askingStorage = false;
+
+  bool get storageSupported => (board.status?.version ?? 0) >= commVersionStorage;
+  bool get cardPresent => storage['present'] == 1;
+  List<String> get cardPictures => [for (final n in (storage['pictures'] as List? ?? const [])) n as String];
+  List<String> get cardSounds => [for (final n in (storage['sounds'] as List? ?? const [])) n as String];
+
+  Future<void> refreshStorage() async {
+    if (_askingStorage || !up || !storageSupported) return;
+    _askingStorage = true;
+    try {
+      final a = await board.request('GET', '/api/storage', '', const Duration(seconds: 10));
+      if (a.status == 200) {
+        storage = jsonDecode(a.body) as Map<String, dynamic>;
+        notifyListeners();
+      }
+    } catch (_) {
+    } finally {
+      _askingStorage = false;
+    }
+  }
+
+  /// Delete a file from the card, [kind] 0 for a picture, 1 for a sound: the
+  /// card's list and the display's or player's follow. Returns why not, or
+  /// null.
+  Future<String?> deleteFromCard(int kind, String name) async {
+    try {
+      final q = 'kind=$kind&del=${Uri.encodeQueryComponent(name)}';
+      final a = await board.request('POST', '/api/storage?$q', '', const Duration(seconds: 10));
+      if (a.status != 200) return 'The unit didn\'t answer';
+      storage = jsonDecode(a.body) as Map<String, dynamic>;
+      notifyListeners();
+      final r = storage['result'] as int? ?? 0;
+      // The page list and the tracks catch up by themselves; the track one
+      // takes the speaker's task a moment
+      Future<void>.delayed(const Duration(seconds: 1), refreshStorage);
+      return r == StorageResult.ok ? null : StorageResult.text(r);
+    } catch (_) {
+      return 'The unit didn\'t answer';
+    }
+  }
+
+  /// A file just saved, to bring up once the unit's lists have it: a picture
+  /// to show, a sound to play.
+  SaveJob? _showJob;
+
+  /// Show or play [_showJob], if the lists have it now.
+  void _showSaved() {
+    final job = _showJob;
+    if (job == null) return;
+    final dot = job.name.lastIndexOf('.');
+    final stem = job.name.substring(0, dot).toLowerCase();
+    if (job.isPicture) {
+      final fs = features;
+      for (var f = 0; f < fs.length; f++) {
+        if (fs[f].$1 != 'Images') continue;
+        final p = fs[f].$2.indexWhere((n) => n.toLowerCase() == stem);
+        if (p >= 0) {
+          _showJob = null;
+          show(f, p);
+        }
+      }
+    } else {
+      final t = tracks.indexWhere((n) => n.toLowerCase() == stem);
+      if (t >= 0) {
+        _showJob = null;
+        command('sound', {'t': t});
+      }
+    }
+  }
+
+  void _onSaver() {
+    final s = saver;
+    if (s == null) return;
+    if (s.saved != _savedSeen) {
+      _savedSeen = s.saved;
+      final j = s.lastSaved;
+      if (j != null && j.showAfter) _showJob = j;
+      refreshStorage();
+      _askInfo();
+    }
+    notifyListeners();
   }
 
   // ----- Commands -----
@@ -265,6 +375,7 @@ class RemoteModel extends ChangeNotifier {
     _timer?.cancel();
     _snapLater?.cancel();
     board.removeListener(_onBoard);
+    saver?.removeListener(_onSaver);
     screen?.dispose();
     super.dispose();
   }

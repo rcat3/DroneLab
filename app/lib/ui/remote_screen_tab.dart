@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../comm/remote_model.dart';
+import 'card_saving.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -73,6 +74,7 @@ class _RemoteScreenTabState extends State<RemoteScreenTab> {
               Panel(children: [
                 for (var f = 0; f < features.length; f++) ..._feature(context, f, features[f], cf, cp),
               ]),
+            ...cardPictures(context, model),
           ],
         ),
       ),

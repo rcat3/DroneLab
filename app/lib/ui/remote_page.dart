@@ -34,7 +34,7 @@ class _RemotePageState extends State<RemotePage> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _model = RemoteModel(_board);
+    _model = RemoteModel(_board, saver: widget.comm.unitStorage);
     _tabs = TabController(length: 4, vsync: this)..addListener(_where);
     appTab.addListener(_where);
     _board.addListener(_onBoard);

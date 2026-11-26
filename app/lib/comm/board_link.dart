@@ -50,6 +50,7 @@ class BoardLink extends ChangeNotifier {
 
   final _avatarAcks = StreamController<AvatarAck>.broadcast();
   final _pictureAcks = StreamController<PictureAck>.broadcast();
+  final _storageAcks = StreamController<StorageAck>.broadcast();
   final _levels = StreamController<VoiceLevel>.broadcast();
   final _updateAcks = StreamController<UpdateAck>.broadcast();
   final _directSounds = StreamController<DirectSound>.broadcast();
@@ -79,6 +80,7 @@ class BoardLink extends ChangeNotifier {
   Stream<DirectAvatarPiece> get directAvatars => _directAvatars.stream;
   Stream<AvatarAck> get avatarAcks => _avatarAcks.stream;
   Stream<PictureAck> get pictureAcks => _pictureAcks.stream;
+  Stream<StorageAck> get storageAcks => _storageAcks.stream;
   Stream<VoiceLevel> get levels => _levels.stream;
   Stream<UpdateAck> get updateAcks => _updateAcks.stream;
 
@@ -311,6 +313,8 @@ class BoardLink extends ChangeNotifier {
       _avatarAcks.add(msg);
     } else if (msg is PictureAck) {
       _pictureAcks.add(msg);
+    } else if (msg is StorageAck) {
+      _storageAcks.add(msg);
     } else if (msg is VoiceLevel) {
       _levels.add(msg);
     } else if (msg is UpdateAck) {

@@ -20,6 +20,7 @@ import 'auto_responder.dart';
 import 'avatars.dart';
 import 'background.dart';
 import 'board_link.dart';
+import 'unit_storage.dart';
 import 'board_protocol.dart';
 import 'calls.dart';
 import 'capabilities.dart';
@@ -184,6 +185,12 @@ class NearbyBoard {
 
 class CommController extends ChangeNotifier {
   final BoardLink board = BoardLink();
+
+  /// Pictures and sounds on their way to the unit's SD card, in the background.
+  late final UnitStorage unitStorage = UnitStorage(board, voiceBusy: () {
+    final st = board.status;
+    return calls.isNotEmpty || (st != null && (st.sending || st.hearsVoice || st.recording));
+  });
   ServerSettings server = ServerSettings();
   int bufferMs = 60;
 

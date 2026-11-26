@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../comm/remote_model.dart';
+import 'card_saving.dart';
 import 'remote_widgets.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -249,8 +250,17 @@ class _RemoteSoundTabState extends State<RemoteSoundTab> {
               title: tracks[t],
               leading: Icon(t == track ? Icons.volume_up : Icons.music_note, color: t == track ? Kc.green : Kc.dim),
               onTap: () => m.command('sound', {'t': t}),
+              trailing: [
+                if (cardSoundFor(m, t) case final file?)
+                  IconButton(
+                    tooltip: 'Delete',
+                    icon: const Icon(Icons.delete_outline, color: Kc.softRed),
+                    onPressed: () => deleteCardSound(context, m, file),
+                  ),
+              ],
             ),
         ]),
+      ...cardSounds(context, m),
     ];
   }
 

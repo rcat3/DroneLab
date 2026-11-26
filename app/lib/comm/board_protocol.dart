@@ -64,6 +64,7 @@ const fromPhoneUuid = 'efe06e1d-a7ff-4823-bfbb-b3a82ea05849';
 const commVersion = 3;
 const commVersionCommands = 4;
 const commVersionRemote = 2;
+const commVersionStorage = 24;   // pictures and sounds saved to the unit's SD card (0x1D), GET and POST /api/storage
 const commVersionRemoteApp = 23;  // the app's own remote: GET /api/screen, POST /api/nav and /api/picture
 const commVersionPeerFirmware = 5;
 const commVersionMessages = 6;
@@ -105,6 +106,7 @@ const _msgRules = 0x10;
 const _msgFavourites = 0x19;
 const _msgPicture = 0x1A;     // both ways: a picture for the screen, in pieces, and the ack
 const _msgSentSound = 0x1B;
+const _msgStorage = 0x1D;     // both ways: a picture or sound to save to the SD card, in pieces, and the ack
 const _msgLevel = 0x1C;       // to the board: send the voice's level; from it, the level   // both ways: a sound for the speaker, in pieces, and the ack, as a picture's
 const _msgIdentity = 0x11;
 const _msgBinding = 0x12;
@@ -352,6 +354,9 @@ Object? parseBoardMessage(Uint8List data) {
   if ((data[0] == _msgPicture || data[0] == _msgSentSound) && data.length >= 6) {
     return PictureAck(data[1] & 1 != 0, data[1] & 2 != 0, le32(2), sound: data[0] == _msgSentSound);
   }
+  if (data[0] == _msgStorage && data.length >= 7) {
+    return StorageAck(data[1] & 1 != 0, data[1] & 2 != 0, le32(2), data[6]);
+  }
   if (data[0] == _msgAvatar && data.length >= 7) {
     final got = data[3] | (data[4] << 8) | (data[5] << 16) | (data[6] << 24);
     return AvatarAck(data[1], data[2] & 1 != 0, data[2] & 2 != 0, got);
@@ -587,6 +592,70 @@ List<Uint8List> _mediaMessages(int op, Uint8List bytes, int kind, List<int> hash
   }
   out.add(Uint8List.fromList([op, 2]));
   return out;
+}
+
+/// A picture or sound for the unit's SD card (core/app/storage_save.h,
+/// commVersion 24): [kind] a [storagePicture] or [storageSound], with its
+/// SHA-256 and its file [name] (ASCII, with its extension). Its messages:
+/// the start, then each piece with where it goes, then the end.
+const storagePicture = 0, storageSound = 1;
+const storagePictureMaxBytes = 2 * 1024 * 1024;   // SAVE_PICTURE_MAX_BYTES
+const storageSoundMaxBytes = 3 * 1024 * 1024;     // SAVE_SOUND_MAX_BYTES
+const storageNameMax = 64;                        // SAVE_NAME_MAX
+
+Uint8List storageStart(int kind, int length, List<int> hash, String name) => Uint8List.fromList([
+      _msgStorage, 1 | 4, kind, length & 0xFF, (length >> 8) & 0xFF, (length >> 16) & 0xFF, (length >> 24) & 0xFF,
+      ...hash, ...ascii.encode(name),
+    ]);
+
+/// The piece of [bytes] from [at], as much as fits [maxWrite]; [ack] asks the
+/// unit to say how much it's got.
+Uint8List storagePiece(Uint8List bytes, int at, int maxWrite, {bool ack = false}) {
+  final room = maxWrite - 6;
+  final end = at + room < bytes.length ? at + room : bytes.length;
+  return Uint8List.fromList([
+    _msgStorage, ack ? 4 : 0, at & 0xFF, (at >> 8) & 0xFF, (at >> 16) & 0xFF, (at >> 24) & 0xFF,
+    ...Uint8List.sublistView(bytes, at, end),
+  ]);
+}
+
+Uint8List storageEnd() => Uint8List.fromList([_msgStorage, 2 | 4]);
+
+/// Say it's still there, and ask how much has come: while it waits for voice,
+/// so the unit doesn't take it for gone.
+Uint8List storageKeepAlive() => Uint8List.fromList([_msgStorage, 4]);
+
+/// Give up on the file: the unit deletes what it has of it.
+Uint8List storageAbort() => Uint8List.fromList([_msgStorage, 8]);
+
+/// What the unit says came of a file (save_result_t), and what to tell the
+/// wearer.
+abstract final class StorageResult {
+  static const ok = 0, noCard = 1, badName = 2, exists = 3, noRoom = 4, failed = 5, badHash = 6, badFile = 7, busy = 8;
+
+  static String text(int r) => switch (r) {
+        ok => 'Saved',
+        noCard => "The unit's SD card can't be written (is it in?)",
+        badName => "The unit doesn't take that name",
+        exists => 'The unit has one of that name already',
+        noRoom => "The unit's SD card hasn't room for it",
+        failed => 'Writing to the unit\'s SD card went wrong',
+        badHash => 'It was damaged on the way: try again',
+        badFile => "The unit can't show or play that file",
+        busy => 'The unit is busy: try again in a moment',
+        _ => 'The unit refused it',
+      };
+}
+
+/// The unit's answer to a file's start, pieces that ask, and end: [done] for
+/// the end's, [ok] all's well, how much of it's come, and [result]
+/// ([StorageResult]).
+class StorageAck {
+  final bool done;
+  final bool ok;
+  final int received;
+  final int result;
+  StorageAck(this.done, this.ok, this.received, this.result);
 }
 
 /// The board's answer to a picture's pieces: [done] for the end's, [ok] all's
