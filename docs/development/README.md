@@ -106,6 +106,8 @@ To try the installer locally, run `tools/release/build_firmware.sh` and serve `d
 
 ### Release checklist
 
+`tools/release/cut_release.sh` does all of this: `cut_release.sh draft > changes.md` makes a starting list from the commits since the last release, and `cut_release.sh X.Y.Z changes.md` checks, asks you to type the version, then does steps 1 to 7 below, with `--dry-run`, `--prerelease`, `--yes` and `--no-wait` options (the top of the script says more).  The steps stay here for doing one by hand, or for fixing a run that stopped.
+
 The app carries the release's firmware, to keep boards up to date with it, so it's built after the release is tagged, from that tag, and attached when the release is published.  Built in another order, its firmware says a version like `v0.9.6-3-gabc123-dirty`, and the app takes boards on the real release for newer than its own; `tools/release/bundle_firmware.sh` refuses such a build.  With version `X.Y.Z`, and the next version code `N` (one more than the last release's):
 
 1. **Start from `master` with everything in it, pushed, and nothing changed** (`git status` shows nothing modified).
