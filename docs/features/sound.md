@@ -23,7 +23,7 @@ Limits:
 - Up to 100 sounds are found on the card.
 - Any sample rate works.  Mono and stereo files both play, and files with more channels play their first two.
 - Files that can't be played are skipped, and the reason is printed in the board's log.
-- The card is only read when the board starts, so restart it after changing the card.
+- The card is read when the board starts, so restart it after changing the card by hand.  Sounds the app saves to it appear as tracks straight away, after the others: see [saving to the unit's SD card](../app/remote.md#saving-pictures-and-sounds-to-the-units-sd-card).
 
 While the [Voice Effect](voice-effects.md) is playing on the speaker, the player waits.
 

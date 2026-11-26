@@ -23,9 +23,24 @@ The Remote tab is the app's own, with four tabs along the top and a link to Setu
 - **Toys**: your own [toys](../features/toys.md): a slider for each of the screen's controls, the patterns, the reactions, the toys to connect, and a big **STOP** that's always at the bottom.
 - **Terminal**: type a message onto your own display, add a line, clear it, and pick the letter size.
 
+Both tabs also save files to the unit's SD card: see [below](#saving-pictures-and-sounds-to-the-units-sd-card).
+
 The unit's own settings (brightness, rotation, what it shows at startup, the hotspot) are in Setup's *Display Unit*, under [General Setup](#setup-general-setup).  The display and the phone control the same things, so each shows what the other does.
 
 The WiFi hotspot's web page has the same things in a page, and a Setup tab of its own: see [WiFi Hotspot Remote](../features/phone-remote.md).
+
+## Saving pictures and sounds to the unit's SD card
+
+With a card in the unit, the Remote saves pictures and sounds to it, so you can use them without taking the card out.  They stay on the card, work with the unit off and without the phone, and are the unit's [Images](../features/images.md#images-on-the-sd-card) and [sounds](../features/sound.md#sounds-on-the-sd-card) like any you copied there.
+
+- **Pictures**: at the bottom of the *Screen* tab, *Save a picture to the unit*.  Take a photo or choose a picture, name it, and pick **Crop** (you choose the part that fills the round display) or **As it is** (the whole picture, made no bigger than the display).  An animated GIF is saved as it is, to play, up to 2 MB.  A PNG with see-through parts stays a PNG.  Everything else is saved as a JPEG.  *Show it when it is saved* brings it onto the display.
+- **Sounds**: at the bottom of *Sound*, *Playback*, *Save a sound to the unit*.  A WAV, MP3 or FLAC file, up to 3 MB.  A WAV that is stereo or too big is mixed down to mono, and to a lower sample rate if it has to be, to fit.  It becomes a track after the others in the player; *Play it when it is saved* starts it.
+- **What's on the card**: the pictures are listed under the Screen tab's pages, and the sounds among the player's tracks, each with a bin to delete it (it asks first).  The pictures go in with the card's others, in order of name; the sounds go after the card's others, till the unit is restarted, when they're all in order of name.
+- **A name that's taken**: the app asks whether to replace the file or keep both (it adds a number to the new one).
+
+A file goes in the background: you can leave the page, and its progress, with a *Cancel*, shows at the top of the lists when you come back.  It waits while there's voice (you talking, someone heard, a call) so the file doesn't take the link from it, and carries on after.  Over Bluetooth, a 3 MB sound takes a minute or two.  A sound that's playing pauses while one is saved, and carries on after.
+
+The unit keeps at most 32 pictures and 100 sounds from its card.  If a file is too big, the card is full or is missing, or the picture can't be shown, the app says so.  The unit needs the firmware from 0.9.15 on; with older firmware the section isn't there.
 
 ## The app, or the WiFi hotspot
 

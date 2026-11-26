@@ -59,7 +59,7 @@ The ESP32-S3 boards can also show images from their micro SD card, so you can ch
 2. Copy PNG, JPG, BMP or animated GIF files into it.
 3. Put the card in the board and switch it on.  It reads the card while the DroneLab logo is on screen.
 
-The images from the card come first, sorted by file name, followed by the built-in images.  They can be picked in the *Startup* setting by their file name (without the extension).  If a card image has the same name as a built-in image, the card image is the one picked.  The card is only read when the board starts, so restart it after changing the card.
+The images from the card come first, sorted by file name, followed by the built-in images.  They can be picked in the *Startup* setting by their file name (without the extension).  If a card image has the same name as a built-in image, the card image is the one picked.  The card is read when the board starts, so restart it after changing the card by hand.  Pictures the app saves to it, though, appear straight away: see [saving to the unit's SD card](../app/remote.md#saving-pictures-and-sounds-to-the-units-sd-card).
 
 Images are sized for the screen the same way as the built-in images.  Still images are resized once, when they're loaded.  Animated GIFs are scaled while they play, which costs a little time on every frame and looks slightly softer.  For the best results, prepare images on your computer first with `tools/prepare_sd.py`.  It resizes GIFs and still images ahead of time and marks them as prepared, so the board shows them as they are:
 
