@@ -60,6 +60,17 @@
  *                                     last track, play a track, move in it,
  *                                     and its options
  *
+ *     POST /api/nav?d=<l, r, u or d>  one step as a swipe would: to the next page
+ *                                     of the feature, the one before, the feature
+ *                                     above or the one below (the app only)
+ *     POST /api/picture?f=&p=&del=1   delete a picture others sent, the page
+ *                                     the state's "recv" lists (the app only)
+ *     GET  /api/screen?p=<piece>      (the app only, over Bluetooth) a snapshot
+ *                                     of the screen, 160 px wide, RGB565 as
+ *                                     little-endian bytes in base64, in "n"
+ *                                     pieces that fit an answer: {"w","h",
+ *                                     "n","p","d"}. Piece 0 takes the picture.
+ *
  *   The POSTs answer with the state, so the page shows the change at once.
  *   Each request has its own connection ("Connection: close"), which keeps
  *   this simple, and is quick enough on the board's own network.
@@ -75,7 +86,9 @@
 #include "app/direct.h"
 #include "app/toys.h"
 #include "app/others.h"
+#include "app/pictures.h"
 #include "app/rules.h"
+#include "app/screenshot.h"
 #include "app/message.h"
 #include "app/patterns.h"
 #include "app/reactive.h"
@@ -447,8 +460,28 @@ static void write_state(json_t *j)
     notice = NULL;
     size_t feature, page;
     ui_current(&feature, &page);
-    jprintf(j, ",\"screen\":[%u,%u],\"term_size\":%d,\"term_scale\":%d,\"message\":", (unsigned)feature,
-            (unsigned)page, settings_get()->terminal_size, message_scale());
+    jprintf(j, ",\"screen\":[%u,%u],\"pages\":[", (unsigned)feature, (unsigned)page);
+    // How many pages each feature has, for the app to ask for the lists
+    // again when they change, and which are pictures others sent
+    for (size_t f = 0; f < ui_feature_count(); f++)
+    {
+        jprintf(j, "%s%u", f ? "," : "", (unsigned)ui_page_count(f));
+    }
+    jprintf(j, "],\"recv\":[");
+    bool first_recv = true;
+    for (size_t f = 0; f < ui_feature_count(); f++)
+    {
+        for (size_t p = 0; p < ui_page_count(f); p++)
+        {
+            if (pictures_page_kept(ui_page_object(f, p)))
+            {
+                jprintf(j, "%s[%u,%u]", first_recv ? "" : ",", (unsigned)f, (unsigned)p);
+                first_recv = false;
+            }
+        }
+    }
+    jprintf(j, "],\"term_size\":%d,\"term_scale\":%d,\"message\":", settings_get()->terminal_size,
+            message_scale());
     jstring(j, message_text());
     const settings_t *s = settings_get();
     jprintf(j, ",\"display\":{\"brightness\":%u,\"rotation\":%u,\"startup\":%d,\"remote_auto\":%u,\"uptime\":%lu,"
@@ -793,6 +826,25 @@ static int query_int(const char *query, const char *name, int fallback)
     return fallback;
 }
 
+/* The first character of name's value, or 0 */
+static char query_char(const char *query, const char *name)
+{
+    size_t n = strlen(name);
+    for (const char *q = query; q != NULL && *q != '\0';)
+    {
+        if (strncmp(q, name, n) == 0 && q[n] == '=')
+        {
+            return q[n + 1] == '&' ? '\0' : q[n + 1];
+        }
+        q = strchr(q, '&');
+        if (q != NULL)
+        {
+            q++;
+        }
+    }
+    return '\0';
+}
+
 /* Channels, as c= gives them (a bit for each, V1 the lowest), or all of
  * them. */
 static uint8_t query_channels(const char *query)
@@ -1030,6 +1082,20 @@ static bool run_command(const char *name, const char *query, const char *body, s
         if (f >= 0 && p >= 0)
         {
             ui_show((size_t)f, (size_t)p);
+        }
+    }
+    else if (strcmp(name, "nav") == 0)
+    {
+        char d = query_char(query, "d");
+        ui_step(d == 'r' ? 1 : d == 'l' ? -1 : 0, d == 'd' ? 1 : d == 'u' ? -1 : 0);
+    }
+    else if (strcmp(name, "picture") == 0)
+    {
+        int f = query_int(query, "f", -1), p = query_int(query, "p", -1);
+        void *page = f >= 0 && p >= 0 ? ui_page_object((size_t)f, (size_t)p) : NULL;
+        if (page != NULL && query_int(query, "del", 0) == 1 && pictures_page_kept(page))
+        {
+            pictures_delete_page(page);
         }
     }
     else if (strcmp(name, "message") == 0)
@@ -1377,6 +1443,89 @@ const char *remote_page_html(size_t *len)
     return remote_page;
 }
 
+/* ----- The screen's snapshot, for the app ----- */
+
+#define SNAP_W          160
+#define SNAP_PIECE      5376            // bytes of the picture to an answer, a multiple of 3
+
+static uint16_t *snap;                  // the last one, RGB565, from LVGL's memory (PSRAM)
+static int32_t snap_w, snap_h;
+static const char *screen_query;
+
+/* Take the screen and shrink it to SNAP_W wide, averaging the pixels that
+ * go into each one */
+static void take_snap(void)
+{
+    lv_free(snap);
+    snap = NULL;
+    int32_t w, h;
+    uint16_t *full = screenshot_take(&w, &h);
+    if (full == NULL)
+    {
+        return;
+    }
+    snap_w = SNAP_W;
+    snap_h = (h * SNAP_W + w / 2) / w;
+    snap = lv_malloc((size_t)snap_w * snap_h * sizeof(uint16_t));
+    for (int32_t y = 0; snap != NULL && y < snap_h; y++)
+    {
+        int32_t y0 = y * h / snap_h, y1 = (y + 1) * h / snap_h;
+        y1 = y1 > y0 ? y1 : y0 + 1;
+        for (int32_t x = 0; x < snap_w; x++)
+        {
+            int32_t x0 = x * w / snap_w, x1 = (x + 1) * w / snap_w;
+            x1 = x1 > x0 ? x1 : x0 + 1;
+            uint32_t r = 0, g = 0, b = 0, n = 0;
+            for (int32_t yy = y0; yy < y1; yy++)
+            {
+                for (int32_t xx = x0; xx < x1; xx++)
+                {
+                    uint16_t c = full[(size_t)yy * w + xx];
+                    r += (c >> 11) & 0x1f;
+                    g += (c >> 5) & 0x3f;
+                    b += c & 0x1f;
+                    n++;
+                }
+            }
+            snap[(size_t)y * snap_w + x] = (uint16_t)(((r / n) << 11) | ((g / n) << 5) | (b / n));
+        }
+    }
+    lv_free(full);
+}
+
+static void write_screen(json_t *j)
+{
+    static const char digits[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    int piece = query_int(screen_query, "p", 0);
+    if (piece == 0)
+    {
+        take_snap();
+    }
+    size_t total = snap != NULL ? (size_t)snap_w * snap_h * 2 : 0;
+    size_t room = j->cap > 160 ? (j->cap - 160) / 4 * 3 : 0;
+    size_t size = room < SNAP_PIECE ? room : SNAP_PIECE;
+    size_t pieces = size > 0 ? (total + size - 1) / size : 0;
+    jprintf(j, "{\"w\":%d,\"h\":%d,\"n\":%u,\"p\":%d,\"d\":\"", (int)snap_w, (int)snap_h, (unsigned)pieces, piece);
+    size_t from = piece > 0 ? (size_t)piece * size : 0;
+    size_t to = from + size < total ? from + size : total;
+    const uint8_t *bytes = (const uint8_t *)snap;
+    for (size_t i = from; bytes != NULL && i < to; i += 3)
+    {
+        uint32_t v = (uint32_t)bytes[i] << 16;
+        v |= i + 1 < to ? (uint32_t)bytes[i + 1] << 8 : 0;
+        v |= i + 2 < to ? bytes[i + 2] : 0;
+        char out[5] = { digits[v >> 18], digits[(v >> 12) & 63], i + 1 < to ? digits[(v >> 6) & 63] : '=',
+                        i + 2 < to ? digits[v & 63] : '=', '\0' };
+        jprintf(j, "%s", out);
+    }
+    jprintf(j, "\"}");
+    if (to >= total)
+    {
+        lv_free(snap);      // the last piece: no need to keep it
+        snap = NULL;
+    }
+}
+
 int remote_api(const char *method, const char *target, const char *body, size_t body_len, char *out, size_t cap)
 {
     char path[200];
@@ -1410,6 +1559,11 @@ int remote_api(const char *method, const char *target, const char *body, size_t 
     else if (strcmp(path, "/api/rules") == 0)
     {
         write = write_rules;
+    }
+    else if (strcmp(path, "/api/screen") == 0)
+    {
+        screen_query = query;
+        write = write_screen;
     }
     else if (strcmp(path, "/api/hotspot") == 0)
     {

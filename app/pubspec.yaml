@@ -44,7 +44,6 @@ dependencies:
   flutter_foreground_task: ^11.0.3
   shared_preferences: ^2.5.6
   crypto: ^3.0.8
-  webview_flutter: ^4.14.1
   package_info_plus: ^10.2.2
   pointycastle: ^4.0.0
   image: ^4.13.1
@@ -86,9 +85,7 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # The phone remote's page, copied from core/app by tools/gen_remote_page.py
   assets:
-    - assets/remote_page.html
     # The logo, cut from core/ui/assets/dronelab_logo.png, for the About page
     - assets/dronelab_logo.png
     # The firmware it carries, put there by tools/release/bundle_firmware.sh

@@ -1,6 +1,7 @@
 #ifndef RCAT_UI_H
 #define RCAT_UI_H
 
+#include <stdbool.h>
 #include <stddef.h>
 
 /* Build the tile view: one tile per image, a black tile, then the settings tiles. */
@@ -21,6 +22,15 @@ void ui_current(size_t *feature, size_t *page);
 
 /* Bring a page on screen, as if it had been swiped to. */
 void ui_show(size_t feature, size_t page);
+
+/* Move one page, as a swipe would: dx = 1 to the next page of the feature,
+ * -1 to the one before; dy = 1 to the next feature down, -1 to the one up,
+ * which shows the page it was left on. False at an edge, or with neither. */
+bool ui_step(int dx, int dy);
+
+/* A page's object (an lv_obj_t), to compare with what a feature keeps, or
+ * NULL if there's no such page. */
+void *ui_page_object(size_t feature, size_t page);
 
 /* Bring a page on screen for others (others.h's Display commands), and go
  * back to what was on screen before after seconds, or with ui_go_back();

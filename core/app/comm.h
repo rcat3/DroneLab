@@ -347,8 +347,10 @@
  *  21  Sounds others play from the speaker (others.h 0x13), sent over the
  *      server, from the phone (0x1B)
  *  22  a preset to record through, or to hold the speaker at (0x0A); the
- *      voice's level (0x1C) */
-#define COMM_VERSION            22
+ *      voice's level (0x1C)
+ *  23  the app's own remote: GET /api/screen (a snapshot of the screen),
+ *      POST /api/nav and /api/picture, and the state's "pages" and "recv" */
+#define COMM_VERSION            23
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

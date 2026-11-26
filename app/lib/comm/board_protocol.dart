@@ -64,6 +64,7 @@ const fromPhoneUuid = 'efe06e1d-a7ff-4823-bfbb-b3a82ea05849';
 const commVersion = 3;
 const commVersionCommands = 4;
 const commVersionRemote = 2;
+const commVersionRemoteApp = 23;  // the app's own remote: GET /api/screen, POST /api/nav and /api/picture
 const commVersionPeerFirmware = 5;
 const commVersionMessages = 6;
 const commVersionUpdate = 7;     // updating the firmware from the app, and status bit 5

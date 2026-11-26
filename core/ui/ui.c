@@ -417,6 +417,42 @@ void ui_show(size_t feature, size_t page)
     navigate_event_cb(NULL);    // as a swipe would
 }
 
+bool ui_step(int dx, int dy)
+{
+    size_t f, p;
+    ui_current(&f, &p);
+    if (dy != 0)
+    {
+        long to = (long)f + (dy > 0 ? 1 : -1);
+        if (to < 0 || to >= (long)feature_count)
+        {
+            return false;
+        }
+        f = (size_t)to;
+        p = (size_t)lv_obj_get_index(lv_tileview_get_tile_active(features[f].pages));    // where it was left
+    }
+    else if (dx != 0)
+    {
+        long to = (long)p + (dx > 0 ? 1 : -1);
+        if (to < 0 || to >= (long)ui_page_count(f))
+        {
+            return false;
+        }
+        p = (size_t)to;
+    }
+    else
+    {
+        return false;
+    }
+    ui_show(f, p);
+    return true;
+}
+
+void *ui_page_object(size_t feature, size_t page)
+{
+    return page < ui_page_count(feature) ? lv_obj_get_child(features[feature].pages, (int32_t)page) : NULL;
+}
+
 bool ui_show_page(lv_obj_t *page)
 {
     for (uint8_t i = 0; i < feature_count; i++)

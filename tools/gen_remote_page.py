@@ -6,15 +6,13 @@ The page is served from flash as one string, so run this after changing it:
     python3 tools/gen_remote_page.py
 
 It writes core/app/remote_page.c, leaving out the indentation and blank
-lines to make it a little smaller, and copies the page into the app
-(app/assets/remote_page.html), which shows it over Bluetooth.
+lines to make it a little smaller. (The app has its own remote, in Dart.)
 """
 import os
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE = os.path.join(REPO, "core", "app", "remote_page.html")
 OUT = os.path.join(REPO, "core", "app", "remote_page.c")
-APP_COPY = os.path.join(REPO, "app", "assets", "remote_page.html")
 
 
 def c_string(line):
@@ -43,10 +41,6 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(text)
     print(f"{OUT}: {len(data.encode('utf-8'))} bytes")
-    os.makedirs(os.path.dirname(APP_COPY), exist_ok=True)
-    with open(APP_COPY, "w", encoding="utf-8") as f:
-        f.write(data)
-    print(f"{APP_COPY}: copied")
 
 
 if __name__ == "__main__":

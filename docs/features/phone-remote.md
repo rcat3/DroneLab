@@ -2,7 +2,7 @@
 
 *Boards with WiFi: the ESP32-S3 boards*
 
-The *WiFi Hotspot Remote* page in [Settings](settings.md) lets people run the display from a phone's web browser, so nobody has to reach the display in the mask.  On the ESP32-S3-Touch-AMOLED-1.75, the [DroneLab app](#in-the-app) is the better way: it shows the same page over Bluetooth, and the phone stays on the internet, which it can't while it's joined to the hotspot.  The hotspot is for phones without the app, like iPhones for now.  They can pick what it shows, set its brightness and other settings, control the [toys](toys.md), run the voice ring, the [voice effect](voice-effects.md) and the [sound player](sound.md), and type messages onto the [Terminal](terminal.md).  The phone needs no app.
+The *WiFi Hotspot Remote* page in [Settings](settings.md) lets people run the display from a phone's web browser, so nobody has to reach the display in the mask.  On the ESP32-S3-Touch-AMOLED-1.75, the [DroneLab app](#in-the-app) is the better way: its Remote tab does the same over Bluetooth, and the phone stays on the internet, which it can't while it's joined to the hotspot.  The hotspot is for phones without the app, like iPhones for now.  They can pick what it shows, set its brightness and other settings, control the [toys](toys.md), run the voice ring, the [voice effect](voice-effects.md) and the [sound player](sound.md), and type messages onto the [Terminal](terminal.md).  The phone needs no app.
 
 1. Connect the devices on the display first (the Toys feature's Devices page).  The phone can connect them too, but the display is quicker.
 2. On the *WiFi Hotspot Remote* page, switch it on.  The board starts a WiFi hotspot of its own, called `DroneLab-` and four letters, and shows a QR code with its name and password under it.
@@ -27,6 +27,6 @@ The WiFi Hotspot Remote and the [Voice Lab](voice-lab.md) both use WiFi, so they
 
 ## In the app
 
-The DroneLab app has the same page on its *Remote* tab, sent over the app's Bluetooth link instead of the hotspot, so the phone stays on its own WiFi or mobile data.  It needs the board's *Phone App* switched on, and the phone paired with it; the hotspot isn't used.  See [Remote](../app/remote.md) for what it's for, and how the two compare.
+The DroneLab app has its own *Remote* tab for the same things (Screen, Sound, Toys and Terminal, with a snapshot of the display), over the app's Bluetooth link instead of the hotspot, so the phone stays on its own WiFi or mobile data.  The display's settings are in the app's Setup, not on the tab.  It needs the board's *Phone App* switched on, and the phone paired with it; the hotspot isn't used.  See [Remote](../app/remote.md) for what it's for, and how the two compare.
 
-The page is `core/app/remote_page.html`.  After changing it, run `python3 tools/gen_remote_page.py` to turn it into the C file that's built into the firmware, and to copy it into the app.
+The hotspot's page is `core/app/remote_page.html`.  After changing it, run `python3 tools/gen_remote_page.py` to turn it into the C file that's built into the firmware.

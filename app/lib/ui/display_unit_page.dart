@@ -14,8 +14,8 @@ import 'people.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// The unit's own display settings, as on the Remote's Setup tab and the
-/// display's Settings: brightness, rotation, what it shows at startup; and
+/// The unit's own display settings, as on the display's Settings and the
+/// WiFi remote's Setup tab: brightness, rotation, what it shows at startup; and
 /// its WiFi hotspot remote, as on the display's WiFi Hotspot Remote page: on
 /// or off, its name, password and QR code, a new password, and whether it
 /// starts at power-up. Through the remote's API (core/app/remote.c), over
@@ -243,7 +243,7 @@ class _DisplayUnitPageState extends State<DisplayUnitPage> {
           const Padding(
             padding: EdgeInsets.only(top: 8, bottom: 4),
             child: Text(
-                "The unit's own settings, as on its display's Settings and the Remote's Setup tab. "
+                "The unit's own settings, as on its display's Settings. "
                 'A change here shows there too.',
                 style: TextStyle(color: Kc.muted, fontSize: 13)),
           ),

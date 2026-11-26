@@ -52,6 +52,10 @@ void pictures_show_built_in(const char *name, size_t len, uint16_t seconds);
  * feature's). */
 void pictures_delete_page(const void *page);
 
+/* Whether a page (an lv_obj_t) is one of those: a sent picture the wearer
+ * can delete. */
+bool pictures_page_kept(const void *page);
+
 /* Now and then, from the UI loop: drops what's waited too long. */
 void pictures_poll(uint32_t now_ms);
 

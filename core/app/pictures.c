@@ -256,6 +256,18 @@ void pictures_delete_page(const void *page)
     }
 }
 
+bool pictures_page_kept(const void *page)
+{
+    for (int i = 0; page != NULL && i < kept_count; i++)
+    {
+        if (kept[i].page == page)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 void pictures_poll(uint32_t now_ms)
 {
     (void)now_ms;
