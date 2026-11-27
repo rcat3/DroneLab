@@ -7,6 +7,7 @@ This is for working on the firmware itself: how it's put together, and how to ad
 - [Adding a board](adding-a-board.md): supporting another display, in the firmware and with a housing.
 - [Voice effects and the processor](voice-effects-cpu.md): keeping the voice effects in time on the 1.75", how to measure them, and what's been learned.
 - [Saving to the SD card](saving-to-the-card.md): how the app puts pictures and sounds on the unit's card, and how they join its lists.
+- [The Windows app](windows-app.md): what building it showed about Windows and the unit's Bluetooth, and what's still open.
 - [Contributing](contributing.md): sending a change as a pull request, and how contributions are licensed.
 - [Releases](#releases): how the firmware, the web installer and the printable parts are published, and the [checklist](#release-checklist) for making one.
 
