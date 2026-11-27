@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../comm/board_protocol.dart' show OthersCommand;
 import '../comm/comm_controller.dart';
 import '../comm/patterns.dart' show builtInPatterns;
+import 'patterns_page.dart';
 import '../comm/conversations.dart';
 import '../comm/hivesight_guide.dart';
 import '../comm/hivesight_invite.dart';
@@ -1054,6 +1055,22 @@ class _ToysPanelState extends State<_ToysPanel> {
   void _do(VoidCallback f) => setState(f);
 
   @override
+  void initState() {
+    super.initState();
+    g.comm.patterns.addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    g.comm.patterns.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     final vessels = g.vessels;
     // One Vessel's the one driven: the only one there is, or the one picked
@@ -1139,6 +1156,15 @@ class _ToysPanelState extends State<_ToysPanel> {
               _patternChip(ToyPattern.builtIn(name)),
             for (final e in yours) _patternChip(ToyPattern.custom(e.pattern)),
           ]),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => PatternsPage(comm: g.comm))),
+              icon: const Icon(Icons.edit, size: 16),
+              label: Text(yours.isEmpty ? 'Make or import patterns…' : 'Edit patterns…'),
+            ),
+          ),
           if (t.playing != null) ...[
             _group('Plays on'),
             Wrap(spacing: 6, runSpacing: 4, children: [
