@@ -120,13 +120,25 @@ class ControlClient(
 
     private fun loop() {
         var next = 0
+        // Since when the Guide's been out of reach: said after a few
+        // seconds, and given up on after a while (their session has most
+        // likely ended, or their sender stopped)
+        var lost = System.currentTimeMillis()
         while (running) {
-            if (System.currentTimeMillis() >= session.expiresMs) {
+            val now = System.currentTimeMillis()
+            if (now >= session.expiresMs) {
                 end("The session has ended"); return
+            }
+            if (now - lost >= GIVE_UP_MS) {
+                end("Can't reach ${session.guide}: the session has probably ended"); return
             }
             val host = session.hosts[next % session.hosts.size]
             next++
-            onStatus("Connecting to ${session.guide}…")
+            onStatus(
+                if (now - lost >= SAY_LOST_MS)
+                    "Can't reach ${session.guide}: their session may have ended. Still trying…"
+                else "Connecting to ${session.guide}…"
+            )
             val closed = Object()
             var done = false
             var opened = false
@@ -179,10 +191,11 @@ class ControlClient(
             ws?.cancel()
             ws = null
             connectedHost = null
+            if (opened) lost = System.currentTimeMillis()
             // Straight on to the next address if this one never answered;
             // a pause once they've all been tried, or the link dropped
             if (running && (opened || next % session.hosts.size == 0)) {
-                onStatus("Disconnected — retrying")
+                if (opened) onStatus("Disconnected — retrying")
                 try { Thread.sleep(1000) } catch (_: InterruptedException) {}
             }
         }
@@ -199,5 +212,7 @@ class ControlClient(
 
     companion object {
         private const val TAG = "HiveSightControl"
+        private const val SAY_LOST_MS = 8_000L
+        private const val GIVE_UP_MS = 90_000L
     }
 }
