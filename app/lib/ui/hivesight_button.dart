@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -46,7 +47,7 @@ Future<String?> joinHiveSight(
 }) async {
   if (!await hiveSightSupported()) return 'HiveSight needs an Android phone with Android 11 or newer';
   if (who != 'k:${i.guideId}' || !await i.verify()) return "This invitation isn't from the person who sent it";
-  if (i.expired) return 'This invitation has expired';
+  if (i.expired) return 'This session ended at ${HiveSightInvite.clock(i.expires)}';
   final me = comm.identity;
   if (me == null) return "This phone's identity isn't ready";
   final keyHex = _hex(i.guideKey);
@@ -213,6 +214,34 @@ class HiveSightInviteCard extends StatefulWidget {
 class _HiveSightInviteCardState extends State<HiveSightInviteCard> {
   bool _joining = false;
 
+  // The session's end is in the invitation itself: shown when it comes,
+  // whether or not the Guide says so
+  Timer? _end;
+
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(HiveSightInviteCard old) {
+    super.didUpdateWidget(old);
+    if (old.i.expires != widget.i.expires) _schedule();
+  }
+
+  void _schedule() {
+    _end?.cancel();
+    final left = widget.i.expires.difference(DateTime.now());
+    if (left > Duration.zero) _end = Timer(left + const Duration(seconds: 1), () => mounted ? setState(() {}) : null);
+  }
+
+  @override
+  void dispose() {
+    _end?.cancel();
+    super.dispose();
+  }
+
   Future<void> _join() async {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _joining = true);
@@ -248,7 +277,7 @@ class _HiveSightInviteCardState extends State<HiveSightInviteCard> {
           widget.ended
               ? 'The session has ended'
               : i.expired
-              ? 'Expired'
+              ? 'The session ended at ${HiveSightInvite.clock(i.expires)}'
               : 'As a Vessel, until ${HiveSightInvite.clock(i.expires)}',
           style: const TextStyle(color: Kc.muted, fontSize: 13),
         ),
