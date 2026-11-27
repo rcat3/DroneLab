@@ -21,12 +21,12 @@ class RuleClass {
   static const all = [display, vibe, estim, machine, sounds];
 
   /// HiveSight's, which the phone goes by and the unit never has: a Guide
-  /// guiding you, and the light pulse in their sessions.
-  static const hiveSight = 8, hiveSightPulse = 9;
-  static const phoneOnly = {hiveSight, hiveSightPulse};
+  /// guiding you. (The light pulse is one of its ignore options.)
+  static const hiveSight = 8;
+  static const phoneOnly = {hiveSight};
 
   /// Every class Permissions shows.
-  static const shown = [...all, hiveSight, hiveSightPulse];
+  static const shown = [...all, hiveSight];
 
   /// Where a class starts, before it's been set.
   static Policy defaultPolicy(int cls) => cls == estim ? Policy.off : Policy.ask;
@@ -43,6 +43,9 @@ enum Policy {
 
 /// What a class ignores, whoever it's from (OTHERS_IGNORE_*).
 const ignoreEveryone = 0x02, ignoreChannel = 0x04;
+
+/// HiveSight's: never show the light pulse, whoever guides. Set to begin with.
+const ignoreLightPulse = 0x08;
 
 class ClassRule {
   Policy policy;
@@ -105,7 +108,10 @@ class HiveRules {
   /// own are taken on when it connects (a new phone, or the app put back).
   bool owned = false;
 
-  ClassRule rule(int cls) => classes.putIfAbsent(cls, () => ClassRule(RuleClass.defaultPolicy(cls)));
+  ClassRule rule(int cls) => classes.putIfAbsent(
+    cls,
+    () => ClassRule(RuleClass.defaultPolicy(cls), cls == RuleClass.hiveSight ? ignoreLightPulse : 0),
+  );
   Policy policy(int cls) => rule(cls).policy;
 
   bool allows(String keyHex, int cls) => policy(cls) == Policy.anyone || (people[keyHex]?.allowed.contains(cls) ?? false);

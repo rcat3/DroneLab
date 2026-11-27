@@ -51,8 +51,6 @@ const controlKinds = [
 const hiveSightKinds = [
   ControlKind(RuleClass.hiveSight, null, 'HiveSight', Icons.visibility_outlined,
       'Guide you in a HiveSight session, when you join their invitation'),
-  ControlKind(RuleClass.hiveSightPulse, null, 'Light pulse', Icons.flare,
-      'Use the flashing light pulse in a HiveSight session they guide'),
 ];
 
 /// Everything Permissions shows, in order.

@@ -109,7 +109,6 @@ Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
           };
         }
 
-        // Not HiveSight's: the light pulse is only ever allowed on purpose
         final allowable = {for (final k in controlKinds) k.id};
         return SafeArea(
           child: Padding(
@@ -385,7 +384,9 @@ class _FeaturesTabState extends State<_FeaturesTab> {
               ignoreEveryone),
           ignoring('Ignore channel commands', 'Commands sent to a whole channel rather than just to you',
               ignoreChannel),
-        ],
+        ] else
+          ignoring('Ignore light pulses', 'Never show the flashing light pulse in a session, whoever guides you',
+              ignoreLightPulse),
       ]),
       const SectionHeader('People'),
       if (people.isEmpty)

@@ -8,7 +8,7 @@ import 'board_protocol.dart';
 import 'capabilities.dart';
 import 'rules.dart';
 
-export 'rules.dart' show Policy, ignoreEveryone, ignoreChannel;
+export 'rules.dart' show Policy, ignoreEveryone, ignoreChannel, ignoreLightPulse;
 
 /// Who may control what of ours, in one place: the rules this app owns
 /// (rules.dart: each class's policy, what it ignores, and who's allowed),
@@ -468,7 +468,6 @@ String capName(int cap) => switch (cap) {
       Capabilities.vibe => 'Vibe',
       Capabilities.sounds => 'Sounds',
       RuleClass.hiveSight => 'HiveSight',
-      RuleClass.hiveSightPulse => 'Light pulse',
       _ => 'something',
     };
 

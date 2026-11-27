@@ -55,9 +55,8 @@ Future<String?> joinHiveSight(
   if (rules.policy(RuleClass.hiveSight) == Policy.off) return 'HiveSight is set to Nobody in Setup → Permissions';
   if (!context.mounted) return null;
   if (!rules.allows(keyHex, RuleClass.hiveSight)) {
-    final pulse = await _askAllow(context, from);
-    if (pulse == null) return null;
-    await comm.permissions.grant(keyHex, from, {RuleClass.hiveSight, if (pulse) RuleClass.hiveSightPulse});
+    if (!await _askAllow(context, from)) return null;
+    await comm.permissions.grant(keyHex, from, {RuleClass.hiveSight});
   } else {
     if (!context.mounted || !await _notice(context)) return null;
   }
@@ -74,7 +73,8 @@ Future<String?> joinHiveSight(
       'guide': from,
       'key': _hex(me.publicKey),
       'sig': _hex(sig),
-      'lightPulse': rules.allows(keyHex, RuleClass.hiveSightPulse),
+      // The light pulse is a switch of its own in Permissions (set to begin with)
+      'lightPulse': rules.rule(RuleClass.hiveSight).ignore & ignoreLightPulse == 0,
       'name': comm.server.username,
     });
     // HiveMind voice waits while the view is open; the view says when it's closed
@@ -88,44 +88,24 @@ Future<String?> joinHiveSight(
   return null;
 }
 
-/// Ask whether [from] may guide us, and with the light pulse: null if not.
-Future<bool?> _askAllow(BuildContext context, String from) {
-  var pulse = false;
-  return showDialog<bool>(
-    context: context,
-    builder: (d) => StatefulBuilder(
-      builder: (d, setState) => AlertDialog(
+/// Ask whether [from] may guide us.
+Future<bool> _askAllow(BuildContext context, String from) async =>
+    await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
         title: Text('Let $from guide you?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Experimental. In a HiveSight session your Guide controls what you see and hear through the '
-              'headset. Back leaves the view. You can change this later in Setup → Permissions.',
-            ),
-            const SizedBox(height: 8),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              value: pulse,
-              onChanged: (on) => setState(() => pulse = on ?? false),
-              title: const Text('Allow the light pulse'),
-              subtitle: const Text(
-                'Flashing light, up to 30 times a second. Leave it off if flashing lights can '
-                'affect you.',
-                style: TextStyle(color: Kc.muted, fontSize: 13),
-              ),
-            ),
-          ],
+        content: const Text(
+          'Experimental. In a HiveSight session your Guide controls what you see and hear through the '
+          'headset. Back leaves the view. The flashing light pulse is only shown if you turn off '
+          '"Ignore light pulses" in Setup → Permissions → HiveSight.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(d, pulse), child: const Text('Allow and join')),
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Allow and join')),
         ],
       ),
-    ),
-  );
-}
+    ) ??
+    false;
 
 /// The notice before the view opens, for a Guide already allowed.
 Future<bool> _notice(BuildContext context) async =>
