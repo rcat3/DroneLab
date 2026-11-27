@@ -547,3 +547,7 @@ size_t rcat_hal_ble_peer_receive(void *data, size_t max)
 void rcat_hal_ble_peer_fast(bool fast)
 {
 }
+
+void rcat_hal_ble_peer_responsive(bool on)
+{
+}

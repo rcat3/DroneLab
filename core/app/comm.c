@@ -100,6 +100,7 @@
 #define REQ_LAST            0x02
 #define REQUEST_MAX         2048    // the method, target and body
 #define ANSWER_MAX          8192    // as long as the remote's longest
+#define RESPONSIVE_MS       10000   // how long the link's kept quick after the app last asked for something
 #define ANSWER_CHUNKS_PER_POLL  6   // at most this many notifications every 50 ms, leaving room for the voice
 #define FLAG_FIRST          0x01
 #define FLAG_LAST           0x02
@@ -1277,6 +1278,22 @@ static uint32_t hash(const char *data, size_t len)
 }
 
 /* A whole request has come: "METHOD /api/...\n" then the body. */
+static bool link_responsive;
+static uint32_t responsive_until;
+
+/* The app's asking for things, other than its routine polls: keep the link
+ * quick for a while, so the answers don't each wait for an event the board
+ * would sleep through. */
+static void keep_link_responsive(void)
+{
+    responsive_until = rcat_hal_millis() + RESPONSIVE_MS;
+    if (!link_responsive)
+    {
+        link_responsive = true;
+        rcat_hal_ble_peer_responsive(true);
+    }
+}
+
 static void answer_request(void)
 {
     request[request_len] = '\0';
@@ -1293,6 +1310,10 @@ static void answer_request(void)
     answer_body = answer + 4;
     if (sscanf(request, "%7s %199s", method, target) == 2)
     {
+        if (strncmp(target, "/api/state", 10) != 0 && strncmp(target, "/api/comm", 9) != 0)
+        {
+            keep_link_responsive();
+        }
         if (strncmp(target, "/version", 8) == 0)
         {
             const char *v = strstr(target, "app=");
@@ -2277,6 +2298,12 @@ void comm_poll(uint32_t now_ms)
     send_direct_peers(now_ms);
     send_direct_avatars(now_ms);
     send_answer();
+    if (link_responsive && (!rcat_hal_ble_peer_connected() ||
+                            ((int32_t)(responsive_until - now_ms) <= 0 && !answering)))
+    {
+        link_responsive = false;
+        rcat_hal_ble_peer_responsive(false);
+    }
 
     // The wearer's avatar, for direct comms to send the others, once it's here
     static const uint16_t *own_sent;

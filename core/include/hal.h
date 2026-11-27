@@ -416,6 +416,12 @@ size_t rcat_hal_ble_peer_receive(void *data, size_t max);
  * its range. */
 void rcat_hal_ble_peer_fast(bool fast);
 
+/* While the phone's asking for things (the remote's screen and jumps), ask for
+ * a link whose events the board doesn't skip: each message of an answer would
+ * otherwise wait for the next one it's awake for. Back to the usual one when
+ * it's off. Unlike rcat_hal_ble_peer_fast() it leaves the radio's rate alone. */
+void rcat_hal_ble_peer_responsive(bool on);
+
 /* Run fn(arg) on a task of its own, for work that mustn't hold up the UI loop
  * or the audio, such as encoding sound. stack_size is in bytes; the board may
  * put the stack in slower memory. fn can call rcat_hal_delay_ms() to wait,
