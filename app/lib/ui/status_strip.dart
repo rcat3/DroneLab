@@ -5,6 +5,7 @@ import '../comm/board_transport.dart' show socketIdPrefix, socketUnitName;
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
 import '../comm/virtual_unit.dart';
+import 'hivesight_button.dart';
 import 'identity_page.dart';
 import 'permissions_page.dart';
 import 'server_page.dart';
@@ -358,6 +359,8 @@ Future<void> showLinks(BuildContext context, CommController comm) => showTopShee
                     },
                     child: const Text('Open Setup'),
                   ),
+                  // Experimental: only with developer options on
+                  HiveSightButton(comm: comm, before: () => Navigator.pop(sheet)),
                 ],
               ),
             ),

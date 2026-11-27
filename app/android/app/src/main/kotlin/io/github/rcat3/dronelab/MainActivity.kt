@@ -101,6 +101,20 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        // HiveSight: "open" starts the Vessel's full-screen view, "supported"
+        // says whether this Android can (it needs 11)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/hivesight").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "supported" -> result.success(Build.VERSION.SDK_INT >= 30)
+                "open" -> if (Build.VERSION.SDK_INT >= 30) {
+                    startActivity(Intent(this, io.github.rcat3.dronelab.hivesight.HiveSightActivity::class.java))
+                    result.success(null)
+                } else {
+                    result.error("unsupported", "HiveSight needs Android 11 or newer", null)
+                }
+                else -> result.notImplemented()
+            }
+        }
         // The phone, for the About page
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/device").setMethodCallHandler { call, result ->
             if (call.method == "info") {
