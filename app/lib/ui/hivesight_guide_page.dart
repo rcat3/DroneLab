@@ -118,15 +118,18 @@ class _HiveSightGuidePageState extends State<HiveSightGuidePage> {
           title: const Text('HiveSight Guide'),
           bottom: PreferredSize(preferredSize: const Size.fromHeight(64), child: _topBar()),
         ),
+        // The preview stays put, beside the panels in a wide window and
+        // above them in a narrow one, so whatever's changed can be seen
         body: LayoutBuilder(
           builder: (context, box) {
-            final cols = (box.maxWidth / 380).floor().clamp(1, 4);
-            final w = (box.maxWidth - 16 - 12 * (cols - 1) - 16) / cols;
             final live = g.linked;
+            final wide = box.maxWidth >= 900;
+            final side = wide ? (box.maxWidth * 0.38).clamp(360.0, 640.0) : 0.0;
+            final rest = box.maxWidth - side;
+            final cols = ((rest - 32) / 360).floor().clamp(1, 4);
+            final w = (rest - 32 - 12 * (cols - 1)) / cols;
             final panels = <Widget>[
-              _SessionPanel(g, onInvite: _invite),
-              _VesselsPanel(g),
-              _PreviewPanel(g, enabled: live),
+              if (!wide) ...[_SessionPanel(g, onInvite: _invite), _VesselsPanel(g)],
               _SourcePanel(g, enabled: live),
               _VoicePanel(g, enabled: live),
               _MixPanel(g, enabled: live),
@@ -138,13 +141,57 @@ class _HiveSightGuidePageState extends State<HiveSightGuidePage> {
               _CalibratePanel(g, enabled: live),
               _SenderPanel(g),
             ];
-            return SingleChildScrollView(
+            final scroll = SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               child: Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: [for (final p in panels) SizedBox(width: w, child: p)],
               ),
+            );
+            if (!wide) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Kc.line))),
+                    child: _PreviewPanel(g, enabled: live, maxHeight: box.maxHeight * 0.3),
+                  ),
+                  Expanded(child: scroll),
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: side,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 0, 0),
+                        child: _PreviewPanel(g, enabled: live, maxHeight: box.maxHeight * 0.45),
+                      ),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 0, 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _SessionPanel(g, onInvite: _invite),
+                              const SizedBox(height: 12),
+                              _VesselsPanel(g),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(child: scroll),
+              ],
             );
           },
         ),
@@ -155,45 +202,66 @@ class _HiveSightGuidePageState extends State<HiveSightGuidePage> {
   Widget _topBar() {
     final live = g.linked;
     final muted = g.flag('voice.mute');
+    // In a narrow window, the buttons' words go: their icons stay, with tooltips
+    final compact = MediaQuery.sizeOf(context).width < 820;
+    const pad = EdgeInsets.symmetric(horizontal: 12);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       child: Row(
         children: [
-          _status(),
+          _status(compact),
           const Spacer(),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: g.blackedOut ? Kc.red : Kc.raised,
-              foregroundColor: Kc.text,
-              minimumSize: const Size(150, 48),
+          Tooltip(
+            message: 'BLACKOUT: fade to black and stop the light pulse',
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: g.blackedOut ? Kc.red : Kc.raised,
+                foregroundColor: Kc.text,
+                minimumSize: Size(compact ? 0 : 150, 48),
+                padding: pad,
+              ),
+              onPressed: live ? g.blackout : null,
+              icon: Icon(g.blackedOut ? Icons.visibility_off : Icons.visibility),
+              label: Text(g.blackedOut && !compact ? 'BLACKED OUT' : 'BLACKOUT'),
             ),
-            onPressed: live ? g.blackout : null,
-            icon: Icon(g.blackedOut ? Icons.visibility_off : Icons.visibility),
-            label: Text(g.blackedOut ? 'BLACKED OUT' : 'BLACKOUT'),
           ),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(130, 48),
-              foregroundColor: muted ? Kc.softRed : Kc.green,
+          const SizedBox(width: 8),
+          Tooltip(
+            message: muted ? 'Mic muted' : 'Mic live',
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                minimumSize: Size(compact ? 48 : 130, 48),
+                padding: pad,
+                foregroundColor: muted ? Kc.softRed : Kc.green,
+              ),
+              onPressed: live && !_ptt ? () => g.set('voice.mute', !muted) : null,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(muted ? Icons.mic_off : Icons.mic, size: 20),
+                  if (!compact) ...[const SizedBox(width: 8), Text(muted ? 'MIC MUTED' : 'MIC LIVE')],
+                ],
+              ),
             ),
-            onPressed: live && !_ptt ? () => g.set('voice.mute', !muted) : null,
-            icon: Icon(muted ? Icons.mic_off : Icons.mic),
-            label: Text(muted ? 'MIC MUTED' : 'MIC LIVE'),
           ),
-          const SizedBox(width: 10),
-          _MicMeter(g),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
+          _MicMeter(g, width: compact ? 40 : 80),
+          const SizedBox(width: 8),
           // Push-to-talk: switched on, the mic's muted but while the button or
           // Space is held
           GestureDetector(
             onTapDown: live && _ptt ? (_) => _talk(true) : null,
             onTapUp: live && _ptt ? (_) => _talk(false) : null,
             onTapCancel: live && _ptt ? () => _talk(false) : null,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(minimumSize: const Size(130, 48)),
-              onPressed: live && _ptt ? () {} : null,
-              child: Text(_ptt ? 'HOLD TO TALK' : 'PUSH-TO-TALK OFF'),
+            child: Tooltip(
+              message: 'Push-to-talk: hold this or Space',
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(minimumSize: Size(compact ? 48 : 130, 48), padding: pad),
+                onPressed: live && _ptt ? () {} : null,
+                child: compact
+                    ? const Icon(Icons.record_voice_over_outlined, size: 20)
+                    : Text(_ptt ? 'HOLD TO TALK' : 'PUSH-TO-TALK OFF'),
+              ),
             ),
           ),
           Switch(
@@ -211,20 +279,22 @@ class _HiveSightGuidePageState extends State<HiveSightGuidePage> {
     );
   }
 
-  Widget _status() {
+  Widget _status(bool compact) {
     final (icon, color, text) = switch (g.state) {
       SenderState.running when g.linked => (Icons.check_circle_outline, Kc.green, 'Sender running'),
       SenderState.running || SenderState.starting => (Icons.sync, Kc.muted, 'Starting the sender…'),
       SenderState.failed => (Icons.error_outline, Kc.softRed, 'Sender stopped'),
       SenderState.stopped => (Icons.stop_circle_outlined, Kc.muted, 'Sender off'),
     };
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(width: 6),
-        Text(text, style: TextStyle(color: color)),
-      ],
+    return Tooltip(
+      message: text,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 18),
+          if (!compact) ...[const SizedBox(width: 6), Text(text, style: TextStyle(color: color))],
+        ],
+      ),
     );
   }
 }
@@ -484,30 +554,170 @@ class _VesselsPanel extends StatelessWidget {
   ]);
 }
 
+/// What the first Vessel sees (without the lens correction), kept in view:
+/// [maxHeight] at most, with its switch and frame rate on one line.
 class _PreviewPanel extends StatelessWidget {
   final HiveSightGuide g;
   final bool enabled;
-  const _PreviewPanel(this.g, {required this.enabled});
+  final double maxHeight;
+  const _PreviewPanel(this.g, {required this.enabled, required this.maxHeight});
 
   @override
   Widget build(BuildContext context) {
     final img = g.preview;
     final on = g.flag('preview.video');
-    return _Card('Preview', [
-      AspectRatio(
-        aspectRatio: 2,
-        child: Container(
-          color: Colors.black,
-          alignment: Alignment.center,
-          child: on && img != null
-              ? Image.memory(img, gaplessPlayback: true, fit: BoxFit.contain)
-              : Text(on ? 'Waiting for a Vessel…' : 'Preview off', style: _small),
+    final fps = g.number('preview.fps', 5).toDouble().clamp(1.0, 20.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight.clamp(120.0, 600.0)),
+          child: AspectRatio(
+            aspectRatio: 2,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                color: Colors.black,
+                alignment: Alignment.center,
+                child: on && img != null
+                    ? Image.memory(img, gaplessPlayback: true, fit: BoxFit.contain)
+                    : Text(on ? 'Waiting for a Vessel…' : 'Preview off', style: _small),
+              ),
+            ),
+          ),
         ),
+        Row(
+          children: [
+            const Text('Preview', style: TextStyle(fontSize: 14)),
+            Switch(value: on, onChanged: enabled ? (v) => g.set('preview.video', v) : null),
+            Expanded(
+              child: Slider(
+                value: fps,
+                min: 1,
+                max: 20,
+                divisions: 19,
+                onChanged: enabled && on ? (v) => g.set('preview.fps', v.round()) : null,
+              ),
+            ),
+            Text('${fps.round()} fps', style: Kc.term(13, color: Kc.muted)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Which camera, in which mode, as stereo or mono: changed at once, and
+/// what the Vessels see from then on (a file playing stops).
+class _CameraPicker extends StatelessWidget {
+  final HiveSightGuide g;
+  final bool enabled;
+  const _CameraPicker(this.g, {required this.enabled});
+
+  static ({String format, int width, int height, List<int> fps}) _best(
+    List<({String format, int width, int height, List<int> fps})> modes,
+  ) => ([...modes]..sort((a, b) => b.width * b.height - a.width * a.height)).first;
+
+  static int? _top(List<int> fps) => fps.isEmpty ? null : fps.reduce((a, b) => a > b ? a : b);
+
+  void _use(SenderOptions o) => g.setOptions(o, useCamera: true);
+
+  @override
+  Widget build(BuildContext context) {
+    final o = g.options;
+    final cam = g.cameras.where((c) => c.path == o.camera).firstOrNull;
+    final modes = cam?.modes ?? const [];
+    final mode = modes.where((m) => m.format == o.format && m.width == o.width && m.height == o.height).firstOrNull;
+    Widget row(String label, Widget child) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(width: 80, child: Text(label, style: const TextStyle(fontSize: 14))),
+          Expanded(child: child),
+        ],
       ),
-      _Toggle(g, 'preview.video', "Show what the Vessel sees", enabled: enabled),
-      _Slide(g, 'preview.fps', 'Frames', 1, 20, 1, unit: 'fps', enabled: enabled && on),
-      const Text('From the first Vessel, as they see it but without the lens correction.', style: _small),
-    ]);
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        row(
+          'Camera',
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: o.camera.isEmpty || cam != null ? o.camera : null,
+                  hint: Text(o.camera, overflow: TextOverflow.ellipsis),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('Test pattern')),
+                    for (final c in g.cameras)
+                      DropdownMenuItem(value: c.path, child: Text(c.name, overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: enabled
+                      ? (p) {
+                          final c = g.cameras.where((x) => x.path == p).firstOrNull;
+                          final m = c == null || c.modes.isEmpty ? null : _best(c.modes);
+                          _use(
+                            o.copyWith(
+                              camera: p ?? '',
+                              format: m?.format,
+                              width: m?.width,
+                              height: m?.height,
+                              fps: m == null ? null : _top(m.fps),
+                              layout: p == null || p.isEmpty ? 'sbs' : null,
+                            ),
+                          );
+                        }
+                      : null,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Look for cameras and microphones again',
+                icon: const Icon(Icons.refresh, size: 20),
+                onPressed: g.listDevices,
+              ),
+            ],
+          ),
+        ),
+        if (cam != null)
+          row(
+            'Mode',
+            DropdownButton<int>(
+              isExpanded: true,
+              value: mode == null ? null : modes.indexOf(mode),
+              items: [
+                for (var i = 0; i < modes.length; i++)
+                  DropdownMenuItem(
+                    value: i,
+                    child: Text('${modes[i].width}×${modes[i].height} ${modes[i].format.toUpperCase()}'),
+                  ),
+              ],
+              onChanged: enabled
+                  ? (i) {
+                      final m = modes[i!];
+                      _use(o.copyWith(format: m.format, width: m.width, height: m.height, fps: _top(m.fps)));
+                    }
+                  : null,
+            ),
+          ),
+        row(
+          'Picture',
+          Wrap(
+            spacing: 6,
+            children: [
+              for (final (v, l) in const [('sbs', 'Stereo side by side'), ('mono', 'Mono')])
+                ChoiceChip(
+                  showCheckmark: false,
+                  label: Text(l),
+                  selected: o.layout == v,
+                  onSelected: enabled && o.camera.isNotEmpty ? (_) => _use(o.copyWith(layout: v)) : null,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -541,10 +751,11 @@ class _SourcePanel extends StatelessWidget {
               icon: Icon(paused ? Icons.play_arrow : Icons.pause),
               onPressed: enabled ? () => g.set('media.paused', !paused) : null,
             ),
-            OutlinedButton(onPressed: enabled ? g.useCamera : null, child: const Text('Camera')),
+            OutlinedButton(onPressed: enabled ? g.useCamera : null, child: const Text('Use camera')),
           ],
         ],
       ),
+      _CameraPicker(g, enabled: enabled),
       if (file && g.mediaDuration > 0)
         Row(
           children: [
@@ -862,7 +1073,9 @@ class _SenderPanel extends StatefulWidget {
 }
 
 class _SenderPanelState extends State<_SenderPanel> {
-  late SenderOptions _o = widget.g.options;
+  // The voice and media folder, as being changed (the camera's in Source)
+  late bool _audio = widget.g.options.audio;
+  late String _mic = widget.g.options.mic;
   late final _media = TextEditingController(text: widget.g.options.mediaDir);
 
   @override
@@ -874,10 +1087,8 @@ class _SenderPanelState extends State<_SenderPanel> {
   @override
   Widget build(BuildContext context) {
     final g = widget.g;
-    final cam = g.cameras.where((c) => c.path == _o.camera).firstOrNull;
-    final modes = cam?.modes ?? const [];
-    final mode = modes.where((m) => m.format == _o.format && m.width == _o.width && m.height == _o.height).firstOrNull;
-    final changed = _o.toJson().toString() != g.options.toJson().toString() || _media.text.trim() != g.options.mediaDir;
+    final o = g.options;
+    final changed = _audio != o.audio || _mic != o.mic || _media.text.trim() != o.mediaDir;
     Widget row(String label, Widget child) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -897,86 +1108,19 @@ class _SenderPanelState extends State<_SenderPanel> {
         ],
         const SizedBox(height: 8),
       ],
-      row(
-        'Camera',
-        DropdownButton<String>(
-          isExpanded: true,
-          value: _o.camera.isEmpty || cam != null ? _o.camera : null,
-          items: [
-            const DropdownMenuItem(value: '', child: Text('Test pattern')),
-            for (final c in g.cameras)
-              DropdownMenuItem(
-                value: c.path,
-                child: Text('${c.name} (${c.path})', overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: (p) => setState(() {
-            final c = g.cameras.where((x) => x.path == p).firstOrNull;
-            final m = c?.modes.isEmpty ?? true
-                ? null
-                : ([...c!.modes]..sort((a, b) => b.width * b.height - a.width * a.height)).first;
-            _o = _o.copyWith(
-              camera: p ?? '',
-              format: m?.format,
-              width: m?.width,
-              height: m?.height,
-              fps: m == null || m.fps.isEmpty ? null : m.fps.reduce((a, b) => a > b ? a : b),
-            );
-          }),
-        ),
-      ),
-      if (cam != null)
-        row(
-          'Mode',
-          DropdownButton<int>(
-            isExpanded: true,
-            value: mode == null ? null : modes.indexOf(mode),
-            items: [
-              for (var i = 0; i < modes.length; i++)
-                DropdownMenuItem(
-                  value: i,
-                  child: Text('${modes[i].width}×${modes[i].height} ${modes[i].format.toUpperCase()}'),
-                ),
-            ],
-            onChanged: (i) => setState(() {
-              final m = modes[i!];
-              _o = _o.copyWith(
-                format: m.format,
-                width: m.width,
-                height: m.height,
-                fps: m.fps.isEmpty ? null : m.fps.reduce((a, b) => a > b ? a : b),
-              );
-            }),
-          ),
-        ),
-      row(
-        'Picture',
-        Wrap(
-          spacing: 6,
-          children: [
-            for (final (v, l) in const [('sbs', 'Stereo side by side'), ('mono', 'Mono')])
-              ChoiceChip(
-                showCheckmark: false,
-                label: Text(l),
-                selected: _o.layout == v,
-                onSelected: _o.camera.isEmpty ? null : (_) => setState(() => _o = _o.copyWith(layout: v)),
-              ),
-          ],
-        ),
-      ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         dense: true,
         title: const Text('Send my voice', style: TextStyle(fontSize: 14)),
-        value: _o.audio,
-        onChanged: (on) => setState(() => _o = _o.copyWith(audio: on)),
+        value: _audio,
+        onChanged: (on) => setState(() => _audio = on),
       ),
-      if (_o.audio)
+      if (_audio)
         row(
           'Microphone',
           DropdownButton<String>(
             isExpanded: true,
-            value: _o.mic.isEmpty || g.mics.any((m) => m.name == _o.mic) ? _o.mic : null,
+            value: _mic.isEmpty || g.mics.any((m) => m.name == _mic) ? _mic : null,
             items: [
               const DropdownMenuItem(value: '', child: Text('Default')),
               for (final m in g.mics)
@@ -985,7 +1129,7 @@ class _SenderPanelState extends State<_SenderPanel> {
                   child: Text(m.label, overflow: TextOverflow.ellipsis),
                 ),
             ],
-            onChanged: (m) => setState(() => _o = _o.copyWith(mic: m ?? '')),
+            onChanged: (m) => setState(() => _mic = m ?? ''),
           ),
         ),
       row(
@@ -1001,7 +1145,9 @@ class _SenderPanelState extends State<_SenderPanel> {
         children: [
           Expanded(
             child: FilledButton(
-              onPressed: changed ? () => g.setOptions(_o.copyWith(mediaDir: _media.text.trim())) : null,
+              onPressed: changed
+                  ? () => g.setOptions(o.copyWith(audio: _audio, mic: _mic, mediaDir: _media.text.trim()))
+                  : null,
               child: const Text('Apply'),
             ),
           ),
@@ -1014,7 +1160,11 @@ class _SenderPanelState extends State<_SenderPanel> {
         ],
       ),
       const SizedBox(height: 4),
-      const Text('Applying restarts the sender. A session carries on, and its Vessels reconnect.', style: _small),
+      const Text(
+        'The camera is chosen under Source. A new microphone or folder applies at once; turning your voice on or '
+        'off restarts the sender, and a session carries on.',
+        style: _small,
+      ),
       if (g.output.isNotEmpty)
         ExpansionTile(
           tilePadding: EdgeInsets.zero,
@@ -1038,7 +1188,8 @@ class _SenderPanelState extends State<_SenderPanel> {
 /// The Guide's mic level, after the voice chain, and the gate's light.
 class _MicMeter extends StatelessWidget {
   final HiveSightGuide g;
-  const _MicMeter(this.g);
+  final double width;
+  const _MicMeter(this.g, {this.width = 80});
 
   @override
   Widget build(BuildContext context) {
@@ -1054,7 +1205,7 @@ class _MicMeter extends StatelessWidget {
         ),
         const SizedBox(width: 6),
         SizedBox(
-          width: 80,
+          width: width,
           height: 10,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(5),
