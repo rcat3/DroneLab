@@ -1,16 +1,18 @@
 /*
  * The virtual unit's link to the app: where a board has its Bluetooth
- * peripheral, a Unix socket at $XDG_RUNTIME_DIR/dronelab-unit.sock
- * (dronelab-unit-2.sock for unit 2, ...), carrying the same messages, each
- * after its length in 2 bytes, little-endian. See "Virtual units" in
- * app/linux/README.md.
+ * peripheral, a TCP port on the loopback interface (this computer only),
+ * carrying the same messages, each after its length in 2 bytes, little-endian.
+ * See "Virtual units" in app/linux/README.md.
  *
- * Only the computer's user can reach the runtime folder, so there's no
- * pairing: an app that's connected is as good as a phone that's paired and
- * has turned notifications on. One app at a time; another is turned away,
- * with an empty message first to say the unit's in use. While an app's
- * connected, an empty file beside the socket (dronelab-unit.sock.inuse)
- * says so to other apps looking for units, without their connecting.
+ * The port is whatever was free; the unit says which, and a token, in a file
+ * only the computer's user can read: unit-N.ep (N is --unit) in
+ * $XDG_RUNTIME_DIR/dronelab-units, "PORT TOKEN". An app sends the token as its
+ * first bytes, or it's dropped, so there's no pairing: an app that's
+ * connected is as good as a phone that's paired and has turned notifications
+ * on. One app at a time; another is turned away, with an empty message first
+ * to say the unit's in use. While an app's connected, an empty file beside
+ * the endpoint (unit-N.inuse) says so to other apps looking for units,
+ * without their connecting.
  */
 
 #define _GNU_SOURCE
@@ -22,10 +24,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/eventfd.h>
+#include <sys/random.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/un.h>
 #include <unistd.h>
 
 #include "hal.h"
@@ -40,8 +45,14 @@ static int wake_fd = -1;                // tells the thread something's changed
 static atomic_bool wanted;              // between start and stop
 static int listen_fd = -1;              // the thread's own
 static atomic_int client_fd = -1;
-static char path[sizeof(((struct sockaddr_un *)0)->sun_path)];
-static char inuse_path[sizeof(path) + 8];
+#define TOKEN_LEN       32              // hex characters
+#define AUTH_WAIT_MS    300             // for an app to say its token
+
+static char dir_path[240];
+static char ep_path[sizeof(dir_path) + 24];
+static char inuse_path[sizeof(dir_path) + 24];
+static char token[TOKEN_LEN + 1];
+static atomic_bool owns_endpoint;       // the files are this unit's, not another's
 
 // From the app: whole messages, the oldest dropped when it's full
 static uint8_t in_msgs[RCAT_HAL_BLE_PEER_MSGS][RCAT_HAL_BLE_PEER_MSG_MAX];
@@ -65,17 +76,27 @@ static void wake(void)
     }
 }
 
-static bool socket_path(char *out, size_t len)
+static bool endpoint_paths(void)
 {
     const char *runtime = getenv("XDG_RUNTIME_DIR");
     if (runtime == NULL || runtime[0] != '/')
     {
-        fprintf(stderr, "XDG_RUNTIME_DIR isn't set, so there's nowhere for the app's socket\n");
+        fprintf(stderr, "XDG_RUNTIME_DIR isn't set, so there's nowhere for the app to find the unit\n");
         return false;
     }
-    int n = host_options.unit == 1 ? snprintf(out, len, "%s/dronelab-unit.sock", runtime)
-                                   : snprintf(out, len, "%s/dronelab-unit-%d.sock", runtime, host_options.unit);
-    return n > 0 && (size_t)n < len;
+    int n = snprintf(dir_path, sizeof(dir_path), "%s/dronelab-units", runtime);
+    if (n <= 0 || (size_t)n >= sizeof(dir_path))
+    {
+        return false;
+    }
+    if (mkdir(dir_path, 0700) != 0 && errno != EEXIST)
+    {
+        fprintf(stderr, "Couldn't make %s: %s\n", dir_path, strerror(errno));
+        return false;
+    }
+    snprintf(ep_path, sizeof(ep_path), "%s/unit-%d.ep", dir_path, host_options.unit);
+    snprintf(inuse_path, sizeof(inuse_path), "%s/unit-%d.inuse", dir_path, host_options.unit);
+    return true;
 }
 
 /* Say whether an app's connected, for other apps' lists of units. */
@@ -99,44 +120,128 @@ static void mark_in_use(bool in_use)
     }
 }
 
-/* Listen on the socket, unless another unit already is. */
-static int listen_on(const char *p)
+static bool make_token(void)
 {
-    struct sockaddr_un addr = { .sun_family = AF_UNIX };
-    snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", p);
-
-    // One left behind by a unit that stopped can go; one that answers can't.
-    int probe = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-    if (probe >= 0)
+    uint8_t raw[TOKEN_LEN / 2];
+    if (getrandom(raw, sizeof(raw), 0) != (ssize_t)sizeof(raw))
     {
-        bool taken = connect(probe, (struct sockaddr *)&addr, sizeof(addr)) == 0;
-        close(probe);
-        if (taken)
-        {
-            fprintf(stderr, "Virtual unit %d is already running (%s): try --unit %d\n", host_options.unit, p,
-                    host_options.unit + 1);
-            return -1;
-        }
+        return false;
     }
-    unlink(p);
+    for (size_t i = 0; i < sizeof(raw); i++)
+    {
+        snprintf(token + 2 * i, 3, "%02x", raw[i]);
+    }
+    return true;
+}
 
-    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+/* Whether the unit that wrote the endpoint file is still there: it answers. */
+static bool endpoint_taken(void)
+{
+    FILE *f = fopen(ep_path, "r");
+    if (f == NULL)
+    {
+        return false;
+    }
+    int port = 0;
+    int got = fscanf(f, "%d", &port);
+    fclose(f);
+    if (got != 1 || port < 1 || port > 65535)
+    {
+        return false;
+    }
+    struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons((uint16_t)port) };
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    int probe = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (probe < 0)
+    {
+        return false;
+    }
+    bool taken = connect(probe, (struct sockaddr *)&addr, sizeof(addr)) == 0;
+    close(probe);       // it drops what doesn't say a token
+    return taken;
+}
+
+/* Listen on a free port and say which, unless another unit already is. */
+static int listen_on(void)
+{
+    // An endpoint left behind by a unit that stopped can go; one that answers can't.
+    if (endpoint_taken())
+    {
+        fprintf(stderr, "Virtual unit %d is already running (%s): try --unit %d\n", host_options.unit, ep_path,
+                host_options.unit + 1);
+        return -1;
+    }
+    if (!make_token())
+    {
+        fprintf(stderr, "Couldn't make a token\n");
+        return -1;
+    }
+
+    int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     if (fd < 0)
     {
         return -1;
     }
-    mode_t old = umask(0077);
-    int bound = bind(fd, (struct sockaddr *)&addr, sizeof(addr));
-    umask(old);
-    if (bound != 0 || listen(fd, 2) != 0)
+    struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = 0 };
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socklen_t len = sizeof(addr);
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0 || listen(fd, 2) != 0 ||
+        getsockname(fd, (struct sockaddr *)&addr, &len) != 0)
     {
-        fprintf(stderr, "Couldn't listen on %s: %s\n", p, strerror(errno));
+        fprintf(stderr, "Couldn't listen on the loopback interface: %s\n", strerror(errno));
         close(fd);
         return -1;
     }
+
+    // Whole or not at all, for apps looking at the same time
+    char tmp[sizeof(ep_path) + 8];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", ep_path);
+    FILE *f = fopen(tmp, "w");
+    bool saved = false;
+    if (f != NULL)
+    {
+        fchmod(fileno(f), 0600);
+        saved = fprintf(f, "%d %s\n", ntohs(addr.sin_port), token) > 0;
+        saved = fclose(f) == 0 && saved && rename(tmp, ep_path) == 0;
+    }
+    if (!saved)
+    {
+        fprintf(stderr, "Couldn't write %s: %s\n", ep_path, strerror(errno));
+        close(fd);
+        return -1;
+    }
+    owns_endpoint = true;
     mark_in_use(false);     // left by a unit that stopped
-    printf("Waiting for the app on %s\n", p);
+    printf("Waiting for the app on 127.0.0.1:%d (%s)\n", ntohs(addr.sin_port), ep_path);
     return fd;
+}
+
+/* Whether the app that's just connected says the token. */
+static bool authenticate(int fd)
+{
+    char got[TOKEN_LEN];
+    size_t n = 0;
+    while (n < sizeof(got))
+    {
+        struct pollfd p = { .fd = fd, .events = POLLIN };
+        if (poll(&p, 1, AUTH_WAIT_MS) <= 0)
+        {
+            return false;
+        }
+        ssize_t r = recv(fd, got + n, sizeof(got) - n, MSG_DONTWAIT);
+        if (r == 0 || (r < 0 && errno != EAGAIN && errno != EINTR))
+        {
+            return false;
+        }
+        n += r > 0 ? (size_t)r : 0;
+    }
+    // Same time whatever's wrong, not that it matters on this computer
+    unsigned diff = 0;
+    for (size_t i = 0; i < sizeof(got); i++)
+    {
+        diff |= (unsigned)(got[i] ^ token[i]);
+    }
+    return diff == 0;
 }
 
 static void drop_client(const char *why)
@@ -227,7 +332,7 @@ static void *peer_thread(void *arg)
     {
         if (wanted && listen_fd < 0)
         {
-            listen_fd = listen_on(path);
+            listen_fd = listen_on();
             if (listen_fd < 0)
             {
                 wanted = false;
@@ -238,7 +343,11 @@ static void *peer_thread(void *arg)
             drop_client(NULL);
             close(listen_fd);
             listen_fd = -1;
-            unlink(path);
+            if (owns_endpoint)
+            {
+                unlink(ep_path);
+                owns_endpoint = false;
+            }
         }
 
         int fd = client_fd;
@@ -267,6 +376,8 @@ static void *peer_thread(void *arg)
             int c = accept4(listen_fd, NULL, NULL, SOCK_CLOEXEC | SOCK_NONBLOCK);
             if (c >= 0)
             {
+                int one = 1;
+                setsockopt(c, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
                 if (client_fd >= 0)
                 {
                     // One app at a time: an empty message says it's in use
@@ -276,6 +387,10 @@ static void *peer_thread(void *arg)
                         // it's gone already
                     }
                     close(c);
+                }
+                else if (!authenticate(c))
+                {
+                    close(c);       // not an app of this computer's user
                 }
                 else
                 {
@@ -311,18 +426,17 @@ static void *peer_thread(void *arg)
 
 void rcat_hal_ble_peer_setup(const rcat_hal_ble_peer_service_t *service)
 {
-    // There's only the one service: the app knows the socket by its name.
+    // There's only the one service: the app knows the unit by its number.
 }
 
 bool rcat_hal_ble_peer_start(const char *name)
 {
     if (!thread_started)
     {
-        if (!socket_path(path, sizeof(path)))
+        if (!endpoint_paths())
         {
             return false;
         }
-        snprintf(inuse_path, sizeof(inuse_path), "%s.inuse", path);
         wake_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
         if (wake_fd < 0 || pthread_create(&thread, NULL, peer_thread, NULL) != 0)
         {
@@ -350,9 +464,9 @@ void host_peer_close(void)
     {
         shutdown(fd, SHUT_RDWR);
     }
-    if (path[0] != '\0')
+    if (owns_endpoint)
     {
-        unlink(path);
+        unlink(ep_path);
         unlink(inuse_path);
     }
 }

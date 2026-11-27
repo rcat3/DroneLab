@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../comm/board_link.dart';
-import '../comm/board_transport.dart' show socketIdPrefix, socketUnitName;
+import '../comm/board_transport.dart' show socketUnitName;
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
 import '../comm/virtual_unit.dart';
@@ -452,9 +452,9 @@ Future<void> pickBoard(BuildContext context, CommController comm) async {
                         title: 'Start a virtual unit',
                         subtitle: 'No hardware: the firmware in a window on this computer',
                         onTap: () async {
-                          final path = VirtualUnits.socketFor(await VirtualUnits.nextFree());
-                          if (path != null && context.mounted) {
-                            Navigator.pop(context, FoundBoard('$socketIdPrefix$path', socketUnitName(path), 0, local: true));
+                          final unit = await VirtualUnits.nextFree();
+                          if (context.mounted) {
+                            Navigator.pop(context, FoundBoard(VirtualUnits.idFor(unit), socketUnitName(unit), 0, local: true));
                           }
                         },
                       ),

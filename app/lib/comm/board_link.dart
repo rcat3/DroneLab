@@ -113,7 +113,7 @@ class BoardLink extends ChangeNotifier {
   late BoardTransport _transport = _ble;
   bool _scanning = false;
 
-  /// Whether virtual units are looked for too (Linux).
+  /// Whether virtual units are looked for too (Linux, Windows).
   bool get _socketsToo => socketDirectory() != null;
 
   BoardTransport _transportFor(String id) => id.startsWith(socketIdPrefix) ? _socket : _ble;
@@ -346,7 +346,7 @@ class BoardLink extends ChangeNotifier {
         // Paired and talking: swap versions. Asked again at the next status
         // until it's answered, as the first can come before the link's up.
         _askingVersion = true;
-        request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}&os=${Platform.isIOS ? 'iPhone' : Platform.isLinux ? 'Linux' : 'Android'}').then((a) {
+        request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}&os=${Platform.isIOS ? 'iPhone' : Platform.isLinux ? 'Linux' : Platform.isWindows ? 'Windows' : 'Android'}').then((a) {
           if (a.status == 200) {
             final v = jsonDecode(a.body) as Map<String, dynamic>;
             firmware = v['firmware'] as String?;
