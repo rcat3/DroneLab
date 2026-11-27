@@ -162,7 +162,6 @@ class ControlClient(
                     connectedHost = host
                     onStatus("Connected to ${session.guide}")
                     onLink(true)
-                    HiveSightActivity.toysState?.let { sendToysState(it) }
                     webSocket.send(
                         JSONObject().put("type", "hello").put("role", "vessel")
                             .put("token", session.token)
@@ -173,6 +172,10 @@ class ControlClient(
                             .put("media_port", HiveSightActivity.MEDIA_PORT)
                             .put("view", Params.viewJson()).toString()
                     )
+                    // After the hello: the sender ignores anyone who hasn't said it
+                    HiveSightActivity.toysState?.let {
+                        runCatching { webSocket.send(JSONObject(it).put("type", "toys_state").toString()) }
+                    }
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) = handle(text)
