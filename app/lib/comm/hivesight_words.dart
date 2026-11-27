@@ -62,7 +62,7 @@ const wordsDistortions = [
 /// How a phrase looks and moves.
 class WordsLook {
   String font = 'sans';
-  bool bold = false, italic = false, underline = false;
+  bool bold = false, italic = false, underline = false, outline = false;
   int color = 0xFFFFFF; // RGB
   double size = 0.12, opacity = 1.0, fade = 1.0;
   String mode = 'still';
@@ -89,6 +89,7 @@ class WordsLook {
     bold = false;
     italic = false;
     underline = false;
+    outline = false;
     color = 0x33FF33;
     size = 0.07;
     crt = true;
@@ -101,6 +102,7 @@ class WordsLook {
     bold = false;
     italic = false;
     underline = false;
+    outline = false;
     color = 0xFFFFFF;
     size = 0.12;
     opacity = 1.0;
@@ -158,6 +160,7 @@ class WordsLook {
     'bold': bold,
     'italic': italic,
     'underline': underline,
+    'outline': outline,
     'color': '#$hex',
     'size': size,
     'opacity': opacity,
@@ -187,6 +190,7 @@ class WordsLook {
     l.bold = j['bold'] == true;
     l.italic = j['italic'] == true;
     l.underline = j['underline'] == true;
+    l.outline = j['outline'] == true;
     l.color = int.tryParse((j['color'] as String? ?? '').replaceAll('#', ''), radix: 16) ?? l.color;
     l.size = d('size', l.size);
     l.opacity = d('opacity', l.opacity);

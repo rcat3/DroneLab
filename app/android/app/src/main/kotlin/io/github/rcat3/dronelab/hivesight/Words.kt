@@ -33,6 +33,8 @@ class Cue(j: JSONObject) {
     val bold = j.optBoolean("bold")
     val italic = j.optBoolean("italic")
     val underline = j.optBoolean("underline")
+    /** A black edge round the letters, to read against any picture. */
+    val outline = j.optBoolean("outline")
     val rgb: FloatArray = parseColor(j.optString("color", "#ffffff"))
     val size = j.optDouble("size", 0.12).toFloat().coerceIn(0.01f, 0.4f)
     val opacity = j.optDouble("opacity", 1.0).toFloat().coerceIn(0f, 1f)
@@ -58,7 +60,7 @@ class Cue(j: JSONObject) {
     val update = j.optBoolean("update")
 
     /** What the texture depends on: a different key means redrawing it. */
-    val key = "$text|$font|$bold|$italic|$underline|${Math.round(size * 500)}|$crt|$cursor|$typing"
+    val key = "$text|$font|$bold|$italic|$underline|$outline|${Math.round(size * 500)}|$crt|$cursor|$typing"
 
     companion object {
         val FONTS = setOf("sans", "serif", "mono", "cursive", "casual", "condensed")
@@ -358,7 +360,8 @@ class Words {
                 if (c.crt) setShadowLayer(textPx * 0.25f, 0f, 0f, Color.argb(170, 255, 255, 255))
                 else setShadowLayer(textPx * 0.08f, 0f, 0f, Color.argb(200, 0, 0, 0))
             }
-            val pad = Math.ceil(textPx * 0.3).toInt() + 2
+            val edge = textPx * 0.14f
+            val pad = Math.ceil(textPx * 0.3 + (if (c.outline) edge else 0f)).toInt() + 2
             val full = if (c.cursor && !c.typing) c.text + CURSOR else c.text
             val wrap = (1.3f * PX_PER_UNIT).toInt()
             val align = if (c.crt) Layout.Alignment.ALIGN_NORMAL else Layout.Alignment.ALIGN_CENTER
@@ -377,6 +380,19 @@ class Words {
                 val canvas = Canvas(bmp)
                 val dx = if (c.crt) (bmpW - widest) / 2f else (bmpW - layout.width) / 2f
                 canvas.translate(dx, pad.toFloat())
+                if (c.outline) {
+                    // Black first, wider than the letters, then the letters over it
+                    val glow = if (c.crt) Color.argb(170, 255, 255, 255) else Color.argb(200, 0, 0, 0)
+                    paint.clearShadowLayer()
+                    paint.style = Paint.Style.STROKE
+                    paint.strokeWidth = edge
+                    paint.strokeJoin = Paint.Join.ROUND
+                    paint.color = Color.BLACK
+                    layout.draw(canvas)
+                    paint.style = Paint.Style.FILL
+                    paint.color = Color.WHITE
+                    paint.setShadowLayer(textPx * (if (c.crt) 0.25f else 0.08f), 0f, 0f, glow)
+                }
                 layout.draw(canvas)
                 var id = tex
                 if (id == 0) {

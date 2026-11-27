@@ -1764,6 +1764,11 @@ class _WordsPanelState extends State<_WordsPanel> {
                 onSelected: (v) => changed(() => look.underline = v),
               ),
               FilterChip(
+                label: const Text('Outline'),
+                selected: look.outline,
+                onSelected: (v) => changed(() => look.outline = v),
+              ),
+              FilterChip(
                 label: const Text('Terminal glow'),
                 selected: look.crt,
                 onSelected: (v) => changed(() => look.crt = v),
