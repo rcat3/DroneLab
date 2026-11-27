@@ -7,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
-import '../comm/hivesight_guide.dart';
 import '../comm/hivesight_invite.dart';
 import '../comm/patterns.dart';
 import '../comm/server_invites.dart';
@@ -393,15 +392,6 @@ class _ConversationPageState extends State<ConversationPage> {
     }
   }
 
-  /// Invite them to the HiveSight session we're guiding, as a text with a
-  /// Join button.
-  Future<void> _inviteToHiveSight(Conversation c) async {
-    final messenger = ScaffoldMessenger.of(context);
-    if (!await HiveSightGuide.of(comm).invite(c)) {
-      messenger.showSnackBar(SnackBar(content: Text("Couldn't send it: ${c.title} can't be reached just now")));
-    }
-  }
-
   /// Share one of our patterns, as a text with a Save button.
   Future<void> _sharePattern(Conversation c) async {
     final e = await pickPattern(context, comm);
@@ -460,6 +450,14 @@ class _ConversationPageState extends State<ConversationPage> {
             ]),
             titleSpacing: 0,
             actions: [
+              // On a computer that can guide: invite them to a HiveSight
+              // session, started first if need be
+              if (canInviteToHiveSight(comm))
+                IconButton(
+                  tooltip: 'Invite to HiveSight',
+                  icon: const Icon(Icons.visibility_outlined),
+                  onPressed: online ? () => inviteToHiveSight(context, comm, c) : null,
+                ),
               // Everything to control, in one menu; for one person, what they
               // don't let others control is greyed out
               PopupMenuButton<int>(
@@ -498,7 +496,6 @@ class _ConversationPageState extends State<ConversationPage> {
                       ? showChannelDetails(context, comm, c)
                       : showPerson(context, comm, id: CommController.personOf(c), inConversation: true),
                   'invite' => _inviteToServer(c),
-                  'hivesight' => _inviteToHiveSight(c),
                   'pattern' => _sharePattern(c),
                   _ => deleteConversation(context, comm, c, leave: true),
                 },
@@ -506,9 +503,6 @@ class _ConversationPageState extends State<ConversationPage> {
                   const PopupMenuItem(value: 'details', child: Text('Details')),
                   if (comm.canInviteToServer(c))
                     PopupMenuItem(value: 'invite', enabled: online, child: const Text('Invite to your server')),
-                  if (canInviteToHiveSight(comm))
-                    PopupMenuItem(
-                        value: 'hivesight', enabled: online, child: const Text('Invite to your HiveSight session')),
                   PopupMenuItem(value: 'pattern', enabled: online, child: const Text('Share a pattern')),
                   const PopupMenuItem(value: 'delete', child: Text('Delete conversation')),
                 ],

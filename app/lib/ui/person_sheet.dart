@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../comm/comm_controller.dart';
 import '../comm/known_people.dart';
 import 'capabilities_ui.dart';
+import 'hivesight_button.dart';
 import 'people.dart';
 import 'status_strip.dart';
 import 'text_page.dart';
@@ -143,6 +144,18 @@ Future<void> showPerson(BuildContext context, CommController comm,
                             },
                       icon: const Icon(Icons.person_add_alt, size: 18),
                       label: Text('Invite to ${g.name}'),
+                    ),
+                  ],
+                  // On a computer that can guide: to a HiveSight session
+                  if (canInviteToHiveSight(comm)) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(sheet);
+                        inviteToHiveSight(context, comm, comm.personConversation(p.id));
+                      },
+                      icon: const Icon(Icons.visibility_outlined, size: 18),
+                      label: const Text('Invite to HiveSight'),
                     ),
                   ],
                 ],

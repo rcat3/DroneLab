@@ -266,7 +266,34 @@ class _HiveSightInviteCardState extends State<HiveSightInviteCard> {
   }
 }
 
-/// Whether a conversation can be sent an invitation to our HiveSight
-/// session: on a computer with one running.
-bool canInviteToHiveSight(CommController comm) =>
-    HiveSightGuide.supported && comm.developerOptions && HiveSightGuide.of(comm).canInvite;
+/// Whether we can invite people to a HiveSight session: on a computer that
+/// can guide one, with developer options on.
+bool canInviteToHiveSight(CommController comm) => HiveSightGuide.supported && comm.developerOptions;
+
+/// Invite [c] to our HiveSight session, as a text with a Join button: the
+/// sender and a session are started first if they aren't yet, after asking.
+Future<void> inviteToHiveSight(BuildContext context, CommController comm, Conversation c) async {
+  final g = HiveSightGuide.of(comm);
+  final messenger = ScaffoldMessenger.of(context);
+  if (!g.canInvite) {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Start a HiveSight session?'),
+        content: Text(
+          'Experimental. ${c.kind == ConversationKind.person ? 'They get' : 'Everyone in ${c.title} gets'} a text '
+          'with a Join button, to join as a Vessel for the next '
+          '${HiveSightInvite.lifetime.inHours} hours or until you end it. Guide it from Setup → Developer → '
+          'HiveSight Guide.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Start and invite')),
+        ],
+      ),
+    );
+    if (go != true) return;
+  }
+  final why = await g.inviteStarting(c);
+  messenger.showSnackBar(SnackBar(content: Text(why ?? 'Invitation to HiveSight sent to ${c.audience}')));
+}
