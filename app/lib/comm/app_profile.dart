@@ -48,9 +48,9 @@ class AppProfile {
   static Future<Directory> files() => _files ??= _findFiles();
 
   static Future<Directory> _findFiles() async {
-    if (!Platform.isLinux) return getApplicationDocumentsDirectory();
+    if (!Platform.isLinux && !Platform.isWindows) return getApplicationDocumentsDirectory();
     final dir = await getApplicationSupportDirectory();
-    if (name == null) await _moveFromDocuments(dir);
+    if (name == null && Platform.isLinux) await _moveFromDocuments(dir);
     return dir;
   }
 

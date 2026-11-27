@@ -1,0 +1,96 @@
+# Build the app for Windows (x64), as a zip to unpack and run. There's no
+# virtual unit in it yet: platforms/host is Linux only, so the app talks to
+# real units over Bluetooth.
+#
+# For each release, firmware.yml calls it with the release's tag: the app
+# carries the release's firmware (bundled by firmware.yml), and the zip is
+# attached to the release. On a pull request that touches the app, or run by
+# hand, it's built without the firmware, and the zip is the run's artifact.
+# Run by hand with a release and its Firmware run, it's built from the branch
+# it's run on, with the firmware that run built for the app, and attached to
+# that release: for a release whose own Windows build failed.
+
+name: Windows app
+
+on:
+  workflow_call:
+    inputs:
+      release:
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'A release to attach the zip to (a tag), or none'
+        type: string
+        default: ''
+      firmware_run:
+        description: "That release's Firmware run (its id), for the firmware it built for the app"
+        type: string
+        default: ''
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'third_party/**'
+      - 'core/audio/**'
+      - '.github/workflows/windows.yml'
+
+permissions:
+  contents: write     # to attach the zip to the release
+  actions: read       # for the firmware from a release's Firmware run
+
+env:
+  FLUTTER_VERSION: 3.47.9
+
+jobs:
+  build:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Submodules
+        run: git submodule update --init --depth 1 third_party/miniaudio
+      - name: The firmware the app carries
+        if: inputs.release && !inputs.firmware_run
+        uses: actions/download-artifact@v4
+        with:
+          name: app-firmware
+          path: app/assets/firmware
+      - name: The firmware the app carries, from the release's Firmware run
+        if: inputs.release && inputs.firmware_run
+        uses: actions/download-artifact@v4
+        with:
+          name: app-firmware
+          path: app/assets/firmware
+          run-id: ${{ inputs.firmware_run }}
+          github-token: ${{ github.token }}
+      - name: Flutter
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+      - name: Build
+        working-directory: app
+        run: |
+          flutter config --no-analytics --enable-windows-desktop
+          flutter build windows --release
+          rel=build/windows/x64/runner/Release
+          test -f $rel/dronelab.exe
+          test -f $rel/dronelab_audio.dll
+          test -f $rel/dronelab_fx.dll
+      - name: Zip
+        run: |
+          mkdir DroneLab
+          cp -r app/build/windows/x64/runner/Release/. DroneLab/
+          cp app/windows/README.md DroneLab/
+          powershell -NoProfile -Command "Compress-Archive -Path DroneLab -DestinationPath DroneLab-windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DroneLab-windows-x64
+          path: DroneLab-windows-x64.zip
+      - name: Attach to the release
+        if: inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.release }}" DroneLab-windows-x64.zip --clobber --repo "${{ github.repository }}"

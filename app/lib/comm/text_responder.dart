@@ -11,6 +11,7 @@ import 'comm_controller.dart';
 import 'conversations.dart';
 import 'message_details.dart';
 import 'mumble_client.dart';
+import 'native_lib.dart';
 
 /// The developer options' text auto responder: the app as a second person,
 /// for testing range and relays alone. Each text heard is echoed back to
@@ -104,7 +105,7 @@ class TextResponder {
     final phoneRuns = await comm.phoneUnderruns();
     if (speakers.isEmpty) return 'Nobody heard yet';
     final lines = [
-      Platform.isLinux ? comm.audioOutHealth : "The phone's player ran dry $phoneRuns times since it started",
+      nativeAudio ? comm.audioOutHealth : "The phone's player ran dry $phoneRuns times since it started",
       'Buffer ${comm.bufferMs} ms',
       for (final sp in speakers)
         '${comm.talkerName(sp.session)}${CommController.isDirectSession(sp.session) ? ' (direct)' : ''}: '
@@ -234,7 +235,7 @@ class TextResponder {
                   '${comm.nearby.length} unit${comm.nearby.length == 1 ? '' : 's'} heard'
               : 'Direct: off',
       'Responders: voice ${comm.voiceResponder.on ? 'on' : 'off'}, text ${on ? 'on' : 'off'} (echo ${echo ? 'on' : 'off'})',
-      if (Platform.isLinux) comm.audioOutHealth,
+      if (nativeAudio) comm.audioOutHealth,
     ].join('\n');
   }
 

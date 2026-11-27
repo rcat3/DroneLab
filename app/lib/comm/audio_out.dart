@@ -5,7 +5,6 @@ library;
 
 import 'dart:async';
 import 'dart:ffi';
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -15,6 +14,7 @@ import 'package:opus_codec/opus_flutter.dart' as opus_flutter;
 import 'package:opus_codec_dart/opus_dart.dart';
 
 import 'jitter.dart';
+import 'native_lib.dart';
 
 const outputRate = 48000;
 const _blockMs = 10;
@@ -101,7 +101,7 @@ class AudioOut {
     if (on == _voiceCall) return;
     _voiceCall = on;
     await _starting;
-    if (!_running || Platform.isLinux) return;
+    if (!_running || nativeAudio) return;
     await stop();
     await start();
   }
@@ -117,7 +117,7 @@ class AudioOut {
   }
 
   Future<void> _start() async {
-    if (Platform.isLinux) return _startNative();
+    if (nativeAudio) return _startNative();
     await FlutterPcmSound.setLogLevel(LogLevel.error);
     await FlutterPcmSound.setup(
         sampleRate: outputRate,
@@ -247,8 +247,7 @@ class _NativeAudio {
         stopTones = lib.lookupFunction<Void Function(), void Function()>('dl_audio_tones_stop');
 
   factory _NativeAudio.open() {
-    final dir = File(Platform.resolvedExecutable).parent.path;
-    return _NativeAudio._(DynamicLibrary.open('$dir/lib/libdronelab_audio.so'));
+    return _NativeAudio._(DynamicLibrary.open(nativeLibraryPath('dronelab_audio')));
   }
 
   /// A native buffer of [frames], seen from Dart: what [write] sends.

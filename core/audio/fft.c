@@ -6,6 +6,10 @@
 
 #include "audio/fft.h"
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 static fft_complex_t twiddles[FFT_MAX_SIZE / 2];
 static bool tables_ready;
 

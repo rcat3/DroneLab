@@ -19,7 +19,11 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+#ifdef _WIN32
+#define DL_EXPORT __declspec(dllexport)
+#else
 #define DL_EXPORT __attribute__((visibility("default")))
+#endif
 
 #define IN_RATE     48000
 #define FACTOR      (IN_RATE / VOICE_FX_SAMPLE_RATE)
