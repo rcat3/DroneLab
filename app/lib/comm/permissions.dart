@@ -8,7 +8,7 @@ import 'board_protocol.dart';
 import 'capabilities.dart';
 import 'rules.dart';
 
-export 'rules.dart' show Policy, ignoreEveryone, ignoreChannel, ignoreLightPulse;
+export 'rules.dart' show Policy, ignoreEveryone, ignoreChannel, ignoreLightPulse, ignoreToys;
 
 /// Who may control what of ours, in one place: the rules this app owns
 /// (rules.dart: each class's policy, what it ignores, and who's allowed),

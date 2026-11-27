@@ -384,9 +384,12 @@ class _FeaturesTabState extends State<_FeaturesTab> {
               ignoreEveryone),
           ignoring('Ignore channel commands', 'Commands sent to a whole channel rather than just to you',
               ignoreChannel),
-        ] else
+        ] else ...[
           ignoring('Ignore light pulses', 'Never show the flashing light pulse in a session, whoever guides you',
               ignoreLightPulse),
+          ignoring('Ignore toys', "Never let a Guide use your toys in a session, even if you've allowed them on Vibe",
+              ignoreToys),
+        ],
       ]),
       const SectionHeader('People'),
       if (people.isEmpty)

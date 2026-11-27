@@ -23,6 +23,7 @@ import 'app_profile.dart';
 import 'comm_controller.dart';
 import 'conversations.dart';
 import 'hivesight_invite.dart';
+import 'hivesight_toys.dart';
 import 'hivesight_words.dart';
 import 'identity.dart';
 
@@ -126,7 +127,9 @@ class GuideVessel {
   final bool verified; // signed for this session by that key
   final bool lightPulse; // they allow us the light pulse
   final Map<String, dynamic> stats;
-  const GuideVessel(this.id, this.name, this.addr, this.key, this.verified, this.lightPulse, this.stats);
+  final VesselToysInfo? toys; // what their unit and permissions let us do with their toys, once they've said
+  const GuideVessel(this.id, this.name, this.addr, this.key, this.verified, this.lightPulse, this.stats,
+      {this.toys});
 
   /// Who they are, as known_people has them, if they're signed.
   String? get personId => key != null && verified ? 'k:${Identity.idOf(key!)}' : null;
@@ -547,6 +550,7 @@ print(" ".join(missing))
       ok,
       allow['light_pulse'] == true,
       c['stats'] as Map<String, dynamic>? ?? const {},
+      toys: VesselToysInfo.of(c['toys']),
     );
   }
 
@@ -597,6 +601,12 @@ print(" ".join(missing))
   /// Words: phrase lists, and their cues timed from here.
   late final GuideWords words = GuideWords(command, () => linked);
 
+  /// Toys: the Vibe commands for one Vessel's toys.
+  late final GuideToys toys = GuideToys(this);
+
+  /// Send a Vibe command's bytes to [v], whose phone gives it to their unit if they allow it.
+  void sendToys(GuideVessel v, List<int> what) => command('toys', {'to': v.id, 'v': toysWire(what)});
+
   void command(String type, [Map<String, Object?> more = const {}]) => _send({'type': type, ...more});
   void playFile(String name) => command('media_play', {'file': name});
   void useCamera() => command('media_camera');
@@ -604,7 +614,10 @@ print(" ".join(missing))
   void saveScene(String name) => command('scene_save', {'name': name});
   void loadScene(String name) => command('scene_load', {'name': name});
   void deleteScene(String name) => command('scene_delete', {'name': name});
-  void remove(GuideVessel v) => command('kick', {'id': v.id});
+  void remove(GuideVessel v) {
+    if (toys.target == v.id) toys.stop();
+    command('kick', {'id': v.id});
+  }
 
   // ----- The session -----
 

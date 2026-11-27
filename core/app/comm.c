@@ -130,6 +130,7 @@
 #define MSG_FAVOURITES      0x19    // from the phone: the wearer's favourite patterns, in pieces
 #define MSG_PICTURE         0x1A    // both ways: a picture for the screen, in pieces, and the ack
 #define MSG_SENT_SOUND      0x1B    // both ways: a sound for the speaker, in pieces, and the ack, as a picture's
+#define MSG_TOY_LEASE       0x1E    // from the phone: stop the toys if this isn't sent again within these seconds (0: no lease)
 #define MSG_STORAGE         0x1D    // both ways: a picture or sound to save to the SD card, in pieces, and the ack
 #define STORAGE_ABORT       0x08    // in 0x1D: give up on the file, deleting what's there of it
 #define PICTURE_START       0x01
@@ -2241,6 +2242,10 @@ void comm_poll(uint32_t now_ms)
         {
             // The phone's mic records: the speaker's effect to match, alone
             hold_preset(msg[1] != 0 && len >= 4 ? msg[3] : -1);
+        }
+        else if (msg[0] == MSG_TOY_LEASE && len >= 2)
+        {
+            others_lease(msg[1]);
         }
         else if (msg[0] == MSG_LEVEL && len >= 2)
         {

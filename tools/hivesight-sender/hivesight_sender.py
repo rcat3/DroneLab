@@ -850,7 +850,7 @@ class Sender:
             "clients": [
                 {"id": i["id"], "role": i.get("role"), "name": i.get("name"), "addr": i["addr"],
                  "key": i.get("key", ""), "sig": i.get("sig", ""), "allow": i.get("allow", {}),
-                 "stats": i.get("stats")}
+                 "stats": i.get("stats"), "toys": i.get("toys")}
                 for i in self.clients.values() if i.get("role")
             ],
             "session": {"on": self.session_token is not None, "expires": self.session_expires},
@@ -888,7 +888,7 @@ class Sender:
         await self.broadcast({"type": "set", "path": path, "value": value})
 
     # Messages each role may send. Vessels only report; the Guide page drives.
-    VESSEL_MESSAGES = {"hello", "ping", "stats", "keyframe", "left"}
+    VESSEL_MESSAGES = {"hello", "ping", "stats", "keyframe", "left", "toys_state"}
 
     def _session_valid(self, token) -> bool:
         return (self.session_token is not None and isinstance(token, str)
@@ -958,6 +958,24 @@ class Sender:
                 self.word_cues.pop(n, None)
             await self.broadcast({"type": "words_clear", "layers": layers, "fade": msg.get("fade", 1.0)},
                                  roles={"vessel"})
+        elif t == "toys":
+            # Toy commands (the bytes of an others.h Vibe command, base64) for
+            # one Vessel: relayed to it alone, which checks them against its own
+            # permissions before its unit gets them. Nothing is kept for late joiners.
+            data = msg.get("v")
+            if isinstance(data, str) and len(data) <= 400:
+                for w, i in list(self.clients.items()):
+                    if i.get("role") == "vessel" and i["id"] == msg.get("to"):
+                        await w.send_str(json.dumps({"type": "toys", "v": data}))
+        elif t == "toys_state":
+            # What a Vessel's unit and permissions allow the Guide, as it says
+            info["toys"] = {
+                "unit": bool(msg.get("unit")),
+                "mapped": int(msg.get("mapped", 0)) & 0x3F,
+                "allowed": bool(msg.get("allowed")),
+                "why": str(msg.get("why", ""))[:40],
+            }
+            await self.broadcast(self.summary(), roles={"guide"})
         elif t == "session":
             token, expires = msg.get("token"), float(msg.get("expires", 0))
             if not isinstance(token, str) or len(token) < 16 or expires <= time.time():

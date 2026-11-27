@@ -9,6 +9,7 @@ import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
 import '../comm/hivesight_guide.dart';
 import '../comm/hivesight_invite.dart';
+import '../comm/hivesight_vessel_toys.dart';
 import '../comm/permissions.dart';
 import '../comm/rules.dart' show RuleClass;
 import 'hivesight_guide_page.dart';
@@ -63,6 +64,19 @@ Future<String?> joinHiveSight(
   final sig = await me.sign(HiveSightInvite.joinMessage(i.token, i.fingerprint));
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString('hiveSightLast', '$who\n$from\n${i.link}');
+  // Toys the Guide drives go to our unit under these rules, and stop with the view
+  final toys = VesselToys(comm, keyHex, _channel);
+  _channel.setMethodCallHandler((call) async {
+    switch (call.method) {
+      case 'closed':
+        toys.dispose();
+        comm.setVesselView(false);
+      case 'toys':
+        toys.onCommand(call.arguments as String);
+      case 'toysStop':
+        toys.stop();
+    }
+  });
   try {
     await _channel.invokeMethod<void>('open', {
       'hosts': i.hosts,
@@ -78,11 +92,9 @@ Future<String?> joinHiveSight(
       'name': comm.server.username,
     });
     // HiveMind voice waits while the view is open; the view says when it's closed
-    _channel.setMethodCallHandler((call) async {
-      if (call.method == 'closed') comm.setVesselView(false);
-    });
     comm.setVesselView(true);
   } on PlatformException catch (e) {
+    toys.dispose();
     return e.message ?? "Couldn't open HiveSight";
   }
   return null;
@@ -97,7 +109,8 @@ Future<bool> _askAllow(BuildContext context, String from) async =>
         content: const Text(
           'Experimental. In a HiveSight session your Guide controls what you see and hear through the '
           'headset. Back leaves the view. The flashing light pulse is only shown if you turn off '
-          '"Ignore light pulses" in Setup → Permissions → HiveSight.',
+          '"Ignore light pulses" in Setup → Permissions → HiveSight. Your toys only answer a Guide '
+          'you have allowed on Vibe there, and "Ignore toys" stops that altogether.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),

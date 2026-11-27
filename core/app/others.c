@@ -657,6 +657,15 @@ void others_run_own(const uint8_t *what, size_t len)
     run(what, len, "");
 }
 
+static bool leased;
+static uint32_t lease_until;
+
+void others_lease(uint32_t seconds)
+{
+    leased = seconds > 0;
+    lease_until = rcat_hal_millis() + seconds * 1000;
+}
+
 /* Whether this very command, signature and all, has been checked lately:
  * a copy, sent again in case one was lost, is as good as the first. */
 static bool known(const queued_t *q)
@@ -896,6 +905,12 @@ size_t others_capabilities(uint8_t out[OTHERS_CAPS_MAX])
 void others_poll(uint32_t now_ms)
 {
     update_capabilities();
+    if (leased && (int32_t)(now_ms - lease_until) >= 0)
+    {
+        leased = false;
+        printf("others: the toys' lease ran out, stopping them\n");
+        toys_stop_all();
+    }
     pictures_poll(now_ms);
     sounds_poll();
     if (list == NULL)

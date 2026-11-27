@@ -369,8 +369,10 @@
  *  23  the app's own remote: GET /api/screen (a snapshot of the screen),
  *      POST /api/nav and /api/picture, and the state's "pages" and "recv"
  *  24  pictures and sounds saved to the SD card (0x1D), GET and POST
- *      /api/storage */
-#define COMM_VERSION            24
+ *      /api/storage
+ *  25  a lease on the toys (0x1E, from the phone): the toys stop if it
+ *      isn't sent again in time, for a Guide's HiveSight session */
+#define COMM_VERSION            25
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

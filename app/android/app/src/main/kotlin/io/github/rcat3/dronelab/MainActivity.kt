@@ -108,8 +108,18 @@ class MainActivity : FlutterActivity() {
         io.github.rcat3.dronelab.hivesight.HiveSightActivity.onClosed = {
             runOnUiThread { hiveChannel.invokeMethod("closed", null) }
         }
+        io.github.rcat3.dronelab.hivesight.HiveSightActivity.onToys = { v ->
+            runOnUiThread { hiveChannel.invokeMethod("toys", v) }
+        }
+        io.github.rcat3.dronelab.hivesight.HiveSightActivity.onToysStop = { why ->
+            runOnUiThread { hiveChannel.invokeMethod("toysStop", why) }
+        }
         hiveChannel.setMethodCallHandler { call, result ->
             when (call.method) {
+                "toysState" -> {
+                    io.github.rcat3.dronelab.hivesight.HiveSightActivity.sendToysState(call.arguments as? String ?: "{}")
+                    result.success(null)
+                }
                 "supported" -> result.success(Build.VERSION.SDK_INT >= 30)
                 "open" -> if (Build.VERSION.SDK_INT >= 30) {
                     val i = Intent(this, io.github.rcat3.dronelab.hivesight.HiveSightActivity::class.java)
@@ -284,6 +294,8 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         io.github.rcat3.dronelab.hivesight.HiveSightActivity.onClosed = null
+        io.github.rcat3.dronelab.hivesight.HiveSightActivity.onToys = null
+        io.github.rcat3.dronelab.hivesight.HiveSightActivity.onToysStop = null
         stopHeadset()
         stopSession()
         dev?.let { unregisterReceiver(it) }

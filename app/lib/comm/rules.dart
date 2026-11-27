@@ -47,6 +47,11 @@ const ignoreEveryone = 0x02, ignoreChannel = 0x04;
 /// HiveSight's: never show the light pulse, whoever guides. Set to begin with.
 const ignoreLightPulse = 0x08;
 
+/// HiveSight's: never let a Guide use our toys in a session, even one we've
+/// allowed them on. Not set to begin with: the Vibe class's own permission
+/// is the consent.
+const ignoreToys = 0x10;
+
 class ClassRule {
   Policy policy;
   int ignore;

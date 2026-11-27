@@ -106,6 +106,7 @@ class HiveSightActivity : Activity() {
         })
         glView.setOnTouchListener { _, e -> gestures.onTouchEvent(e); true }
 
+        current = this
         control = newControl()
         video = RtpVideoReceiver(VIDEO_PORT, onAccessUnit = decoder::submit, onNeedKeyframe = { control.requestKeyframe() })
         audio = AudioEngine(AUDIO_PORT, MEDIA_PORT)
@@ -117,7 +118,13 @@ class HiveSightActivity : Activity() {
     }
 
     private fun newControl() = ControlClient(session, VIDEO_PORT, AUDIO_PORT, onStatus = { status = it },
-        onEnded = { ended = it }, words = renderer.words)
+        onEnded = { ended = it; stopToys("ended") }, words = renderer.words,
+        onToys = { v -> onToys?.invoke(v) }, onLink = { up -> if (!up) stopToys("link") })
+
+    /** Everything the Guide has running on our toys stops, for whichever reason. */
+    private fun stopToys(why: String) {
+        onToysStop?.invoke(why)
+    }
 
     override fun onResume() {
         super.onResume()
@@ -166,6 +173,7 @@ class HiveSightActivity : Activity() {
     private fun leaveSession() {
         if (!::renderer.isInitialized || isFinishing) return
         renderer.exiting = true
+        stopToys("left")
         Params.set("fx.fade", 0.0)
         Params.set("photic.on", false)
         if (::control.isInitialized) control.sendLeft() // control.stop() closes after it's sent
@@ -289,6 +297,8 @@ class HiveSightActivity : Activity() {
 
     override fun onDestroy() {
         Params.onChange = null
+        stopToys("closed")
+        current = null
         super.onDestroy()
         if (::session.isInitialized) onClosed?.invoke()
     }
@@ -296,6 +306,21 @@ class HiveSightActivity : Activity() {
     companion object {
         /** Called when the view closes: MainActivity tells the app, which holds HiveMind voice while it's open. */
         @Volatile var onClosed: (() -> Unit)? = null
+
+        /** The Guide's toy commands (base64 others.h bytes), for the app to give the unit. */
+        @Volatile var onToys: ((String) -> Unit)? = null
+
+        /** Toys must stop: [why] is left, ended, link or closed. The app stops them on the unit. */
+        @Volatile var onToysStop: ((String) -> Unit)? = null
+
+        /** What the app says the Guide may do with toys (JSON): kept, and sent whenever we connect. */
+        @Volatile var toysState: String? = null
+        @Volatile private var current: HiveSightActivity? = null
+
+        fun sendToysState(json: String) {
+            toysState = json
+            current?.takeIf { it::control.isInitialized }?.control?.sendToysState(json)
+        }
 
         /** How long volume-down is held to leave the session. */
         const val EXIT_HOLD_MS = 1500L

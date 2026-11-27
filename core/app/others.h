@@ -184,6 +184,12 @@ void others_receive(comm_transport_t via, const char *from, const uint8_t *cmd, 
  * commands only. From the UI loop. */
 void others_run_own(const uint8_t *what, size_t len);
 
+/* A lease on the toys, from the wearer's app, for as long as it's kept up:
+ * every Vibe toy stops if [seconds] go by without it being given again, as
+ * they do if the phone or the link to it is lost. 0 ends it, with the toys
+ * as they are. From the UI loop. */
+void others_lease(uint32_t seconds);
+
 /* How a command came over direct comms: the broadcast it came in (the
  * sending board's counter for it, the same in a copy another board passed
  * on), how strong (dBm, from the last board it came from), how many times

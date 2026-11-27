@@ -44,6 +44,10 @@ class ControlClient(
     private val onStatus: (String) -> Unit,
     private val onEnded: (String) -> Unit,
     private val words: Words,
+    /** The Guide's toy commands: the bytes of an others.h Vibe command, base64. */
+    private val onToys: (String) -> Unit = {},
+    /** The link to the Guide came up (true) or went (false): toys go with it. */
+    private val onLink: (Boolean) -> Unit = {},
 ) {
     private val http: OkHttpClient
     @Volatile private var ws: WebSocket? = null
@@ -101,6 +105,11 @@ class ControlClient(
     /** Tells the Guide we left on purpose (the exit gesture). */
     fun sendLeft() = send(JSONObject().put("type", "left"))
 
+    /** Tells the Guide what our unit and permissions let it do with toys. */
+    fun sendToysState(state: String) {
+        runCatching { send(JSONObject(state).put("type", "toys_state")) }
+    }
+
     fun sendStats(stats: JSONObject) = send(JSONObject().put("type", "stats").put("stats", stats))
 
     /** Preview payloads. Dropped (not queued) if the link is backed up. */
@@ -152,6 +161,8 @@ class ControlClient(
                     opened = true
                     connectedHost = host
                     onStatus("Connected to ${session.guide}")
+                    onLink(true)
+                    HiveSightActivity.toysState?.let { sendToysState(it) }
                     webSocket.send(
                         JSONObject().put("type", "hello").put("role", "vessel")
                             .put("token", session.token)
@@ -195,7 +206,10 @@ class ControlClient(
             ws?.cancel()
             ws = null
             connectedHost = null
-            if (opened) lost = System.currentTimeMillis()
+            if (opened) {
+                lost = System.currentTimeMillis()
+                onLink(false)
+            }
             // Straight on to the next address if this one never answered;
             // a pause once they've all been tried, or the link dropped
             if (running && (opened || next % session.hosts.size == 0)) {
@@ -215,6 +229,7 @@ class ControlClient(
                 m.optJSONArray("layers")?.let { a -> (0 until a.length()).map { a.optInt(it, -1) } },
                 m.optDouble("fade", 1.0).toFloat(),
             )
+            "toys" -> onToys(m.optString("v"))
             "pong" -> rttMs = ((System.nanoTime() - m.optLong("t")) / 1_000_000L).toInt()
         }
     }
