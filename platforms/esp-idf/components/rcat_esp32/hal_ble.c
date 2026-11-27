@@ -1485,7 +1485,18 @@ static int peer_event_cb(struct ble_gap_event *event, void *arg)
     switch (event->type)
     {
     case BLE_GAP_EVENT_CONNECT:
-        if (event->connect.status != 0)
+    {
+        // NimBLE says a phone's connected once the controller has read the
+        // phone's features, with that read's status. Windows answers "unsupported
+        // remote feature" (0x1A), and it's reported as the connection's status
+        // though the link is up: it's a connection if there's one to find.
+        bool up = event->connect.status == 0;
+        if (!up && event->connect.status == BLE_ERR_UNSUPP_REM_FEATURE)
+        {
+            struct ble_gap_conn_desc found;
+            up = ble_gap_conn_find(event->connect.conn_handle, &found) == 0;
+        }
+        if (!up)
         {
             ESP_LOGW(TAG, "Phone's connection failed (%d)", event->connect.status);
             peer_advertise();
@@ -1516,6 +1527,7 @@ static int peer_event_cb(struct ble_gap_event *event, void *arg)
 #endif
         }
         break;
+    }
 
 #if CONFIG_BT_NIMBLE_SECURITY_ENABLE
     case BLE_GAP_EVENT_PASSKEY_ACTION:
