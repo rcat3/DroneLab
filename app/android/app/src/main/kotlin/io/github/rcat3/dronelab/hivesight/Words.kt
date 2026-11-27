@@ -130,7 +130,7 @@ class Words {
         pos[2] = bmpW / PX_PER_UNIT / 2 * scale; pos[3] = bmpH / PX_PER_UNIT / 2 * scale
         val c = StereoRenderer.hsv(Params.f("words.hue"), Params.f("words.sat").coerceIn(0f, 1f))
         color[0] = c[0]; color[1] = c[1]; color[2] = c[2]; color[3] = alpha.coerceIn(0f, 1f)
-        eyeOffset = Params.f("words.depth").coerceIn(-1f, 1f) * MAX_DISPARITY
+        eyeOffset = Params.f("words.depth").coerceIn(MIN_DEPTH, 1f) * MAX_DISPARITY
     }
 
     private fun upload(text: String, size: Float) {
@@ -165,5 +165,7 @@ class Words {
         const val MAX_TEX = 2048
         /** Depth 1 puts each eye's copy this far (lens-space units) off centre. */
         const val MAX_DISPARITY = 0.08f
+        /** Below this the eyes would have to diverge: nobody can fuse it. */
+        const val MIN_DEPTH = -0.05f
     }
 }

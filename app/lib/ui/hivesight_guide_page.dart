@@ -1574,12 +1574,12 @@ class _WordsPanelState extends State<_WordsPanel> {
           ], enabled: enabled),
           _Slide(g, 'words.speed', 'Motion speed', 0, 4, 0.05, enabled: enabled),
           _Slide(g, 'words.size', 'Size', 0.02, 0.4, 0.005, enabled: enabled),
-          _Slide(g, 'words.depth', 'Depth', -1, 1, 0.01, enabled: enabled),
+          _Slide(g, 'words.depth', 'Depth', -0.05, 1, 0.01, enabled: enabled),
           _Slide(g, 'words.opacity', 'Opacity', 0, 1, 0.01, enabled: enabled),
           _Slide(g, 'words.hue', 'Hue', 0, 1, 0.01, enabled: enabled),
           _Slide(g, 'words.sat', 'Colour', 0, 1, 0.01, enabled: enabled),
           const Text(
-            'Depth: further than the picture below zero, nearer above. Pulse with the beat only brightens with the light pulse allowed.',
+            'Depth: 0 is as far as the lenses go, higher is nearer (below zero the eyes would have to diverge). Pulse with the beat only brightens with the light pulse allowed.',
             style: _small,
           ),
         ]);

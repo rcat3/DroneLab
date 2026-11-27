@@ -93,13 +93,10 @@ class HiveSightActivity : Activity() {
         root.addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         setContentView(root)
 
-        // Long-press (outside the viewer) opens settings. A Cardboard button tap
-        // is a plain touch, so short taps toggle the stats overlay.
+        // Long-press (outside the viewer) opens settings. Taps do nothing: they
+        // happen too easily putting the phone in the viewer or taking it out.
         val gestures = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onLongPress(e: MotionEvent) = showSettings()
-            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                Params.set("view.stats", !Params.b("view.stats")); return true
-            }
         })
         glView.setOnTouchListener { _, e -> gestures.onTouchEvent(e); true }
 
@@ -151,6 +148,11 @@ class HiveSightActivity : Activity() {
             if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) ui.postDelayed(exitNow, EXIT_HOLD_MS)
             if (e.action == KeyEvent.ACTION_UP) ui.removeCallbacks(exitNow)
             return true // no volume change either: it's a button, not a volume control
+        }
+        if (e.keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+            // Volume up shows or hides the stats
+            if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) Params.set("view.stats", !Params.b("view.stats"))
+            return true
         }
         return super.dispatchKeyEvent(e)
     }
