@@ -57,7 +57,11 @@ class Notifier {
       await _plugin.initialize(
         settings: const InitializationSettings(
             android: AndroidInitializationSettings('ic_notify'),
-            linux: LinuxInitializationSettings(defaultActionName: 'Open')),
+            linux: LinuxInitializationSettings(defaultActionName: 'Open'),
+            windows: WindowsInitializationSettings(
+                appName: 'DroneLab',
+                appUserModelId: 'io.github.rcat3.DroneLab',
+                guid: '51fedcee-bdb7-4ec4-a212-6ab77a532f06')),
         onDidReceiveNotificationResponse: (r) {
           final key = r.payload;
           if (key != null && key.startsWith(_callPrefix)) {
