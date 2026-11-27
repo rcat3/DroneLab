@@ -35,11 +35,12 @@ LVGL, Mbed TLS, Opus, miniaudio and dr_libs come from the submodules
 - **The app** finds it in its list of units, as *Virtual unit*, *On this
   computer*, and starts it itself when it isn't running (*Start a virtual
   unit*): the Linux app carries it, and a build of the app picks up
-  `build-host/dronelab-unit` if it's there. It listens on `$XDG_RUNTIME_DIR/dronelab-unit.sock` (see
-  "Virtual units" in `app/linux/README.md`); there's no pairing, as only
-  the computer's user can reach it. The comm channel is on from the start.
+  `build-host/dronelab-unit` if it's there. It listens on a loopback TCP port, found in
+  `$XDG_RUNTIME_DIR/dronelab-units/unit-1.ep` (see "Virtual units" in
+  `app/linux/README.md`); there's no pairing, as only the computer's user can
+  read the token in it. The comm channel is on from the start.
 - **Several units** can run at once, each with its own `--unit` number,
-  socket (`dronelab-unit-2.sock`, *Virtual unit 2*) and settings.
+  endpoint (`unit-2.ep`, *Virtual unit 2*) and settings.
 - **Settings** are kept in `~/.local/share/io.github.rcat3.dronelab/unit`
   (`unit-2` for unit 2, ...), with its made-up MAC address and a `sdcard`
   folder that stands in for the SD card. `--sdcard DIR` uses another folder.

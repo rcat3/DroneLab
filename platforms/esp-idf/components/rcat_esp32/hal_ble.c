@@ -1321,6 +1321,7 @@ function:	The peripheral: one service that a phone connects to
 #define PEER_CONN_MAX       24
 #define PEER_CONN_LATENCY   4
 #define PEER_CONN_TIMEOUT   500     // 10 ms steps
+#define PEER_RESP_CONN      12      // 15 ms, with no events skipped: while the app's asking for things
 #define PEER_FAST_CONN_MIN  6       // 7.5 ms: for updates, as fast as the phone allows
 #define PEER_FAST_CONN_MAX  12
 
@@ -1330,6 +1331,7 @@ static uint16_t peer_tx_handle;
 static char peer_name[32];
 static volatile bool peer_wanted;
 static volatile uint16_t peer_conn = BLE_HS_CONN_HANDLE_NONE;
+static bool peer_responsive;                // the link asked for is the one with no events skipped
 static volatile bool peer_subscribed;
 static volatile uint16_t peer_mtu;
 static volatile bool peer_secure;       // paired with a code: encrypted and authenticated
@@ -1485,15 +1487,33 @@ static int peer_event_cb(struct ble_gap_event *event, void *arg)
     switch (event->type)
     {
     case BLE_GAP_EVENT_CONNECT:
-        if (event->connect.status != 0)
+    {
+        // NimBLE says a phone's connected once the controller has read the
+        // phone's features, with that read's status. Windows answers "unsupported
+        // remote feature" (0x1A), and it's reported as the connection's status
+        // though the link is up: it's a connection if there's one to find.
+        bool up = event->connect.status == 0;
+        if (!up && event->connect.status == BLE_ERR_UNSUPP_REM_FEATURE)
+        {
+            struct ble_gap_conn_desc found;
+            up = ble_gap_conn_find(event->connect.conn_handle, &found) == 0;
+        }
+        if (!up)
         {
             ESP_LOGW(TAG, "Phone's connection failed (%d)", event->connect.status);
             peer_advertise();
             break;
         }
         peer_conn = event->connect.conn_handle;
-        peer_mtu = BLE_ATT_MTU_DFLT;
-        ESP_LOGI(TAG, "Phone connected");
+        // Not the default: NimBLE says a phone's connected only once it's read the
+        // phone's features, and Windows has agreed its MTU by then (the MTU event
+        // comes once, before this), which the default would put back to 23
+        peer_mtu = ble_att_mtu(peer_conn);
+        if (peer_mtu < BLE_ATT_MTU_DFLT)
+        {
+            peer_mtu = BLE_ATT_MTU_DFLT;
+        }
+        ESP_LOGI(TAG, "Phone connected (%d buffers free)", os_msys_num_free());
         if (!peer_wanted)
         {
             ble_gap_terminate(peer_conn, BLE_ERR_REM_USER_CONN_TERM);
@@ -1516,6 +1536,7 @@ static int peer_event_cb(struct ble_gap_event *event, void *arg)
 #endif
         }
         break;
+    }
 
 #if CONFIG_BT_NIMBLE_SECURITY_ENABLE
     case BLE_GAP_EVENT_PASSKEY_ACTION:
@@ -1569,6 +1590,7 @@ static int peer_event_cb(struct ble_gap_event *event, void *arg)
         peer_conn = BLE_HS_CONN_HANDLE_NONE;
         peer_subscribed = false;
         peer_secure = false;
+        peer_responsive = false;
         peer_passkey = -1;
         peer_mtu = 0;
         taskENTER_CRITICAL(&ble_lock);
@@ -1771,6 +1793,23 @@ bool rcat_hal_ble_peer_send(const void *data, size_t len)
     return ble_gatts_notify_custom(conn, peer_tx_handle, om) == 0;     // it frees om either way
 }
 
+void rcat_hal_ble_peer_responsive(bool on)
+{
+    uint16_t conn = peer_conn;
+    if (conn == BLE_HS_CONN_HANDLE_NONE || on == peer_responsive)
+    {
+        return;
+    }
+    peer_responsive = on;
+    struct ble_gap_upd_params params = {
+        .itvl_min = on ? PEER_RESP_CONN : PEER_CONN_MIN,
+        .itvl_max = on ? PEER_RESP_CONN : PEER_CONN_MAX,
+        .latency = on ? 0 : PEER_CONN_LATENCY,
+        .supervision_timeout = PEER_CONN_TIMEOUT,
+    };
+    ble_gap_update_params(conn, &params);
+}
+
 void rcat_hal_ble_peer_fast(bool fast)
 {
     uint16_t conn = peer_conn;
@@ -1877,6 +1916,11 @@ size_t rcat_hal_ble_peer_receive(void *data, size_t max)
 void rcat_hal_ble_peer_fast(bool fast)
 {
     (void)fast;
+}
+
+void rcat_hal_ble_peer_responsive(bool on)
+{
+    (void)on;
 }
 
 #endif

@@ -5,6 +5,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert' show ascii;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -327,31 +328,87 @@ class BleTransport implements BoardTransport {
 // ----- A local socket -----
 
 /// The ids of units reached over a local socket start with this, then the
-/// socket's path.
-const socketIdPrefix = 'unix:';
+/// unit's number.
+const socketIdPrefix = 'unit:';
 
-/// A virtual unit listens on a Unix socket in the runtime directory (only
-/// its owner can reach it): $XDG_RUNTIME_DIR/dronelab-unit*.sock. One app at
-/// a time; while it's connected, it's as if the phone were connected, paired
-/// and had notifications on. Each message goes as its length (2 bytes,
-/// little-endian) and then itself, up to [socketMessageMax] bytes, the same
-/// messages as over Bluetooth. Another app's turned away with an empty
-/// message; while one's connected, there's an empty file beside the socket,
-/// its name and `.inuse`.
+/// A virtual unit listens on a TCP port of the loopback interface (this
+/// computer only), a different one each time it starts. It says which, and a
+/// token, in a file only its owner can read, in [socketDirectory]:
+/// `unit-N.ep` (N is the unit's number, 1 and up), holding the port, a space,
+/// and the token ([socketTokenLength] characters). An app that connects sends
+/// the token first, or it's dropped, so another user of the computer can't
+/// reach the unit. One app at a time; while it's connected, it's as if the
+/// phone were connected, paired and had notifications on. Each message goes as
+/// its length (2 bytes, little-endian) and then itself, up to
+/// [socketMessageMax] bytes, the same messages as over Bluetooth. Another
+/// app's turned away with an empty message; while one's connected, there's an
+/// empty file beside the endpoint, `unit-N.inuse`.
 const socketMessageMax = 244;
+const socketTokenLength = 32;
 
-/// Where to look for virtual units: null where there's no runtime directory.
-String? socketDirectory() =>
-    Platform.isLinux ? Platform.environment['XDG_RUNTIME_DIR'] : null;
+/// For tests: where to look in place of [socketDirectory]'s own.
+@visibleForTesting
+String? socketDirectoryOverride;
 
-final _socketName = RegExp(r'^dronelab-unit(.*)\.sock$');
-
-/// What to call the unit at the socket [path].
-String socketUnitName(String path) {
-  final m = _socketName.firstMatch(path.split('/').last);
-  final rest = (m?.group(1) ?? '').replaceFirst(RegExp(r'^[-_.]'), '');
-  return rest.isEmpty ? 'Virtual unit' : 'Virtual unit $rest';
+/// Where virtual units say where they are: null where there's no such
+/// private place (units only run on Linux and Windows).
+String? socketDirectory() {
+  if (socketDirectoryOverride != null) return socketDirectoryOverride;
+  if (Platform.isLinux) {
+    final runtime = Platform.environment['XDG_RUNTIME_DIR'];
+    return runtime == null || runtime.isEmpty ? null : '$runtime/dronelab-units';
+  }
+  if (Platform.isWindows) {
+    final local = Platform.environment['LOCALAPPDATA'];
+    return local == null || local.isEmpty ? null : '$local\\DroneLab\\units';
+  }
+  return null;
 }
+
+final _endpointName = RegExp(r'^unit-(\d+)\.ep$');
+
+/// Where a virtual unit listens, and how to prove it's an app of its owner.
+class UnitEndpoint {
+  final int unit;
+  final int port;
+  final String token;
+  const UnitEndpoint(this.unit, this.port, this.token);
+
+  String get id => '$socketIdPrefix$unit';
+
+  /// From the file [name]'s [text]: null if it isn't one.
+  static UnitEndpoint? parse(String name, String text) {
+    final m = _endpointName.firstMatch(name);
+    final parts = text.trim().split(' ');
+    if (m == null || parts.length != 2) return null;
+    final unit = int.tryParse(m.group(1)!), port = int.tryParse(parts[0]);
+    if (unit == null || unit < 1 || port == null || port < 1 || port > 65535) return null;
+    if (!RegExp('^[0-9a-f]{$socketTokenLength}\$').hasMatch(parts[1])) return null;
+    return UnitEndpoint(unit, port, parts[1]);
+  }
+
+  /// Unit [unit]'s, if it has said where it is.
+  static Future<UnitEndpoint?> read(int unit) async {
+    final dir = socketDirectory();
+    if (dir == null) return null;
+    final name = 'unit-$unit.ep';
+    try {
+      return parse(name, await File('$dir${Platform.pathSeparator}$name').readAsString());
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+/// The number in a local unit's [id]: null if it's not one.
+int? socketUnitNumber(String id) {
+  if (!id.startsWith(socketIdPrefix)) return null;
+  final n = int.tryParse(id.substring(socketIdPrefix.length));
+  return n != null && n >= 1 ? n : null;
+}
+
+/// What to call local unit [unit].
+String socketUnitName(int unit) => unit == 1 ? 'Virtual unit' : 'Virtual unit $unit';
 
 /// Splits what comes off a socket into the messages it carries.
 class FrameReader {
@@ -405,28 +462,30 @@ class SocketTransport implements BoardTransport {
   @override
   Future<String?> ready() async => null;
 
-  /// The sockets virtual units are listening on just now.
-  static Future<List<String>> listening() async {
+  /// The units that have said where they're listening just now.
+  static Future<List<UnitEndpoint>> listening() async {
     final dir = socketDirectory();
     if (dir == null) return [];
-    final found = <String>[];
+    final found = <UnitEndpoint>[];
     try {
       await for (final e in Directory(dir).list(followLinks: false)) {
-        if (!_socketName.hasMatch(e.path.split('/').last)) continue;
-        if (await FileSystemEntity.type(e.path, followLinks: false) != FileSystemEntityType.unixDomainSock) continue;
-        found.add(e.path);
+        if (e is! File) continue;
+        final m = _endpointName.firstMatch(e.uri.pathSegments.last);
+        final ep = m == null ? null : await UnitEndpoint.read(int.parse(m.group(1)!));
+        if (ep != null) found.add(ep);
       }
     } catch (_) {}
-    found.sort();
+    found.sort((a, b) => a.unit.compareTo(b.unit));
     return found;
   }
 
   @override
   Future<void> startScan(void Function(FoundBoard) onFound) async {
     Future<void> look() async {
-      for (final path in await listening()) {
-        onFound(FoundBoard('$socketIdPrefix$path', socketUnitName(path), 0,
-            local: true, inUse: await File('$path.inuse').exists()));
+      final dir = socketDirectory();
+      for (final ep in await listening()) {
+        onFound(FoundBoard(ep.id, socketUnitName(ep.unit), 0,
+            local: true, inUse: await File('$dir${Platform.pathSeparator}unit-${ep.unit}.inuse').exists()));
       }
     }
 
@@ -450,11 +509,20 @@ class SocketTransport implements BoardTransport {
       required void Function(String? why) onDropped,
       required bool Function() overtaken}) async {
     await close();
-    final path = id.substring(socketIdPrefix.length);
+    final unit = socketUnitNumber(id);
+    if (unit == null) throw TransportFailure("That isn't a virtual unit");
     final start = startIfStopped;
     startIfStopped = false;
-    Future<Socket> connect() => Socket.connect(InternetAddress(path, type: InternetAddressType.unix), 0,
-        timeout: const Duration(seconds: 5));
+    Future<Socket> connect() async {
+      // Where it listens is looked up each time: it's somewhere else once it's restarted
+      final ep = await UnitEndpoint.read(unit);
+      if (ep == null) throw const SocketException('not listening');
+      final s = await Socket.connect(InternetAddress.loopbackIPv4, ep.port, timeout: const Duration(seconds: 5));
+      s.setOption(SocketOption.tcpNoDelay, true);
+      s.add(ascii.encode(ep.token));
+      return s;
+    }
+
     Socket s;
     try {
       s = await connect();
@@ -463,7 +531,7 @@ class SocketTransport implements BoardTransport {
         debugPrint('board: failed $e');
         throw TransportFailure("The virtual unit isn't running");
       }
-      if (!await VirtualUnits.start(path)) throw TransportFailure("Couldn't start the virtual unit");
+      if (!await VirtualUnits.start(unit)) throw TransportFailure("Couldn't start the virtual unit");
       // Give it a while to open its window and listen
       final until = DateTime.now().add(const Duration(seconds: 15));
       while (true) {
@@ -515,7 +583,7 @@ class SocketTransport implements BoardTransport {
     // It's said at once; a unit that's free can be a moment saying anything
     if (await first.future.timeout(const Duration(milliseconds: 500), onTimeout: () => false)) {
       await close();
-      throw TransportFailure('${socketUnitName(path)} is in use by another DroneLab app', inUse: true);
+      throw TransportFailure('${socketUnitName(unit)} is in use by another DroneLab app', inUse: true);
     }
   }
 

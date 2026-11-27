@@ -78,19 +78,22 @@ it's the usual one.
 ## Virtual units
 
 Besides units over Bluetooth, the app finds units running on the same
-computer: anything listening on a Unix socket named
-`$XDG_RUNTIME_DIR/dronelab-unit*.sock` shows up in the list of units, as
-*Virtual unit* (`dronelab-unit-2.sock` is *Virtual unit 2*). Only its owner
-can reach the runtime directory, so there's no pairing.
+computer. A virtual unit listens on a TCP port of the loopback interface
+(reachable from this computer only), a different one each time, and says
+which in a file only its owner can read: `$XDG_RUNTIME_DIR/dronelab-units/unit-N.ep`
+holds the port, a space and a token (`unit-2.ep` is *Virtual unit 2*). An app
+sends the token as the first thing on the connection, or it's dropped, so
+there's no pairing and no one else on the computer can reach the unit.
 
-The socket carries the same messages as the unit's Bluetooth service, the
+The connection carries the same messages as the unit's Bluetooth service, the
 app's writes one way and the unit's notifications the other, each as its
 length (2 bytes, little-endian) and then the message, up to 244 bytes. The
 app connects once the unit's listening; while it's connected, it's as if the
 phone were connected, paired and had notifications on. One app at a time:
 another is sent an empty message and turned away, and while one's
-connected there's an empty file beside the socket (`dronelab-unit.sock.inuse`),
-so other apps can list the unit as in use without connecting to it.
+connected there's an empty file beside the endpoint (`unit-N.inuse`),
+so other apps can list the unit as in use without connecting to it. The Windows app
+looks for the same files in `%LOCALAPPDATA%\DroneLab\units`.
 
 `platforms/host` builds one: the firmware itself, running on the computer
 (see its README). The app carries it as `dronelab-unit`, beside its own

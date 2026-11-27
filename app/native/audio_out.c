@@ -21,8 +21,15 @@
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
+#ifdef _WIN32
+#define EXPORT __declspec(dllexport)
+#else
 #define EXPORT __attribute__((visibility("default")))
+#endif
 
 #define TONE_MAX        (48000 * 8)     // samples of tones waiting: 8 s at 48 kHz
 
@@ -40,9 +47,17 @@ static uint64_t last_ask_us;
 
 static uint64_t now_us(void)
 {
+#ifdef _WIN32
+    LARGE_INTEGER freq, count;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&count);
+    return (uint64_t)(count.QuadPart / freq.QuadPart) * 1000000u +
+           (uint64_t)(count.QuadPart % freq.QuadPart) * 1000000u / (uint64_t)freq.QuadPart;
+#else
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
     return (uint64_t)t.tv_sec * 1000000u + (uint64_t)t.tv_nsec / 1000u;
+#endif
 }
 
 static void play(ma_device *d, void *out, const void *in, ma_uint32 frames)

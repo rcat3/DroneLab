@@ -20,7 +20,8 @@ class VirtualUnits {
     if (!_looked) {
       _looked = true;
       if (socketDirectory() != null) {
-        final f = File('${File(Platform.resolvedExecutable).parent.path}/dronelab-unit');
+        final name = Platform.isWindows ? 'dronelab-unit.exe' : 'dronelab-unit';
+        final f = File('${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}$name');
         if (f.existsSync()) _program = f.path;
       }
     }
@@ -30,24 +31,18 @@ class VirtualUnits {
   /// Whether the app can start a virtual unit.
   static bool get available => program != null;
 
-  /// The socket virtual unit [unit] listens on.
-  static String? socketFor(int unit) {
-    final dir = socketDirectory();
-    if (dir == null) return null;
-    return unit == 1 ? '$dir/dronelab-unit.sock' : '$dir/dronelab-unit-$unit.sock';
-  }
+  /// The id of virtual unit [unit].
+  static String idFor(int unit) => '$socketIdPrefix$unit';
 
-  /// Which unit listens on [path]: null if it's not one the app could start.
-  static int? unitAt(String path) {
-    final m = RegExp(r'/dronelab-unit(?:-(\d+))?\.sock$').firstMatch(path);
-    if (m == null) return null;
-    final n = m.group(1) == null ? 1 : int.parse(m.group(1)!);
-    return n >= 1 && n <= 99 && socketFor(n) == path ? n : null;
+  /// Which unit [id] is, if it's one the app could start.
+  static int? unitAt(String id) {
+    final n = socketUnitNumber(id);
+    return n != null && n <= 99 ? n : null;
   }
 
   /// The first unit that isn't running: the one a new one would be.
   static Future<int> nextFree() async {
-    final running = (await SocketTransport.listening()).map(unitAt).toSet();
+    final running = (await SocketTransport.listening()).map((e) => e.unit).toSet();
     var n = 1;
     while (running.contains(n) && n < 99) {
       n++;
@@ -55,11 +50,10 @@ class VirtualUnits {
     return n;
   }
 
-  /// Start the unit that listens on [path]: false if it couldn't be. It's
-  /// listening a moment later.
-  static Future<bool> start(String path) async {
-    final prog = program, unit = unitAt(path);
-    if (prog == null || unit == null) return false;
+  /// Start unit [unit]: false if it couldn't be. It's listening a moment later.
+  static Future<bool> start(int unit) async {
+    final prog = program;
+    if (prog == null) return false;
     try {
       // Detached: it lives on after the app, until its window's closed
       await Process.start(prog, ['--unit', '$unit'], mode: ProcessStartMode.detached);

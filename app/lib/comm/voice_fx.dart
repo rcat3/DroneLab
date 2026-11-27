@@ -13,6 +13,8 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 
+import 'native_lib.dart';
+
 /// The effects' own rate, as the board's (VOICE_FX_SAMPLE_RATE).
 const voiceFxRate = 16000;
 
@@ -42,9 +44,8 @@ class _Lib {
     try {
       if (Platform.isAndroid) {
         _loaded = _Lib(DynamicLibrary.open('libdronelab_fx.so'));
-      } else if (Platform.isLinux) {
-        final dir = File(Platform.resolvedExecutable).parent.path;
-        _loaded = _Lib(DynamicLibrary.open('$dir/lib/libdronelab_fx.so'));
+      } else if (Platform.isLinux || Platform.isWindows) {
+        _loaded = _Lib(DynamicLibrary.open(nativeLibraryPath('dronelab_fx')));
       }
     } catch (e) {
       debugPrint('voice fx: $e');

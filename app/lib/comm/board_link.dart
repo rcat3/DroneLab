@@ -113,7 +113,7 @@ class BoardLink extends ChangeNotifier {
   late BoardTransport _transport = _ble;
   bool _scanning = false;
 
-  /// Whether virtual units are looked for too (Linux).
+  /// Whether virtual units are looked for too (Linux, Windows).
   bool get _socketsToo => socketDirectory() != null;
 
   BoardTransport _transportFor(String id) => id.startsWith(socketIdPrefix) ? _socket : _ble;
@@ -130,6 +130,7 @@ class BoardLink extends ChangeNotifier {
   Completer<RemoteAnswer>? _answer;
   int _answerId = -1;
   BytesBuilder? _answerBytes;
+  int _answerPieces = 0, _answerSize = 0;   // for saying what came of a slow request
   bool _askingVersion = false;   // the version swap's request is out
 
   bool _wanted = false;     // keep reconnecting
@@ -160,7 +161,8 @@ class BoardLink extends ChangeNotifier {
     if (b == null) {
       found[f.id] = f;
     } else {
-      b.rssi = f.rssi;
+      // Smoothed: a board heard a few times a second jumps by several dB each time
+      b.rssi = b.rssi == 0 || f.rssi == 0 ? f.rssi : ((b.rssi * 3 + f.rssi) / 4).round();
       b.inUse = f.inUse;
     }
     notifyListeners();
@@ -346,7 +348,7 @@ class BoardLink extends ChangeNotifier {
         // Paired and talking: swap versions. Asked again at the next status
         // until it's answered, as the first can come before the link's up.
         _askingVersion = true;
-        request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}&os=${Platform.isIOS ? 'iPhone' : Platform.isLinux ? 'Linux' : 'Android'}').then((a) {
+        request('GET', '/version?app=${Uri.encodeQueryComponent(appVersion)}&os=${Platform.isIOS ? 'iPhone' : Platform.isLinux ? 'Linux' : Platform.isWindows ? 'Windows' : 'Android'}').then((a) {
           if (a.status == 200) {
             final v = jsonDecode(a.body) as Map<String, dynamic>;
             firmware = v['firmware'] as String?;
@@ -380,6 +382,8 @@ class BoardLink extends ChangeNotifier {
 
   void _onAnswerPiece(AnswerPiece p) {
     if (p.id != _answerId || _answer == null) return;
+    _answerPieces++;
+    _answerSize += p.data.length;
     if (p.first) _answerBytes = BytesBuilder();
     final b = _answerBytes;
     if (b == null) return;
@@ -419,12 +423,25 @@ class BoardLink extends ChangeNotifier {
     final answer = _answer = Completer<RemoteAnswer>();
     _answerId = _requestId;
     _answerBytes = null;
+    _answerPieces = 0;
+    _answerSize = 0;
+    final clock = Stopwatch()..start();
     final text = Uint8List.fromList(utf8.encode('$method $target\n$body'));
     for (final m in requestMessages(_requestId, text, maxWrite)) {
       await _transport.write(m);
     }
+    final sent = clock.elapsedMilliseconds;
     try {
-      return await answer.future.timeout(timeout);
+      final a = await answer.future.timeout(timeout);
+      if (clock.elapsedMilliseconds > 1000) {
+        debugPrint('board: $method $target answered in ${clock.elapsedMilliseconds} ms '
+            '(sent in $sent, $_answerPieces pieces, $_answerSize bytes, mtu $mtu)');
+      }
+      return a;
+    } on TimeoutException {
+      debugPrint('board: $method $target got no answer in ${timeout.inSeconds} s '
+          '(sent in $sent ms, $_answerPieces pieces and $_answerSize bytes came, mtu $mtu)');
+      rethrow;
     } finally {
       _answer = null;
     }

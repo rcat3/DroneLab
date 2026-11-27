@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../comm/board_link.dart';
-import '../comm/board_transport.dart' show socketIdPrefix, socketUnitName;
+import '../comm/board_transport.dart' show socketUnitName;
 import '../comm/comm_controller.dart';
 import '../comm/mumble_client.dart';
 import '../comm/virtual_unit.dart';
@@ -414,7 +414,13 @@ Future<void> pickBoard(BuildContext context, CommController comm) async {
     builder: (context) => ListenableBuilder(
       listenable: comm.board,
       builder: (context, _) {
-        final boards = comm.board.found.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi));
+        // A steady order: the board from last time first, then by name. By signal, they
+        // jumped about as the signals changed
+        final boards = comm.board.found.values.toList()
+          ..sort((a, b) {
+            final mine = (b.id == comm.lastBoardId ? 1 : 0) - (a.id == comm.lastBoardId ? 1 : 0);
+            return mine != 0 ? mine : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+          });
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -452,9 +458,9 @@ Future<void> pickBoard(BuildContext context, CommController comm) async {
                         title: 'Start a virtual unit',
                         subtitle: 'No hardware: the firmware in a window on this computer',
                         onTap: () async {
-                          final path = VirtualUnits.socketFor(await VirtualUnits.nextFree());
-                          if (path != null && context.mounted) {
-                            Navigator.pop(context, FoundBoard('$socketIdPrefix$path', socketUnitName(path), 0, local: true));
+                          final unit = await VirtualUnits.nextFree();
+                          if (context.mounted) {
+                            Navigator.pop(context, FoundBoard(VirtualUnits.idFor(unit), socketUnitName(unit), 0, local: true));
                           }
                         },
                       ),
