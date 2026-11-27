@@ -6,7 +6,9 @@
 ///     commands for others' boards);
 ///   - a P-256 certificate for the Mumble server, the same every time (fixed
 ///     dates and serial, and an RFC 6979 signature), so the server, and
-///     everyone on it, sees the same certificate hash each time we connect.
+///     everyone on it, sees the same certificate hash each time we connect;
+///   - another, with a key of its own, for a HiveSight Guide's TLS link to
+///     its Vessels.
 /// Plain Dart but for where the seed's kept ([SeedStore]), so it can be
 /// tested on a computer.
 library;
@@ -83,6 +85,20 @@ class Identity {
   static String idOf(List<int> publicKey) => _hex(publicKey.sublist(0, 8));
 
   String get id => idOf(publicKey);
+
+  /// HiveSight's TLS certificate, from the seed as the Mumble one is but a
+  /// key of its own: PEM certificate and key for the sender, and the
+  /// certificate's SHA-256 (hex), which invitations carry for the Vessel
+  /// to pin. The same each time, so a Vessel's invitation stays good while
+  /// the sender restarts.
+  late final ({Uint8List certificatePem, Uint8List privateKeyPem, String fingerprint}) hiveSightCertificate = () {
+    final (cert, key) = _certificate(seed, label: 'dronelab-hivesight-cert', commonName: 'DroneLab HiveSight');
+    return (
+      certificatePem: _pem('CERTIFICATE', cert),
+      privateKeyPem: _pem('PRIVATE KEY', key),
+      fingerprint: hash.sha256.convert(cert).toString(),
+    );
+  }();
 
   Future<Uint8List> sign(List<int> message) async =>
       Uint8List.fromList((await _ed25519.sign(message, keyPair: _keyPair)).bytes);
@@ -206,11 +222,12 @@ class Identity {
   static const _oidCommonName = [2, 5, 4, 3];
 
   /// The certificate (DER) and its private key (PKCS #8 DER), from the seed.
-  static (Uint8List, Uint8List) _certificate(Uint8List seed) {
+  static (Uint8List, Uint8List) _certificate(Uint8List seed,
+      {String label = 'dronelab-mumble-cert', String commonName = 'DroneLab'}) {
     // The P-256 key: from the seed, so it's the same each time
     BigInt d = BigInt.zero;
     for (var i = 0; d == BigInt.zero || d >= _p256.n; i++) {
-      final mac = hash.Hmac(hash.sha256, seed).convert(utf8.encode('dronelab-mumble-cert-$i')).bytes;
+      final mac = hash.Hmac(hash.sha256, seed).convert(utf8.encode('$label-$i')).bytes;
       d = _int(mac);
     }
     final q = (_p256.G * d)!.getEncoded(false);
@@ -219,7 +236,7 @@ class Identity {
     final algorithm = _seq([_oid(_oidEcdsaSha256)]);
     final name = _seq([
       _set([
-        _seq([_oid(_oidCommonName), _tlv(0x0C, utf8.encode('DroneLab'))])
+        _seq([_oid(_oidCommonName), _tlv(0x0C, utf8.encode(commonName))])
       ])
     ]);
     final spki = _seq([
