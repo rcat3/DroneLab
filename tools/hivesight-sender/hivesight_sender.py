@@ -243,8 +243,9 @@ def _autoplug_select(_bin, _pad, caps, factory):
 class GstPipeline:
     """Owns one Gst pipeline: build, watch bus, restart on error."""
 
-    def __init__(self, name, build_desc, on_built=None, on_level=None, on_eos=None):
+    def __init__(self, name, build_desc, on_built=None, on_level=None, on_eos=None, on_error=None):
         self.name = name
+        self.on_error = on_error
         self.build_desc = build_desc
         self.on_built = on_built
         self.on_level = on_level
@@ -321,6 +322,8 @@ class GstPipeline:
         elif t == Gst.MessageType.ERROR:
             err, dbg = msg.parse_error()
             log.error("%s error: %s (%s)", self.name, err.message, dbg)
+            if self.on_error:
+                self.on_error(err.message)
             self._schedule_restart()
         elif t == Gst.MessageType.WARNING:
             w, _ = msg.parse_warning()
@@ -372,7 +375,8 @@ class Sender:
         self.apply_preset_values(self.state["voice"]["preset"])
 
         self.video = GstPipeline("video", self.video_desc, on_built=self._attach_video_clients,
-                                 on_eos=lambda: GLib.idle_add(self._on_file_eos))
+                                 on_eos=lambda: GLib.idle_add(self._on_file_eos),
+                                 on_error=self._on_video_error)
         if args.file:
             self._select_file_sync(args.file)
         self.audio = GstPipeline("audio", self.audio_desc, on_built=self._attach_audio_clients,
@@ -600,6 +604,19 @@ class Sender:
                 asyncio.run_coroutine_threadsafe(
                     self.broadcast({"type": "set", "path": "media.paused", "value": True}), self.loop)
         return False
+
+    def _on_video_error(self, message):
+        """Tell the Guide page, once per failure run: a camera that's
+        unplugged or busy fails every few seconds as it's retried."""
+        now = time.monotonic()
+        if now - getattr(self, "_video_error_t", 0.0) < 15:
+            return
+        self._video_error_t = now
+        src = self.state["stream"].get("source", "")
+        if self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.notify(f"No video from {src}: {message.rstrip('.')}. Retrying; pick another camera under Source."),
+                self.loop)
 
     async def notify(self, text):
         await self.broadcast({"type": "notice", "text": text}, roles={"guide"})

@@ -614,11 +614,24 @@ class _CameraPicker extends StatelessWidget {
   final bool enabled;
   const _CameraPicker(this.g, {required this.enabled});
 
+  /// The mode to start a camera in: the biggest picture that still runs
+  /// smoothly (24 fps or more), MJPEG before YUYV, or failing that the
+  /// smoothest. Big YUYV modes often run at 2–5 fps.
   static ({String format, int width, int height, List<int> fps}) _best(
     List<({String format, int width, int height, List<int> fps})> modes,
-  ) => ([...modes]..sort((a, b) => b.width * b.height - a.width * a.height)).first;
+  ) {
+    int score(({String format, int width, int height, List<int> fps}) m) {
+      final fps = _top(m.fps) ?? 0;
+      return (fps >= 24 ? 1 << 40 : fps << 32) + (m.format == 'mjpeg' ? 1 << 31 : 0) + m.width * m.height;
+    }
+
+    return ([...modes]..sort((a, b) => score(b).compareTo(score(a)))).first;
+  }
 
   static int? _top(List<int> fps) => fps.isEmpty ? null : fps.reduce((a, b) => a > b ? a : b);
+
+  /// What the sender starts with, and the test pattern always uses.
+  static const _pattern = SenderOptions();
 
   void _use(SenderOptions o) => g.setOptions(o, useCamera: true);
 
@@ -626,7 +639,12 @@ class _CameraPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final o = g.options;
     final cam = g.cameras.where((c) => c.path == o.camera).firstOrNull;
-    final modes = cam?.modes ?? const [];
+    // Biggest first, MJPEG before YUYV
+    final modes = [...?cam?.modes]
+      ..sort((a, b) {
+        final f = (a.format == 'mjpeg' ? 0 : 1).compareTo(b.format == 'mjpeg' ? 0 : 1);
+        return f != 0 ? f : (b.width * b.height).compareTo(a.width * a.height);
+      });
     final mode = modes.where((m) => m.format == o.format && m.width == o.width && m.height == o.height).firstOrNull;
     Widget row(String label, Widget child) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -659,14 +677,22 @@ class _CameraPicker extends StatelessWidget {
                           final c = g.cameras.where((x) => x.path == p).firstOrNull;
                           final m = c == null || c.modes.isEmpty ? null : _best(c.modes);
                           _use(
-                            o.copyWith(
-                              camera: p ?? '',
-                              format: m?.format,
-                              width: m?.width,
-                              height: m?.height,
-                              fps: m == null ? null : _top(m.fps),
-                              layout: p == null || p.isEmpty ? 'sbs' : null,
-                            ),
+                            m == null
+                                ? o.copyWith(
+                                    camera: p ?? '',
+                                    format: _pattern.format,
+                                    width: _pattern.width,
+                                    height: _pattern.height,
+                                    fps: _pattern.fps,
+                                    layout: 'sbs',
+                                  )
+                                : o.copyWith(
+                                    camera: p,
+                                    format: m.format,
+                                    width: m.width,
+                                    height: m.height,
+                                    fps: _top(m.fps),
+                                  ),
                           );
                         }
                       : null,
@@ -690,7 +716,11 @@ class _CameraPicker extends StatelessWidget {
                 for (var i = 0; i < modes.length; i++)
                   DropdownMenuItem(
                     value: i,
-                    child: Text('${modes[i].width}×${modes[i].height} ${modes[i].format.toUpperCase()}'),
+                    child: Text(
+                      '${modes[i].width}×${modes[i].height} ${modes[i].format.toUpperCase()}'
+                      '${_top(modes[i].fps) == null ? '' : ', ${_top(modes[i].fps)} fps'}',
+                      style: TextStyle(color: (_top(modes[i].fps) ?? 30) < 24 ? Kc.muted : null),
+                    ),
                   ),
               ],
               onChanged: enabled
