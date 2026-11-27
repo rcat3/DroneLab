@@ -97,6 +97,9 @@ class ControlClient(
         send(JSONObject().put("type", "keyframe"))
     }
 
+    /** Tells the Guide we left on purpose (the exit gesture). */
+    fun sendLeft() = send(JSONObject().put("type", "left"))
+
     fun sendStats(stats: JSONObject) = send(JSONObject().put("type", "stats").put("stats", stats))
 
     /** Preview payloads. Dropped (not queued) if the link is backed up. */

@@ -23,6 +23,7 @@ import 'app_profile.dart';
 import 'comm_controller.dart';
 import 'conversations.dart';
 import 'hivesight_invite.dart';
+import 'hivesight_words.dart';
 import 'identity.dart';
 
 /// How the sender's camera, microphone and media are set up: given to it
@@ -427,6 +428,7 @@ print(" ".join(missing))
 
   void _onLinkDone() {
     _ws = null;
+    words.stopTiming();
     notifyListeners();
     if (state == SenderState.running && !_stopping) _retry = Timer(const Duration(seconds: 1), _connect);
   }
@@ -486,6 +488,10 @@ print(" ".join(missing))
         notifyListeners();
       case 'notice':
         notices.add(m['text'] as String? ?? '');
+      case 'vessel_left':
+        // They used the exit gesture in the headset
+        final who = vessels.where((v) => v.id == m['id']);
+        notices.add('${who.isEmpty ? 'A Vessel' : nameOf(who.first)} left the session');
       case 'clients':
         _onClients(m);
     }
@@ -586,6 +592,18 @@ print(" ".join(missing))
       set('fx.fade', 0.0);
       set('photic.on', false);
     }
+  }
+
+  /// Words: phrase lists, and their cues timed from here.
+  late final GuideWords words = GuideWords(setInOrder, () => linked);
+
+  /// Several settings at once, each sent as it is (no slider throttle), in order.
+  void setInOrder(List<(String, Object)> changes) {
+    for (final (path, value) in changes) {
+      values[path] = value;
+      _send({'type': 'set', 'path': path, 'value': value});
+    }
+    notifyListeners();
   }
 
   void command(String type, [Map<String, Object?> more = const {}]) => _send({'type': type, ...more});

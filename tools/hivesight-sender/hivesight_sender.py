@@ -115,6 +115,14 @@ DEFAULT_STATE = {
         "on": False, "sync": True, "hz": 10.0, "depth": 0.5, "amount": 0.3,
         "hue": 0.6, "sat": 0.8, "hue_cycle_s": 0.0, "alternate": False,
     },
+    # Words drawn into the Vessel's view. Guide-only: the Guide page times
+    # the cues (text, then seq, which counts up on every cue so the same
+    # phrase can be cued twice) and each cue carries its own fade_s. Not part
+    # of scenes: a scene is a look, and a phrase shouldn't come back with it.
+    "words": {
+        "text": "", "seq": 0, "mode": "still", "size": 0.12, "depth": 0.0,
+        "opacity": 1.0, "hue": 0.0, "sat": 0.0, "speed": 0.5, "fade_s": 1.0,
+    },
     # Guide preview: the phone mirrors back what it shows and plays.
     # Switched off automatically when the last Guide page disconnects.
     "preview": {"video": False, "audio": False, "fps": 10},
@@ -149,6 +157,8 @@ def set_path(tree, path, value):
     # Coerce to the existing type so a slider's "0.5" string can't sneak in.
     if isinstance(old, bool):
         value = bool(value)
+    elif isinstance(old, str):
+        value = str(value)[:600]
     elif isinstance(old, (int, float)) and not isinstance(value, bool):
         value = type(old)(float(value)) if isinstance(old, float) else int(round(float(value)))
     node[leaf] = value
@@ -886,7 +896,7 @@ class Sender:
         await self.broadcast({"type": "set", "path": path, "value": value})
 
     # Messages each role may send. Vessels only report; the Guide page drives.
-    VESSEL_MESSAGES = {"hello", "ping", "stats", "keyframe"}
+    VESSEL_MESSAGES = {"hello", "ping", "stats", "keyframe", "left"}
 
     def _session_valid(self, token) -> bool:
         return (self.session_token is not None and isinstance(token, str)
@@ -966,6 +976,10 @@ class Sender:
             GLib.idle_add(lambda: (self.seek(pos), False)[1])
         elif t == "keyframe":
             GLib.idle_add(lambda: (self.force_keyframe(), False)[1])
+        elif t == "left":
+            # The Vessel used the exit gesture; its socket closes next.
+            info["left"] = True
+            await self.broadcast({"type": "vessel_left", "id": info["id"]}, roles={"guide"})
         elif t == "ping":
             await ws.send_str(json.dumps({"type": "pong", "t": msg.get("t")}))
         elif t == "stats":

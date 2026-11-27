@@ -7,6 +7,7 @@ import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
 import '../comm/hivesight_guide.dart';
 import '../comm/hivesight_invite.dart';
+import '../comm/hivesight_words.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -34,6 +35,7 @@ class _HiveSightGuidePageState extends State<HiveSightGuidePage> {
     _notices = g.notices.stream.listen((t) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
     });
+    g.words.load();
     if (g.cameras.isEmpty) g.listDevices();
     if (g.state == SenderState.stopped) g.start();
   }
@@ -136,6 +138,7 @@ class _HiveSightGuidePageState extends State<HiveSightGuidePage> {
               _BeatsPanel(g, enabled: live),
               _VisionPanel(g, enabled: live),
               _SpiralPanel(g, enabled: live),
+              _WordsPanel(g, enabled: live),
               _LightPulsePanel(g, enabled: live),
               _ScenesPanel(g, enabled: live),
               _CalibratePanel(g, enabled: live),
@@ -155,7 +158,9 @@ class _HiveSightGuidePageState extends State<HiveSightGuidePage> {
                 children: [
                   Container(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                    decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Kc.line))),
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Kc.line)),
+                    ),
                     child: _PreviewPanel(g, enabled: live, maxHeight: box.maxHeight * 0.3),
                   ),
                   Expanded(child: scroll),
@@ -550,7 +555,21 @@ class _VesselsPanel extends StatelessWidget {
               IconButton(
                 tooltip: 'Remove from the session',
                 icon: const Icon(Icons.person_remove_outlined, color: Kc.muted),
-                onPressed: () => g.remove(v),
+                onPressed: () async {
+                  final name = g.nameOf(v);
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (d) => AlertDialog(
+                      title: Text('Remove $name?'),
+                      content: const Text('They leave the session and can only come back with a new invitation.'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
+                        FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Remove')),
+                      ],
+                    ),
+                  );
+                  if (ok == true) g.remove(v);
+                },
               ),
             ],
           ),
@@ -674,7 +693,10 @@ class _CameraPicker extends StatelessWidget {
                   items: [
                     const DropdownMenuItem(value: '', child: Text('Test pattern')),
                     for (final c in g.cameras)
-                      DropdownMenuItem(value: c.path, child: Text(c.name, overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                        value: c.path,
+                        child: Text(c.name, overflow: TextOverflow.ellipsis),
+                      ),
                   ],
                   onChanged: enabled
                       ? (p) {
@@ -1251,6 +1273,317 @@ class _MicMeter extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ----- Words -----
+
+class _WordsPanel extends StatefulWidget {
+  final HiveSightGuide g;
+  final bool enabled;
+  const _WordsPanel(this.g, {required this.enabled});
+
+  @override
+  State<_WordsPanel> createState() => _WordsPanelState();
+}
+
+class _WordsPanelState extends State<_WordsPanel> {
+  final _text = TextEditingController();
+  double _fade = 1.0; // for the next phrase added or shown
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  Future<String?> _ask(String title, String initial) => showDialog<String>(
+    context: context,
+    builder: (d) {
+      final c = TextEditingController(text: initial);
+      return AlertDialog(
+        title: Text(title),
+        content: TextField(controller: c, autofocus: true, onSubmitted: (v) => Navigator.pop(d, v)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(d, c.text), child: const Text('OK')),
+        ],
+      );
+    },
+  );
+
+  Future<void> _edit(GuideWords w, int i) async {
+    final p = w.list!.phrases[i];
+    final c = TextEditingController(text: p.text);
+    var fade = p.fadeS;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => StatefulBuilder(
+        builder: (d, setState) => AlertDialog(
+          title: const Text('Edit phrase'),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: c, autofocus: true, minLines: 1, maxLines: 5, maxLength: wordsMaxLength),
+                Row(
+                  children: [
+                    const Text('Fade'),
+                    Expanded(
+                      child: Slider(
+                        value: fade,
+                        min: 0,
+                        max: 10,
+                        divisions: 40,
+                        onChanged: (v) => setState(() => fade = v),
+                      ),
+                    ),
+                    Text('${fade.toStringAsFixed(2)} s', style: Kc.term(14)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    if (ok == true) w.editPhrase(i, c.text, fade);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final g = widget.g, enabled = widget.enabled;
+    final w = g.words;
+    return ListenableBuilder(
+      listenable: w,
+      builder: (context, _) {
+        final l = w.list;
+        final phrases = l?.phrases ?? const <WordsPhrase>[];
+        final hold = w.holdSeconds;
+        return _Card('Words', [
+          const Text(
+            'Phrases shown in the Vessel\'s view, timed from here. BLACKOUT hides them too. Lists are kept on this computer.',
+            style: _small,
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButton<int>(
+                  isExpanded: true,
+                  value: w.listIndex.clamp(0, w.lists.isEmpty ? 0 : w.lists.length - 1),
+                  items: [
+                    for (var i = 0; i < w.lists.length; i++) DropdownMenuItem(value: i, child: Text(w.lists[i].name)),
+                  ],
+                  onChanged: (i) => i == null ? null : w.selectList(i),
+                ),
+              ),
+              IconButton(
+                tooltip: 'New list',
+                icon: const Icon(Icons.add),
+                onPressed: () async {
+                  final n = await _ask('New list', '');
+                  if (n != null) w.addList(n);
+                },
+              ),
+              IconButton(
+                tooltip: 'Rename list',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () async {
+                  final n = await _ask('Rename list', l?.name ?? '');
+                  if (n != null) w.renameList(n);
+                },
+              ),
+              IconButton(
+                tooltip: 'Delete list',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (d) => AlertDialog(
+                      title: Text('Delete ${l?.name}?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
+                        FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Delete')),
+                      ],
+                    ),
+                  );
+                  if (ok == true) w.deleteList();
+                },
+              ),
+            ],
+          ),
+          if (phrases.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('No phrases yet.', style: _small),
+            ),
+          for (var i = 0; i < phrases.length; i++)
+            Container(
+              decoration: BoxDecoration(color: i == w.current ? Kc.line : null, borderRadius: BorderRadius.circular(8)),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: enabled ? () => w.cue(i) : null,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                        child: Text(
+                          phrases[i].text,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: enabled ? Kc.text : Kc.dim),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Text('${phrases[i].fadeS.toStringAsFixed(1)} s', style: Kc.term(12, color: Kc.muted)),
+                  IconButton(
+                    tooltip: 'Move up',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.arrow_upward, size: 18),
+                    onPressed: i == 0 ? null : () => w.movePhrase(i, -1),
+                  ),
+                  IconButton(
+                    tooltip: 'Move down',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.arrow_downward, size: 18),
+                    onPressed: i == phrases.length - 1 ? null : () => w.movePhrase(i, 1),
+                  ),
+                  IconButton(
+                    tooltip: 'Edit',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    onPressed: () => _edit(w, i),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () => w.removePhrase(i),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _text,
+            minLines: 1,
+            maxLines: 4,
+            maxLength: wordsMaxLength,
+            decoration: const InputDecoration(hintText: 'A phrase', isDense: true, counterText: ''),
+          ),
+          Row(
+            children: [
+              const SizedBox(width: 4),
+              const Text('Fade', style: TextStyle(fontSize: 14)),
+              Expanded(
+                child: Slider(
+                  value: _fade,
+                  min: 0,
+                  max: 10,
+                  divisions: 40,
+                  onChanged: (v) => setState(() => _fade = v),
+                ),
+              ),
+              SizedBox(
+                width: 56,
+                child: Text('${_fade.toStringAsFixed(2)} s', style: Kc.term(14), textAlign: TextAlign.right),
+              ),
+            ],
+          ),
+          Wrap(
+            spacing: 8,
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.playlist_add),
+                label: const Text('Add to list'),
+                onPressed: () {
+                  w.addPhrase(_text.text, _fade);
+                  _text.clear();
+                },
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.visibility_outlined),
+                label: const Text('Show now'),
+                onPressed: enabled ? () => w.show(_text.text, _fade) : null,
+              ),
+            ],
+          ),
+          _group('Cues'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.skip_previous),
+                label: const Text('Previous'),
+                onPressed: enabled && phrases.isNotEmpty ? w.previous : null,
+              ),
+              FilledButton.icon(
+                icon: const Icon(Icons.skip_next),
+                label: Text(w.current < 0 ? 'Start' : 'Next'),
+                onPressed: enabled && phrases.isNotEmpty ? w.next : null,
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.clear_all),
+                label: const Text('Clear'),
+                onPressed: enabled ? w.clear : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text('On screen: ${wordsHoldLabel(hold)}'),
+          Slider(
+            value: w.hold.toDouble(),
+            min: 0,
+            max: (wordsHolds.length - 1).toDouble(),
+            divisions: wordsHolds.length - 1,
+            label: wordsHoldLabel(hold),
+            semanticFormatterCallback: (v) => wordsHoldLabel(wordsHolds[v.round()]),
+            onChanged: (v) => w.setHold(v.round()),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Go on to the next phrase by itself', style: TextStyle(fontSize: 14)),
+            subtitle: hold == 0 ? const Text('Needs a time above', style: _small) : null,
+            value: w.auto,
+            onChanged: hold == 0 ? null : w.setAuto,
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Start again after the last', style: TextStyle(fontSize: 14)),
+            value: w.loop,
+            onChanged: w.setLoop,
+          ),
+          _group('Look'),
+          _Choice(g, 'words.mode', 'Motion', const [
+            ('still', 'Still'),
+            ('breathe', 'Breathe'),
+            ('drift', 'Drift'),
+            ('pulse', 'Pulse with the beat'),
+            ('spiral', 'Follow the spiral'),
+          ], enabled: enabled),
+          _Slide(g, 'words.speed', 'Motion speed', 0, 4, 0.05, enabled: enabled),
+          _Slide(g, 'words.size', 'Size', 0.02, 0.4, 0.005, enabled: enabled),
+          _Slide(g, 'words.depth', 'Depth', -1, 1, 0.01, enabled: enabled),
+          _Slide(g, 'words.opacity', 'Opacity', 0, 1, 0.01, enabled: enabled),
+          _Slide(g, 'words.hue', 'Hue', 0, 1, 0.01, enabled: enabled),
+          _Slide(g, 'words.sat', 'Colour', 0, 1, 0.01, enabled: enabled),
+          const Text(
+            'Depth: further than the picture below zero, nearer above. Pulse with the beat only brightens with the light pulse allowed.',
+            style: _small,
+          ),
+        ]);
+      },
     );
   }
 }

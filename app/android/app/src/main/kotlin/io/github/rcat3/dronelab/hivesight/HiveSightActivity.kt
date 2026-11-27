@@ -17,6 +17,7 @@ import android.os.PowerManager
 import androidx.annotation.RequiresApi
 import android.view.Gravity
 import android.view.GestureDetector
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
@@ -139,6 +140,31 @@ class HiveSightActivity : Activity() {
         super.onPause()
     }
 
+    // ------------------------------------------------------------ exit gesture
+    // Holding volume-down for 1.5 s leaves the session, with the headset on:
+    // the view goes black at once, the Guide is told, and the Activity closes.
+    // There's no confirmation, on purpose.
+    private val exitNow = Runnable { leaveSession() }
+
+    override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+        if (e.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) ui.postDelayed(exitNow, EXIT_HOLD_MS)
+            if (e.action == KeyEvent.ACTION_UP) ui.removeCallbacks(exitNow)
+            return true // no volume change either: it's a button, not a volume control
+        }
+        return super.dispatchKeyEvent(e)
+    }
+
+    private fun leaveSession() {
+        if (!::renderer.isInitialized || isFinishing) return
+        renderer.exiting = true
+        Params.set("fx.fade", 0.0)
+        Params.set("photic.on", false)
+        Params.set("words.text", "")
+        if (::control.isInitialized) control.sendLeft() // control.stop() closes after it's sent
+        ui.postDelayed({ finish() }, 150)
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemUi()
@@ -245,6 +271,9 @@ class HiveSightActivity : Activity() {
     }
 
     companion object {
+        /** How long volume-down is held to leave the session. */
+        const val EXIT_HOLD_MS = 1500L
+
         /** The session, from the intent MainActivity starts this with; null if it isn't one. */
         fun sessionOf(i: android.content.Intent): Session? {
             val hosts = i.getStringArrayListExtra("hosts")?.filter { it.isNotBlank() } ?: return null
