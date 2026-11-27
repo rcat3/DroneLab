@@ -10,6 +10,7 @@ import '../comm/hivesight_guide.dart';
 import '../comm/hivesight_invite.dart';
 import '../comm/permissions.dart';
 import '../comm/rules.dart' show RuleClass;
+import 'hivesight_guide_page.dart';
 import 'theme.dart';
 
 /// HiveSight on the Vessel's side: joining a Guide's invitation, and the
@@ -202,7 +203,8 @@ class HiveSightInviteCard extends StatefulWidget {
   final HiveSightInvite i;
   final ConversationEntry e;
   final String from;
-  const HiveSightInviteCard(this.comm, this.i, this.e, {super.key, required this.from});
+  final bool ended; // its Guide has said the session's over
+  const HiveSightInviteCard(this.comm, this.i, this.e, {super.key, required this.from, this.ended = false});
 
   @override
   State<HiveSightInviteCard> createState() => _HiveSightInviteCardState();
@@ -225,7 +227,7 @@ class _HiveSightInviteCardState extends State<HiveSightInviteCard> {
   @override
   Widget build(BuildContext context) {
     final i = widget.i, mine = widget.e.mine;
-    final expired = i.expired;
+    final over = i.expired || widget.ended;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -243,10 +245,14 @@ class _HiveSightInviteCardState extends State<HiveSightInviteCard> {
         ),
         const SizedBox(height: 4),
         Text(
-          expired ? 'Expired' : 'As a Vessel, until ${HiveSightInvite.clock(i.expires)}',
+          widget.ended
+              ? 'The session has ended'
+              : i.expired
+              ? 'Expired'
+              : 'As a Vessel, until ${HiveSightInvite.clock(i.expires)}',
           style: const TextStyle(color: Kc.muted, fontSize: 13),
         ),
-        if (!mine && !expired) ...[
+        if (!mine && !over) ...[
           const SizedBox(height: 8),
           FutureBuilder<bool>(
             future: hiveSightSupported(),
@@ -270,30 +276,54 @@ class _HiveSightInviteCardState extends State<HiveSightInviteCard> {
 /// can guide one, with developer options on.
 bool canInviteToHiveSight(CommController comm) => HiveSightGuide.supported && comm.developerOptions;
 
-/// Invite [c] to our HiveSight session, as a text with a Join button: the
-/// sender and a session are started first if they aren't yet, after asking.
+/// Invite [c] to our HiveSight session, as a text with a Join button,
+/// after asking (the sender and a session are started first if they aren't
+/// yet), and then, unless unticked, open the Guide page.
 Future<void> inviteToHiveSight(BuildContext context, CommController comm, Conversation c) async {
   final g = HiveSightGuide.of(comm);
   final messenger = ScaffoldMessenger.of(context);
-  if (!g.canInvite) {
-    final go = await showDialog<bool>(
-      context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('Start a HiveSight session?'),
-        content: Text(
-          'Experimental. ${c.kind == ConversationKind.person ? 'They get' : 'Everyone in ${c.title} gets'} a text '
-          'with a Join button, to join as a Vessel for the next '
-          '${HiveSightInvite.lifetime.inHours} hours or until you end it. Guide it from Setup → Developer → '
-          'HiveSight Guide.',
+  final navigator = Navigator.of(context);
+  final starting = !g.canInvite;
+  var open = true;
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (d) => StatefulBuilder(
+      builder: (d, setState) => AlertDialog(
+        title: Text(starting ? 'Start a HiveSight session?' : 'Invite to HiveSight?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${starting ? 'Experimental. ' : ''}'
+              '${c.kind == ConversationKind.person ? '${c.title} gets' : 'Everyone in ${c.title} gets'} a text '
+              'with a Join button, to join as a Vessel '
+              '${starting ? 'for the next ${HiveSightInvite.lifetime.inHours} hours' : 'until ${HiveSightInvite.clock(g.session!.expires)}'}'
+              ' or until you end the session.',
+            ),
+            const SizedBox(height: 8),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: open,
+              onChanged: (on) => setState(() => open = on ?? false),
+              title: const Text('Open the Guide page'),
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Start and invite')),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, true),
+            child: Text(starting ? 'Start and invite' : 'Send invitation'),
+          ),
         ],
       ),
-    );
-    if (go != true) return;
-  }
+    ),
+  );
+  if (go != true) return;
   final why = await g.inviteStarting(c);
   messenger.showSnackBar(SnackBar(content: Text(why ?? 'Invitation to HiveSight sent to ${c.audience}')));
+  if (why == null && open) {
+    navigator.push(MaterialPageRoute<void>(builder: (_) => HiveSightGuidePage(comm: comm)));
+  }
 }
