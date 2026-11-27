@@ -21,4 +21,13 @@ void main() {
     expect(await changed.verify(), isFalse);
     expect(HiveSightInvite.parse('just a text'), isNull);
   });
+
+  test('the end of a session', () {
+    final t = HiveSightInvite.endText('abcdefghijklmnopqrstuvwx');
+    expect(HiveSightInvite.endOf(t), 'abcdefghijklmnopqrstuvwx');
+    expect(HiveSightInvite.endWords(t), 'My HiveSight session has ended');
+    expect(HiveSightInvite.preview(t), 'HiveSight session ended');
+    expect(HiveSightInvite.parse(t), isNull);
+    expect(HiveSightInvite.endOf('just a text'), isNull);
+  });
 }

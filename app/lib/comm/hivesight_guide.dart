@@ -605,6 +605,7 @@ print(" ".join(missing))
 
   /// Start one: [HiveSightInvite.lifetime] from now.
   void startSession() {
+    _invited.clear();
     _session = (token: _randomToken(), expires: DateTime.now().add(HiveSightInvite.lifetime));
     _send({'type': 'session', 'token': _session!.token, 'expires': _session!.expires.millisecondsSinceEpoch / 1000});
     notifyListeners();
@@ -612,11 +613,24 @@ print(" ".join(missing))
 
   /// End it: every Vessel's dropped, and the invitations no longer work.
   Future<void> endSession() async {
-    if (_session == null) return;
+    final s = _session;
+    if (s == null) return;
     _session = null;
     _send({'type': 'session_end'});
     notifyListeners();
+    // Tell those invited, so their invitations lose the Join button (not
+    // needed once it's run out: they show that themselves)
+    if (s.expires.isAfter(DateTime.now())) {
+      for (final key in _invited) {
+        final c = comm.conversations.all[key];
+        if (c != null) comm.sendText(c, HiveSightInvite.endText(s.token), typed: false);
+      }
+    }
+    _invited.clear();
   }
+
+  /// The conversations invited to this session.
+  final Set<String> _invited = {};
 
   /// Invite a conversation, as a text: false if there's no session, or it
   /// couldn't go.
@@ -624,7 +638,9 @@ print(" ".join(missing))
     final s = session, me = comm.identity;
     if (s == null || me == null || state != SenderState.running) return false;
     final i = await HiveSightInvite.make(me, hosts: addrs, port: vesselPort, token: s.token, expires: s.expires);
-    return comm.sendText(c, i.text, typed: false);
+    if (!comm.sendText(c, i.text, typed: false)) return false;
+    _invited.add(c.key);
+    return true;
   }
 
   bool get canInvite => session != null && state == SenderState.running && addrs.isNotEmpty;

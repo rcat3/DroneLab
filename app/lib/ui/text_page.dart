@@ -434,6 +434,13 @@ class _ConversationPageState extends State<ConversationPage> {
         }
         final online = comm.isOnline(c);
         final group = c.kind != ConversationKind.person;
+        // HiveSight sessions their Guide has said have ended, here: their
+        // invitations lose the Join button
+        final ended = {
+          for (final x in c.entries)
+            if (x.kind == ConversationEntry.text)
+              if (HiveSightInvite.endOf(x.body) case final t?) '${x.who}\n$t',
+        };
         return Scaffold(
           appBar: AppBar(
             // Smaller to fit beside the buttons, as a long name needs
@@ -535,7 +542,8 @@ class _ConversationPageState extends State<ConversationPage> {
                                 comm: comm,
                                 from: comm.fromLabel(c.entries[i]),
                                 named: group,
-                                photo: comm.conversations.photoFile(c.entries[i])),
+                                photo: comm.conversations.photoFile(c.entries[i]),
+                                endedSessions: ended),
                             if (c.entries[i].reactions.isNotEmpty)
                               _Reactions(comm, c.entries[i],
                                   onTap: comm.isOnline(c) ? (r) => comm.react(c, c.entries[i], r) : null),
@@ -616,7 +624,9 @@ class _Entry extends StatelessWidget {
   final bool named;     // show who it's from: in a channel, not with one person
   final File? photo;    // a photo's file
   final CommController comm;
-  const _Entry(this.e, this.time, {required this.comm, required this.from, required this.named, this.photo});
+  final Set<String> endedSessions; // HiveSight sessions said to have ended here: who, newline, token
+  const _Entry(this.e, this.time,
+      {required this.comm, required this.from, required this.named, this.photo, this.endedSessions = const {}});
 
   @override
   Widget build(BuildContext context) {
@@ -684,7 +694,13 @@ class _Entry extends StatelessWidget {
             if (ServerInvite.parse(e.body) case final i?)
               _ServerInviteCard(comm, i, mine: e.mine)
             else if (HiveSightInvite.parse(e.body) case final i?)
-              HiveSightInviteCard(comm, i, e, from: from)
+              HiveSightInviteCard(comm, i, e, from: from, ended: endedSessions.contains('${e.who}\n${i.token}'))
+            else if (HiveSightInvite.endOf(e.body) != null)
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.visibility_off_outlined, size: 18, color: Kc.muted),
+                const SizedBox(width: 6),
+                Flexible(child: Text(HiveSightInvite.endWords(e.body), style: const TextStyle(fontSize: 15))),
+              ])
             else if (PatternShare.parse(e.body) case final p?)
               _PatternCard(comm, p, from: from, mine: e.mine)
             else

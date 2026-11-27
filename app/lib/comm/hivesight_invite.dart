@@ -104,8 +104,37 @@ class HiveSightInvite {
   }
 
   /// A text, as shown where the whole of it isn't (the list of
-  /// conversations, notifications): an invitation in words.
-  static String preview(String text) => parse(text) == null ? text : 'Invitation to a HiveSight session';
+  /// conversations, notifications): an invitation, or its end, in words.
+  static String preview(String text) => parse(text) != null
+      ? 'Invitation to a HiveSight session'
+      : endOf(text) != null
+      ? 'HiveSight session ended'
+      : text;
+
+  // ----- The session's end -----
+  //
+  // When the Guide ends a session, each conversation they invited is sent
+  // a text saying so, with a line naming the session (its token, no use to
+  // anyone now). The invitations before it, from the same person, lose
+  // their Join button.
+
+  static const _endPrefix = 'dronelab://hivesight-end?t=';
+
+  /// The text saying the session with [token] has ended.
+  static String endText(String token) => 'My HiveSight session has ended\n$_endPrefix$token';
+
+  /// The session a text says has ended, or null if it isn't one.
+  static String? endOf(String text) {
+    for (final line in text.split('\n')) {
+      final l = line.trim();
+      if (l.startsWith(_endPrefix) && l.length > _endPrefix.length) return l.substring(_endPrefix.length);
+    }
+    return null;
+  }
+
+  /// The words of an end text, without its line for the app.
+  static String endWords(String text) =>
+      text.split('\n').where((l) => !l.trim().startsWith(_endPrefix)).join('\n').trim();
 
   /// What a Vessel signs to say who it is, for this session.
   static List<int> joinMessage(String token, String fingerprint) => utf8.encode('$_joinContext$token\n$fingerprint');
