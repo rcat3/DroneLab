@@ -137,6 +137,8 @@ class HiveSightActivity : Activity() {
             setReferenceCounted(false); acquire()
         }
         decoder.start(); video.start(); audio.start()
+        inFront = true
+        Quiet.start(this)
         if (ended == null) control.start()
         ui.post(statsTick)
     }
@@ -144,6 +146,8 @@ class HiveSightActivity : Activity() {
     override fun onPause() {
         if (!::session.isInitialized) { super.onPause(); return }
         ui.removeCallbacks(statsTick)
+        inFront = false
+        Quiet.restore(this)
         control.stop(); video.stop(); audio.stop(); decoder.stop()
         wifiLock?.release()
         glView.onPause()
@@ -298,6 +302,7 @@ class HiveSightActivity : Activity() {
     override fun onDestroy() {
         Params.onChange = null
         stopToys("closed")
+        Quiet.restore(this)
         current = null
         super.onDestroy()
         if (::session.isInitialized) onClosed?.invoke()
@@ -306,6 +311,9 @@ class HiveSightActivity : Activity() {
     companion object {
         /** Called when the view closes: MainActivity tells the app, which holds HiveMind voice while it's open. */
         @Volatile var onClosed: (() -> Unit)? = null
+
+        /** The view's in front: other apps' notifications are held back (Quiet). */
+        @Volatile var inFront = false
 
         /** The Guide's toy commands (base64 others.h bytes), for the app to give the unit. */
         @Volatile var onToys: ((String) -> Unit)? = null

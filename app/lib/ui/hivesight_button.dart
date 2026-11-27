@@ -64,6 +64,9 @@ Future<String?> joinHiveSight(
   final sig = await me.sign(HiveSightInvite.joinMessage(i.token, i.fingerprint));
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString('hiveSightLast', '$who\n$from\n${i.link}');
+  if (!context.mounted) return null;
+  // Off to Android's settings to give it: back here, join again
+  if (!await _offerQuiet(context)) return null;
   // Toys the Guide drives go to our unit under these rules, and stop with the view
   final toys = VesselToys(comm, keyHex, _channel);
   _channel.setMethodCallHandler((call) async {
@@ -98,6 +101,43 @@ Future<String?> joinHiveSight(
     return e.message ?? "Couldn't open HiveSight";
   }
   return null;
+}
+
+/// Other apps' notifications are held back while the view's in front, if
+/// Android's Do Not Disturb access is given. Offered once, to give it.
+/// False if they went to the settings for it, so the view isn't opened over them.
+Future<bool> _offerQuiet(BuildContext context) async {
+  try {
+    if (await _channel.invokeMethod<bool>('quietAccess') ?? true) return true;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('hiveSightQuietAsked') ?? false) return true;
+    await prefs.setBool('hiveSightQuietAsked', true);
+    if (!context.mounted) return true;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Keep notifications out?'),
+        content: const Text(
+          "Other apps' notifications can pop up over the view. To hold them back while a session is open, "
+          'allow DroneLab Do Not Disturb access in Android\'s settings. It puts your settings back when '
+          'you leave the view. You can allow it later there too.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Not now')),
+          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Open settings')),
+        ],
+      ),
+    );
+    if (go == true) {
+      await _channel.invokeMethod<void>('quietSettings');
+      return false;
+    }
+    return true;
+  } on PlatformException {
+    return true;
+  } on MissingPluginException {
+    return true;
+  }
 }
 
 /// Ask whether [from] may guide us.

@@ -33,6 +33,10 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Do Not Disturb left changed by a view the system killed
+        if (Build.VERSION.SDK_INT >= 30 && !io.github.rcat3.dronelab.hivesight.HiveSightActivity.inFront) {
+            io.github.rcat3.dronelab.hivesight.Quiet.restore(this)
+        }
         val c = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/media_buttons")
         c.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -116,6 +120,12 @@ class MainActivity : FlutterActivity() {
         }
         hiveChannel.setMethodCallHandler { call, result ->
             when (call.method) {
+                "quietAccess" -> result.success(
+                    Build.VERSION.SDK_INT >= 30 && io.github.rcat3.dronelab.hivesight.Quiet.hasAccess(this))
+                "quietSettings" -> if (Build.VERSION.SDK_INT >= 30) {
+                    startActivity(io.github.rcat3.dronelab.hivesight.Quiet.settingsIntent())
+                    result.success(null)
+                } else result.success(null)
                 "toysState" -> {
                     io.github.rcat3.dronelab.hivesight.HiveSightActivity.sendToysState(call.arguments as? String ?: "{}")
                     result.success(null)
