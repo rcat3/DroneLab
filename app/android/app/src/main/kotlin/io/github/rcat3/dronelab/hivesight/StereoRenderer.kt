@@ -54,7 +54,7 @@ class StereoRenderer(
     private var fboTex = 0
     private var fboW = 0
     private var fboH = 0
-    private val words = Words()
+    val words = Words()
     /** The exit gesture: black at once, whatever the Guide says. */
     @Volatile var exiting = false
     private lateinit var quad: FloatBuffer
@@ -75,8 +75,7 @@ class StereoRenderer(
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
 
-        words.onSurfaceCreated()
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTex)
+        words.onSurfaceCreated(::buildProgram)
         fbo = 0; fboTex = 0; fboW = 0; fboH = 0 // new EGL context: old objects are gone
 
         surfaceTexture?.release()
@@ -129,11 +128,7 @@ class StereoRenderer(
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTex)
         GLES20.glUniform1i(u["uTex"]!!, 0)
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, words.tex)
-        GLES20.glUniform1i(u["uWords"]!!, 1)
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-        GLES20.glUniform4f(u["uWordsColor"]!!, words.color[0], words.color[1], words.color[2], words.color[3])
+
         GLES20.glUniformMatrix4fv(u["uTexMat"]!!, 1, false, texMatrix, 0)
         val pos = GLES20.glGetAttribLocation(program, "aPos")
         GLES20.glEnableVertexAttribArray(pos)
@@ -163,7 +158,8 @@ class StereoRenderer(
         val conv = Params.f("view.convergence")
         val vert = Params.f("view.vertical")
 
-        GLES20.glUniform2f(u["uK"]!!, Params.f("view.k1"), Params.f("view.k2"))
+        val kNow = floatArrayOf(Params.f("view.k1"), Params.f("view.k2"))
+        GLES20.glUniform2f(u["uK"]!!, kNow[0], kNow[1])
         GLES20.glUniform2f(u["uImgHalf"]!!, halfH * aspect, halfH)
         GLES20.glUniform1f(u["uMirror"]!!, if (Params.b("fx.mirror")) 1f else 0f)
         GLES20.glUniform1f(u["uRot"]!!, if (Params.b("fx.rotate180")) 1f else 0f)
@@ -209,14 +205,17 @@ class StereoRenderer(
             val v0 = if (topBottom) (if (srcEye == 0) 0.5f else 0f) else 0f
             GLES20.glUniform4f(u["uEyeRect"]!!, u0, subW, v0, subH)
             val sign = if (eye == 0) 1f else -1f
-            GLES20.glUniform4f(u["uWordsPos"]!!, words.pos[0] + sign * words.eyeOffset, words.pos[1],
-                words.pos[2], words.pos[3])
             GLES20.glUniform2f(u["uShift"]!!, sign * conv, sign * vert * 0.5f)
             // Smooth (sinusoidal) brightness pulse; alternate mode puts the eyes in anti-phase.
             val ph = photicPhase + if (alternate && eye == 1) Math.PI else 0.0
             val pulse = 1f - pDepth * (0.5f - 0.5f * kotlin.math.sin(ph).toFloat())
             GLES20.glUniform2f(u["uPhotic"]!!, pAmount, pulse)
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+            // The words, over it, through the same lens
+            words.drawEye(quad, x0.toFloat(), lensX * s, lensY * s, radius * s, kNow[0], kNow[1], sign, fade)
+            GLES20.glUseProgram(program)
+            GLES20.glEnableVertexAttribArray(pos)
+            GLES20.glVertexAttribPointer(pos, 2, GLES20.GL_FLOAT, false, 0, quad)
           }
         }
 
@@ -235,6 +234,7 @@ class StereoRenderer(
             GLES20.glViewport(0, 0, pw, ph)
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             GLES20.glUniform2f(u["uK"]!!, 0f, 0f)
+            kNow[0] = 0f; kNow[1] = 0f
             drawEyes(pw.toFloat() / width)
             val buf = pv.buffer(pw, ph)
             GLES20.glReadPixels(0, 0, pw, ph, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buf)
@@ -300,7 +300,7 @@ class StereoRenderer(
             "uTex", "uTexMat", "uOrigin", "uLens", "uR", "uK", "uImgHalf", "uEyeRect", "uShift",
             "uMirror", "uRot", "uFade", "uBright", "uContrast", "uSat", "uTint", "uInvert",
             "uVignette", "uGrid", "uEdge", "uSpiral", "uSpiral2", "uSpiralColor",
-            "uPhotic", "uPhoticColor", "uWords", "uWordsPos", "uWordsColor",
+            "uPhotic", "uPhoticColor",
         )
 
         /** Flicker ceiling. Above this a 120 Hz display can't render a clean sine anyway. */
@@ -342,9 +342,6 @@ class StereoRenderer(
             uniform vec3 uSpiralColor;
             uniform vec2 uPhotic;       // amount (colour field mix), pulse brightness for this eye
             uniform vec3 uPhoticColor;
-            uniform sampler2D uWords;
-            uniform vec4 uWordsPos;     // centre x/y, half width/height, lens space
-            uniform vec4 uWordsColor;   // rgb, alpha
 
             void main() {
                 vec2 p = (gl_FragCoord.xy - uOrigin - uLens) / uR;
@@ -377,16 +374,6 @@ class StereoRenderer(
 
                 // Light-and-sound-machine colour field + brightness pulse.
                 c = mix(c, uPhoticColor, uPhotic.x) * uPhotic.y;
-
-                // Words, in the same lens space as the video: flat through the optics.
-                if (uWordsColor.a > 0.002) {
-                    vec2 wuv = vec2(0.5 + (q.x - uWordsPos.x) / (2.0 * uWordsPos.z),
-                                    0.5 - (q.y - uWordsPos.y) / (2.0 * uWordsPos.w));
-                    if (wuv.x >= 0.0 && wuv.y >= 0.0 && wuv.x <= 1.0 && wuv.y <= 1.0) {
-                        vec4 w = texture2D(uWords, wuv); // premultiplied
-                        c = c * (1.0 - w.a * uWordsColor.a) + w.rgb * uWordsColor.rgb * uWordsColor.a;
-                    }
-                }
 
                 if (inside && uGrid > 0.5) {
                     // Lines every 0.1 in image space: should look straight through the lens

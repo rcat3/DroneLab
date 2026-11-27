@@ -111,7 +111,7 @@ class HiveSightActivity : Activity() {
     }
 
     private fun newControl() = ControlClient(session, VIDEO_PORT, AUDIO_PORT, onStatus = { status = it },
-        onEnded = { ended = it })
+        onEnded = { ended = it }, words = renderer.words)
 
     override fun onResume() {
         super.onResume()
@@ -162,7 +162,6 @@ class HiveSightActivity : Activity() {
         renderer.exiting = true
         Params.set("fx.fade", 0.0)
         Params.set("photic.on", false)
-        Params.set("words.text", "")
         if (::control.isInitialized) control.sendLeft() // control.stop() closes after it's sent
         ui.postDelayed({ finish() }, 150)
     }

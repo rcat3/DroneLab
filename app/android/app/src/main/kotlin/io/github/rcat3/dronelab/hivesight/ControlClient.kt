@@ -43,6 +43,7 @@ class ControlClient(
     private val audioPort: Int,
     private val onStatus: (String) -> Unit,
     private val onEnded: (String) -> Unit,
+    private val words: Words,
 ) {
     private val http: OkHttpClient
     @Volatile private var ws: WebSocket? = null
@@ -209,6 +210,11 @@ class ControlClient(
         when (m.optString("type")) {
             "state" -> m.optJSONObject("state")?.let { Params.applyState(it) }
             "set" -> Params.set(m.getString("path"), m.get("value"))
+            "words" -> words.show(m.optInt("layer", -1), m)
+            "words_clear" -> words.clear(
+                m.optJSONArray("layers")?.let { a -> (0 until a.length()).map { a.optInt(it, -1) } },
+                m.optDouble("fade", 1.0).toFloat(),
+            )
             "pong" -> rttMs = ((System.nanoTime() - m.optLong("t")) / 1_000_000L).toInt()
         }
     }

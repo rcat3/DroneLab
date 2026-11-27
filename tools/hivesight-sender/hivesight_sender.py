@@ -62,6 +62,7 @@ HERE = Path(__file__).resolve().parent
 log = logging.getLogger("hivesight")
 
 VIDEO_PORT, AUDIO_PORT, MEDIA_PORT = 5004, 5006, 5008
+WORD_LAYERS = 8  # phrases the Vessel can show at once
 RTP_PAYLOADERS = ("pay", "mpay")  # element names whose RTP numbering survives rebuilds
 VIDEO_DSCP = 40  # CS5 -> WMM video access category
 AUDIO_DSCP = 48  # CS6 -> WMM voice access category
@@ -115,14 +116,6 @@ DEFAULT_STATE = {
         "on": False, "sync": True, "hz": 10.0, "depth": 0.5, "amount": 0.3,
         "hue": 0.6, "sat": 0.8, "hue_cycle_s": 0.0, "alternate": False,
     },
-    # Words drawn into the Vessel's view. Guide-only: the Guide page times
-    # the cues (text, then seq, which counts up on every cue so the same
-    # phrase can be cued twice) and each cue carries its own fade_s. Not part
-    # of scenes: a scene is a look, and a phrase shouldn't come back with it.
-    "words": {
-        "text": "", "seq": 0, "mode": "still", "size": 0.12, "depth": 0.0,
-        "opacity": 1.0, "hue": 0.0, "sat": 0.0, "speed": 0.5, "fade_s": 1.0,
-    },
     # Guide preview: the phone mirrors back what it shows and plays.
     # Switched off automatically when the last Guide page disconnects.
     "preview": {"video": False, "audio": False, "fps": 10},
@@ -157,8 +150,6 @@ def set_path(tree, path, value):
     # Coerce to the existing type so a slider's "0.5" string can't sneak in.
     if isinstance(old, bool):
         value = bool(value)
-    elif isinstance(old, str):
-        value = str(value)[:600]
     elif isinstance(old, (int, float)) and not isinstance(value, bool):
         value = type(old)(float(value)) if isinstance(old, float) else int(round(float(value)))
     node[leaf] = value
@@ -359,6 +350,7 @@ class Sender:
         self.args = args
         self.loop: asyncio.AbstractEventLoop | None = None
         self.state = copy.deepcopy(DEFAULT_STATE)
+        self.word_cues = {}  # layer -> the cue showing there, for Vessels who join later
         self.presets = json.loads((HERE / "presets.json").read_text())
         self.scenes_path = Path(args.scenes)
         self.scenes = json.loads(self.scenes_path.read_text()) if self.scenes_path.exists() else {}
@@ -943,10 +935,29 @@ class Sender:
                 self.add_destination(dest)
                 GLib.timeout_add(300, lambda: (self.force_keyframe(), False)[1])
             await ws.send_str(json.dumps({"type": "state", "state": self.state}))
+            if info["role"] == "vessel":
+                for cue in self.word_cues.values():
+                    await ws.send_str(json.dumps(cue))
             await self.broadcast({"type": "state", "state": self.state}, exclude=ws)
             await self.broadcast(self.summary(), roles={"guide"})
         elif t == "set":
             await self.handle_set(msg["path"], msg["value"])
+        elif t == "words":
+            # Words for a Vessel's view, one of WORD_LAYERS layers: relayed as
+            # they are (the Vessel checks them) and kept for Vessels who join later
+            layer = msg.get("layer")
+            if isinstance(layer, int) and 0 <= layer < WORD_LAYERS and len(json.dumps(msg)) <= 4096:
+                self.word_cues[layer] = msg
+                await self.broadcast(msg, roles={"vessel"})
+        elif t == "words_clear":
+            layers = msg.get("layers")
+            if not isinstance(layers, list):
+                layers = list(range(WORD_LAYERS))
+            layers = [n for n in layers if isinstance(n, int) and 0 <= n < WORD_LAYERS]
+            for n in layers:
+                self.word_cues.pop(n, None)
+            await self.broadcast({"type": "words_clear", "layers": layers, "fade": msg.get("fade", 1.0)},
+                                 roles={"vessel"})
         elif t == "session":
             token, expires = msg.get("token"), float(msg.get("expires", 0))
             if not isinstance(token, str) or len(token) < 16 or expires <= time.time():
@@ -1017,6 +1028,7 @@ class Sender:
         if self.session_token is not None:
             log.info("session ended")
         self.session_token, self.session_expires = None, 0.0
+        self.word_cues.clear()
         self._set_live(False)
         for w, i in list(self.clients.items()):
             if i.get("role") == "vessel":

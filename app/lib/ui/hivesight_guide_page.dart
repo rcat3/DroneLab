@@ -1279,6 +1279,120 @@ class _MicMeter extends StatelessWidget {
 
 // ----- Words -----
 
+/// A colour, picked by its hue, saturation and brightness, a hex code, or
+/// its red, green and blue values. Returns RGB, or null if cancelled.
+Future<int?> _pickColor(BuildContext context, int rgb) => showDialog<int>(
+  context: context,
+  builder: (d) {
+    var hsv = HSVColor.fromColor(Color(0xFF000000 | rgb));
+    final hex = TextEditingController();
+    final r = TextEditingController(), g = TextEditingController(), b = TextEditingController();
+    void fill() {
+      final c = hsv.toColor();
+      final v = c.toARGB32() & 0xFFFFFF;
+      hex.text = v.toRadixString(16).padLeft(6, '0').toUpperCase();
+      r.text = '${(v >> 16) & 255}';
+      g.text = '${(v >> 8) & 255}';
+      b.text = '${v & 255}';
+    }
+
+    fill();
+    return StatefulBuilder(
+      builder: (d, setState) {
+        void setRgb(int v) => setState(() {
+          hsv = HSVColor.fromColor(Color(0xFF000000 | (v & 0xFFFFFF)));
+          fill();
+        });
+        int channel(TextEditingController c) => (int.tryParse(c.text) ?? 0).clamp(0, 255);
+        Widget num3(String label, TextEditingController c) => Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: TextField(
+              controller: c,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: label, isDense: true),
+              onChanged: (_) => setRgb((channel(r) << 16) | (channel(g) << 8) | channel(b)),
+            ),
+          ),
+        );
+        return AlertDialog(
+          title: const Text('Colour'),
+          content: SizedBox(
+            width: 340,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: hsv.toColor(),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Kc.line),
+                  ),
+                ),
+                for (final (label, value, max, set) in <(String, double, double, void Function(double))>[
+                  ('Hue', hsv.hue, 360, (v) => hsv = hsv.withHue(v)),
+                  ('Saturation', hsv.saturation, 1, (v) => hsv = hsv.withSaturation(v)),
+                  ('Brightness', hsv.value, 1, (v) => hsv = hsv.withValue(v)),
+                ])
+                  Row(
+                    children: [
+                      SizedBox(width: 84, child: Text(label)),
+                      Expanded(
+                        child: Slider(
+                          value: value.clamp(0, max),
+                          max: max,
+                          onChanged: (v) => setState(() {
+                            set(v);
+                            fill();
+                          }),
+                        ),
+                      ),
+                    ],
+                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: TextField(
+                          controller: hex,
+                          decoration: const InputDecoration(labelText: 'Hex', prefixText: '#', isDense: true),
+                          onChanged: (t) {
+                            final v = int.tryParse(t.replaceAll('#', '').trim(), radix: 16);
+                            if (v != null && t.replaceAll('#', '').trim().length == 6) {
+                              hsv = HSVColor.fromColor(Color(0xFF000000 | v));
+                              r.text = '${(v >> 16) & 255}';
+                              g.text = '${(v >> 8) & 255}';
+                              b.text = '${v & 255}';
+                              setState(() {});
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    num3('R', r),
+                    num3('G', g),
+                    num3('B', b),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () => Navigator.pop(d, hsv.toColor().toARGB32() & 0xFFFFFF),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  },
+);
+
 class _WordsPanel extends StatefulWidget {
   final HiveSightGuide g;
   final bool enabled;
@@ -1290,7 +1404,7 @@ class _WordsPanel extends StatefulWidget {
 
 class _WordsPanelState extends State<_WordsPanel> {
   final _text = TextEditingController();
-  double _fade = 1.0; // for the next phrase added or shown
+  WordsPhrase? _shownIn; // whose text the field holds
 
   @override
   void dispose() {
@@ -1313,48 +1427,79 @@ class _WordsPanelState extends State<_WordsPanel> {
     },
   );
 
-  Future<void> _edit(GuideWords w, int i) async {
-    final p = w.list!.phrases[i];
-    final c = TextEditingController(text: p.text);
-    var fade = p.fadeS;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (d) => StatefulBuilder(
-        builder: (d, setState) => AlertDialog(
-          title: const Text('Edit phrase'),
-          content: SizedBox(
-            width: 380,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: c, autofocus: true, minLines: 1, maxLines: 5, maxLength: wordsMaxLength),
-                Row(
-                  children: [
-                    const Text('Fade'),
-                    Expanded(
-                      child: Slider(
-                        value: fade,
-                        min: 0,
-                        max: 10,
-                        divisions: 40,
-                        onChanged: (v) => setState(() => fade = v),
-                      ),
-                    ),
-                    Text('${fade.toStringAsFixed(2)} s', style: Kc.term(14)),
-                  ],
-                ),
-              ],
-            ),
+  /// A slider on the edited phrase's own value.
+  Widget _num(
+    GuideWords w,
+    String label,
+    double min,
+    double max,
+    double step,
+    double Function(WordsLook) get,
+    void Function(WordsLook, double) set, {
+    String unit = '',
+    bool enabled = true,
+  }) {
+    final l = w.edited.look;
+    final v = get(l).clamp(min, max);
+    final digits = step >= 1
+        ? 0
+        : step >= 0.1
+        ? 1
+        : 2;
+    return Row(
+      children: [
+        SizedBox(width: 112, child: Text(label, style: const TextStyle(fontSize: 14))),
+        Expanded(
+          child: Slider(
+            value: v,
+            min: min,
+            max: max,
+            divisions: ((max - min) / step).round().clamp(1, 2000),
+            onChanged: enabled
+                ? (x) {
+                    set(l, x);
+                    w.editedChanged();
+                  }
+                : null,
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Save')),
-          ],
         ),
-      ),
+        SizedBox(
+          width: 78,
+          child: Text(
+            '${v.toStringAsFixed(digits)}${unit.isEmpty ? '' : ' $unit'}',
+            textAlign: TextAlign.right,
+            style: Kc.term(14),
+          ),
+        ),
+      ],
     );
-    if (ok == true) w.editPhrase(i, c.text, fade);
   }
+
+  Widget _chips(String label, List<(String, String)> options, String value, void Function(String) pick) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 112,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(label, style: const TextStyle(fontSize: 14)),
+          ),
+        ),
+        Expanded(
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final (v, l) in options)
+                ChoiceChip(showCheckmark: false, label: Text(l), selected: value == v, onSelected: (_) => pick(v)),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1365,10 +1510,22 @@ class _WordsPanelState extends State<_WordsPanel> {
       builder: (context, _) {
         final l = w.list;
         final phrases = l?.phrases ?? const <WordsPhrase>[];
-        final hold = w.holdSeconds;
+        final p = w.edited;
+        final look = p.look;
+        // The field follows whichever phrase is being edited
+        if (!identical(_shownIn, p)) {
+          _shownIn = p;
+          _text.text = p.text;
+        }
+        void changed(void Function() f) {
+          f();
+          w.editedChanged();
+        }
+
         return _Card('Words', [
           const Text(
-            'Phrases shown in the Vessel\'s view, timed from here. BLACKOUT hides them too. Lists are kept on this computer.',
+            'Phrases shown in the Vessel\'s view, each with its own look and timing. BLACKOUT hides them too. '
+            'Lists are kept on this computer.',
             style: _small,
           ),
           const SizedBox(height: 6),
@@ -1419,31 +1576,37 @@ class _WordsPanelState extends State<_WordsPanel> {
               ),
             ],
           ),
-          if (phrases.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('No phrases yet.', style: _small),
-            ),
           for (var i = 0; i < phrases.length; i++)
             Container(
-              decoration: BoxDecoration(color: i == w.current ? Kc.line : null, borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                color: i == w.selected ? Kc.raised : null,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: i == w.selected ? Kc.darkGreen : Colors.transparent),
+              ),
               child: Row(
                 children: [
+                  IconButton(
+                    tooltip: 'Show it',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(w.onScreen(phrases[i]) ? Icons.visibility : Icons.play_arrow, size: 20),
+                    color: w.onScreen(phrases[i]) ? Kc.green : null,
+                    onPressed: enabled ? () => w.cue(i) : null,
+                  ),
+                  Container(
+                    width: 10,
+                    height: 10,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(color: Color(0xFF000000 | phrases[i].look.color), shape: BoxShape.circle),
+                  ),
                   Expanded(
                     child: InkWell(
-                      onTap: enabled ? () => w.cue(i) : null,
+                      onTap: () => w.select(i),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
-                        child: Text(
-                          phrases[i].text,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: enabled ? Kc.text : Kc.dim),
-                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(phrases[i].text, maxLines: 2, overflow: TextOverflow.ellipsis),
                       ),
                     ),
                   ),
-                  Text('${phrases[i].fadeS.toStringAsFixed(1)} s', style: Kc.term(12, color: Kc.muted)),
                   IconButton(
                     tooltip: 'Move up',
                     visualDensity: VisualDensity.compact,
@@ -1457,12 +1620,6 @@ class _WordsPanelState extends State<_WordsPanel> {
                     onPressed: i == phrases.length - 1 ? null : () => w.movePhrase(i, 1),
                   ),
                   IconButton(
-                    tooltip: 'Edit',
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    onPressed: () => _edit(w, i),
-                  ),
-                  IconButton(
                     tooltip: 'Remove',
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.close, size: 18),
@@ -1471,49 +1628,59 @@ class _WordsPanelState extends State<_WordsPanel> {
                 ],
               ),
             ),
-          const SizedBox(height: 6),
+          InkWell(
+            onTap: () => w.select(-1),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: w.selected < 0 ? Kc.darkGreen : Kc.line),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.add, size: 18, color: Kc.muted),
+                  const SizedBox(width: 8),
+                  Text(w.selected < 0 ? 'A new phrase, below' : 'A new phrase', style: _small),
+                ],
+              ),
+            ),
+          ),
+          _group(w.selected < 0 ? 'New phrase' : 'This phrase'),
           TextField(
             controller: _text,
-            minLines: 1,
-            maxLines: 4,
+            minLines: 2,
+            maxLines: 5,
             maxLength: wordsMaxLength,
-            decoration: const InputDecoration(hintText: 'A phrase', isDense: true, counterText: ''),
+            onChanged: (t) => changed(() => p.text = t),
+            decoration: const InputDecoration(hintText: 'What to show', isDense: true, counterText: ''),
           ),
-          Row(
-            children: [
-              const SizedBox(width: 4),
-              const Text('Fade', style: TextStyle(fontSize: 14)),
-              Expanded(
-                child: Slider(
-                  value: _fade,
-                  min: 0,
-                  max: 10,
-                  divisions: 40,
-                  onChanged: (v) => setState(() => _fade = v),
-                ),
-              ),
-              SizedBox(
-                width: 56,
-                child: Text('${_fade.toStringAsFixed(2)} s', style: Kc.term(14), textAlign: TextAlign.right),
-              ),
-            ],
-          ),
+          const SizedBox(height: 6),
           Wrap(
             spacing: 8,
+            runSpacing: 4,
             children: [
-              OutlinedButton.icon(
-                icon: const Icon(Icons.playlist_add),
-                label: const Text('Add to list'),
-                onPressed: () {
-                  w.addPhrase(_text.text, _fade);
-                  _text.clear();
-                },
-              ),
-              OutlinedButton.icon(
+              FilledButton.icon(
                 icon: const Icon(Icons.visibility_outlined),
                 label: const Text('Show now'),
-                onPressed: enabled ? () => w.show(_text.text, _fade) : null,
+                onPressed: enabled ? () => w.play(p, index: w.selected >= 0 ? w.selected : null) : null,
               ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.terminal),
+                label: const Text('As terminal'),
+                onPressed: enabled
+                    ? () {
+                        look.terminal();
+                        w.editedChanged();
+                        w.play(p, index: w.selected >= 0 ? w.selected : null);
+                      }
+                    : null,
+              ),
+              if (w.selected < 0)
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.playlist_add),
+                  label: const Text('Add to list'),
+                  onPressed: p.text.trim().isEmpty ? null : () => w.addDraft(),
+                ),
             ],
           ),
           _group('Cues'),
@@ -1533,29 +1700,27 @@ class _WordsPanelState extends State<_WordsPanel> {
               ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.clear_all),
-                label: const Text('Clear'),
+                label: const Text('Clear all'),
                 onPressed: enabled ? w.clear : null,
               ),
             ],
           ),
           const SizedBox(height: 6),
-          Text('On screen: ${wordsHoldLabel(hold)}'),
+          Text('On screen, unless a phrase says otherwise: ${wordsHoldLabel(w.holdSeconds)}'),
           Slider(
             value: w.hold.toDouble(),
-            min: 0,
             max: (wordsHolds.length - 1).toDouble(),
             divisions: wordsHolds.length - 1,
-            label: wordsHoldLabel(hold),
-            semanticFormatterCallback: (v) => wordsHoldLabel(wordsHolds[v.round()]),
+            label: wordsHoldLabel(w.holdSeconds),
             onChanged: (v) => w.setHold(v.round()),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             dense: true,
             title: const Text('Go on to the next phrase by itself', style: TextStyle(fontSize: 14)),
-            subtitle: hold == 0 ? const Text('Needs a time above', style: _small) : null,
+            subtitle: w.holdSeconds == 0 ? const Text('Needs a time above', style: _small) : null,
             value: w.auto,
-            onChanged: hold == 0 ? null : w.setAuto,
+            onChanged: w.setAuto,
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -1565,21 +1730,155 @@ class _WordsPanelState extends State<_WordsPanel> {
             onChanged: w.setLoop,
           ),
           _group('Look'),
-          _Choice(g, 'words.mode', 'Motion', const [
-            ('still', 'Still'),
-            ('breathe', 'Breathe'),
-            ('drift', 'Drift'),
-            ('pulse', 'Pulse with the beat'),
-            ('spiral', 'Follow the spiral'),
-          ], enabled: enabled),
-          _Slide(g, 'words.speed', 'Motion speed', 0, 4, 0.05, enabled: enabled),
-          _Slide(g, 'words.size', 'Size', 0.02, 0.4, 0.005, enabled: enabled),
-          _Slide(g, 'words.depth', 'Depth', -0.05, 1, 0.01, enabled: enabled),
-          _Slide(g, 'words.opacity', 'Opacity', 0, 1, 0.01, enabled: enabled),
-          _Slide(g, 'words.hue', 'Hue', 0, 1, 0.01, enabled: enabled),
-          _Slide(g, 'words.sat', 'Colour', 0, 1, 0.01, enabled: enabled),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final (label, f) in <(String, void Function(WordsLook))>[
+                ('Plain', (x) => x.plain()),
+                ('Terminal', (x) => x.terminal()),
+                ('Whisper', (x) => x.whisper()),
+                ('Shout', (x) => x.shout()),
+              ])
+                ActionChip(label: Text(label), onPressed: () => changed(() => f(look))),
+            ],
+          ),
+          _chips('Font', wordsFonts, look.font, (v) => changed(() => look.font = v)),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              FilterChip(
+                label: const Text('Bold', style: TextStyle(fontWeight: FontWeight.bold)),
+                selected: look.bold,
+                onSelected: (v) => changed(() => look.bold = v),
+              ),
+              FilterChip(
+                label: const Text('Italic', style: TextStyle(fontStyle: FontStyle.italic)),
+                selected: look.italic,
+                onSelected: (v) => changed(() => look.italic = v),
+              ),
+              FilterChip(
+                label: const Text('Underline', style: TextStyle(decoration: TextDecoration.underline)),
+                selected: look.underline,
+                onSelected: (v) => changed(() => look.underline = v),
+              ),
+              FilterChip(
+                label: const Text('Terminal glow'),
+                selected: look.crt,
+                onSelected: (v) => changed(() => look.crt = v),
+              ),
+              FilterChip(
+                label: const Text('Blinking cursor'),
+                selected: look.cursor,
+                onSelected: (v) => changed(() => look.cursor = v),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const SizedBox(width: 112, child: Text('Colour', style: TextStyle(fontSize: 14))),
+              OutlinedButton.icon(
+                icon: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Color(0xFF000000 | look.color),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Kc.muted),
+                  ),
+                ),
+                label: Text('#${look.hex.toUpperCase()}'),
+                onPressed: () async {
+                  final c = await _pickColor(context, look.color);
+                  if (c != null) changed(() => look.color = c);
+                },
+              ),
+            ],
+          ),
+          _num(w, 'Size', 0.02, 0.4, 0.005, (l) => l.size, (l, v) => l.size = v),
+          _num(w, 'Opacity', 0, 1, 0.01, (l) => l.opacity, (l, v) => l.opacity = v),
+          _num(w, 'Fade', 0, 10, 0.1, (l) => l.fade, (l, v) => l.fade = v, unit: 's'),
+          _group('Where and for how long'),
+          Row(
+            children: [
+              const SizedBox(width: 112, child: Text('Layer', style: TextStyle(fontSize: 14))),
+              Expanded(
+                child: DropdownButton<int>(
+                  isExpanded: true,
+                  value: p.layer,
+                  items: [
+                    const DropdownMenuItem(value: WordsPhrase.addLayer, child: Text('Add to what\'s showing')),
+                    const DropdownMenuItem(value: WordsPhrase.replaceAll, child: Text('Replace everything')),
+                    for (var n = 0; n < wordsLayers; n++) DropdownMenuItem(value: n, child: Text('Layer ${n + 1}')),
+                  ],
+                  onChanged: (v) => v == null ? null : changed(() => p.layer = v),
+                ),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              const SizedBox(width: 112, child: Text('On screen', style: TextStyle(fontSize: 14))),
+              Expanded(
+                child: DropdownButton<int>(
+                  isExpanded: true,
+                  value: p.hold,
+                  items: [
+                    const DropdownMenuItem(value: -1, child: Text('The list\'s time')),
+                    for (var n = 0; n < wordsHolds.length; n++)
+                      DropdownMenuItem(value: n, child: Text(wordsHoldLabel(wordsHolds[n]))),
+                  ],
+                  onChanged: (v) => v == null ? null : changed(() => p.hold = v),
+                ),
+              ),
+            ],
+          ),
+          _group('Motion'),
+          _chips('Motion', wordsModes, look.mode, (v) => changed(() => look.mode = v)),
+          _num(w, 'Motion speed', 0, 4, 0.05, (l) => l.speed, (l, v) => l.speed = v),
+          _num(w, 'Left / right', -1, 1, 0.01, (l) => l.x, (l, v) => l.x = v),
+          _num(w, 'Down / up', -1, 1, 0.01, (l) => l.y, (l, v) => l.y = v),
+          _num(w, 'Depth', 0, 1, 0.01, (l) => l.depth, (l, v) => l.depth = v),
+          _num(w, 'Turn', -180, 180, 1, (l) => l.yaw, (l, v) => l.yaw = v, unit: '°'),
+          _num(w, 'Tilt', -180, 180, 1, (l) => l.pitch, (l, v) => l.pitch = v, unit: '°'),
+          _num(w, 'Roll', -180, 180, 1, (l) => l.roll, (l, v) => l.roll = v, unit: '°'),
+          _group('Distortion'),
+          _chips('Effect', wordsDistortions, look.distort, (v) => changed(() => look.setDistortion(v))),
+          _num(
+            w,
+            'Amount',
+            0,
+            1,
+            0.01,
+            (l) => l.distAmount,
+            (l, v) => l.distAmount = v,
+            enabled: look.distort != 'none',
+          ),
+          _num(
+            w,
+            'Size of effect',
+            0,
+            1,
+            0.01,
+            (l) => l.distFreq,
+            (l, v) => l.distFreq = v,
+            enabled: look.distort != 'none',
+          ),
+          _num(
+            w,
+            'Effect speed',
+            0,
+            4,
+            0.05,
+            (l) => l.distSpeed,
+            (l, v) => l.distSpeed = v,
+            enabled: look.distort != 'none',
+          ),
           const Text(
-            'Depth: 0 is as far as the lenses go, higher is nearer (below zero the eyes would have to diverge). Pulse with the beat only brightens with the light pulse allowed.',
+            'Depth: 0 is as far as the lenses go, 1 is nearest. Pulse with the beat only brightens with the light pulse allowed. '
+            'Changes show at once on a phrase that\'s on screen.',
             style: _small,
           ),
         ]);
