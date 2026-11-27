@@ -1,15 +1,28 @@
 #!/usr/bin/python3
-"""EyeStream sender.
+"""HiveSight sender: the Guide's side of a HiveSight session.
 
-Captures (stereo) video and the operator's microphone, streams them as RTP/UDP
-to one or more receiver phones, and serves the operator console + control
-WebSocket. Receivers find the sender through a UDP broadcast beacon.
+Captures (stereo) video and the Guide's microphone and streams them as RTP/UDP
+to one or more Vessels' phones. The DroneLab app starts it as a helper and
+drives it over a WebSocket of its own; Vessels join with an invitation.
 
-Ports (sender side):   8080/tcp  console + /ws control
-                       5010/udp  discovery beacon (broadcast, sent by us)
-Ports (receiver side): 5004/udp  H.264 RTP video
-                       5006/udp  L16 stereo RTP audio (operator voice)
+Ports (sender side):   --guide-port/tcp   the Guide page's /ws, 127.0.0.1 only
+                       --vessel-port/tcp  the Vessels' /ws, TLS (wss://)
+Ports (Vessel side):   5004/udp  H.264 RTP video
+                       5006/udp  L16 stereo RTP audio (the Guide's voice)
                        5008/udp  L16 stereo RTP audio (video file soundtrack)
+
+The app writes one JSON line to stdin at start, {"guide_token": "..."}, and
+keeps stdin open: when it closes, the sender stops. Once listening, the sender
+prints one line, HIVESIGHT {"guide_port": n, "vessel_port": n, "addrs": [...]}.
+
+Who may connect:
+  - the Guide page: from loopback, with the guide token in its hello;
+  - Vessels: over TLS (--cert/--key), with the session token from their
+    invitation in their hello. The Guide page starts a session
+    ({"type": "session", "token": ..., "expires": unix seconds}) and ends it
+    ({"type": "session_end"}), which drops every Vessel. Vessels can only
+    report (stats, pings, keyframe requests, preview); they can't change
+    settings.
 """
 from __future__ import annotations
 
@@ -20,7 +33,8 @@ import json
 import logging
 import random
 import re
-import socket
+import secrets
+import ssl
 import subprocess
 import sys
 import threading
@@ -40,22 +54,22 @@ from voicefx import SpectralVoice  # noqa: E402
 import media  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-log = logging.getLogger("eyestream")
+log = logging.getLogger("hivesight")
 
-BEACON_PORT = 5010
 VIDEO_PORT, AUDIO_PORT, MEDIA_PORT = 5004, 5006, 5008
 RTP_PAYLOADERS = ("pay", "mpay")  # element names whose RTP numbering survives rebuilds
 VIDEO_DSCP = 40  # CS5 -> WMM video access category
 AUDIO_DSCP = 48  # CS6 -> WMM voice access category
 
 # --------------------------------------------------------------------------
-# Shared state. Everything the console can change lives here; the whole tree
-# is mirrored to every client. Sections:
-#   voice  - operator mic effect chain (applied here, on the sender)
-#   mix    - receiver-side audio mix levels
-#   beats  - receiver-side binaural beat / noise synth
-#   fx     - receiver-side video effects
-#   view   - receiver-side lens/IPD calibration (phone-specific; phone stores it)
+# Shared state. Everything the Guide page can change lives here; the whole
+# tree is mirrored to every client. The Vessel's Params.kt uses the same
+# dotted keys. Sections:
+#   voice  - the Guide's mic effect chain (applied here, on the sender)
+#   mix    - Vessel-side audio mix levels
+#   beats  - Vessel-side binaural beat / noise synth
+#   fx     - Vessel-side video effects
+#   view   - Vessel-side lens/IPD calibration (phone-specific; phone stores it)
 #   video  - encoder settings
 #   stream - read-only description of what is being sent
 # --------------------------------------------------------------------------
@@ -90,13 +104,14 @@ DEFAULT_STATE = {
         "hue": 0.0, "sat": 0.0, "zoom_hz": 0.0,
     },
     # Light-and-sound-machine style colour pulsing. Follows the binaural beat
-    # frequency when sync is on. Capped at 30 Hz on the phone.
+    # frequency when sync is on. Capped at 30 Hz on the phone, and only shown
+    # by a Vessel who allows the Guide the light pulse.
     "photic": {
         "on": False, "sync": True, "hz": 10.0, "depth": 0.5, "amount": 0.3,
         "hue": 0.6, "sat": 0.8, "hue_cycle_s": 0.0, "alternate": False,
     },
-    # Operator preview: the phone mirrors back what it shows and plays.
-    # Switched off automatically when the last console disconnects.
+    # Guide preview: the phone mirrors back what it shows and plays.
+    # Switched off automatically when the last Guide page disconnects.
     "preview": {"video": False, "audio": False, "fps": 10},
     # Video source: the live camera (or test pattern) or a file from --media-dir.
     # av_offset_ms > 0 delays the file's video to line up with the phone's
@@ -234,7 +249,7 @@ class GstPipeline:
         self._restart_id = 0
         # RTP continuity across rebuilds: payloader name -> (ssrc, next seqnum).
         # Without it every rebuild (source switch, preset change) starts a new
-        # random sequence, which receivers can mistake for stale packets.
+        # random sequence, which Vessels can mistake for stale packets.
         self._rtp = {}
 
     def start(self):
@@ -325,6 +340,12 @@ class Sender:
         self.scenes_path = Path(args.scenes)
         self.scenes = json.loads(self.scenes_path.read_text()) if self.scenes_path.exists() else {}
         self.clients: dict[web.WebSocketResponse, dict] = {}
+        # Who may connect: the Guide page's token (from stdin), and the
+        # session's, which Vessels' invitations carry (None: no session).
+        self.guide_token: str = ""
+        self.session_token: str | None = None
+        self.session_expires = 0.0
+        self.stopped: asyncio.Event | None = None
         # Destinations as (host, video_port, voice_port, media_audio_port)
         self.destinations: set[tuple[str, int, int, int]] = set()
         for host in args.also_send:
@@ -545,7 +566,7 @@ class Sender:
         return False
 
     async def notify(self, text):
-        await self.broadcast({"type": "notice", "text": text}, roles={"console"})
+        await self.broadcast({"type": "notice", "text": text}, roles={"guide"})
 
     def _audio_structure_key(self):
         v = self.state["voice"]
@@ -749,9 +770,10 @@ class Sender:
 
     # ---------------- control protocol ----------------
     async def broadcast(self, msg, roles=None, exclude=None):
+        """To every client that has said hello ([roles]: only those)."""
         data = json.dumps(msg)
         for ws, info in list(self.clients.items()):
-            if ws is exclude or (roles and info.get("role") not in roles):
+            if ws is exclude or info.get("role") is None or (roles and info.get("role") not in roles):
                 continue
             try:
                 await ws.send_str(data)
@@ -763,9 +785,11 @@ class Sender:
             "type": "clients",
             "clients": [
                 {"id": i["id"], "role": i.get("role"), "name": i.get("name"), "addr": i["addr"],
+                 "key": i.get("key", ""), "sig": i.get("sig", ""), "allow": i.get("allow", {}),
                  "stats": i.get("stats")}
-                for i in self.clients.values()
+                for i in self.clients.values() if i.get("role")
             ],
+            "session": {"on": self.session_token is not None, "expires": self.session_expires},
             "scenes": sorted(self.scenes),
             "presets": list(self.presets),
             "mic_db": round(self.dynamics.in_db, 1) if self.dynamics else -100.0,
@@ -799,12 +823,41 @@ class Sender:
             GLib.idle_add(lambda: (self.apply_media_settings(), False)[1])
         await self.broadcast({"type": "set", "path": path, "value": value})
 
+    # Messages each role may send. Vessels only report; the Guide page drives.
+    VESSEL_MESSAGES = {"hello", "ping", "stats", "keyframe"}
+
+    def _session_valid(self, token) -> bool:
+        return (self.session_token is not None and isinstance(token, str)
+                and secrets.compare_digest(token, self.session_token)
+                and time.time() < self.session_expires)
+
     async def handle_message(self, ws, info, msg):
         t = msg.get("type")
+        role = info.get("role")
+        if role is None and t != "hello":
+            return
+        if role == "vessel" and t not in self.VESSEL_MESSAGES:
+            log.warning("vessel %s sent %r; ignored", info["id"], t)
+            return
         if t == "hello":
-            info["role"] = msg.get("role", "console")
-            info["name"] = msg.get("name", "")
-            if info["role"] == "receiver":
+            if role is not None:
+                return
+            want = msg.get("role")
+            if want == "guide" and info["site"] == "guide" and self.guide_token and \
+                    secrets.compare_digest(str(msg.get("token", "")), self.guide_token):
+                info["role"] = "guide"
+            elif want == "vessel" and info["site"] == "vessel" and self._session_valid(msg.get("token")):
+                info["role"] = "vessel"
+            else:
+                log.warning("refused %s: not invited", info["id"])
+                await ws.close(code=4001, message=b"not invited")
+                return
+            info["name"] = str(msg.get("name", ""))[:64]
+            if info["role"] == "vessel":
+                # Who they say they are, signed: the Guide page checks it.
+                info["key"] = str(msg.get("key", ""))[:64]
+                info["sig"] = str(msg.get("sig", ""))[:128]
+                info["allow"] = {k: bool(v) for k, v in (msg.get("allow") or {}).items()}
                 dest = (info["addr"], int(msg.get("video_port", VIDEO_PORT)),
                         int(msg.get("audio_port", AUDIO_PORT)), int(msg.get("media_port", MEDIA_PORT)))
                 info["dest"] = dest
@@ -819,9 +872,26 @@ class Sender:
                 GLib.timeout_add(300, lambda: (self.force_keyframe(), False)[1])
             await ws.send_str(json.dumps({"type": "state", "state": self.state}))
             await self.broadcast({"type": "state", "state": self.state}, exclude=ws)
-            await self.broadcast(self.summary(), roles={"console"})
+            await self.broadcast(self.summary(), roles={"guide"})
         elif t == "set":
             await self.handle_set(msg["path"], msg["value"])
+        elif t == "session":
+            token, expires = msg.get("token"), float(msg.get("expires", 0))
+            if not isinstance(token, str) or len(token) < 16 or expires <= time.time():
+                await self.notify("bad session")
+                return
+            if token != self.session_token:
+                await self.end_session()
+            self.session_token, self.session_expires = token, expires
+            log.info("session open until %s", time.strftime("%H:%M", time.localtime(expires)))
+            await self.broadcast(self.summary(), roles={"guide"})
+        elif t == "session_end":
+            await self.end_session()
+            await self.broadcast(self.summary(), roles={"guide"})
+        elif t == "kick":
+            for w, i in list(self.clients.items()):
+                if i.get("role") == "vessel" and i["id"] == msg.get("id"):
+                    await w.close(code=4002, message=b"removed by the Guide")
         elif t == "media_play" and msg.get("file"):
             await self.play_file(str(msg["file"]))
         elif t == "media_camera":
@@ -838,7 +908,7 @@ class Sender:
         elif t == "scene_save" and msg.get("name"):
             self.scenes[msg["name"]] = {s: copy.deepcopy(self.state[s]) for s in SCENE_SECTIONS}
             self.scenes_path.write_text(json.dumps(self.scenes, indent=2))
-            await self.broadcast(self.summary(), roles={"console"})
+            await self.broadcast(self.summary(), roles={"guide"})
         elif t == "scene_load" and msg.get("name") in self.scenes:
             for section, values in self.scenes[msg["name"]].items():
                 if section in self.state:
@@ -848,17 +918,35 @@ class Sender:
         elif t == "scene_delete" and msg.get("name") in self.scenes:
             del self.scenes[msg["name"]]
             self.scenes_path.write_text(json.dumps(self.scenes, indent=2))
-            await self.broadcast(self.summary(), roles={"console"})
+            await self.broadcast(self.summary(), roles={"guide"})
 
-    async def ws_handler(self, request):
-        ws = web.WebSocketResponse(heartbeat=5.0)
+    async def end_session(self):
+        """No session any more: every Vessel is dropped, and can't come back
+        with that invitation."""
+        if self.session_token is not None:
+            log.info("session ended")
+        self.session_token, self.session_expires = None, 0.0
+        for w, i in list(self.clients.items()):
+            if i.get("role") == "vessel":
+                await w.close(code=4001, message=b"the session has ended")
+
+    def _ws_handler(self, site):
+        async def handler(request):
+            return await self.ws_handler(request, site)
+        return handler
+
+    async def ws_handler(self, request, site):
+        ws = web.WebSocketResponse(heartbeat=5.0, max_msg_size=4 * 1024 * 1024)
         await ws.prepare(request)
         peer = request.transport.get_extra_info("peername")
-        info = {"id": f"{peer[0]}:{peer[1]}", "addr": peer[0], "role": None,
+        info = {"id": f"{peer[0]}:{peer[1]}", "addr": peer[0], "role": None, "site": site,
                 "previewq": asyncio.Queue(maxsize=32)}
         self.clients[ws] = info
-        log.info("client connected from %s", info["id"])
+        log.info("client connected from %s (%s port)", info["id"], site)
         pump = asyncio.create_task(self._preview_pump(ws, info["previewq"]))
+        # A client that hasn't said who it is within a few seconds goes.
+        asyncio.get_running_loop().call_later(
+            5, lambda: info.get("role") is None and not ws.closed and asyncio.ensure_future(ws.close(code=4001)))
         try:
             async for m in ws:
                 if m.type == WSMsgType.TEXT:
@@ -866,28 +954,28 @@ class Sender:
                         await self.handle_message(ws, info, json.loads(m.data))
                     except Exception:
                         log.exception("error handling %s", m.data[:200])
-                elif m.type == WSMsgType.BINARY and info.get("role") == "receiver":
+                elif m.type == WSMsgType.BINARY and info.get("role") == "vessel":
                     self._relay_preview(m.data)
                 elif m.type == WSMsgType.ERROR:
                     break
         finally:
             pump.cancel()
             del self.clients[ws]
-            if info.get("role") == "console" and not any(
-                    i.get("role") == "console" for i in self.clients.values()):
+            if info.get("role") == "guide" and not any(
+                    i.get("role") == "guide" for i in self.clients.values()):
                 for k in ("video", "audio"):
                     if self.state["preview"][k]:
                         await self.handle_set(f"preview.{k}", False)
             if "dest" in info and not any(i.get("dest") == info["dest"] for i in self.clients.values()):
                 self.remove_destination(info["dest"])
             log.info("client %s (%s) disconnected", info["id"], info.get("role"))
-            await self.broadcast(self.summary(), roles={"console"})
+            await self.broadcast(self.summary(), roles={"guide"})
         return ws
 
     def _relay_preview(self, data: bytes):
-        """Fan a preview message out to consoles; a slow console only drops its own frames."""
+        """Fan a preview message out to Guide pages; a slow one only drops its own frames."""
         for i in self.clients.values():
-            if i.get("role") != "console":
+            if i.get("role") != "guide":
                 continue
             q = i["previewq"]
             if q.full():
@@ -909,61 +997,69 @@ class Sender:
     async def status_task(self):
         while True:
             await asyncio.sleep(0.5)
-            await self.broadcast(self.summary(), roles={"console"})
+            if self.session_token is not None and time.time() >= self.session_expires:
+                await self.end_session()
+            await self.broadcast(self.summary(), roles={"guide"})
 
-    # ---------------- discovery ----------------
-    @staticmethod
-    def broadcast_addrs():
-        addrs = {"255.255.255.255"}
-        try:
-            out = subprocess.run(["ip", "-4", "-o", "addr", "show"], capture_output=True,
-                                 text=True, timeout=2).stdout
-            for line in out.splitlines():
-                m = re.search(r"\sbrd\s(\d+\.\d+\.\d+\.\d+)", line)
-                if m and " lo " not in line and "docker" not in line:
-                    addrs.add(m.group(1))
-        except (OSError, subprocess.SubprocessError):
-            pass
-        return addrs
-
-    async def beacon_task(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        sock.setblocking(False)
-        payload = json.dumps({"eyestream": 1, "name": socket.gethostname(),
-                              "port": self.args.port}).encode()
-        addrs, refreshed = set(), 0.0
-        while True:
-            if time.monotonic() - refreshed > 10:
-                addrs, refreshed = self.broadcast_addrs(), time.monotonic()
-            for a in addrs:
+    # ---------------- the app ----------------
+    def _read_stdin(self):
+        """The app's line, then wait: stdin closing means the app's gone."""
+        first = True
+        for line in sys.stdin:
+            if first:
+                first = False
                 try:
-                    sock.sendto(payload, (a, BEACON_PORT))
-                except OSError:
-                    pass
-            await asyncio.sleep(1.0)
+                    self.guide_token = str(json.loads(line).get("guide_token", ""))
+                except (ValueError, AttributeError):
+                    log.error("bad first line on stdin")
+        log.info("stdin closed; stopping")
+        if self.loop and self.stopped:
+            self.loop.call_soon_threadsafe(self.stopped.set)
 
     # ---------------- run ----------------
     async def run(self):
         self.loop = asyncio.get_running_loop()
-        app = web.Application()
-        app.router.add_get("/ws", self.ws_handler)
-        app.router.add_get("/", lambda r: web.FileResponse(HERE / "console" / "index.html"))
-        app.router.add_static("/console/", HERE / "console")
-        runner = web.AppRunner(app, access_log=None)
-        await runner.setup()
-        await web.TCPSite(runner, "0.0.0.0", self.args.port).start()
+        self.stopped = asyncio.Event()
+        a = self.args
+        if a.guide_token:
+            self.guide_token = a.guide_token
+        else:
+            threading.Thread(target=self._read_stdin, daemon=True, name="stdin").start()
+
+        guide_app = web.Application()
+        guide_app.router.add_get("/ws", self._ws_handler("guide"))
+        guide_runner = web.AppRunner(guide_app, access_log=None)
+        await guide_runner.setup()
+        guide_site = web.TCPSite(guide_runner, "127.0.0.1", a.guide_port)
+        await guide_site.start()
+
+        ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.load_cert_chain(a.cert, a.key)
+        vessel_app = web.Application()
+        vessel_app.router.add_get("/ws", self._ws_handler("vessel"))
+        vessel_runner = web.AppRunner(vessel_app, access_log=None)
+        await vessel_runner.setup()
+        vessel_site = web.TCPSite(vessel_runner, "0.0.0.0", a.vessel_port, ssl_context=ctx)
+        await vessel_site.start()
 
         GLib.idle_add(lambda: (self.video.start(), False)[1])
         if self.audio:
             GLib.idle_add(lambda: (self.audio.start(), False)[1])
 
-        ips = sorted(a for a in local_ips())
-        log.info("console: %s", ", ".join(f"http://{ip}:{self.args.port}/" for ip in ips))
-        tasks = [self.status_task()]
-        if not self.args.no_beacon:
-            tasks.append(self.beacon_task())
-        await asyncio.gather(*tasks)
+        def port_of(runner):
+            return runner.addresses[0][1]
+        ready = {"guide_port": port_of(guide_runner), "vessel_port": port_of(vessel_runner),
+                 "addrs": sorted(local_ips())}
+        print("HIVESIGHT " + json.dumps(ready), flush=True)
+        log.info("Guide page on 127.0.0.1:%d; Vessels on wss://%s:%d/ws", ready["guide_port"],
+                 ",".join(ready["addrs"]) or "?", ready["vessel_port"])
+        status = asyncio.create_task(self.status_task())
+        await self.stopped.wait()
+        status.cancel()
+        await self.end_session()
+        await guide_runner.cleanup()
+        await vessel_runner.cleanup()
 
 
 def local_ips():
@@ -1009,6 +1105,46 @@ def list_devices():
     mon.stop()
 
 
+def devices_json():
+    """Cameras (path, name, modes) and microphones (name, description)."""
+    mon = Gst.DeviceMonitor()
+    mon.add_filter("Video/Source", None)
+    mon.add_filter("Audio/Source", None)
+    mon.start()
+    cameras, mics = [], []
+    for dev in mon.get_devices():
+        props = dev.get_properties()
+        if dev.get_device_class() == "Audio/Source":
+            name = props.get_string("node.name") or props.get_string("device.name") if props else None
+            if name and not name.endswith(".monitor"):
+                mics.append({"name": name, "label": dev.get_display_name()})
+            continue
+        path = (props.get_string("device.path") or props.get_string("api.v4l2.path")) if props else None
+        if not path:
+            continue
+        modes, seen = [], set()
+        caps = dev.get_caps()
+        for i in range(caps.get_size()):
+            st = caps.get_structure(i)
+            ok_w, w = st.get_int("width")
+            ok_h, h = st.get_int("height")
+            if not (ok_w and ok_h):
+                continue
+            fmt = "mjpeg" if st.get_name() == "image/jpeg" else "yuyv" \
+                if st.get_string("format") == "YUY2" else None
+            if fmt is None or (fmt, w, h) in seen:
+                continue
+            seen.add((fmt, w, h))
+            fr = st.to_string()
+            fps = sorted({int(x) for x in re.findall(r"(\d+)/1", fr.split("framerate=")[-1])}) \
+                if "framerate" in fr else []
+            modes.append({"format": fmt, "width": w, "height": h, "fps": fps})
+        if path not in [c["path"] for c in cameras]:
+            cameras.append({"path": path, "name": dev.get_display_name(), "modes": modes})
+    mon.stop()
+    return {"cameras": cameras, "mics": mics}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--device", default="/dev/video0", help="V4L2 camera device")
@@ -1025,16 +1161,22 @@ def main():
     ap.add_argument("--no-audio", action="store_true")
     ap.add_argument("--test-tone", action="store_true",
                     help="replace the mic with a quiet 300 Hz tone (checks the voice path)")
-    ap.add_argument("--port", type=int, default=8080, help="console/control HTTP port")
+    ap.add_argument("--guide-port", type=int, default=0,
+                    help="the Guide page's port, on 127.0.0.1 (default: any free one)")
+    ap.add_argument("--vessel-port", type=int, default=8443, help="the Vessels' TLS port")
+    ap.add_argument("--cert", help="TLS certificate (PEM) for the Vessels' port")
+    ap.add_argument("--key", help="its private key (PEM)")
+    ap.add_argument("--guide-token", default="",
+                    help="the Guide page's token, for running by hand (otherwise read from stdin)")
     ap.add_argument("--also-send", action="append", default=[], metavar="HOST",
                     help="always stream to HOST too (e.g. 127.0.0.1 for tools/preview.sh)")
     ap.add_argument("--media-dir", default=None,
-                    help="folder of video files offered in the console's Source tab (default ~/Videos)")
+                    help="folder of video files offered on the Guide page's Source panel (default ~/Videos)")
     ap.add_argument("--file", default=None, help="start by playing this video file instead of the camera")
-    ap.add_argument("--no-beacon", action="store_true",
-                    help="don't broadcast the discovery beacon (phones must be given this host's address)")
     ap.add_argument("--scenes", default=str(HERE / "scenes.json"))
     ap.add_argument("--list-devices", action="store_true")
+    ap.add_argument("--list-devices-json", action="store_true",
+                    help="cameras and microphones as one JSON line, for the Guide page")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 
@@ -1044,6 +1186,11 @@ def main():
     if args.list_devices:
         list_devices()
         return
+    if args.list_devices_json:
+        print(json.dumps(devices_json()))
+        return
+    if not (args.cert and args.key):
+        ap.error("--cert and --key are needed: Vessels connect over TLS")
 
     args.media_dir_given = args.media_dir is not None
     if args.media_dir is None:
