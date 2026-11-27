@@ -160,7 +160,8 @@ class BoardLink extends ChangeNotifier {
     if (b == null) {
       found[f.id] = f;
     } else {
-      b.rssi = f.rssi;
+      // Smoothed: a board heard a few times a second jumps by several dB each time
+      b.rssi = b.rssi == 0 || f.rssi == 0 ? f.rssi : ((b.rssi * 3 + f.rssi) / 4).round();
       b.inUse = f.inUse;
     }
     notifyListeners();

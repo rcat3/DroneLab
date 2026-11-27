@@ -9,6 +9,7 @@ import 'comm/comm_controller.dart';
 import 'comm/linux_pairing.dart';
 import 'comm/notifier.dart';
 import 'comm/release_check.dart';
+import 'comm/windows_pairing.dart';
 import 'ui/firmware_ui.dart';
 import 'ui/pairing_code.dart';
 import 'ui/call_ui.dart';
@@ -45,6 +46,10 @@ void main(List<String> args) {
     comm.board.pairFirst = (id) async => await pairing.pair(id) ? true : pairing.cancelled ? null : false;
     comm.board.letGo = pairing.letGo;
     comm.board.servicesReady = pairing.servicesReady;
+  }
+  if (Platform.isWindows) {
+    final pairing = WindowsPairing();
+    comm.board.pairFirst = (id) async => await pairing.pair(id);
   }
   comm.notifier.opens.listen((key) => _openConversation(comm, key));
   comm.incomingCalls.listen((call) => showIncomingCall(comm, call.personId));
