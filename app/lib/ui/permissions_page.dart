@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../comm/comm_controller.dart';
 import '../comm/permissions.dart';
+import '../comm/rules.dart' show RuleClass;
 import 'capabilities_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -71,10 +72,10 @@ String _ago(DateTime t) {
   return '${s ~/ 86400} d ago';
 }
 
-String _names(Iterable<int> caps) => [for (final k in controlKinds) if (caps.contains(k.id)) k.name].join(' and ');
+String _names(Iterable<int> caps) => [for (final k in permissionKinds) if (caps.contains(k.id)) k.name].join(' and ');
 
 Widget _capIcons(Iterable<int> caps, {Color color = Kc.pink}) => Row(mainAxisSize: MainAxisSize.min, children: [
-      for (final k in controlKinds)
+      for (final k in permissionKinds)
         if (caps.contains(k.id))
           Padding(
             padding: const EdgeInsets.only(right: 6),
@@ -108,6 +109,7 @@ Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
           };
         }
 
+        // Not HiveSight's: the light pulse is only ever allowed on purpose
         final allowable = {for (final k in controlKinds) k.id};
         return SafeArea(
           child: Padding(
@@ -115,7 +117,7 @@ Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               SectionHeader(title),
               Panel(color: Kc.bg, children: [
-                for (final k in controlKinds)
+                for (final k in permissionKinds)
                   CheckboxListTile(
                     value: picked.contains(k.id),
                     onChanged: (on) => setState(() => on == true ? picked.add(k.id) : picked.remove(k.id)),
@@ -303,7 +305,7 @@ class _FeaturesTab extends StatefulWidget {
 }
 
 class _FeaturesTabState extends State<_FeaturesTab> {
-  int _cap = controlKinds.first.id;
+  int _cap = permissionKinds.first.id;
 
   Future<void> _set(ListedPerson u, bool on) async {
     final failed = await widget.comm.permissions.setAllowed(u.id, {_cap: on});
@@ -313,9 +315,11 @@ class _FeaturesTabState extends State<_FeaturesTab> {
   @override
   Widget build(BuildContext context) {
     final perms = widget.comm.permissions;
-    final kind = controlKinds.firstWhere((k) => k.id == _cap);
+    final kind = permissionKinds.firstWhere((k) => k.id == _cap);
     final p = widget.policy.caps[_cap];
     final people = widget.policy.everyone;
+    // HiveSight's: kept on the phone, and about invitations, not commands
+    final phoneOnly = RuleClass.phoneOnly.contains(_cap);
     Widget ignoring(String title, String subtitle, int bit) => PanelRow(
           title: title,
           subtitle: subtitle,
@@ -332,7 +336,7 @@ class _FeaturesTabState extends State<_FeaturesTab> {
       // Which feature: a chip each, wrapping onto more lines as there are
       // more of them; the icon dimmed for one that's set to Nobody
       Wrap(spacing: 8, runSpacing: 4, children: [
-        for (final k in controlKinds)
+        for (final k in permissionKinds)
           ChoiceChip(
             showCheckmark: false,
             avatar: Icon(k.icon,
@@ -366,6 +370,8 @@ class _FeaturesTabState extends State<_FeaturesTab> {
             Text(
               switch (p?.policy) {
                 Policy.off => "Nobody. The people you've allowed below are kept for when you turn it back on.",
+                Policy.ask when phoneOnly =>
+                  "Only the people switched on below. Joining anyone else's invitation asks you first.",
                 Policy.ask => 'Only the people switched on below. Commands from anyone else become requests.',
                 Policy.anyone => 'Everyone. The switches below make no difference while this is set.',
                 null => '',
@@ -374,9 +380,12 @@ class _FeaturesTabState extends State<_FeaturesTab> {
             ),
           ]),
         ),
-        ignoring('Ignore broadcasts', 'Commands sent to everyone, including on the open direct channel',
-            ignoreEveryone),
-        ignoring('Ignore channel commands', 'Commands sent to a whole channel rather than just to you', ignoreChannel),
+        if (!phoneOnly) ...[
+          ignoring('Ignore broadcasts', 'Commands sent to everyone, including on the open direct channel',
+              ignoreEveryone),
+          ignoring('Ignore channel commands', 'Commands sent to a whole channel rather than just to you',
+              ignoreChannel),
+        ],
       ]),
       const SectionHeader('People'),
       if (people.isEmpty)
@@ -413,7 +422,7 @@ class _PeopleTab extends StatelessWidget {
         title: 'What ${p.name} can control', id: p.id, initial: now, action: 'Save', all: false);
     if (caps == null) return;
     final failed = await comm.permissions.setAllowed(p.id, {
-      for (final k in controlKinds) k.id: caps.contains(k.id)
+      for (final k in permissionKinds) k.id: caps.contains(k.id)
     });
     if (context.mounted) _reportFailed(context, p.name, failed);
   }

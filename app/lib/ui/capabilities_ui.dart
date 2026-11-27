@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../comm/capabilities.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
+import '../comm/rules.dart' show RuleClass;
 import 'control_page.dart';
 import 'display_sheet.dart';
 import 'sound_sheet.dart';
@@ -29,7 +30,7 @@ enum ControlArea {
 /// Something others can control, as this app shows it.
 class ControlKind {
   final int id;             // Capabilities.*
-  final ControlArea area;
+  final ControlArea? area;     // null: only in Permissions, not something to control from here
   final String name;
   final IconData icon;
   final String does;
@@ -44,6 +45,18 @@ const controlKinds = [
   ControlKind(Capabilities.sounds, ControlArea.display, 'Sounds', Icons.volume_up_outlined,
       "Play a sound from their unit's speaker"),
 ];
+
+/// HiveSight, in Permissions only: a Guide's invitations are joined from
+/// Text, and the Vessel's phone goes by these, not the unit.
+const hiveSightKinds = [
+  ControlKind(RuleClass.hiveSight, null, 'HiveSight', Icons.visibility_outlined,
+      'Guide you in a HiveSight session, when you join their invitation'),
+  ControlKind(RuleClass.hiveSightPulse, null, 'Light pulse', Icons.flare,
+      'Use the flashing light pulse in a HiveSight session they guide'),
+];
+
+/// Everything Permissions shows, in order.
+const permissionKinds = [...controlKinds, ...hiveSightKinds];
 
 /// Those of one area.
 Iterable<ControlKind> kindsOf(ControlArea area) => controlKinds.where((k) => k.area == area);

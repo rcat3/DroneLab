@@ -20,6 +20,14 @@ class RuleClass {
   static const estim = 3, machine = 4;    // 5 was to be pictures, which display covers
   static const all = [display, vibe, estim, machine, sounds];
 
+  /// HiveSight's, which the phone goes by and the unit never has: a Guide
+  /// guiding you, and the light pulse in their sessions.
+  static const hiveSight = 8, hiveSightPulse = 9;
+  static const phoneOnly = {hiveSight, hiveSightPulse};
+
+  /// Every class Permissions shows.
+  static const shown = [...all, hiveSight, hiveSightPulse];
+
   /// Where a class starts, before it's been set.
   static Policy defaultPolicy(int cls) => cls == estim ? Policy.off : Policy.ask;
 }
@@ -169,7 +177,10 @@ class HiveRules {
     sections.add((0x01, [
       for (final c in RuleClass.all) ...[c, rule(c).policy.index, rule(c).ignore & 0xFF, 0],
     ]));
-    final allowed = [for (final p in people.values) if (p.allowed.isNotEmpty && !muted.contains(p.key)) p]
+    final allowed = [
+      for (final p in people.values)
+        if (p.allowed.any((c) => !RuleClass.phoneOnly.contains(c)) && !muted.contains(p.key)) p
+    ]
       ..sort((a, b) => b.seen.compareTo(a.seen));
     final listed = [
       for (final p in allowed) (p.key, p.name, _bits(p.allowed), 0),
@@ -206,7 +217,8 @@ class HiveRules {
     ]);
   }
 
-  static int _bits(Set<int> classes) => classes.fold(0, (b, c) => c >= 0 && c < 16 ? b | (1 << c) : b);
+  static int _bits(Set<int> classes) =>
+      classes.fold(0, (b, c) => c >= 0 && c < 16 && !RuleClass.phoneOnly.contains(c) ? b | (1 << c) : b);
 
   static List<int> _name(String name) => _utf8(name, 15, withLength: true);
 

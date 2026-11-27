@@ -158,7 +158,7 @@ class Permissions extends ChangeNotifier {
       for (final p in rules.people.values) ListedPerson(p.id, p.key, p.name, false, clashOf(p.key)),
     ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return PolicyView({
-      for (final cls in RuleClass.all)
+      for (final cls in RuleClass.shown)
         cls: CapPolicy(rules.policy(cls), rules.rule(cls).ignore, [
           for (final p in everyone)
             ListedPerson(p.id, p.key, p.name, rules.people[p.key]!.allowed.contains(cls), p.clash),
@@ -466,6 +466,9 @@ class Permissions extends ChangeNotifier {
 String capName(int cap) => switch (cap) {
       Capabilities.display => 'Display',
       Capabilities.vibe => 'Vibe',
+      Capabilities.sounds => 'Sounds',
+      RuleClass.hiveSight => 'HiveSight',
+      RuleClass.hiveSightPulse => 'Light pulse',
       _ => 'something',
     };
 
