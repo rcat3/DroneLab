@@ -92,9 +92,9 @@ DEFAULT_STATE = {
         "master": 1.0, "voice_vol": 0.9, "voice_pan": 0.0, "autopan_hz": 0.0,
         "beats_vol": 0.25, "noise_vol": 0.0, "media_vol": 1.0, "jitter_ms": 40,
     },
-    "beats": {"on": True, "carrier_hz": 200.0, "beat_hz": 6.0, "glide_s": 4.0},
+    "beats": {"on": False, "carrier_hz": 200.0, "beat_hz": 6.0, "glide_s": 4.0},
     "fx": {
-        "fade": 1.0, "fade_s": 1.5, "delay_ms": 0, "swap": False, "mirror": False,
+        "fade": 1.0, "fade_s": 1.5, "screen": 0.0, "delay_ms": 0, "swap": False, "mirror": False,
         "rotate180": False, "mono": False, "brightness": 0.0, "contrast": 1.0,
         "saturation": 1.0, "tint_r": 1.0, "tint_g": 1.0, "tint_b": 1.0,
         "invert": False, "vignette": 0.35,

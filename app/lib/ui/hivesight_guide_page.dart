@@ -960,12 +960,15 @@ class _VisionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _Card('Vision', [
+    _group('Screen'),
+    _Slide(g, 'fx.screen', 'Screen brightness', 0, 1, 0.01, enabled: enabled),
+    const Text('0 leaves the phone\'s own level, held as it was when the Vessel joined.', style: _small),
     _group('Fade and time'),
     _Slide(g, 'fx.fade', 'Fade', 0, 1, 0.01, enabled: enabled),
     _Slide(g, 'fx.fade_s', 'Fade time', 0, 10, 0.1, unit: 's', enabled: enabled),
     _Slide(g, 'fx.delay_ms', 'Video delay', 0, 5000, 10, unit: 'ms', enabled: enabled),
     _group('Colour'),
-    _Slide(g, 'fx.brightness', 'Brightness', -0.5, 0.5, 0.01, enabled: enabled),
+    _Slide(g, 'fx.brightness', 'Picture lift', -0.5, 0.5, 0.01, enabled: enabled),
     _Slide(g, 'fx.contrast', 'Contrast', 0, 2, 0.01, enabled: enabled),
     _Slide(g, 'fx.saturation', 'Saturation', 0, 2, 0.01, enabled: enabled),
     _Slide(g, 'fx.tint_r', 'Tint red', 0, 1.5, 0.01, enabled: enabled),

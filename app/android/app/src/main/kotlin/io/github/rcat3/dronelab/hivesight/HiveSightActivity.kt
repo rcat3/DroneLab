@@ -53,15 +53,17 @@ class HiveSightActivity : Activity() {
         Params.init(this)
         Params.lightPulse = s.lightPulse
         applyOrientation()
+        // The brightness it has now, held (the phone's automatic brightness would
+        // otherwise keep adjusting it as the light sensor changes), until the Guide sets one
+        phoneBrightness = (android.provider.Settings.System.getInt(
+            contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS, 128) / 255f).coerceIn(0.05f, 1f)
+        Params.onChange = { k -> if (k == "fx.screen") ui.post { applyBrightness() } }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.attributes = window.attributes.apply {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             preferredDisplayModeId = highestRefreshMode()
-            // The brightness it has now, held: the phone's automatic brightness
-            // would otherwise keep adjusting it as the light sensor changes
-            screenBrightness = (android.provider.Settings.System.getInt(
-                contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS, 128) / 255f).coerceIn(0.05f, 1f)
         }
+        applyBrightness()
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         if (pm.isSustainedPerformanceModeSupported) window.setSustainedPerformanceMode(true)
 
@@ -275,7 +277,18 @@ class HiveSightActivity : Activity() {
         }
     }
 
+    private var phoneBrightness = 0.5f
+
+    /** The Guide's screen brightness (fx.screen), or the phone's own level when it's 0. */
+    private fun applyBrightness() {
+        val v = Params.f("fx.screen")
+        window.attributes = window.attributes.apply {
+            screenBrightness = if (v <= 0.001f) phoneBrightness else v.coerceIn(0.02f, 1f)
+        }
+    }
+
     override fun onDestroy() {
+        Params.onChange = null
         super.onDestroy()
         if (::session.isInitialized) onClosed?.invoke()
     }

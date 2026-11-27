@@ -27,9 +27,9 @@ object Params {
         "mix.master" to 1.0, "mix.voice_vol" to 0.9, "mix.voice_pan" to 0.0,
         "mix.autopan_hz" to 0.0, "mix.beats_vol" to 0.25, "mix.noise_vol" to 0.0, "mix.media_vol" to 1.0,
         "mix.jitter_ms" to 40,
-        "beats.on" to true, "beats.carrier_hz" to 200.0, "beats.beat_hz" to 6.0,
+        "beats.on" to false, "beats.carrier_hz" to 200.0, "beats.beat_hz" to 6.0,
         "beats.glide_s" to 4.0,
-        "fx.fade" to 1.0, "fx.fade_s" to 1.5, "fx.delay_ms" to 0, "fx.swap" to false,
+        "fx.fade" to 1.0, "fx.fade_s" to 1.5, "fx.screen" to 0.0, "fx.delay_ms" to 0, "fx.swap" to false,
         "fx.mirror" to false, "fx.rotate180" to false, "fx.mono" to false,
         "fx.brightness" to 0.0, "fx.contrast" to 1.0, "fx.saturation" to 1.0,
         "fx.tint_r" to 1.0, "fx.tint_g" to 1.0, "fx.tint_b" to 1.0, "fx.invert" to false,
@@ -68,9 +68,13 @@ object Params {
     private fun allowed(key: String, value: Any): Any =
         if (key == "photic.on" && !lightPulse) false else value
 
+    /** Told the key of each setting set from outside (the Activity follows the screen brightness). */
+    @Volatile var onChange: ((String) -> Unit)? = null
+
     fun set(key: String, value: Any, persist: Boolean = true) {
         if (value == JSONObject.NULL) return
         map[key] = allowed(key, value)
+        onChange?.invoke(key)
         if (persist && key.startsWith("view.")) saveView()
     }
 
@@ -85,6 +89,7 @@ object Params {
             }
         }
         saveView()
+        onChange?.invoke("fx.screen")
     }
 
     fun viewJson(): JSONObject {
