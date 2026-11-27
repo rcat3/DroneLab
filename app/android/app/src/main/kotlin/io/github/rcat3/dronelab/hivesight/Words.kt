@@ -51,11 +51,14 @@ class Cue(j: JSONObject) {
     val distSpeed = j.optDouble("dist_speed", 1.0).toFloat().coerceIn(0f, 4f)
     val crt = j.optBoolean("crt")
     val cursor = j.optBoolean("cursor")
+    /** Types out letter by letter, like the unit's terminal; [typeSpeed] letters a second to start with. */
+    val typing = j.optBoolean("typing")
+    val typeSpeed = j.optDouble("type_speed", 25.0).toFloat().coerceIn(2f, 120f)
     /** A change to a phrase that's already showing: no fade out and in. */
     val update = j.optBoolean("update")
 
     /** What the texture depends on: a different key means redrawing it. */
-    val key = "$text|$font|$bold|$italic|$underline|${Math.round(size * 500)}|$crt|$cursor"
+    val key = "$text|$font|$bold|$italic|$underline|${Math.round(size * 500)}|$crt|$cursor|$typing"
 
     companion object {
         val FONTS = setOf("sans", "serif", "mono", "cursive", "casual", "condensed")
@@ -156,6 +159,12 @@ class Words {
         GLES20.glDisable(GLES20.GL_BLEND)
     }
 
+    private fun hash(n: Int): Float {
+        var h = n * 374761393 + 668265263
+        h = (h xor (h ushr 13)) * 1274126177
+        return ((h xor (h ushr 16)) and 0xFFFF) / 65535f
+    }
+
     private inner class Layer {
         var shown: Cue? = null
         private var pending: Cue? = null
@@ -176,6 +185,12 @@ class Words {
         private var alpha = 0f
         private val rot = FloatArray(9)
         private var useB = false
+        // Typing out: how many letters are showing, and where the text sits in its texture
+        private var typed = 0f
+        private var layout: StaticLayout? = null
+        private var layoutDx = 0f
+        private var layoutPad = 0
+        private var textPx = 12f
 
         val drawable get() = shown != null && alpha > 0.002f && texA != 0
 
@@ -213,6 +228,7 @@ class Words {
                     vis = max(0f, vis - step)
                 } else {
                     shown = pending
+                    typed = 0f
                     pending = null
                     if (pendingClear) release()
                     pendingClear = false
@@ -223,7 +239,17 @@ class Words {
             val c = shown
             if (c == null || c.text.isEmpty() || vis <= 0f) { alpha = 0f; return }
             if (c.key != shownKey) { upload(c); shownKey = c.key }
-            useB = c.cursor && !blinkOn
+            useB = c.cursor && !c.typing && !blinkOn
+            if (c.typing) {
+                val len = c.text.length
+                if (typed < len) {
+                    // The unit's pace (more at a time the more is left), with the
+                    // odd hesitation of a modem
+                    val boost = 1f + (len - typed) / 120f
+                    val jitter = 0.45f + 1.1f * hash(typed.toInt())
+                    typed = min(len.toFloat(), typed + dt * c.typeSpeed * boost * jitter)
+                } else typed = len.toFloat()
+            }
 
             phase = (phase + 2 * PI * c.speed * 0.25 * dt) % (2 * PI * 1000)
             beatPhase = (beatPhase + 2 * PI * beatHz.coerceIn(0f, StereoRenderer.MAX_PHOTIC_HZ) * dt) % (2 * PI)
@@ -292,6 +318,23 @@ class Words {
             GLES20.glUniform4f(u["uColor"]!!, c.rgb[0], c.rgb[1], c.rgb[2], alpha * fade)
             GLES20.glUniform4f(u["uDist"]!!, c.distort.toFloat(), c.distAmount, 2f + c.distFreq * 10f, dist.toFloat())
             GLES20.glUniform1f(u["uCrt"]!!, if (c.crt) bmpH.toFloat() else 0f)
+            GLES20.glUniform2f(u["uBmp"]!!, bmpW.toFloat(), bmpH.toFloat())
+            val lay = layout
+            if (c.typing && lay != null && c.text.isNotEmpty()) {
+                val len = c.text.length
+                val n = min(typed.toInt(), len)
+                val line = lay.getLineForOffset(n)
+                val top = lay.getLineTop(line) + layoutPad.toFloat()
+                val bottom = lay.getLineBottom(line) + layoutPad.toFloat()
+                val x = lay.getPrimaryHorizontal(n) + layoutDx
+                val typingNow = typed < len
+                GLES20.glUniform4f(u["uReveal"]!!, top, bottom, x, if (typingNow) 1f else 0f)
+                // The cursor is solid while it types, then blinks
+                GLES20.glUniform3f(u["uCur"]!!, textPx * 0.55f, if (c.cursor) 1f else 0f, if (typingNow || blinkOn) 1f else 0f)
+            } else {
+                GLES20.glUniform4f(u["uReveal"]!!, 0f, 0f, 0f, 0f)
+                GLES20.glUniform3f(u["uCur"]!!, 0f, 0f, 0f)
+            }
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
         }
 
@@ -316,7 +359,7 @@ class Words {
                 else setShadowLayer(textPx * 0.08f, 0f, 0f, Color.argb(200, 0, 0, 0))
             }
             val pad = Math.ceil(textPx * 0.3).toInt() + 2
-            val full = if (c.cursor) c.text + CURSOR else c.text
+            val full = if (c.cursor && !c.typing) c.text + CURSOR else c.text
             val wrap = (1.3f * PX_PER_UNIT).toInt()
             val align = if (c.crt) Layout.Alignment.ALIGN_NORMAL else Layout.Alignment.ALIGN_CENTER
             val maxLines = max(1, ((MAX_TEX - 2 * pad) / (textPx * 1.25f)).toInt())
@@ -351,7 +394,12 @@ class Words {
                 return id
             }
             texA = draw(layoutA, texA)
-            if (c.cursor) {
+            layout = layoutA
+            layoutPad = pad
+            layoutDx = if (c.crt) (bmpW - widest) / 2f else (bmpW - layoutA.width) / 2f
+            this.textPx = textPx
+            typed = min(typed, c.text.length.toFloat())
+            if (c.cursor && !c.typing) {
                 // The same, with the cursor's block clear: it blinks between the two
                 val s = SpannableString(full)
                 s.setSpan(ForegroundColorSpan(Color.TRANSPARENT), full.length - 1, full.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -375,7 +423,7 @@ class Words {
         private const val CURSOR = "█"
 
         private val UNIFORMS = listOf(
-            "uTex", "uOrigin", "uLens", "uR", "uK", "uEyeX", "uC", "uRot", "uHalf", "uColor", "uDist", "uCrt",
+            "uTex", "uOrigin", "uLens", "uR", "uK", "uEyeX", "uC", "uRot", "uHalf", "uColor", "uDist", "uCrt", "uBmp", "uReveal", "uCur",
         )
 
         private const val VERT = """
@@ -399,6 +447,9 @@ class Words {
             uniform vec4 uColor;     // rgb, alpha
             uniform vec4 uDist;      // kind, amount, frequency, clock
             uniform float uCrt;
+            uniform vec2 uBmp;       // the texture's size in pixels
+            uniform vec4 uReveal;    // typing: top and bottom of the line being typed, how far along it, on
+            uniform vec3 uCur;       // typing cursor: width, wanted, showing
 
             float hash(float n) { return fract(sin(n) * 43758.5453); }
 
@@ -433,6 +484,10 @@ class Words {
                 }
                 if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) discard;
                 vec4 w = texture2D(uTex, uv);   // premultiplied
+                vec2 px = uv * uBmp;
+                if (uReveal.w > 0.5 && (px.y >= uReveal.y || (px.y >= uReveal.x && px.x >= uReveal.z))) w = vec4(0.0);
+                if (uCur.y > 0.5 && uCur.z > 0.5 && px.y >= uReveal.x && px.y < uReveal.y &&
+                    px.x >= uReveal.z && px.x < uReveal.z + uCur.x) w = vec4(1.0);
                 float a = uColor.a;
                 if (uCrt > 0.5) {
                     // scanlines, one every 3 texture pixels (uCrt is the texture's height)

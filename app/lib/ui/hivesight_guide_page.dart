@@ -1773,8 +1773,15 @@ class _WordsPanelState extends State<_WordsPanel> {
                 selected: look.cursor,
                 onSelected: (v) => changed(() => look.cursor = v),
               ),
+              FilterChip(
+                label: const Text('Type it out'),
+                selected: look.typing,
+                onSelected: (v) => changed(() => look.typing = v),
+              ),
             ],
           ),
+          if (look.typing)
+            _num(w, 'Typing speed', 2, 120, 1, (l) => l.typeSpeed, (l, v) => l.typeSpeed = v, unit: 'letters/s'),
           const SizedBox(height: 4),
           Row(
             children: [
@@ -1809,8 +1816,8 @@ class _WordsPanelState extends State<_WordsPanel> {
                   isExpanded: true,
                   value: p.layer,
                   items: [
-                    const DropdownMenuItem(value: WordsPhrase.addLayer, child: Text('Add to what\'s showing')),
                     const DropdownMenuItem(value: WordsPhrase.replaceAll, child: Text('Replace everything')),
+                    const DropdownMenuItem(value: WordsPhrase.addLayer, child: Text('Add to what\'s showing')),
                     for (var n = 0; n < wordsLayers; n++) DropdownMenuItem(value: n, child: Text('Layer ${n + 1}')),
                   ],
                   onChanged: (v) => v == null ? null : changed(() => p.layer = v),

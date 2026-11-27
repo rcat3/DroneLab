@@ -74,6 +74,10 @@ class WordsLook {
   double distAmount = 0.5, distFreq = 0.5, distSpeed = 1.0;
   bool crt = false, cursor = false;
 
+  /// Types itself out letter by letter, [typeSpeed] letters a second to begin with.
+  bool typing = false;
+  double typeSpeed = 25;
+
   WordsLook();
 
   WordsLook copy() => WordsLook.fromJson(toJson());
@@ -89,6 +93,7 @@ class WordsLook {
     size = 0.07;
     crt = true;
     cursor = true;
+    typing = true;
   }
 
   void plain() {
@@ -101,6 +106,7 @@ class WordsLook {
     opacity = 1.0;
     crt = false;
     cursor = false;
+    typing = false;
   }
 
   void whisper() {
@@ -170,6 +176,8 @@ class WordsLook {
     'dist_speed': distSpeed,
     'crt': crt,
     'cursor': cursor,
+    'typing': typing,
+    'type_speed': typeSpeed,
   };
 
   factory WordsLook.fromJson(Map<String, dynamic> j) {
@@ -197,6 +205,8 @@ class WordsLook {
     l.distSpeed = d('dist_speed', l.distSpeed);
     l.crt = j['crt'] == true;
     l.cursor = j['cursor'] == true;
+    l.typing = j['typing'] == true;
+    l.typeSpeed = d('type_speed', l.typeSpeed);
     return l;
   }
 }
@@ -206,21 +216,21 @@ class WordsPhrase {
   String text;
   WordsLook look;
 
-  /// Which layer: [addLayer] the next free one, [replaceAll] the only one,
-  /// or 0..7 that one (replacing what's on it).
+  /// Which layer: [replaceAll] the only one (the usual), [addLayer] the next
+  /// free one, or 0..7 that one (replacing what's on it).
   int layer;
   static const addLayer = -1, replaceAll = -2;
 
   /// How long it stays: an index into [wordsHolds], or -1 for the list's.
   int hold;
 
-  WordsPhrase(this.text, {WordsLook? look, this.layer = addLayer, this.hold = -1}) : look = look ?? WordsLook();
+  WordsPhrase(this.text, {WordsLook? look, this.layer = replaceAll, this.hold = -1}) : look = look ?? WordsLook();
 
   Map<String, Object?> toJson() => {'text': text, 'look': look.toJson(), 'layer': layer, 'hold': hold};
   factory WordsPhrase.fromJson(Map<String, dynamic> j) => WordsPhrase(
     j['text'] as String? ?? '',
     look: WordsLook.fromJson(j['look'] as Map<String, dynamic>? ?? const {}),
-    layer: j['layer'] as int? ?? addLayer,
+    layer: j['layer'] as int? ?? replaceAll,
     hold: j['hold'] as int? ?? -1,
   );
 }
