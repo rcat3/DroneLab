@@ -1,7 +1,5 @@
 package io.github.rcat3.dronelab.hivesight
 
-import android.content.Context
-import android.net.wifi.WifiManager
 import android.os.Build
 import android.util.Log
 import okhttp3.OkHttpClient
@@ -11,34 +9,74 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString.Companion.toByteString
 import org.json.JSONObject
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetSocketAddress
-import java.net.SocketTimeoutException
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.security.cert.CertificateException
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.X509TrustManager
+
+/** A session joined from a Guide's invitation, as the app checked it. */
+data class Session(
+    val hosts: List<String>,
+    val port: Int,
+    val fingerprint: String,    // the Guide's certificate's SHA-256, hex
+    val token: String,
+    val expiresMs: Long,
+    val guide: String,          // the Guide's name, for showing
+    val key: String,            // our identity key, hex
+    val sig: String,            // our signature for this session, hex
+    val lightPulse: Boolean,    // we allow the Guide the light pulse
+    val name: String,
+)
 
 /**
- * Finds the sender (UDP broadcast beacon on 5010, or a fixed host from
- * settings), keeps a WebSocket open to it, applies state updates to Params,
- * and reports stats back.
+ * Keeps a WebSocket open to the Guide's sender, over TLS with the
+ * certificate pinned from the invitation, trying its addresses in turn;
+ * applies state updates to Params, and reports stats back. Stops for good
+ * when the Guide ends the session or removes us, or it expires.
  */
 class ControlClient(
-    context: Context,
+    private val session: Session,
     private val videoPort: Int,
     private val audioPort: Int,
     private val onStatus: (String) -> Unit,
+    private val onEnded: (String) -> Unit,
 ) {
-    private val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-    private val http = OkHttpClient.Builder()
-        .pingInterval(3, TimeUnit.SECONDS)
-        .connectTimeout(3, TimeUnit.SECONDS)
-        .build()
+    private val http: OkHttpClient
     @Volatile private var ws: WebSocket? = null
     @Volatile private var running = false
     @Volatile var connectedHost: String? = null; private set
     @Volatile var rttMs = -1; private set
     private var thread: Thread? = null
     private var lastKeyReq = 0L
+
+    init {
+        // Trust the one certificate the invitation names, whatever the host
+        // is called: the pin is the check
+        val pin = object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) =
+                throw CertificateException("no client certificates")
+
+            override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
+                val leaf = chain.firstOrNull() ?: throw CertificateException("no certificate")
+                val fp = MessageDigest.getInstance("SHA-256").digest(leaf.encoded)
+                    .joinToString("") { "%02x".format(it) }
+                if (!MessageDigest.isEqual(fp.toByteArray(), session.fingerprint.lowercase().toByteArray()))
+                    throw CertificateException("not the Guide's certificate")
+            }
+
+            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+        }
+        val tls = SSLContext.getInstance("TLS").apply { init(null, arrayOf(pin), SecureRandom()) }
+        http = OkHttpClient.Builder()
+            .sslSocketFactory(tls.socketFactory, pin)
+            .hostnameVerifier { _, _ -> true }
+            .pingInterval(3, TimeUnit.SECONDS)
+            .connectTimeout(3, TimeUnit.SECONDS)
+            .build()
+    }
 
     fun start() {
         running = true
@@ -75,27 +113,35 @@ class ControlClient(
         ws?.send(j.toString())
     }
 
+    private fun end(why: String) {
+        running = false
+        onEnded(why)
+    }
+
     private fun loop() {
+        var next = 0
         while (running) {
-            val manual = Params.prefs()?.getString("host", "")?.trim().orEmpty()
-            val target = if (manual.isNotEmpty()) {
-                val parts = manual.split(":")
-                parts[0] to (parts.getOrNull(1)?.toIntOrNull() ?: 8080)
-            } else {
-                onStatus("Searching for sender…")
-                discover() ?: continue
+            if (System.currentTimeMillis() >= session.expiresMs) {
+                end("The session has ended"); return
             }
-            onStatus("Connecting to ${target.first}…")
+            val host = session.hosts[next % session.hosts.size]
+            next++
+            onStatus("Connecting to ${session.guide}…")
             val closed = Object()
             var done = false
-            val req = Request.Builder().url("ws://${target.first}:${target.second}/ws").build()
+            var opened = false
+            val req = Request.Builder().url("wss://$host:${session.port}/ws").build()
             ws = http.newWebSocket(req, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
-                    connectedHost = target.first
-                    onStatus("Connected to ${target.first}")
+                    opened = true
+                    connectedHost = host
+                    onStatus("Connected to ${session.guide}")
                     webSocket.send(
-                        JSONObject().put("type", "hello").put("role", "receiver")
-                            .put("name", "${Build.MANUFACTURER} ${Build.MODEL}")
+                        JSONObject().put("type", "hello").put("role", "vessel")
+                            .put("token", session.token)
+                            .put("name", session.name.ifEmpty { "${Build.MANUFACTURER} ${Build.MODEL}" })
+                            .put("key", session.key).put("sig", session.sig)
+                            .put("allow", JSONObject().put("light_pulse", session.lightPulse))
                             .put("video_port", videoPort).put("audio_port", audioPort)
                             .put("media_port", HiveSightActivity.MEDIA_PORT)
                             .put("view", Params.viewJson()).toString()
@@ -104,9 +150,17 @@ class ControlClient(
 
                 override fun onMessage(webSocket: WebSocket, text: String) = handle(text)
 
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    when (code) {
+                        4001 -> end(if (reason.isNotEmpty()) reason.replaceFirstChar { it.uppercase() } else "The session has ended")
+                        4002 -> end("${session.guide} removed you from the session")
+                    }
+                    webSocket.close(1000, null)
+                }
+
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = finish()
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                    Log.w(TAG, "ws failure: ${t.message}")
+                    Log.w(TAG, "ws failure ($host): ${t.message}")
                     finish()
                 }
 
@@ -125,7 +179,9 @@ class ControlClient(
             ws?.cancel()
             ws = null
             connectedHost = null
-            if (running) {
+            // Straight on to the next address if this one never answered;
+            // a pause once they've all been tried, or the link dropped
+            if (running && (opened || next % session.hosts.size == 0)) {
                 onStatus("Disconnected — retrying")
                 try { Thread.sleep(1000) } catch (_: InterruptedException) {}
             }
@@ -141,35 +197,7 @@ class ControlClient(
         }
     }
 
-    /** Listen for the sender's beacon for up to ~3 s. */
-    private fun discover(): Pair<String, Int>? {
-        val lock = wifi.createMulticastLock("hivesight-discovery").apply { setReferenceCounted(false); acquire() }
-        try {
-            DatagramSocket(null).use { s ->
-                s.reuseAddress = true
-                s.broadcast = true
-                s.soTimeout = 3000
-                s.bind(InetSocketAddress(BEACON_PORT))
-                val buf = ByteArray(1024)
-                val p = DatagramPacket(buf, buf.size)
-                s.receive(p)
-                val j = JSONObject(String(buf, 0, p.length))
-                if (j.optInt("eyestream") != 1) return null
-                return p.address.hostAddress!! to j.optInt("port", 8080)
-            }
-        } catch (_: SocketTimeoutException) {
-            return null
-        } catch (e: Exception) {
-            Log.w(TAG, "discovery: ${e.message}")
-            try { Thread.sleep(1000) } catch (_: InterruptedException) {}
-            return null
-        } finally {
-            lock.release()
-        }
-    }
-
     companion object {
         private const val TAG = "HiveSightControl"
-        const val BEACON_PORT = 5010
     }
 }

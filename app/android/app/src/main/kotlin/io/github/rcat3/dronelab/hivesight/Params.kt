@@ -12,11 +12,16 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * The "view.*" section is the lens calibration for this phone + viewer, so it
  * is persisted locally and offered to the sender on connect.
+ *
+ * The light pulse ("photic.on") stays off unless the Vessel allows this
+ * Guide it ([lightPulse], from Permissions when the session was joined).
  */
 object Params {
     private val map = ConcurrentHashMap<String, Any>()
     private const val PREFS = "hivesight"
     private var appContext: Context? = null
+    @Volatile var lightPulse = false
+        set(v) { field = v; if (!v) map["photic.on"] = false }
 
     private val DEFAULTS = mapOf<String, Any>(
         "mix.master" to 1.0, "mix.voice_vol" to 0.9, "mix.voice_pan" to 0.0,
@@ -60,9 +65,12 @@ object Params {
     fun b(key: String): Boolean = map[key] as? Boolean ?: false
     fun s(key: String): String = map[key]?.toString() ?: ""
 
+    private fun allowed(key: String, value: Any): Any =
+        if (key == "photic.on" && !lightPulse) false else value
+
     fun set(key: String, value: Any, persist: Boolean = true) {
         if (value == JSONObject.NULL) return
-        map[key] = value
+        map[key] = allowed(key, value)
         if (persist && key.startsWith("view.")) saveView()
     }
 
@@ -73,7 +81,7 @@ object Params {
             for (k in sec.keys()) {
                 val v = sec.get(k)
                 if (v is JSONObject || v is org.json.JSONArray) continue
-                map["$section.$k"] = v
+                map["$section.$k"] = allowed("$section.$k", v)
             }
         }
         saveView()

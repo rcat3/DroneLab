@@ -7,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import '../comm/board_protocol.dart';
 import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
+import '../comm/hivesight_guide.dart';
+import '../comm/hivesight_invite.dart';
 import '../comm/patterns.dart';
 import '../comm/server_invites.dart';
 import 'capabilities_ui.dart';
@@ -14,6 +16,7 @@ import 'permissions_page.dart';
 import 'message_details.dart';
 import 'channel_details.dart';
 import 'channel_lists.dart';
+import 'hivesight_button.dart';
 import 'pattern_sparkline.dart';
 import 'patterns_page.dart';
 import 'people.dart';
@@ -153,7 +156,7 @@ class _Row extends StatelessWidget {
         ? null
         : last.kind == ConversationEntry.text || last.kind == ConversationEntry.photo
             ? '${last.mine ? 'You: ' : c.kind == ConversationKind.person ? '' : '${comm.fromLabel(last)}: '}'
-                '${last.kind == ConversationEntry.photo ? '📷 Photo' : PatternShare.preview(ServerInvite.preview(last.body))}'
+                '${last.kind == ConversationEntry.photo ? '📷 Photo' : PatternShare.preview(ServerInvite.preview(HiveSightInvite.preview(last.body)))}'
             : '${last.mine ? 'You' : comm.fromLabel(last)} ${last.body}';
     return InkWell(
       onTap: () => openConversation(context, comm, c),
@@ -390,6 +393,15 @@ class _ConversationPageState extends State<ConversationPage> {
     }
   }
 
+  /// Invite them to the HiveSight session we're guiding, as a text with a
+  /// Join button.
+  Future<void> _inviteToHiveSight(Conversation c) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!await HiveSightGuide.of(comm).invite(c)) {
+      messenger.showSnackBar(SnackBar(content: Text("Couldn't send it: ${c.title} can't be reached just now")));
+    }
+  }
+
   /// Share one of our patterns, as a text with a Save button.
   Future<void> _sharePattern(Conversation c) async {
     final e = await pickPattern(context, comm);
@@ -486,6 +498,7 @@ class _ConversationPageState extends State<ConversationPage> {
                       ? showChannelDetails(context, comm, c)
                       : showPerson(context, comm, id: CommController.personOf(c), inConversation: true),
                   'invite' => _inviteToServer(c),
+                  'hivesight' => _inviteToHiveSight(c),
                   'pattern' => _sharePattern(c),
                   _ => deleteConversation(context, comm, c, leave: true),
                 },
@@ -493,6 +506,9 @@ class _ConversationPageState extends State<ConversationPage> {
                   const PopupMenuItem(value: 'details', child: Text('Details')),
                   if (comm.canInviteToServer(c))
                     PopupMenuItem(value: 'invite', enabled: online, child: const Text('Invite to your server')),
+                  if (canInviteToHiveSight(comm))
+                    PopupMenuItem(
+                        value: 'hivesight', enabled: online, child: const Text('Invite to your HiveSight session')),
                   PopupMenuItem(value: 'pattern', enabled: online, child: const Text('Share a pattern')),
                   const PopupMenuItem(value: 'delete', child: Text('Delete conversation')),
                 ],
@@ -673,6 +689,8 @@ class _Entry extends StatelessWidget {
             if (named && !e.mine) Text(from, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
             if (ServerInvite.parse(e.body) case final i?)
               _ServerInviteCard(comm, i, mine: e.mine)
+            else if (HiveSightInvite.parse(e.body) case final i?)
+              HiveSightInviteCard(comm, i, e, from: from)
             else if (PatternShare.parse(e.body) case final p?)
               _PatternCard(comm, p, from: from, mine: e.mine)
             else

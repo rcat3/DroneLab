@@ -26,6 +26,7 @@ import 'calls.dart';
 import 'capabilities.dart';
 import 'invites.dart';
 import 'sent_sounds.dart';
+import 'hivesight_invite.dart';
 import 'server_invites.dart';
 import 'conversations.dart';
 import 'notifier.dart';
@@ -3563,7 +3564,7 @@ class CommController extends ChangeNotifier {
     notifier.showTexts(c.key, c.title,
         [
           for (final e in last)
-            (fromLabel(e), e.kind == ConversationEntry.photo ? '📷 Photo' : PatternShare.preview(ServerInvite.preview(e.body)), e.time, _avatarByName(e.from))
+            (fromLabel(e), e.kind == ConversationEntry.photo ? '📷 Photo' : PatternShare.preview(ServerInvite.preview(HiveSightInvite.preview(e.body))), e.time, _avatarByName(e.from))
         ],
         group: group);
   }

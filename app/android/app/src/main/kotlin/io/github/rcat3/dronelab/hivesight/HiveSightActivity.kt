@@ -14,7 +14,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
-import android.text.InputType
 import androidx.annotation.RequiresApi
 import android.view.Gravity
 import android.view.GestureDetector
@@ -24,7 +23,6 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.CheckBox
-import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -42,10 +40,17 @@ class HiveSightActivity : Activity() {
     private var wifiLock: WifiManager.WifiLock? = null
     private val ui = Handler(Looper.getMainLooper())
     @Volatile private var status = "Starting…"
+    @Volatile private var ended: String? = null
+    private lateinit var session: Session
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Only ever opened by the app, with a session it has checked
+        val s = sessionOf(intent)
+        if (s == null) { finish(); return }
+        session = s
         Params.init(this)
+        Params.lightPulse = s.lightPulse
         applyOrientation()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.attributes = window.attributes.apply {
@@ -97,7 +102,7 @@ class HiveSightActivity : Activity() {
         })
         glView.setOnTouchListener { _, e -> gestures.onTouchEvent(e); true }
 
-        control = ControlClient(this, VIDEO_PORT, AUDIO_PORT) { status = it }
+        control = newControl()
         video = RtpVideoReceiver(VIDEO_PORT, onAccessUnit = decoder::submit, onNeedKeyframe = { control.requestKeyframe() })
         audio = AudioEngine(AUDIO_PORT, MEDIA_PORT)
         // Guide preview: both taps send through whichever control client is current.
@@ -107,8 +112,12 @@ class HiveSightActivity : Activity() {
         requestLocalNetworkIfNeeded()
     }
 
+    private fun newControl() = ControlClient(session, VIDEO_PORT, AUDIO_PORT, onStatus = { status = it },
+        onEnded = { ended = it })
+
     override fun onResume() {
         super.onResume()
+        if (!::session.isInitialized) return
         hideSystemUi()
         glView.onResume()
         val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -116,11 +125,13 @@ class HiveSightActivity : Activity() {
         wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "hivesight").apply {
             setReferenceCounted(false); acquire()
         }
-        decoder.start(); video.start(); audio.start(); control.start()
+        decoder.start(); video.start(); audio.start()
+        if (ended == null) control.start()
         ui.post(statsTick)
     }
 
     override fun onPause() {
+        if (!::session.isInitialized) { super.onPause(); return }
         ui.removeCallbacks(statsTick)
         control.stop(); video.stop(); audio.stop(); decoder.stop()
         wifiLock?.release()
@@ -160,6 +171,7 @@ class HiveSightActivity : Activity() {
             control.sendStats(stats)
 
             val text = when {
+                ended != null -> "$ended\nBack leaves the view"
                 control.connectedHost == null -> status
                 !videoLive -> "$status\nwaiting for video…"
                 Params.b("view.stats") ->
@@ -176,30 +188,22 @@ class HiveSightActivity : Activity() {
     private fun showSettings() {
         val prefs = Params.prefs() ?: return
         val pad = (16 * resources.displayMetrics.density).toInt()
-        val host = EditText(this).apply {
-            hint = "auto-discover (or host[:port])"
-            setText(prefs.getString("host", ""))
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        }
         val reverse = CheckBox(this).apply {
             text = "Flip screen (reverse landscape)"
             isChecked = prefs.getBoolean("reverse", false)
         }
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, 0)
-            addView(TextView(context).apply { text = "Guide address" })
-            addView(host); addView(reverse)
+            addView(TextView(context).apply { text = "Guided by ${session.guide}" })
+            addView(reverse)
             addView(TextView(context).apply {
-                text = "\nLens calibration is adjusted from the Guide console and saved on this phone."
+                text = "\nLens calibration is adjusted from the Guide page and saved on this phone."
             })
         }
         AlertDialog.Builder(this).setTitle("HiveSight").setView(box)
             .setPositiveButton("Save") { _, _ ->
-                prefs.edit().putString("host", host.text.toString().trim())
-                    .putBoolean("reverse", reverse.isChecked).apply()
+                prefs.edit().putBoolean("reverse", reverse.isChecked).apply()
                 applyOrientation()
-                // Reconnect with the new host.
-                control.stop(); control = ControlClient(this, VIDEO_PORT, AUDIO_PORT) { status = it }; control.start()
             }
             .setNegativeButton("Cancel", null)
             .setOnDismissListener { hideSystemUi() }
@@ -241,6 +245,20 @@ class HiveSightActivity : Activity() {
     }
 
     companion object {
+        /** The session, from the intent MainActivity starts this with; null if it isn't one. */
+        fun sessionOf(i: android.content.Intent): Session? {
+            val hosts = i.getStringArrayListExtra("hosts")?.filter { it.isNotBlank() } ?: return null
+            val fp = i.getStringExtra("fingerprint") ?: return null
+            val token = i.getStringExtra("token") ?: return null
+            if (hosts.isEmpty() || fp.length != 64) return null
+            return Session(
+                hosts = hosts, port = i.getIntExtra("port", 0), fingerprint = fp, token = token,
+                expiresMs = i.getLongExtra("expires", 0), guide = i.getStringExtra("guide") ?: "your Guide",
+                key = i.getStringExtra("key") ?: "", sig = i.getStringExtra("sig") ?: "",
+                lightPulse = i.getBooleanExtra("lightPulse", false), name = i.getStringExtra("name") ?: "",
+            )
+        }
+
         const val VIDEO_PORT = 5004
         const val AUDIO_PORT = 5006
         const val MEDIA_PORT = 5008
