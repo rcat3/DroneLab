@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EyeStream Console</title>
+<style>
+  :root {
+    --bg: #0e0f12; --panel: #17191e; --panel2: #1d2026; --line: #2a2d35; --text: #e6e6e6; --dim: #8b8f99;
+    --accent: #7aa2ff; --warn: #ff6b6b; --ok: #5fd68a; --amber: #ffb547;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); display: flex; flex-direction: column;
+         font: 13px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+
+  /* ---- header: always-visible essentials ---- */
+  header { flex: none; background: var(--bg); border-bottom: 1px solid var(--line);
+           padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  header h1 { font-size: 14px; margin: 0 6px 0 0; letter-spacing: .06em; }
+  .big { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 7px;
+         padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none; }
+  .big.on { background: var(--warn); border-color: var(--warn); color: #000; }
+  .big.live { background: var(--ok); border-color: var(--ok); color: #000; }
+  .meters { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--dim); }
+  .mrow { display: flex; align-items: center; gap: 6px; }
+  .mrow span { width: 22px; }
+  .meter { position: relative; width: 130px; height: 9px; background: var(--panel); border: 1px solid var(--line);
+           border-radius: 5px; overflow: hidden; }
+  .meter > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--ok), var(--amber) 75%, var(--warn)); transition: width .1s; }
+  .meter i { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); }
+  #gateLed { color: var(--line); font-size: 12px; }
+  #gateLed.open { color: var(--ok); }
+  #phone { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #phone b { color: var(--text); font-weight: 500; }
+  #conn { font-size: 12px; color: var(--dim); }
+  #conn.ok { color: var(--ok); }
+  .spacer { flex: 1; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--dim); border: 0; padding: 5px 9px; font-size: 12px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--panel2); color: var(--text); }
+  .seg-label { font-size: 12px; color: var(--dim); }
+
+  /* ---- columns of tabbed panels ---- */
+  main { flex: 1; min-height: 0; display: grid; gap: 12px; padding: 12px 16px; }
+  .col { min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--panel);
+         border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .tabs { flex: none; display: flex; flex-wrap: wrap; gap: 2px; padding: 6px 6px 0; background: var(--panel2);
+          border-bottom: 1px solid var(--line); }
+  .tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--dim);
+                 padding: 6px 9px 7px; font-size: 12.5px; cursor: pointer; border-radius: 6px 6px 0 0; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--accent); background: var(--panel); }
+  .tabs button.elsewhere { color: #5d616b; }
+  .colbody { flex: 1; min-height: 0; overflow: auto; padding: 10px 14px 14px; }
+  #holder { display: none; }
+
+  h3 { margin: 12px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); font-weight: 600; }
+  h3:first-child { margin-top: 2px; }
+  .row { display: grid; grid-template-columns: 104px 1fr 62px; gap: 8px; align-items: center; height: 26px; }
+  .row label { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row output { font-variant-numeric: tabular-nums; text-align: right; font-size: 12px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
+  .toggles { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; align-items: center; }
+  .toggles > label { color: var(--dim); width: 104px; }
+  .chip { border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 999px;
+          padding: 4px 10px; font-size: 12.5px; cursor: pointer; }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #000; }
+  .filelist { display: flex; flex-direction: column; gap: 2px; }
+  .filelist button { text-align: left; background: transparent; border: 1px solid transparent; color: var(--text);
+                     padding: 5px 8px; border-radius: 6px; cursor: pointer; font: inherit;
+                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .filelist button:hover { background: var(--panel2); }
+  .filelist button.on { border-color: var(--accent); color: var(--accent); }
+  .clients { font-size: 12px; color: var(--dim); white-space: pre-wrap; font-family: ui-monospace, monospace; }
+  input[type=text] { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 6px;
+                     padding: 5px 8px; font: inherit; }
+  .hint { font-size: 12px; color: var(--dim); margin: 8px 0 0; }
+  .warn { color: var(--amber); }
+
+  #previewCanvas { width: 100%; aspect-ratio: 640 / 295; background: #000; border-radius: 6px; display: block; }
+  .pvbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .pvbar label { color: var(--dim); }
+  .pvbar input[type=range] { width: 90px; }
+  #previewInfo { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+  /* Narrow screens (e.g. operator's phone): one column, page scrolls normally. */
+  @media (max-width: 700px) {
+    body { overflow: auto; }
+    main { display: block; }
+    .colbody { overflow: visible; }
+    header { padding: 8px 12px; }
+    .row { grid-template-columns: 92px 1fr 54px; }
+    #layoutCtl { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>EYESTREAM</h1>
+  <button class="big" id="blackout" title="Fade the wearer's view to black (B)">BLACKOUT</button>
+  <button class="big" id="mute" title="Mute operator mic (M)">MIC LIVE</button>
+  <button class="big" id="ptt" title="Push-to-talk: hold Space to talk">PTT OFF</button>
+  <div class="meters">
+    <div class="mrow"><span>in</span><div class="meter" title="raw mic level; tick = gate threshold"><div id="vu"></div><i id="gateTick"></i></div><b id="gateLed" title="gate open">●</b></div>
+    <div class="mrow"><span>out</span><div class="meter" title="processed voice level sent to the wearer"><div id="vuOut"></div></div></div>
+  </div>
+  <span id="phone" title="receiver phone status">no phone</span>
+  <span class="spacer"></span>
+  <span id="layoutCtl"><span class="seg-label">columns </span><span class="seg" id="colSeg"></span></span>
+  <span id="conn">connecting…</span>
+</header>
+<main id="main"></main>
+<div id="holder"></div>
+
+<script>
+// ---------------------------------------------------------------- schema
+// Controls: [path, label, min, max, step, unit] | [path, label, "toggle"]
+//         | [path, label, "choice", options] | [path, label, "presets"]
+// Each panel is a tab; groups get a small heading.
+const PANELS = [
+  { id: "preview", tab: "Preview", custom: true },
+  { id: "source", tab: "Source", custom: true, groups: [
+    ["Playback options", [
+      ["media.at_end", "At end", "choice", ["loop", "camera", "hold"]],
+      ["media.av_offset_ms", "A/V offset", -500, 1000, 10, "ms"],
+      ["mix.media_vol", "Film audio", 0, 1.5, 0.01, ""],
+    ]],
+    ["Stereo layout of the picture", [
+      ["stream.layout", "Layout", "choice", ["mono", "sbs", "hsbs", "tb", "htb"]],
+    ]],
+  ]},
+  { id: "voice", tab: "Voice", groups: [
+    [null, [
+      ["voice.preset", "Preset", "presets"],
+      ["voice.gain_db", "Gain", -12, 36, 0.5, "dB"],
+      ["voice.gate_db", "Gate thresh.", -90, -20, 1, "dB"],
+      ["voice.comp_ratio", "Compression", 1, 10, 0.1, ":1"],
+      ["voice.denoise", "Denoise", "toggle"],
+    ]],
+    ["Spectral (gender / robot)", [
+      ["voice.fx_mode", "Mode", "choice", ["off", "shift", "robot"]],
+      ["voice.shift_pitch", "Shift pitch", 0.5, 2.5, 0.01, "×"],
+      ["voice.shift_formant", "Formant", 0.7, 1.5, 0.01, "×"],
+      ["voice.robot_hz", "Robot pitch", 60, 400, 1, "Hz"],
+      ["voice.robot_noise", "Robot breath", 0, 0.5, 0.01, ""],
+    ]],
+    ["Tone & space", [
+      ["voice.pitch", "Pitch (simple)", 0.5, 2.0, 0.01, "×"],
+      ["voice.highpass_hz", "High-pass", 20, 1500, 5, "Hz"],
+      ["voice.lowpass_hz", "Low-pass", 500, 20000, 50, "Hz"],
+      ["voice.echo_ms", "Echo time", 1, 1500, 1, "ms"],
+      ["voice.echo_feedback", "Echo feedback", 0, 0.95, 0.01, ""],
+      ["voice.echo_mix", "Echo mix", 0, 1, 0.01, ""],
+      ["voice.reverb_room", "Reverb room", 0, 1, 0.01, ""],
+      ["voice.reverb_damp", "Reverb damp", 0, 1, 0.01, ""],
+      ["voice.reverb_mix", "Reverb mix", 0, 1, 0.01, ""],
+    ]],
+  ]},
+  { id: "sound", tab: "Mix", groups: [
+    ["Wearer's mix", [
+      ["mix.master", "Master", 0, 1, 0.01, ""],
+      ["mix.voice_vol", "Voice", 0, 1.5, 0.01, ""],
+      ["mix.voice_pan", "Voice pan", -1, 1, 0.01, ""],
+      ["mix.autopan_hz", "Auto-pan", 0, 2, 0.01, "Hz"],
+      ["mix.beats_vol", "Beats", 0, 1, 0.01, ""],
+      ["mix.noise_vol", "Pink noise", 0, 1, 0.01, ""],
+      ["mix.media_vol", "Film audio", 0, 1.5, 0.01, ""],
+      ["mix.jitter_ms", "Voice buffer", 10, 200, 5, "ms"],
+    ]],
+    ["Binaural beats", [
+      ["beats.on", "Beats on", "toggle"],
+      ["beats.carrier_hz", "Carrier", 60, 600, 1, "Hz"],
+      ["beats.beat_hz", "Beat", 0.5, 40, 0.1, "Hz"],
+      ["beats.glide_s", "Glide", 0, 30, 0.5, "s"],
+    ]],
+  ]},
+  { id: "vision", tab: "Vision", groups: [
+    ["Fade & time", [
+      ["fx.fade", "Fade", 0, 1, 0.01, ""],
+      ["fx.fade_s", "Fade time", 0, 10, 0.1, "s"],
+      ["fx.delay_ms", "Video delay", 0, 5000, 10, "ms"],
+    ]],
+    ["Colour", [
+      ["fx.brightness", "Brightness", -0.5, 0.5, 0.01, ""],
+      ["fx.contrast", "Contrast", 0, 2, 0.01, ""],
+      ["fx.saturation", "Saturation", 0, 2, 0.01, ""],
+      ["fx.tint_r", "Tint R", 0, 1.5, 0.01, ""],
+      ["fx.tint_g", "Tint G", 0, 1.5, 0.01, ""],
+      ["fx.tint_b", "Tint B", 0, 1.5, 0.01, ""],
+      ["fx.vignette", "Vignette", 0, 1, 0.01, ""],
+      ["fx.invert", "Invert", "toggle"],
+    ]],
+    ["Geometry", [
+      ["fx.swap", "Swap eyes", "toggle"],
+      ["fx.mirror", "Mirror", "toggle"],
+      ["fx.rotate180", "Rotate 180°", "toggle"],
+      ["fx.mono", "Left eye only", "toggle"],
+    ]],
+  ]},
+  { id: "spiral", tab: "Spiral", groups: [
+    [null, [
+      ["spiral.amount", "Amount", 0, 1, 0.01, ""],
+      ["spiral.speed", "Spin", -2, 2, 0.01, "rev/s"],
+      ["spiral.zoom_hz", "Zoom flow", -2, 2, 0.01, "Hz"],
+      ["spiral.arms", "Arms", 1, 12, 1, ""],
+      ["spiral.twist", "Twist", -20, 20, 0.1, ""],
+      ["spiral.sharp", "Sharpness", 0, 1, 0.01, ""],
+      ["spiral.hue", "Hue", 0, 1, 0.01, ""],
+      ["spiral.sat", "Colour", 0, 1, 0.01, ""],
+    ]],
+  ]},
+  { id: "pulse", tab: "Pulse", groups: [
+    [null, [
+      ["photic.on", "Pulse on", "toggle"],
+      ["photic.sync", "Follow beat", "toggle"],
+      ["photic.alternate", "Alternate L/R", "toggle"],
+      ["photic.hz", "Rate (no sync)", 0.5, 30, 0.1, "Hz"],
+      ["photic.depth", "Pulse depth", 0, 1, 0.01, ""],
+      ["photic.amount", "Colour field", 0, 1, 0.01, ""],
+      ["photic.hue", "Hue", 0, 1, 0.01, ""],
+      ["photic.sat", "Saturation", 0, 1, 0.01, ""],
+      ["photic.hue_cycle_s", "Hue cycle", 0, 120, 1, "s"],
+    ]],
+  ]},
+  { id: "scenes", tab: "Scenes", custom: true },
+  { id: "calib", tab: "Calibrate", groups: [
+    ["Viewer (stored on the phone)", [
+      ["view.lens_sep_mm", "Lens sep.", 50, 75, 0.5, "mm"],
+      ["view.lens_y_mm", "Lens height", -20, 20, 0.5, "mm"],
+      ["view.k1", "Distort k1", -0.3, 1.5, 0.01, ""],
+      ["view.k2", "Distort k2", -0.3, 1.5, 0.01, ""],
+      ["view.zoom", "Zoom", 0.4, 2.5, 0.01, "×"],
+      ["view.convergence", "Convergence", -0.15, 0.15, 0.002, ""],
+      ["view.vertical", "Vert. align", -0.1, 0.1, 0.001, ""],
+      ["view.grid", "Grid", "toggle"],
+      ["view.stats", "Stats overlay", "toggle"],
+    ]],
+  ]},
+  { id: "system", tab: "System", groups: [
+    ["Stream", [
+      ["video.bitrate_kbps", "Bitrate", 1000, 30000, 500, "kb/s"],
+    ]],
+  ]},
+];
+
+let ws, state = {}, inputs = {}, presets = [], sending = {};
+const $ = (s) => document.querySelector(s);
+
+function fmt(v, step) { return typeof v === "number" ? (step >= 1 ? Math.round(v) : v.toFixed(step < 0.01 ? 3 : 2)) : v; }
+const unitText = (u) => !u ? "" : u.startsWith(":") ? u : " " + u;
+function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+function set(path, value) { send({ type: "set", path, value }); }
+
+// Coalesce slider drags to ~30 messages/s per control.
+function setThrottled(path, value) {
+  if (sending[path]) { sending[path].v = value; return; }
+  set(path, value);
+  sending[path] = { v: value };
+  setTimeout(() => { const s = sending[path]; delete sending[path]; if (s.v !== value) set(path, s.v); }, 33);
+}
+
+function get(path) { return path.split(".").reduce((o, k) => (o || {})[k], state); }
+
+// ---------------------------------------------------------------- layout
+// Up to 3 columns, each a tab strip that can show any panel. Choosing a panel
+// already open in another column swaps the two. Remembered per browser.
+const panelEls = {};
+const LAYOUT_KEY = "eyestream.layout.v1";
+let layout = { cols: "auto", tabs: ["preview", "voice", "vision"] };
+try { Object.assign(layout, JSON.parse(localStorage.getItem(LAYOUT_KEY) || "{}")); } catch (e) {}
+// URL overrides, e.g. ?tabs=source,preview,voice&cols=3 (handy for bookmarks).
+{
+  const q = new URLSearchParams(location.search);
+  if (q.get("tabs")) layout.tabs = q.get("tabs").split(",");
+  if (["auto", "1", "2", "3"].includes(q.get("cols"))) layout.cols = q.get("cols");
+}
+const saveLayout = () => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch (e) {} };
+
+function columnCount() {
+  const w = window.innerWidth;
+  if (w <= 700) return 1;
+  if (layout.cols !== "auto") return +layout.cols;
+  return w >= 1500 ? 3 : w >= 1000 ? 2 : 1;
+}
+
+function renderLayout() {
+  const n = columnCount(), main = $("#main"), holder = $("#holder");
+  // Keep the tab list valid and distinct.
+  const ids = PANELS.map((p) => p.id);
+  layout.tabs = layout.tabs.filter((t) => ids.includes(t));
+  for (const id of ids) if (layout.tabs.length < 3 && !layout.tabs.includes(id)) layout.tabs.push(id);
+  for (const id of ids) holder.appendChild(panelEls[id]);
+  main.innerHTML = "";
+  main.style.gridTemplateColumns = `repeat(${n}, minmax(0, 1fr))`;
+  const shown = layout.tabs.slice(0, n);
+  shown.forEach((cur, ci) => {
+    const col = document.createElement("div"); col.className = "col";
+    const tabs = document.createElement("div"); tabs.className = "tabs";
+    for (const p of PANELS) {
+      const b = document.createElement("button"); b.textContent = p.tab;
+      if (p.id === cur) b.className = "on";
+      else if (shown.includes(p.id)) { b.className = "elsewhere"; b.title = "open in another column (click to swap)"; }
+      b.onclick = () => {
+        const j = shown.indexOf(p.id);
+        if (j >= 0 && j !== ci) [layout.tabs[ci], layout.tabs[j]] = [layout.tabs[j], layout.tabs[ci]];
+        else if (j < 0) {
+          // Panel not visible: show it here. The displaced panel goes to the end of
+          // the list (hidden), so the other columns don't move.
+          const displaced = layout.tabs[ci];
+          layout.tabs = layout.tabs.filter((t) => t !== p.id);
+          layout.tabs[ci] = p.id;
+          layout.tabs = [...new Set([...layout.tabs, displaced])];
+        }
+        saveLayout(); renderLayout();
+      };
+      tabs.appendChild(b);
+    }
+    const body = document.createElement("div"); body.className = "colbody";
+    body.appendChild(panelEls[cur]);
+    col.append(tabs, body); main.appendChild(col);
+  });
+  for (const b of $("#colSeg").children) b.classList.toggle("on", b.dataset.v === String(layout.cols));
+}
+
+function buildLayoutControl() {
+  for (const v of ["auto", "1", "2", "3"]) {
+    const b = document.createElement("button"); b.textContent = v === "auto" ? "Auto" : v; b.dataset.v = v;
+    b.onclick = () => { layout.cols = v; saveLayout(); renderLayout(); };
+    $("#colSeg").appendChild(b);
+  }
+  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(renderLayout, 120); });
+}
+
+// ---------------------------------------------------------------- controls
+// A path can have widgets in more than one panel (e.g. Film audio).
+function register(path, entry) { (inputs[path] ??= []).push(entry); }
+
+function buildControls(container, controls) {
+  const toggles = document.createElement("div"); toggles.className = "toggles";
+  for (const c of controls) {
+    const [path, label, a] = c;
+    if (a === "toggle") {
+      const b = document.createElement("button"); b.className = "chip"; b.textContent = label;
+      b.onclick = () => set(path, !get(path));
+      register(path, { el: b, kind: "toggle" }); toggles.appendChild(b);
+    } else if (a === "choice") {
+      const row = document.createElement("div"); row.className = "toggles";
+      row.insertAdjacentHTML("beforeend", `<label>${label}</label>`);
+      for (const opt of c[3]) {
+        const b = document.createElement("button"); b.className = "chip"; b.textContent = opt; b.dataset.v = opt;
+        b.onclick = () => set(path, opt); row.appendChild(b);
+      }
+      register(path, { el: row, kind: "choice" }); container.appendChild(row);
+    } else if (a === "presets") {
+      const row = document.createElement("div"); row.className = "toggles"; row.id = "presetRow";
+      register(path, { el: row, kind: "presets" }); container.appendChild(row);
+    } else {
+      const [, , min, max, step, unit] = c;
+      const row = document.createElement("div"); row.className = "row";
+      row.innerHTML = `<label title="${label}">${label}</label><input type="range" min="${min}" max="${max}" step="${step}"><output></output>`;
+      const r = row.querySelector("input"), o = row.querySelector("output");
+      r.oninput = () => { o.textContent = fmt(+r.value, step) + unitText(unit); setThrottled(path, +r.value); };
+      register(path, { el: r, out: o, step, unit, kind: "range" }); container.appendChild(row);
+    }
+  }
+  if (toggles.children.length) container.appendChild(toggles);
+}
+
+function buildPanels() {
+  for (const p of PANELS) {
+    const el = document.createElement("div"); el.className = "panel"; panelEls[p.id] = el;
+    if (p.id === "preview") buildPreview(el);
+    else if (p.id === "source") buildSource(el, p.groups);
+    else if (p.id === "scenes") buildScenes(el);
+    else for (const [title, controls] of p.groups) {
+      if (title) el.insertAdjacentHTML("beforeend", `<h3>${title}</h3>`);
+      buildControls(el, controls);
+    }
+    if (p.id === "pulse") el.insertAdjacentHTML("beforeend",
+      `<p class="hint warn">⚠ Flicker at 3–30 Hz can trigger seizures in people with photosensitive epilepsy,
+       including people who don't know they have it. Ask about epilepsy and migraine first, start with low depth,
+       and keep BLACKOUT (B) within reach. Ramps in over 3 s; BLACKOUT stops it.</p>`);
+    if (p.id === "system") el.insertAdjacentHTML("beforeend", `<h3>Connections</h3><div class="clients" id="clients"></div>`);
+  }
+}
+
+// ---------------------------------------------------------------- source
+let seeking = false, mediaFiles = [];
+
+function buildSource(el, groups) {
+  el.innerHTML = `
+    <div class="toggles"><button class="chip" id="srcCam">Live camera</button>
+      <span id="srcNow" class="hint" style="margin:0"></span></div>
+    <h3>Playback</h3>
+    <div class="toggles"><button class="chip" id="mPause">Pause</button>
+      <span id="mTime" class="hint" style="margin:0;font-variant-numeric:tabular-nums"></span></div>
+    <div class="row"><label>Position</label><input type="range" id="mPos" min="0" max="1" step="0.1" value="0"><output id="mPosOut"></output></div>
+    <div id="mOpts"></div>
+    <p class="hint warn" id="mNotice" style="display:none"></p>
+    <h3>Files</h3>
+    <div class="filelist" id="mFiles"></div>
+    <p class="hint" id="mDir"></p>
+    <p class="hint">sbs = full side-by-side, hsbs = half (squeezed) side-by-side, tb / htb = top-bottom.
+      The layout is guessed from the file name and shape; change it here if the picture looks doubled or squashed.
+      A/V offset delays the picture to match the phone's later audio (Bluetooth); raise it if lips move before the sound.</p>`;
+  const opts = el.querySelector("#mOpts");
+  for (const [title, controls] of groups) {
+    opts.insertAdjacentHTML("beforeend", `<h3>${title}</h3>`);
+    buildControls(opts, controls);
+  }
+  el.querySelector("#srcCam").onclick = () => send({ type: "media_camera" });
+  el.querySelector("#mPause").onclick = () => set("media.paused", !get("media.paused"));
+  const pos = el.querySelector("#mPos");
+  pos.addEventListener("pointerdown", () => { seeking = true; });
+  pos.oninput = () => { seeking = true; $("#mPosOut").textContent = fmtTime(+pos.value); };
+  pos.onchange = () => { send({ type: "media_seek", pos: +pos.value }); setTimeout(() => { seeking = false; }, 600); };
+}
+
+function fmtTime(s) {
+  s = Math.max(0, Math.floor(s || 0));
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, sec = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}
+
+function renderMedia(m) {
+  if (!m) return;
+  const isFile = get("media.source") === "file", cur = get("media.file");
+  $("#srcCam").classList.toggle("on", !isFile);
+  $("#srcNow").textContent = isFile ? `playing ${cur}` : `${(state.stream || {}).source || "camera"}`;
+  for (const id of ["#mPause", "#mPos"]) $(id).disabled = !isFile;
+  const pos = $("#mPos");
+  pos.max = Math.max(1, m.duration);
+  if (!seeking) { pos.value = m.position; $("#mPosOut").textContent = fmtTime(m.position); }
+  $("#mTime").textContent = isFile ? `${fmtTime(m.position)} / ${fmtTime(m.duration)}${m.has_audio ? "" : "  (no sound)"}` : "";
+  const list = $("#mFiles");
+  if (mediaFiles.join("|") !== m.files.join("|")) {
+    mediaFiles = m.files; list.innerHTML = "";
+    for (const f of m.files) {
+      const b = document.createElement("button"); b.textContent = f; b.title = f; b.dataset.f = f;
+      b.onclick = () => send({ type: "media_play", file: f }); list.appendChild(b);
+    }
+    if (!m.files.length) list.innerHTML = `<span class="hint" style="margin:0">no video files found</span>`;
+  }
+  for (const b of list.querySelectorAll("button")) b.classList.toggle("on", isFile && b.dataset.f === cur);
+  $("#mDir").textContent = `folder: ${m.dir}`;
+}
+
+function showNotice(text) {
+  const n = $("#mNotice"); n.textContent = text; n.style.display = "";
+  clearTimeout(showNotice.t); showNotice.t = setTimeout(() => { n.style.display = "none"; }, 6000);
+}
+
+function buildScenes(el) {
+  el.innerHTML = `<h3>Save</h3>
+    <div style="display:flex;gap:6px"><input type="text" id="sceneName" placeholder="scene name" style="flex:1;min-width:0">
+    <button class="chip" id="sceneSave">Save current</button></div>
+    <h3>Recall</h3><div class="toggles" id="scenes"></div>
+    <p class="hint">Scenes store voice, mix, beats, vision, spiral and light-pulse settings (not calibration).
+      Shift-click a scene to delete it.</p>`;
+  el.querySelector("#sceneSave").onclick = () => { const n = $("#sceneName").value.trim(); if (n) send({ type: "scene_save", name: n }); };
+}
+
+// ---------------------------------------------------------------- preview
+// The phone mirrors back what the wearer sees (JPEG, type 0x01) and hears
+// (S16LE stereo 24 kHz, type 0x02) as binary WebSocket messages.
+let audioCtx = null, monGain = null, nextT = 0, pvFrames = 0, pvLast = performance.now();
+
+function buildPreview(el) {
+  el.innerHTML = `
+    <div class="pvbar">
+      <button class="chip" id="pvVideo">Video</button>
+      <button class="chip" id="pvAudio">Audio</button>
+      <label>fps</label><input type="range" id="pvFps" min="2" max="20" step="1">
+      <label>listen</label><input type="range" id="pvVol" min="0" max="1.5" step="0.01" value="0.8">
+      <span id="previewInfo"></span>
+    </div>
+    <canvas id="previewCanvas" width="640" height="295"></canvas>
+    <p class="hint">What the wearer sees and hears, sent back from the phone. Flat view (without lens
+      pre-distortion). Light pulses look choppy here because of the low frame rate. Use headphones:
+      the audio includes your own processed voice, delayed.</p>`;
+  el.querySelector("#pvVideo").onclick = () => set("preview.video", !get("preview.video"));
+  el.querySelector("#pvAudio").onclick = async () => {
+    const on = !get("preview.audio");
+    if (on) {
+      // Browsers only allow audio to start from a click.
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        monGain = audioCtx.createGain(); monGain.gain.value = +$("#pvVol").value; monGain.connect(audioCtx.destination);
+      }
+      await audioCtx.resume();
+      nextT = 0;
+    }
+    set("preview.audio", on);
+  };
+  el.querySelector("#pvFps").oninput = (e) => setThrottled("preview.fps", +e.target.value);
+  el.querySelector("#pvVol").oninput = (e) => { if (monGain) monGain.gain.value = +e.target.value; };
+  setInterval(() => {
+    const now = performance.now(), dt = (now - pvLast) / 1000; pvLast = now;
+    const parts = [];
+    if (get("preview.video")) parts.push(`${(pvFrames / dt).toFixed(1)} fps`);
+    if (get("preview.audio") && audioCtx) parts.push(`audio buffer ${Math.max(0, (nextT - audioCtx.currentTime) * 1000).toFixed(0)} ms`);
+    $("#previewInfo").textContent = parts.join("   ");
+    pvFrames = 0;
+  }, 1000);
+}
+
+function onPreviewVideo(bytes) {
+  pvFrames++;
+  createImageBitmap(new Blob([bytes], { type: "image/jpeg" })).then((bmp) => {
+    const c = $("#previewCanvas");
+    if (c.width !== bmp.width || c.height !== bmp.height) {
+      c.width = bmp.width; c.height = bmp.height; c.style.aspectRatio = `${bmp.width} / ${bmp.height}`;
+    }
+    c.getContext("2d").drawImage(bmp, 0, 0); bmp.close();
+  }).catch(() => {});
+}
+
+function onPreviewAudio(bytes) {
+  if (!audioCtx || !get("preview.audio")) return;
+  const pcm = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength >> 1);
+  const n = pcm.length >> 1;
+  const buf = audioCtx.createBuffer(2, n, 24000);
+  const L = buf.getChannelData(0), R = buf.getChannelData(1);
+  for (let i = 0; i < n; i++) { L[i] = pcm[2 * i] / 32768; R[i] = pcm[2 * i + 1] / 32768; }
+  const src = audioCtx.createBufferSource(); src.buffer = buf; src.connect(monGain);
+  const now = audioCtx.currentTime;
+  // ~80 ms of cushion; resync if we fell behind or drifted far ahead.
+  if (nextT < now + 0.02 || nextT > now + 0.4) nextT = now + 0.08;
+  src.start(nextT); nextT += n / 24000;
+}
+
+function onBinary(ab) {
+  const type = new Uint8Array(ab, 0, 1)[0], body = new Uint8Array(ab, 1);
+  if (type === 1) onPreviewVideo(body); else if (type === 2) onPreviewAudio(body);
+}
+
+// ---------------------------------------------------------------- state -> UI
+function renderPresets() {
+  const row = $("#presetRow"); if (!row) return;
+  const cur = get("voice.preset");
+  if (row.dataset.list !== presets.join("|")) {
+    row.innerHTML = "";
+    for (const p of presets) {
+      const b = document.createElement("button"); b.className = "chip"; b.textContent = p; b.dataset.p = p;
+      b.onclick = () => set("voice.preset", p); row.appendChild(b);
+    }
+    row.dataset.list = presets.join("|");
+  }
+  for (const b of row.children) b.classList.toggle("on", b.dataset.p === cur);
+}
+
+function refresh(path) {
+  const paths = path ? [path] : Object.keys(inputs);
+  for (const p of paths) for (const i of inputs[p] || []) {
+    const v = get(p);
+    if (i.kind === "range" && document.activeElement !== i.el) {
+      i.el.value = v; i.out.textContent = fmt(v, i.step) + unitText(i.unit);
+    } else if (i.kind === "toggle") i.el.classList.toggle("on", !!v);
+    else if (i.kind === "choice") for (const b of i.el.querySelectorAll("button")) b.classList.toggle("on", b.dataset.v === v);
+  }
+  renderPresets();
+  $("#pvVideo").classList.toggle("on", !!get("preview.video"));
+  $("#pvAudio").classList.toggle("on", !!get("preview.audio"));
+  if (document.activeElement !== $("#pvFps")) $("#pvFps").value = get("preview.fps") ?? 10;
+  if (!get("preview.video")) $("#previewCanvas").getContext("2d").clearRect(0, 0, 9999, 9999);
+  const paused = !!get("media.paused");
+  $("#mPause").textContent = paused ? "Play" : "Pause";
+  $("#mPause").classList.toggle("on", paused);
+  $("#blackout").classList.toggle("on", get("fx.fade") < 0.5);
+  const muted = !!get("voice.mute");
+  $("#mute").textContent = muted ? "MIC MUTED" : "MIC LIVE";
+  $("#mute").classList.toggle("on", muted);
+  $("#mute").classList.toggle("live", !muted);
+}
+
+function setLocal(path, value) {
+  const keys = path.split("."), leaf = keys.pop();
+  keys.reduce((o, k) => (o[k] ??= {}), state)[leaf] = value;
+}
+
+function renderClients(msg) {
+  const lines = msg.clients.map((c) => {
+    let s = `${c.role || "?"}  ${c.addr}  ${c.name || ""}`;
+    if (c.stats) {
+      const t = c.stats;
+      s += `\n   ${t.fps ?? "?"} fps  ${t.kbps ?? "?"} kb/s  loss ${t.loss ?? 0}  rtt ${t.rtt_ms ?? "?"} ms\n` +
+           `   voice buf ${t.audio_ms ?? "?"} ms  out lat ${t.out_latency_ms ?? "?"} ms  ${t.res || ""}`;
+    }
+    return s;
+  });
+  const st = state.stream || {};
+  $("#clients").textContent = `sending ${st.width}×${st.height}@${st.fps} ${st.layout} via ${st.encoder} (${st.source})\n\n` +
+    (lines.join("\n") || "no clients");
+
+  // Compact phone status in the header.
+  const phone = msg.clients.find((c) => c.role === "receiver");
+  const t = phone && phone.stats;
+  $("#phone").innerHTML = !phone ? "no phone" : !t ? `phone <b>connected</b>` :
+    `phone <b>${t.fps}</b> fps · <b>${(t.kbps / 1000).toFixed(1)}</b> Mb/s · loss <b>${t.loss}</b> · ` +
+    `rtt <b>${t.rtt_ms}</b> ms · audio out <b>${t.out_latency_ms}</b> ms` +
+    (t.battery != null ? ` · battery <b>${t.battery}%</b>` : "") +
+    (t.thermal >= 2 ? ` · <span class="warn">hot</span>` : "");
+
+  const sc = $("#scenes"); sc.innerHTML = msg.scenes.length ? "" : `<span class="hint" style="margin:0">no scenes saved yet</span>`;
+  for (const n of msg.scenes) {
+    const b = document.createElement("button"); b.className = "chip"; b.textContent = n;
+    b.onclick = (e) => send({ type: e.shiftKey ? "scene_delete" : "scene_load", name: n });
+    sc.appendChild(b);
+  }
+  if (msg.presets) { presets = msg.presets; renderPresets(); }
+  renderMedia(msg.media);
+  // Meters span -80..0 dBFS.
+  const pct = (d) => Math.max(0, Math.min(100, (d + 80) / 80 * 100)) + "%";
+  $("#vu").style.width = pct(msg.mic_db);
+  $("#vuOut").style.width = pct(msg.out_db);
+  $("#gateTick").style.left = pct(get("voice.gate_db") ?? -55);
+  $("#gateLed").classList.toggle("open", !!msg.gate_open);
+}
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => { $("#conn").textContent = "connected"; $("#conn").className = "ok"; send({ type: "hello", role: "console" }); };
+  ws.onclose = () => { $("#conn").textContent = "disconnected — retrying"; $("#conn").className = ""; setTimeout(connect, 1000); };
+  ws.onmessage = (e) => {
+    if (typeof e.data !== "string") { onBinary(e.data); return; }
+    const m = JSON.parse(e.data);
+    if (m.type === "state") { state = m.state; refresh(); }
+    else if (m.type === "set") { setLocal(m.path, m.value); refresh(m.path); }
+    else if (m.type === "clients") renderClients(m);
+    else if (m.type === "notice") showNotice(m.text);
+  };
+}
+
+// ---------------------------------------------------------------- header + keys
+let pttMode = false;
+$("#blackout").onclick = () => set("fx.fade", get("fx.fade") < 0.5 ? 1 : 0);
+$("#mute").onclick = () => set("voice.mute", !get("voice.mute"));
+$("#ptt").onclick = () => {
+  pttMode = !pttMode; $("#ptt").textContent = pttMode ? "PTT ON (hold Space)" : "PTT OFF";
+  $("#ptt").classList.toggle("live", pttMode); if (pttMode) set("voice.mute", true);
+};
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" && e.target.type === "text") return;
+  if (e.code === "Space" && pttMode && !e.repeat) { e.preventDefault(); set("voice.mute", false); }
+  else if (e.key === "b") $("#blackout").click();
+  else if (e.key === "m") $("#mute").click();
+});
+document.addEventListener("keyup", (e) => { if (e.code === "Space" && pttMode) { e.preventDefault(); set("voice.mute", true); } });
+
+buildPanels();
+buildLayoutControl();
+renderLayout();
+connect();
+</script>
+</body>
+</html>
