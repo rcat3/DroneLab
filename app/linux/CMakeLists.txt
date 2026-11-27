@@ -125,6 +125,12 @@ install(TARGETS dronelab_fx LIBRARY DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
 install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/../../build-host/dronelab-unit"
   DESTINATION "${CMAKE_INSTALL_PREFIX}" OPTIONAL COMPONENT Runtime)
 
+# HiveSight's sender (tools/hivesight-sender), beside the app, for the Guide
+# page to start with the system's Python.
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../tools/hivesight-sender/"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/hivesight-sender" COMPONENT Runtime
+  PATTERN "__pycache__" EXCLUDE PATTERN "scenes.json" EXCLUDE)
+
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
