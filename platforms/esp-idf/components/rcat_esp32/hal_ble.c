@@ -1503,7 +1503,14 @@ static int peer_event_cb(struct ble_gap_event *event, void *arg)
             break;
         }
         peer_conn = event->connect.conn_handle;
-        peer_mtu = BLE_ATT_MTU_DFLT;
+        // Not the default: NimBLE says a phone's connected only once it's read the
+        // phone's features, and Windows has agreed its MTU by then (the MTU event
+        // comes once, before this), which the default would put back to 23
+        peer_mtu = ble_att_mtu(peer_conn);
+        if (peer_mtu < BLE_ATT_MTU_DFLT)
+        {
+            peer_mtu = BLE_ATT_MTU_DFLT;
+        }
         ESP_LOGI(TAG, "Phone connected");
         if (!peer_wanted)
         {
