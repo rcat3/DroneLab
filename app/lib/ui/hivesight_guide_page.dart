@@ -447,7 +447,8 @@ class _SessionPanel extends StatelessWidget {
     return _Card('Session', [
       if (s == null) ...[
         const Text(
-          'No session. Start one, then invite your Vessels from here or from a conversation\'s menu in Text.',
+          'No session. Start one, then invite your Vessels from here or from a conversation in Text. '
+          'Your camera and mic stay off until then.',
           style: _small,
         ),
         const SizedBox(height: 10),
@@ -482,7 +483,10 @@ class _SessionPanel extends StatelessWidget {
                     context: context,
                     builder: (d) => AlertDialog(
                       title: const Text('End the session?'),
-                      content: const Text('Every Vessel is disconnected, and the invitations stop working.'),
+                      content: const Text(
+                        'Every Vessel is disconnected, the invitations stop working, and your camera and mic '
+                        'are let go.',
+                      ),
                       actions: [
                         TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
                         FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('End it')),

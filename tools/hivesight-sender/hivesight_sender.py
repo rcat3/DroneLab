@@ -246,6 +246,9 @@ class GstPipeline:
     def __init__(self, name, build_desc, on_built=None, on_level=None, on_eos=None, on_error=None):
         self.name = name
         self.on_error = on_error
+        # Off, it isn't built at all (the camera and mic are let go), and
+        # start() just stops it
+        self.enabled = True
         self.build_desc = build_desc
         self.on_built = on_built
         self.on_level = on_level
@@ -264,6 +267,8 @@ class GstPipeline:
             self._restart_id = 0
             self._restart_pending = False
         self.stop()
+        if not self.enabled:
+            return
         desc = self.build_desc()
         log.debug("%s pipeline: %s", self.name, desc)
         self.pipeline = Gst.parse_launch(desc)
@@ -382,6 +387,10 @@ class Sender:
         self.audio = GstPipeline("audio", self.audio_desc, on_built=self._attach_audio_clients,
                                  on_level=self._on_mic_level) if not args.no_audio else None
         self._audio_structure = self._audio_structure_key()
+        # The camera and mic run only while there's a session (or --also-send)
+        for p in (self.video, self.audio):
+            if p:
+                p.enabled = False
 
     # ---------------- pipelines ----------------
     def video_desc(self):
@@ -937,6 +946,7 @@ class Sender:
                 await self.end_session()
             self.session_token, self.session_expires = token, expires
             log.info("session open until %s", time.strftime("%H:%M", time.localtime(expires)))
+            self._set_live(True)
             await self.broadcast(self.summary(), roles={"guide"})
         elif t == "session_end":
             await self.end_session()
@@ -975,12 +985,25 @@ class Sender:
             self.scenes_path.write_text(json.dumps(self.scenes, indent=2))
             await self.broadcast(self.summary(), roles={"guide"})
 
+    def _set_live(self, on: bool):
+        """Run the camera and mic, or let them go (their lights go out)."""
+        on = on or bool(self.args.also_send)
+        for p in (self.video, self.audio):
+            if p is None or p.enabled == on:
+                continue
+            p.enabled = on
+            log.info("%s %s", p.name, "on" if on else "off: no session")
+            GLib.idle_add(lambda p=p: (p.start(), False)[1])
+        if on:
+            GLib.timeout_add(400, lambda: (self.force_keyframe(), False)[1])
+
     async def end_session(self):
         """No session any more: every Vessel is dropped, and can't come back
-        with that invitation."""
+        with that invitation. The camera and mic are let go."""
         if self.session_token is not None:
             log.info("session ended")
         self.session_token, self.session_expires = None, 0.0
+        self._set_live(False)
         for w, i in list(self.clients.items()):
             if i.get("role") == "vessel":
                 await w.close(code=4001, message=b"the session has ended")
@@ -1108,9 +1131,7 @@ class Sender:
         vessel_site = web.TCPSite(vessel_runner, "0.0.0.0", a.vessel_port, ssl_context=ctx)
         await vessel_site.start()
 
-        GLib.idle_add(lambda: (self.video.start(), False)[1])
-        if self.audio:
-            GLib.idle_add(lambda: (self.audio.start(), False)[1])
+        self._set_live(self.session_token is not None)
 
         def port_of(runner):
             return runner.addresses[0][1]
