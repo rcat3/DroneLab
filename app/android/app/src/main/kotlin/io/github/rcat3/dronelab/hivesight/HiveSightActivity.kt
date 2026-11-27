@@ -57,6 +57,10 @@ class HiveSightActivity : Activity() {
         window.attributes = window.attributes.apply {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             preferredDisplayModeId = highestRefreshMode()
+            // The brightness it has now, held: the phone's automatic brightness
+            // would otherwise keep adjusting it as the light sensor changes
+            screenBrightness = (android.provider.Settings.System.getInt(
+                contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS, 128) / 255f).coerceIn(0.05f, 1f)
         }
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         if (pm.isSustainedPerformanceModeSupported) window.setSustainedPerformanceMode(true)
@@ -271,7 +275,15 @@ class HiveSightActivity : Activity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::session.isInitialized) onClosed?.invoke()
+    }
+
     companion object {
+        /** Called when the view closes: MainActivity tells the app, which holds HiveMind voice while it's open. */
+        @Volatile var onClosed: (() -> Unit)? = null
+
         /** How long volume-down is held to leave the session. */
         const val EXIT_HOLD_MS = 1500L
 

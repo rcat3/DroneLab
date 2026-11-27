@@ -104,7 +104,11 @@ class MainActivity : FlutterActivity() {
         // HiveSight: "open" starts the Vessel's full-screen view on a session
         // the app has checked (hivesight_button.dart), "supported" says
         // whether this Android can (it needs 11)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/hivesight").setMethodCallHandler { call, result ->
+        val hiveChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dronelab/hivesight")
+        io.github.rcat3.dronelab.hivesight.HiveSightActivity.onClosed = {
+            runOnUiThread { hiveChannel.invokeMethod("closed", null) }
+        }
+        hiveChannel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "supported" -> result.success(Build.VERSION.SDK_INT >= 30)
                 "open" -> if (Build.VERSION.SDK_INT >= 30) {
@@ -279,6 +283,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        io.github.rcat3.dronelab.hivesight.HiveSightActivity.onClosed = null
         stopHeadset()
         stopSession()
         dev?.let { unregisterReceiver(it) }

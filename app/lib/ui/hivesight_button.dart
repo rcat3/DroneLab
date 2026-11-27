@@ -77,6 +77,11 @@ Future<String?> joinHiveSight(
       'lightPulse': rules.allows(keyHex, RuleClass.hiveSightPulse),
       'name': comm.server.username,
     });
+    // HiveMind voice waits while the view is open; the view says when it's closed
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'closed') comm.setVesselView(false);
+    });
+    comm.setVesselView(true);
   } on PlatformException catch (e) {
     return e.message ?? "Couldn't open HiveSight";
   }

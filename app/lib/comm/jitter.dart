@@ -246,6 +246,7 @@ class Mixer {
   void Function()? stopToneSink;
 
   void playTone(Int16List samples) {
+    if (hushed) return;
     final sink = toneSink;
     if (sink != null) {
       final v = volume;
@@ -301,7 +302,12 @@ class Mixer {
 
   /// [extraMs] waits that much longer for this speaker's voice, for one that
   /// comes less evenly (direct comms' repeats can come 40 ms late).
+  /// Nothing's played while this is on (a HiveSight Vessel's view is open):
+  /// voices and tones are dropped, not kept for later.
+  bool hushed = false;
+
   void receive(int session, int seq, Uint8List opus, bool last, int nowMs, {int extraMs = 0}) {
+    if (hushed) return;
     final s = speakers.putIfAbsent(session, () {
       final sp = Speaker(session, sampleRate, newDecoder(), targetMs: targetMs + extraMs);
       // What it learned last time, so a bursty voice doesn't break up

@@ -2288,7 +2288,25 @@ class CommController extends ChangeNotifier {
     }
   }
 
+  /// A HiveSight Vessel's view is open on this phone: HiveMind voice is held
+  /// for as long as it is. Nothing's played to the headphones (voices, calls
+  /// and tones are dropped), and the headphones' button doesn't talk, so
+  /// nothing breaks the session or goes out by accident. Texts carry on.
+  bool inVesselView = false;
+
+  void setVesselView(bool on) {
+    if (on == inVesselView) return;
+    inVesselView = on;
+    mixer.hushed = on;
+    if (on) {
+      mixer.stopTones();
+      _setHeadsetTalking(false, chirp: false);
+    }
+    notifyListeners();
+  }
+
   void _onHeadsetPress() {
+    if (inVesselView) return;
     // Headphones send a press, not a hold: each press starts or stops
     _setHeadsetTalking(!headsetTalking);
   }
