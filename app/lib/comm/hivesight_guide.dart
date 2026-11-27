@@ -190,12 +190,32 @@ class HiveSightGuide extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> setOptions(SenderOptions o) async {
+  /// Use [o] from now on. A new camera, mode, microphone or media folder
+  /// changes over while it runs, the Vessels staying connected, and with
+  /// [useCamera] the camera's what they see; turning the voice on or off
+  /// restarts it (a session carries on).
+  Future<void> setOptions(SenderOptions o, {bool useCamera = false}) async {
     await _load();
+    final old = options;
     options = o;
     await _prefs!.setString('hiveSightSender', jsonEncode(o.toJson()));
     notifyListeners();
-    if (state == SenderState.running || state == SenderState.starting) await restart();
+    if (state == SenderState.running && linked && o.audio == old.audio) {
+      _send({
+        'type': 'capture',
+        'device': o.camera,
+        'format': o.format,
+        'width': o.width,
+        'height': o.height,
+        'fps': o.fps,
+        'layout': o.layout,
+        'mic': o.mic,
+        'media_dir': o.mediaDir,
+      });
+      if (useCamera) this.useCamera();
+    } else if (state == SenderState.running || state == SenderState.starting) {
+      await restart();
+    }
   }
 
   void _say(String line) {
@@ -306,7 +326,14 @@ print(" ".join(missing))
         ...options.args,
       ]);
       _process = p;
-      p.stdin.writeln(jsonEncode({'guide_token': _guideToken}));
+      // The session too, if one's on: its Vessels come straight back
+      final ss = session;
+      p.stdin.writeln(
+        jsonEncode({
+          'guide_token': _guideToken,
+          if (ss != null) 'session': {'token': ss.token, 'expires': ss.expires.millisecondsSinceEpoch / 1000},
+        }),
+      );
       await p.stdin.flush();
       p.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
         if (line.startsWith('HIVESIGHT ')) {
@@ -601,6 +628,27 @@ print(" ".join(missing))
   }
 
   bool get canInvite => session != null && state == SenderState.running && addrs.isNotEmpty;
+
+  /// Invite a conversation, starting the sender and a session first if
+  /// need be: why not, or null once it's sent.
+  Future<String?> inviteStarting(Conversation c) async {
+    if (state != SenderState.running) {
+      await start();
+      final done = Completer<void>();
+      void check() {
+        if (state != SenderState.starting && !done.isCompleted) done.complete();
+      }
+
+      addListener(check);
+      check();
+      await done.future.timeout(const Duration(seconds: 20), onTimeout: () {});
+      removeListener(check);
+      if (state != SenderState.running) return problem ?? "The HiveSight sender didn't start";
+    }
+    if (addrs.isEmpty) return "This computer isn't on a network the Vessel can reach";
+    if (session == null) startSession(); // sent now, or when the link's up
+    return await invite(c) ? null : "Couldn't send it: ${c.title} can't be reached just now";
+  }
 
   static String _randomToken() {
     final r = Random.secure();

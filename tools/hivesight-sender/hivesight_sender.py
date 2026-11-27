@@ -11,9 +11,10 @@ Ports (Vessel side):   5004/udp  H.264 RTP video
                        5006/udp  L16 stereo RTP audio (the Guide's voice)
                        5008/udp  L16 stereo RTP audio (video file soundtrack)
 
-The app writes one JSON line to stdin at start, {"guide_token": "..."}, and
-keeps stdin open: when it closes, the sender stops. Once listening, the sender
-prints one line, HIVESIGHT {"guide_port": n, "vessel_port": n, "addrs": [...]}.
+The app writes one JSON line to stdin at start, {"guide_token": "...", and
+"session": {"token": ..., "expires": ...} if one is on}, and keeps stdin
+open: when it closes, the sender stops. Once listening, the sender prints
+one line, HIVESIGHT {"guide_port": n, "vessel_port": n, "addrs": [...]}.
 
 Who may connect:
   - the Guide page: from loopback, with the guide token in its hello;
@@ -23,6 +24,10 @@ Who may connect:
     ({"type": "session_end"}), which drops every Vessel. Vessels can only
     report (stats, pings, keyframe requests, preview); they can't change
     settings.
+
+The Guide page changes the camera, its mode, the microphone and the media
+folder while it runs ({"type": "capture", "device": ..., ...}), Vessels
+staying connected.
 """
 from __future__ import annotations
 
@@ -521,6 +526,37 @@ class Sender:
         GLib.timeout_add(400, lambda: (self.force_keyframe(), False)[1])
         await self.broadcast({"type": "state", "state": self.state})
 
+    async def set_capture(self, msg):
+        """A new camera, mode, microphone or media folder, without stopping:
+        the video is rebuilt if the camera is on, and the voice if the
+        microphone changed. Vessels stay connected."""
+        a = self.args
+        old_mic = a.mic
+        try:
+            device = str(msg.get("device", ""))
+            a.test_pattern = not device
+            if device:
+                a.device = device
+                a.format = "yuyv" if msg.get("format") == "yuyv" else "mjpeg"
+            a.width, a.height = int(msg.get("width", a.width)), int(msg.get("height", a.height))
+            a.fps = int(msg.get("fps", a.fps))
+            a.layout = "mono" if msg.get("layout") == "mono" and device else "sbs"
+            a.mic = str(msg.get("mic") or "") or None
+            if "media_dir" in msg:
+                a.media_dir_given = bool(msg["media_dir"])
+                self.media_dir = Path(msg["media_dir"] or "~/Videos").expanduser()
+                self._media_list_t = 0.0
+        except (TypeError, ValueError):
+            await self.notify("bad camera settings")
+            return
+        log.info("capture: %s %s %dx%d@%d %s, mic %s", "test pattern" if a.test_pattern else a.device,
+                 a.format, a.width, a.height, a.fps, a.layout, a.mic or "default")
+        if self.state["media"]["source"] == "camera":
+            await self.use_camera()
+        if self.audio and a.mic != old_mic:
+            GLib.idle_add(lambda: (self.audio.start(), False)[1])
+        await self.broadcast(self.summary(), roles={"guide"})
+
     def seek(self, seconds: float):
         p = self.video.pipeline
         if p is None or self.state["media"]["source"] != "file":
@@ -896,6 +932,8 @@ class Sender:
             await self.play_file(str(msg["file"]))
         elif t == "media_camera":
             await self.use_camera()
+        elif t == "capture":
+            await self.set_capture(msg)
         elif t == "media_seek":
             pos = float(msg.get("pos", 0))
             GLib.idle_add(lambda: (self.seek(pos), False)[1])
@@ -1002,16 +1040,25 @@ class Sender:
             await self.broadcast(self.summary(), roles={"guide"})
 
     # ---------------- the app ----------------
+    def _read_first_line(self):
+        """The app's line: the Guide page's token, and the session if one is
+        on (a restart: its Vessels come straight back)."""
+        line = sys.stdin.readline()
+        try:
+            j = json.loads(line)
+            self.guide_token = str(j.get("guide_token", ""))
+            s = j.get("session") or {}
+            token, expires = s.get("token"), float(s.get("expires", 0))
+            if isinstance(token, str) and len(token) >= 16 and expires > time.time():
+                self.session_token, self.session_expires = token, expires
+                log.info("session open until %s", time.strftime("%H:%M", time.localtime(expires)))
+        except (ValueError, AttributeError, TypeError):
+            log.error("bad first line on stdin")
+
     def _read_stdin(self):
-        """The app's line, then wait: stdin closing means the app's gone."""
-        first = True
-        for line in sys.stdin:
-            if first:
-                first = False
-                try:
-                    self.guide_token = str(json.loads(line).get("guide_token", ""))
-                except (ValueError, AttributeError):
-                    log.error("bad first line on stdin")
+        """Wait: stdin closing means the app's gone."""
+        for _ in sys.stdin:
+            pass
         log.info("stdin closed; stopping")
         if self.loop and self.stopped:
             self.loop.call_soon_threadsafe(self.stopped.set)
@@ -1024,6 +1071,7 @@ class Sender:
         if a.guide_token:
             self.guide_token = a.guide_token
         else:
+            await self.loop.run_in_executor(None, self._read_first_line)
             threading.Thread(target=self._read_stdin, daemon=True, name="stdin").start()
 
         guide_app = web.Application()
