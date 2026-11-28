@@ -11,6 +11,7 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.math.tanh
 
 /**
@@ -184,6 +185,8 @@ class AudioEngine(voicePort: Int, mediaPort: Int) {
         var beatsGain = 0.0; var noiseGain = 0.0; var voiceGain = 0.0; var mediaGain = 0.0
         val pink = Array(2) { DoubleArray(7) }
         var rng = 0x2545F491L
+        val noiseBeats = NoiseBeats(rate)
+        val nb = DoubleArray(2)
         val dt = block.toDouble() / rate
 
         while (running) {
@@ -216,11 +219,24 @@ class AudioEngine(voicePort: Int, mediaPort: Int) {
             val fR = carrier + beat / 2
             val dL = 2 * PI * fL / rate
             val dR = 2 * PI * fR / rate
+            // The beat on noise (pink or white) rather than two tones: the right ear's noise is the
+            // left's, moved up by the beat in frequency, so the beat is there at every pitch
+            val src = Params.s("beats.source")
+            val noiseBeat = src == "pink" || src == "white"
+            if (noiseBeat) noiseBeats.setBand(carrier, Params.f("beats.noise_bw").toDouble())
             for (n in 0 until block) {
-                phL += dL; if (phL > 2 * PI) phL -= 2 * PI
-                phR += dR; if (phR > 2 * PI) phR -= 2 * PI
-                var l = beatsGain * 0.5 * sin(phL)
-                var r = beatsGain * 0.5 * sin(phR)
+                var l: Double
+                var r: Double
+                if (noiseBeat) {
+                    noiseBeats.next(src == "pink", beat, nb)
+                    l = beatsGain * nb[0]
+                    r = beatsGain * nb[1]
+                } else {
+                    phL += dL; if (phL > 2 * PI) phL -= 2 * PI
+                    phR += dR; if (phR > 2 * PI) phR -= 2 * PI
+                    l = beatsGain * 0.5 * sin(phL)
+                    r = beatsGain * 0.5 * sin(phR)
+                }
                 if (noiseGain > 1e-4) {
                     for (ch in 0..1) {
                         // xorshift white noise -> Paul Kellet pink filter
@@ -261,4 +277,112 @@ class AudioEngine(voicePort: Int, mediaPort: Int) {
 
     private fun softClip(x: Double): Float =
         if (abs(x) < 0.9) x.toFloat() else (0.9 + 0.1 * tanh((abs(x) - 0.9) / 0.1)).toFloat() * if (x < 0) -1f else 1f
+}
+
+
+/** A second-order Butterworth high or low pass (RBJ cookbook), one sample at a time. */
+private class Biquad {
+    private var b0 = 1.0; private var b1 = 0.0; private var b2 = 0.0
+    private var a1 = 0.0; private var a2 = 0.0
+    private var x1 = 0.0; private var x2 = 0.0; private var y1 = 0.0; private var y2 = 0.0
+
+    fun set(high: Boolean, f: Double, rate: Int) {
+        val w0 = 2 * PI * f / rate
+        val al = sin(w0) / (2 * 0.7071)
+        val c = cos(w0)
+        val a0 = 1 + al
+        if (high) { b0 = (1 + c) / 2; b1 = -(1 + c); b2 = (1 + c) / 2 }
+        else { b0 = (1 - c) / 2; b1 = 1 - c; b2 = (1 - c) / 2 }
+        b0 /= a0; b1 /= a0; b2 /= a0; a1 = -2 * c / a0; a2 = (1 - al) / a0
+    }
+
+    fun process(v: Double): Double {
+        val o = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+        x2 = x1; x1 = v; y2 = y1; y1 = o
+        return o
+    }
+}
+
+/**
+ * Binaural beats carried by noise. Noise (white or pink) kept to a band around
+ * the carrier goes to the left ear as it is, and to the right moved up in
+ * frequency by the beat (a single-sideband shift: the noise's analytic signal,
+ * made with a Hilbert FIR, turned by the beat's phase). Every frequency in it
+ * then has the same phase difference between the ears, rotating at the beat, so
+ * the beat is heard as with two tones, but on a sound that is easier on the ears.
+ * Its level is kept steady (about that of the tones) whatever the width.
+ */
+private class NoiseBeats(private val rate: Int) {
+    private val taps = 127
+    private val mid = taps / 2
+    private val hist = DoubleArray(taps)
+    private var pos = 0
+    private val hk = IntArray((taps + 1) / 2)       // the taps that aren't zero: k even
+    private val hv = DoubleArray((taps + 1) / 2)
+    private val hp = Biquad()
+    private val lp = Biquad()
+    private val pinkState = DoubleArray(7)
+    private var rng = 0x6C8E9CF5L
+    private var phase = 0.0
+    private var power = 0.05
+    private var lastCarrier = -1.0
+    private var lastWidth = -1.0
+
+    init {
+        var n = 0
+        for (k in 0 until taps) {
+            val m = k - mid
+            if (m % 2 != 0) {
+                hk[n] = k
+                hv[n] = 2 / (PI * m) * (0.54 + 0.46 * cos(PI * m / mid))
+                n++
+            }
+        }
+    }
+
+    /** The band: [width] Hz around [carrier], set again only when it has moved. */
+    fun setBand(carrier: Double, width: Double) {
+        val w = width.coerceIn(50.0, 8000.0)
+        if (abs(carrier - lastCarrier) < 0.5 && abs(w - lastWidth) < 1.0) return
+        lastCarrier = carrier; lastWidth = w
+        val lo = maxOf(20.0, carrier - w / 2)
+        val hi = minOf(rate * 0.45, maxOf(lo * 1.5, carrier + w / 2))
+        hp.set(true, lo, rate)
+        lp.set(false, hi, rate)
+    }
+
+    private fun white(): Double {
+        rng = rng xor (rng shl 13); rng = rng xor (rng ushr 7); rng = rng xor (rng shl 17)
+        return (rng and 0xffffff).toDouble() / 0x800000 - 1.0
+    }
+
+    /** One sample for each ear into [out]: left, right. */
+    fun next(pink: Boolean, beatHz: Double, out: DoubleArray) {
+        val w = white()
+        val nz = if (pink) {
+            val b = pinkState
+            b[0] = 0.99886 * b[0] + w * 0.0555179
+            b[1] = 0.99332 * b[1] + w * 0.0750759
+            b[2] = 0.96900 * b[2] + w * 0.1538520
+            b[3] = 0.86650 * b[3] + w * 0.3104856
+            b[4] = 0.55000 * b[4] + w * 0.5329522
+            b[5] = -0.7616 * b[5] - w * 0.0168980
+            val p = (b[0] + b[1] + b[2] + b[3] + b[4] + b[5] + b[6] + w * 0.5362) * 0.11
+            b[6] = w * 0.115926
+            p
+        } else w * 0.5
+        val x = lp.process(hp.process(nz))
+        hist[pos] = x
+        val latest = pos
+        pos = (pos + 1) % taps
+        var q = 0.0
+        for (i in hk.indices) q += hv[i] * hist[(latest - hk[i] + taps) % taps]
+        val inPhase = hist[(latest - mid + taps) % taps]
+        power += (inPhase * inPhase - power) / rate     // about a second to settle
+        val norm = (0.354 / sqrt(power + 1e-9)).coerceAtMost(40.0)
+        phase += 2 * PI * beatHz / rate
+        if (phase > 2 * PI) phase -= 2 * PI
+        out[0] = inPhase * norm
+        out[1] = (inPhase * cos(phase) - q * sin(phase)) * norm
+    }
 }
