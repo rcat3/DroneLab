@@ -41,3 +41,6 @@ tools/doc_renders/lineup/
 # The Mumble server's passwords and data
 tools/mumble/.env
 tools/mumble/data/
+
+# HiveSight sender: build_fx.sh output
+tools/hivesight-sender/build/
