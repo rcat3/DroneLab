@@ -1151,6 +1151,21 @@ def local_ips():
         return []
 
 
+def source_name(dev):
+    """A microphone's PulseAudio/PipeWire source name, for pulsesrc device=,
+    or None for a monitor (what's playing, not a microphone). PipeWire's
+    provider has node.name; PulseAudio's, the device's internal-name."""
+    props = dev.get_properties()
+    if props and props.get_string("device.class") == "monitor":
+        return None
+    name = props.get_string("node.name") or props.get_string("device.name") if props else None
+    if not name and dev.find_property("internal-name"):
+        name = dev.get_property("internal-name")
+    if not name or name.endswith(".monitor"):
+        return None
+    return name
+
+
 def list_devices():
     mon = Gst.DeviceMonitor()
     mon.add_filter("Video/Source", None)
@@ -1162,8 +1177,9 @@ def list_devices():
             if props else None
         print(f"\n== {dev.get_device_class()}: {dev.get_display_name()}"
               + (f"  [{path}]" if path else ""))
-        if dev.get_device_class() == "Audio/Source" and props:
-            print(f"   --mic {props.get_string('device.name') or props.get_string('node.name')}")
+        if dev.get_device_class() == "Audio/Source":
+            name = source_name(dev)
+            print(f"   --mic {name}" if name else "   (a monitor, not a microphone)")
             continue
         caps = dev.get_caps()
         seen = set()
@@ -1194,8 +1210,8 @@ def devices_json():
     for dev in mon.get_devices():
         props = dev.get_properties()
         if dev.get_device_class() == "Audio/Source":
-            name = props.get_string("node.name") or props.get_string("device.name") if props else None
-            if name and not name.endswith(".monitor"):
+            name = source_name(dev)
+            if name:
                 mics.append({"name": name, "label": dev.get_display_name()})
             continue
         path = (props.get_string("device.path") or props.get_string("api.v4l2.path")) if props else None
