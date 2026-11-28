@@ -64,6 +64,7 @@ const fromPhoneUuid = 'efe06e1d-a7ff-4823-bfbb-b3a82ea05849';
 const commVersion = 3;
 const commVersionCommands = 4;
 const commVersionRemote = 2;
+const commVersionDryRecord = 26; // recording the microphone dry (0x0A flag 8), for the HiveSight Guide's own effects
 const commVersionLease = 25;     // a lease on the toys (0x1E): they stop if it lapses, for HiveSight
 const commVersionStorage = 24;   // pictures and sounds saved to the unit's SD card (0x1D), GET and POST /api/storage
 const commVersionRemoteApp = 23;  // the app's own remote: GET /api/screen, POST /api/nav and /api/picture
@@ -465,11 +466,13 @@ Uint8List modeMessage(BoardMode mode) => Uint8List.fromList([_msgMode, mode.inde
 /// in place of the wearer's own for as long as it records (commVersion
 /// 22), and a sync beep to start if [beep]. With [speakerOnly], it doesn't
 /// record: the speaker's effect is held at [preset], or let go, while the
-/// phone's mic records.
-Uint8List recordMessage(bool on, {int? preset, bool beep = false, bool speakerOnly = false}) => Uint8List.fromList([
+/// phone's mic records. With [dry] (commVersion 26), the microphone with no
+/// effect at all, the speaker as it was.
+Uint8List recordMessage(bool on, {int? preset, bool beep = false, bool speakerOnly = false, bool dry = false}) =>
+    Uint8List.fromList([
       _msgRecord,
       on ? 1 : 0,
-      1 | (beep ? 2 : 0) | (speakerOnly ? 4 : 0),
+      1 | (beep ? 2 : 0) | (speakerOnly ? 4 : 0) | (dry ? 8 : 0),
       if (on && preset != null && preset >= 0) preset,
     ]);
 

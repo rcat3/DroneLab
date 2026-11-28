@@ -119,6 +119,7 @@
 #define MSG_RECORD          0x0A    // both ways: start or stop recording, and what's recorded
 #define RECORD_SPEAKER      0x01    // the speaker's voice effect, not the comm voice
 #define RECORD_SPEAKER_ONLY 0x04    // not recording: the speaker's effect held at the preset, for the phone's mic
+#define RECORD_DRY          0x08    // the microphone with no effect (COMM_VERSION 26)
 #define MSG_LEVEL           0x1C    // both ways: the phone wants the voice's level, and the level
 #define LEVEL_EVERY_MS      100
 #define LEVEL_FOR_MS        5000    // sent for this long after the phone asks
@@ -1559,15 +1560,17 @@ static bool hold_preset(int preset)
 
 /* Start or stop recording: the speaker's effect, or the comm channel's;
  * or, given a preset (>= 0), that one, on the speaker's effect for as long
- * as it records, the wearer's own coming back after. */
-static void set_recording(bool on, bool speaker, bool beep, int preset)
+ * as it records, the wearer's own coming back after; or dry, the
+ * microphone with no effect (the speaker as it was). */
+static void set_recording(bool on, bool speaker, bool beep, int preset, bool dry)
 {
     if (on != recording)
     {
         printf("comm: recording %s\n", on ? "on" : "off");
     }
     bool given = hold_preset(on ? preset : -1);
-    voice_fx_listen_to_speaker(on && (speaker || given));
+    voice_fx_listen_to_speaker(on && !dry && (speaker || given));
+    voice_fx_listen_dry(on && dry);
     recording = on;
     if (on && beep)
     {
@@ -1584,7 +1587,7 @@ static void forget_phone(void)
     phone_mic_sending = false;
     if (recording)
     {
-        set_recording(false, false, false, -1);     // nor recording
+        set_recording(false, false, false, -1, false);  // nor recording
     }
     app_os[0] = '\0';
     app_version[0] = '\0';
@@ -2254,7 +2257,7 @@ void comm_poll(uint32_t now_ms)
         else if (msg[0] == MSG_RECORD && len >= 3)
         {
             set_recording(msg[1] != 0, (msg[2] & RECORD_SPEAKER) != 0, (msg[2] & RECORD_BEEP) != 0,
-                          len >= 4 ? msg[3] : -1);
+                          len >= 4 ? msg[3] : -1, (msg[2] & RECORD_DRY) != 0);
         }
     }
     merge_hearing();

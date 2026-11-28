@@ -40,6 +40,7 @@ static voice_fx_chain_t *speaker_chain;
 static voice_fx_chain_t *comm_chain;
 static volatile int wanted_preset;          // set by the UI loop
 static volatile int wanted_comm_preset = -1;    // -1 for the speaker's
+static volatile bool listen_dry;                // the listener gets the microphone with no effect
 static volatile bool listen_to_speaker;         // the listener gets the speaker's effect, not the comm one
 static volatile bool comm_sending;              // the comm channel's sending (voice_fx_set_comm_sending)
 static volatile bool fx_paused;                 // for an update (voice_fx_pause)
@@ -199,7 +200,7 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     // instead of the speaker's, which goes quiet: the processor hasn't time
     // for two of the heavier effects at once.
     int comm_preset = wanted_comm_preset;
-    bool has_comm = comm_preset >= 0 && comm_preset != preset && !listen_to_speaker &&
+    bool has_comm = comm_preset >= 0 && comm_preset != preset && !listen_to_speaker && !listen_dry &&
                     __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE) != NULL;
     bool own_comm = has_comm && comm_sending;
     if (has_comm && comm_preset != voice_fx_chain_preset(comm_chain))
@@ -249,6 +250,15 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     memmove(h, h + count, (DECIMATE_TAPS - 1) * sizeof(float));
     voice_fx_chain_track_noise(x, n);
 
+    // Dry, for the listener: the microphone before any effect (static, 320
+    // bytes, rather than more on the audio task's stack; only it runs this)
+    static int16_t dry[MAX_BLOCK];
+    bool dry_out = listen_dry;
+    if (dry_out)
+    {
+        to_pcm(x, dry, n);
+    }
+
     // One effect or the other: the comm channel's while it sends its own,
     // with the speaker quiet, or else the speaker's
     int16_t out[MAX_BLOCK];
@@ -268,7 +278,7 @@ static void mic_cb(const int16_t *samples, size_t count, void *user_data)
     voice_fx_listener_t cb = __atomic_load_n(&listener_cb, __ATOMIC_ACQUIRE);
     if (cb != NULL)
     {
-        cb(out, n, listener_user_data);
+        cb(dry_out ? dry : out, n, listener_user_data);
     }
     if (speaker_on)
     {
@@ -336,6 +346,11 @@ void voice_fx_listen_to_speaker(bool speaker)
     listen_to_speaker = speaker;
 }
 
+void voice_fx_listen_dry(bool dry)
+{
+    listen_dry = dry;
+}
+
 void voice_fx_set_comm_preset(int index)
 {
     wanted_comm_preset = (index >= 0 && (size_t)index < voice_fx_preset_count()) ? index : -1;
@@ -369,7 +384,7 @@ void voice_fx_set_comm_sending(bool on)
 bool voice_fx_comm_has_own(void)
 {
     int comm_preset = wanted_comm_preset;
-    return comm_preset >= 0 && comm_preset != wanted_preset && !listen_to_speaker;
+    return comm_preset >= 0 && comm_preset != wanted_preset && !listen_to_speaker && !listen_dry;
 }
 
 void voice_fx_set_speaker(bool on)

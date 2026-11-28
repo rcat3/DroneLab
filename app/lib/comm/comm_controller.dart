@@ -362,7 +362,13 @@ class CommController extends ChangeNotifier {
     ]);
     _directSoundSub = board.directSounds.listen(_onDirectSound);
     _directGroupSub = board.directGroups.listen(_onDirectGroup);
-    _recordSub = board.recorded.listen((s) => _recorder?.add(s));
+    _recordSub = board.recorded.listen((s) {
+      if (_unitVoiceSink != null) {
+        _unitVoicePacket(s);
+      } else {
+        _recorder?.add(s);
+      }
+    });
     recordEffect = p.getString('recordEffect');
     recordBeep = p.getBool('recordBeep') ?? false;
     recordForSending = p.getBool('recordForSending') ?? false;
@@ -1874,6 +1880,7 @@ class CommController extends ChangeNotifier {
   /// again afterwards. Returns why not, or null.
   Future<String?> startRecording() async {
     if (recording) return null;
+    if (unitVoiceOn) return "The display unit's microphone is in use for HiveSight";
     final phone = phoneMicTalks;
     if (!phone) {
       if (board.state != BoardState.connected || board.status == null) return 'Connect to the board first';
@@ -1945,6 +1952,72 @@ class CommController extends ChangeNotifier {
     if (_resumeDirect && board.state == BoardState.connected) await setDirect(true);
     if (_resumeServer) await connectServer();
     await loadRecordings();
+  }
+
+  // ----- The unit's microphone, dry, for HiveSight's Guide -----
+
+  /// Where the unit's dry voice goes (48 kHz, mono), while it's wanted.
+  void Function(Int16List pcm)? _unitVoiceSink;
+  OpusVoiceDecoder? _unitVoiceDecoder;
+  int? _unitVoiceSeq;
+  bool _unitVoiceResumeServer = false, _unitVoiceResumeDirect = false;
+
+  bool get unitVoiceOn => _unitVoiceSink != null;
+
+  /// Why the unit's microphone can't be had now, or null.
+  String? get unitVoiceProblem {
+    if (board.state != BoardState.connected || board.status == null) return 'No display unit connected';
+    if (board.status!.version < commVersionDryRecord) return "The display unit's firmware is too old for this";
+    if (recording) return 'Recording now';
+    return null;
+  }
+
+  /// The unit's microphone with no effect on it (the Guide's effects are
+  /// made elsewhere), streamed as a recording is, to [sink]. HiveMind voice
+  /// pauses meanwhile (the server and direct comms), as for recording, and
+  /// comes back after [stopUnitVoice]. Called again while on, it asks the
+  /// unit again (after it reconnects). Returns why not, or null.
+  Future<String?> startUnitVoice(void Function(Int16List pcm) sink) async {
+    final why = unitVoiceProblem;
+    if (why != null) return why;
+    if (_unitVoiceSink == null) {
+      holdToTalk(false);
+      _unitVoiceResumeServer = _serverWanted;
+      _unitVoiceResumeDirect = boardSettings?.direct?.on ?? false;
+      if (_serverWanted) await disconnectServer(forGood: false);
+      if (_unitVoiceResumeDirect) await setDirect(false);
+      _unitVoiceDecoder = OpusVoiceDecoder();
+    }
+    _unitVoiceSink = sink;
+    _unitVoiceSeq = null;
+    await board.send(recordMessage(true, dry: true));
+    notifyListeners();
+    return null;
+  }
+
+  Future<void> stopUnitVoice() async {
+    if (_unitVoiceSink == null) return;
+    _unitVoiceSink = null;
+    _unitVoiceDecoder = null;
+    if (board.state == BoardState.connected) {
+      await board.send(recordMessage(false));
+      if (_unitVoiceResumeDirect) await setDirect(true);
+    }
+    if (_unitVoiceResumeServer) await connectServer();
+    notifyListeners();
+  }
+
+  void _unitVoicePacket(BoardSound s) {
+    final sink = _unitVoiceSink, dec = _unitVoiceDecoder;
+    if (sink == null || dec == null) return;
+    // Missing packets made up first, from this one's error correction, as the recorder does
+    final last = _unitVoiceSeq;
+    if (last != null && !s.first) {
+      final gap = ((s.seq - last) & 0xFFFF) - 1;
+      if (gap > 0 && gap < 50 && s.opus.isNotEmpty) sink(dec.decode(s.opus, fec: true, lossMs: gap * boardFrameMs));
+    }
+    _unitVoiceSeq = s.seq;
+    if (s.opus.isNotEmpty) sink(dec.decode(s.opus));
   }
 
   /// The recording playing, if one is.

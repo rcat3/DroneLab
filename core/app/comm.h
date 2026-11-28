@@ -371,8 +371,10 @@
  *  24  pictures and sounds saved to the SD card (0x1D), GET and POST
  *      /api/storage
  *  25  a lease on the toys (0x1E, from the phone): the toys stop if it
- *      isn't sent again in time, for a Guide's HiveSight session */
-#define COMM_VERSION            25
+ *      isn't sent again in time, for a Guide's HiveSight session
+ *  26  recording the microphone dry (0x0A flag 0x08), with no effect, for
+ *      the HiveSight Guide's own effects on the computer */
+#define COMM_VERSION            26
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
 #define COMM_HEARING_MAX        4

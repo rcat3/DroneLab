@@ -66,6 +66,11 @@ bool voice_fx_comm_has_own(void);
  * as for recording what the speaker plays. */
 void voice_fx_listen_to_speaker(bool speaker);
 
+/* Hand the listener the microphone itself, with no effect (after the echo
+ * canceller), as for recording it dry; the speaker plays its effect as
+ * before. */
+void voice_fx_listen_dry(bool dry);
+
 /* How loud it is on the speaker, in percent: 50 is 10 dB up from the
  * microphone, and each step 0.5 dB more or less, with a limiter. 0 is silent. */
 void voice_fx_set_volume(uint8_t percent);
