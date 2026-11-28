@@ -51,6 +51,23 @@ is told the list, so its menu has it and nothing else changes.
    Source tab (`app/lib/ui/guide/panels_source.dart`) needs a tile and its
    own section for choosing it.
 
+## Built-in sources, and files from anywhere
+
+- A session starts on **black** (`BlackSource`, kind `black`); the camera isn't opened until it's taken.
+- `switcher.BUILTINS` lists the built-in sources (id, label, file): the test pattern (`TestPatternSource`) and
+  two 3D logo films, `builtin/katcorp.mp4` and `builtin/dronelab.mp4`, played in a loop (`LoopSource`, a
+  `FileSource` that always loops). The sender tells the Guide the list (`switch.builtins`), so the Guide's
+  Built-in tab shows a new one with no Dart change. To add a film: put it in `builtin/` as a side-by-side
+  stereo pair (2560x720), add a line to `BUILTINS`.
+- The logo films are made by `make_logo_loops.py` (see its docstring for the fonts it needs): the flat
+  logo is extruded into a slab and ray-marched for each eye (two cameras turned in on it), then encoded.
+  They're committed; rerun it only to change a logo.
+- A film's spec may carry `start` (seconds): where it starts, set from the Guide's bar while it's only
+  cued. Without one it goes on from where it was left (`Switcher.resume`).
+- File names in specs, and the music's, may be absolute paths: the Guide's "Choose files…" picks from
+  anywhere (a thumb drive, Downloads). Relative names are still the folders' (`--media-dir`, `--music-dir`),
+  which can't be escaped by `..`.
+
 ## Adding a command from the Guide
 
 `async def _cmd_x(self, msg)` in the sender and an entry in

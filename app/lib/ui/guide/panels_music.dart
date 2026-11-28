@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../../comm/hivesight_guide.dart';
 import '../theme.dart';
+import 'pick_files.dart';
 import 'guide_widgets.dart';
 
 String _time(double s) {
@@ -47,10 +48,11 @@ class _MusicTabState extends State<MusicTab> {
     final pos = (_drag ?? (now?['position'] as num?)?.toDouble() ?? 0).clamp(0.0, dur > 0 ? dur : 1.0).toDouble();
     final level = ((g.musicLevelDb + 60) / 60).clamp(0.0, 1.0);
     final q = _search.text.trim().toLowerCase();
+    final all = [...g.chosen['music']!, ...g.musicFiles];
     final files = q.isEmpty
-        ? g.musicFiles
+        ? all
         : [
-            for (final f in g.musicFiles)
+            for (final f in all)
               if (f.toLowerCase().contains(q)) f,
           ];
     return GCard(null, [
@@ -60,7 +62,7 @@ class _MusicTabState extends State<MusicTab> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              now == null ? 'Nothing playing' : '${now['name']}',
+              now == null ? 'Nothing playing' : HiveSightGuide.baseName('${now['name']}'),
               style: const TextStyle(fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis,
             ),
@@ -155,7 +157,7 @@ class _MusicTabState extends State<MusicTab> {
           Row(
             children: [
               SizedBox(width: 22, child: Text('${i + 1}', style: gSmall)),
-              Expanded(child: Text(g.musicQueue[i], overflow: TextOverflow.ellipsis)),
+              Expanded(child: Text(HiveSightGuide.baseName(g.musicQueue[i]), overflow: TextOverflow.ellipsis)),
               IconButton(
                 tooltip: 'Play now',
                 visualDensity: VisualDensity.compact,
@@ -188,7 +190,17 @@ class _MusicTabState extends State<MusicTab> {
               ),
             ],
           ),
-      gGroup('Music in ${g.musicDir.isEmpty ? 'the music folder' : g.musicDir}'),
+      gGroup(folderHeading('Music', g.musicDir, 'the music folder')),
+      PickRow(
+        g,
+        'music',
+        picked: (p) {
+          g.musicPlay(p.first);
+          for (final more in p.skip(1)) {
+            g.musicAdd(more);
+          }
+        },
+      ),
       TextField(
         controller: _search,
         onChanged: (_) => setState(() {}),
@@ -198,10 +210,10 @@ class _MusicTabState extends State<MusicTab> {
           prefixIcon: Icon(Icons.search, size: 18),
         ),
       ),
-      if (g.musicFiles.isEmpty)
+      if (all.isEmpty)
         const Padding(
           padding: EdgeInsets.only(top: 8),
-          child: Text('None found. Set the folder under Session → Sender.', style: gSmall),
+          child: Text('None found in the folder.', style: gSmall),
         )
       else
         ConstrainedBox(
@@ -215,7 +227,10 @@ class _MusicTabState extends State<MusicTab> {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 selected: now?['name'] == f,
-                title: Text(f, overflow: TextOverflow.ellipsis),
+                title: Text(HiveSightGuide.baseName(f), overflow: TextOverflow.ellipsis),
+                subtitle: f != HiveSightGuide.baseName(f)
+                    ? Text(f, style: gSmall, overflow: TextOverflow.ellipsis)
+                    : null,
                 onTap: en ? () => g.musicPlay(f) : null,
                 trailing: IconButton(
                   tooltip: 'Add to the queue',

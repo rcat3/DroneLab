@@ -15,21 +15,29 @@ import '../theme.dart';
 import 'color_picker.dart';
 import 'guide_widgets.dart';
 import 'panels_picture.dart' show CameraPicker;
+import 'pick_files.dart';
 
 String _hex(int rgb) => '#${(rgb & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
 
-String specLabel(Map<String, dynamic>? s) => switch (s?['kind']) {
-  'camera' => 'Camera',
-  'color' => 'Colour ${_hex((s!['rgb'] as num?)?.toInt() ?? 0)}',
-  'image' => 'Image ${s!['file']}',
-  'file' => '${s!['file']}',
-  _ => '',
-};
+String specLabel(Map<String, dynamic>? s, [List<({String id, String label})> builtins = const []]) =>
+    switch (s?['kind']) {
+      'camera' => 'Camera',
+      'black' => 'Black',
+      'color' => 'Colour ${_hex((s!['rgb'] as num?)?.toInt() ?? 0)}',
+      'image' => 'Image ${HiveSightGuide.baseName('${s!['file']}')}',
+      'file' =>
+        HiveSightGuide.baseName('${s!['file']}') +
+            (((s['start'] as num?) ?? 0) > 0 ? '  from ${_time((s['start'] as num).toDouble())}' : ''),
+      'builtin' => builtins.where((b) => b.id == s!['id']).firstOrNull?.label ?? '${s!['id']}',
+      _ => '',
+    };
 
 IconData _kindIcon(String? kind) => switch (kind) {
   'camera' => Icons.videocam_outlined,
   'color' => Icons.palette_outlined,
   'image' => Icons.image_outlined,
+  'black' => Icons.square,
+  'builtin' => Icons.auto_awesome_outlined,
   _ => Icons.movie_outlined,
 };
 
@@ -44,7 +52,7 @@ class SourceTab extends StatefulWidget {
 
 class _SourceTabState extends State<SourceTab> {
   String _browse = ''; // the kind of source being looked at; the one on air until picked
-  String? _lastFile, _lastImage;
+  String? _lastFile, _lastImage, _lastBuiltin;
 
   HiveSightGuide get g => widget.g;
 
@@ -55,11 +63,13 @@ class _SourceTabState extends State<SourceTab> {
     setState(() => _browse = kind);
     final spec = switch (kind) {
       'camera' => HiveSightGuide.cameraSpec,
+      'black' => HiveSightGuide.blackSpec,
+      'builtin' => g.builtins.isEmpty ? null : HiveSightGuide.builtinSpec(_lastBuiltin ?? g.builtins.first.id),
       'color' => HiveSightGuide.colorSpec(_rgb),
       'image' => _lastImage == null ? null : HiveSightGuide.imageSpec(_lastImage!),
       _ => _lastFile == null ? null : HiveSightGuide.fileSpec(_lastFile!),
     };
-    if (spec != null && !(g.liveKind == kind && kind == 'camera')) g.cue(spec);
+    if (spec != null && !(g.liveKind == kind && (kind == 'camera' || kind == 'black'))) g.cue(spec);
   }
 
   @override
@@ -77,7 +87,9 @@ class _SourceTabState extends State<SourceTab> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              next == null ? 'Nothing cued' : '${specLabel(next)}${cue == null ? '  (first in the queue)' : ''}',
+              next == null
+                  ? 'Nothing cued'
+                  : '${specLabel(next, g.builtins)}${cue == null ? '  (first in the queue)' : ''}',
               style: gSmall,
               overflow: TextOverflow.ellipsis,
             ),
@@ -88,28 +100,30 @@ class _SourceTabState extends State<SourceTab> {
       NextPreview(g),
       const SizedBox(height: 8),
       // The sources
-      Row(
-        children: [
-          for (final (kind, label) in const [
-            ('camera', 'Camera'),
-            ('color', 'Colour'),
-            ('image', 'Image'),
-            ('file', 'File'),
-          ]) ...[
-            Expanded(
-              child: _SourceTile(
-                icon: _kindIcon(kind),
-                title: label,
-                onAir: g.liveKind == kind,
-                next: cue?['kind'] == kind,
-                looking: browse == kind,
-                onTap: () => _tile(kind),
-              ),
-            ),
-            if (kind != 'file') const SizedBox(width: 6),
-          ],
-        ],
-      ),
+      for (final row in const [
+        [('black', 'Black'), ('camera', 'Camera'), ('color', 'Colour')],
+        [('image', 'Image'), ('file', 'File'), ('builtin', 'Built-in')],
+      ])
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(
+            children: [
+              for (final (kind, label) in row) ...[
+                Expanded(
+                  child: _SourceTile(
+                    icon: _kindIcon(kind),
+                    title: label,
+                    onAir: g.liveKind == kind,
+                    next: cue?['kind'] == kind,
+                    looking: browse == kind,
+                    onTap: () => _tile(kind),
+                  ),
+                ),
+                if (kind != row.last.$1) const SizedBox(width: 6),
+              ],
+            ],
+          ),
+        ),
       const SizedBox(height: 4),
       // How it changes over, and the buttons that do it
       gRow(
@@ -166,6 +180,8 @@ class _SourceTabState extends State<SourceTab> {
       const Divider(height: 18),
       // The kind of source being looked at
       if (browse == 'camera') _camera(),
+      if (browse == 'black') const Text('Black: nothing to see. A session starts on it.', style: gSmall),
+      if (browse == 'builtin') _builtin(),
       if (browse == 'color') _color(en),
       if (browse == 'image') _image(en),
       if (browse == 'file') _files(),
@@ -183,6 +199,34 @@ class _SourceTabState extends State<SourceTab> {
       ]),
     ]);
   }
+
+  Widget _builtin() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      gGroup('Built in'),
+      for (final b in g.builtins)
+        ListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          selected: g.cueSpec?['kind'] == 'builtin' && g.cueSpec?['id'] == b.id,
+          leading: g.liveKind == 'builtin' && g.liveFile == b.id
+              ? const Icon(Icons.sensors, size: 18, color: Kc.red)
+              : Icon(b.id == 'test' ? Icons.grid_on : Icons.view_in_ar_outlined, size: 18),
+          title: Text(b.label),
+          trailing: IconButton(
+            tooltip: 'Add to the queue',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.playlist_add, size: 20),
+            onPressed: () => g.queueAdd(HiveSightGuide.builtinSpec(b.id)),
+          ),
+          onTap: () {
+            _lastBuiltin = b.id;
+            g.cue(HiveSightGuide.builtinSpec(b.id));
+          },
+        ),
+      const Text('The logos turn in 3D, each eye seeing it from its own side. Pause stops the turning.', style: gSmall),
+    ],
+  );
 
   Widget _camera() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -290,11 +334,19 @@ class _SourceTabState extends State<SourceTab> {
           label: const Text('Whole picture, centred'),
         ),
       ),
-      gGroup('Images in ${g.mediaDir.isEmpty ? 'the media folder' : g.mediaDir}'),
-      if (g.mediaImages.isEmpty)
-        const Text('None found. Set the folder under Session → Sender.', style: gSmall)
+      gGroup(folderHeading('Images', g.mediaDir, 'the media folder')),
+      PickRow(
+        g,
+        'image',
+        picked: (p) {
+          _lastImage = p.first;
+          g.cue(HiveSightGuide.imageSpec(p.first));
+        },
+      ),
+      if (g.mediaImages.isEmpty && g.chosen['image']!.isEmpty)
+        const Text('None found in the folder.', style: gSmall)
       else
-        _list(g.mediaImages, 'image', (f) {
+        _list([...g.chosen['image']!, ...g.mediaImages], 'image', (f) {
           _lastImage = f;
           g.cue(HiveSightGuide.imageSpec(f));
         }),
@@ -327,11 +379,22 @@ class _SourceTabState extends State<SourceTab> {
                   ],
                 ),
         ),
-        gGroup('Video files in ${g.mediaDir.isEmpty ? 'the media folder' : g.mediaDir}'),
-        if (g.mediaFiles.isEmpty)
-          const Text('None found. Set the folder under Session → Sender.', style: gSmall)
+        gGroup(folderHeading('Video files', g.mediaDir, 'the media folder')),
+        PickRow(
+          g,
+          'file',
+          picked: (p) {
+            _lastFile = p.first;
+            g.cue(HiveSightGuide.fileSpec(p.first));
+            for (final more in p.skip(1)) {
+              g.queueAdd(HiveSightGuide.fileSpec(more));
+            }
+          },
+        ),
+        if (g.mediaFiles.isEmpty && g.chosen['file']!.isEmpty)
+          const Text('None found in the folder.', style: gSmall)
         else
-          _list(g.mediaFiles, 'file', (f) {
+          _list([...g.chosen['file']!, ...g.mediaFiles], 'file', (f) {
             _lastFile = f;
             g.cue(HiveSightGuide.fileSpec(f));
           }),
@@ -355,15 +418,17 @@ class _SourceTabState extends State<SourceTab> {
           leading: g.liveKind == kind && g.liveFile == f
               ? const Icon(Icons.sensors, size: 18, color: Kc.red)
               : Icon(_kindIcon(kind), size: 18),
-          title: Text(f, overflow: TextOverflow.ellipsis),
+          title: Text(HiveSightGuide.baseName(f), overflow: TextOverflow.ellipsis),
           subtitle: kind == 'file' && g.resume[f] != null && g.liveFile != f
               ? Text('left at ${_time(g.resume[f]!)}', style: gSmall)
+              : f != HiveSightGuide.baseName(f)
+              ? Text(f, style: gSmall, overflow: TextOverflow.ellipsis)
               : null,
           trailing: IconButton(
             tooltip: 'Add to the queue',
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.playlist_add, size: 20),
-            onPressed: () => g.queueAdd(spec),
+            onPressed: () => g.queueAdd(kind == 'file' && HiveSightGuide.sameSpec(g.cueSpec, spec) ? g.cueSpec! : spec),
           ),
           onTap: () => pick(f),
         );
@@ -388,7 +453,7 @@ class _SourceTabState extends State<SourceTab> {
             children: [
               Icon(_kindIcon(g.queue[i]['kind'] as String?), size: 18, color: Kc.muted),
               const SizedBox(width: 8),
-              Expanded(child: Text(specLabel(g.queue[i]), overflow: TextOverflow.ellipsis)),
+              Expanded(child: Text(specLabel(g.queue[i], g.builtins), overflow: TextOverflow.ellipsis)),
               IconButton(
                 tooltip: 'Move up',
                 visualDensity: VisualDensity.compact,
@@ -509,20 +574,57 @@ class MediaControls extends StatefulWidget {
 class _MediaControlsState extends State<MediaControls> {
   double? _drag; // where the slider is being dragged to
   Timer? _settle;
+  final _typed = TextEditingController();
+  final _focus = FocusNode();
 
   @override
   void dispose() {
     _settle?.cancel();
+    _typed.dispose();
+    _focus.dispose();
     super.dispose();
+  }
+
+  /// "1:23", "1:02:03" or "83" as seconds; null if it isn't a time.
+  static double? parseTime(String t) {
+    final parts = t.trim().split(':');
+    if (parts.isEmpty || parts.length > 3) return null;
+    var s = 0.0;
+    for (final p in parts) {
+      final v = double.tryParse(p.trim());
+      if (v == null || v < 0) return null;
+      s = s * 60 + v;
+    }
+    return s;
   }
 
   @override
   Widget build(BuildContext context) {
     final g = widget.g;
     final go = widget.enabled && !g.transitioning;
-    final file = g.liveIsFile && g.mediaDuration > 0;
-    final playing = g.liveIsFile && !g.playTakesCue && !g.flag('media.paused');
-    final pos = (_drag ?? g.mediaPosition).clamp(0.0, file ? g.mediaDuration : 1.0).toDouble();
+    // Two things the bar can set: where the film that's on is, or, with one only picked, where it starts
+    final cueing = g.playTakesCue;
+    final live = g.liveIsFile && g.mediaDuration > 0 && !cueing;
+    final length = cueing ? g.cueDuration : g.mediaDuration;
+    final file = (live || cueing) && length > 0;
+    final playing = live && !g.flag('media.paused');
+    final pos = (_drag ?? (cueing ? g.cueStart : g.mediaPosition)).clamp(0.0, file ? length : 1.0).toDouble();
+    void to(double v) {
+      v = v.clamp(0.0, length).toDouble();
+      if (cueing) {
+        g.setCueStart(v);
+      } else {
+        g.seek(v);
+      }
+      // Held where it was dropped until the sender's position catches up
+      _settle?.cancel();
+      setState(() => _drag = v);
+      _settle = Timer(const Duration(milliseconds: 900), () {
+        if (mounted) setState(() => _drag = null);
+      });
+    }
+
+    if (!_focus.hasFocus) _typed.text = _time(pos);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -533,7 +635,7 @@ class _MediaControlsState extends State<MediaControls> {
               tooltip: 'Back 10 seconds',
               iconSize: 28,
               icon: const Icon(Icons.replay_10),
-              onPressed: go && file ? () => g.skip(-10) : null,
+              onPressed: go && file ? () => to(pos - 10) : null,
             ),
             const SizedBox(width: 8),
             FilledButton.icon(
@@ -547,7 +649,7 @@ class _MediaControlsState extends State<MediaControls> {
               tooltip: 'On 10 seconds',
               iconSize: 28,
               icon: const Icon(Icons.forward_10),
-              onPressed: go && file ? () => g.skip(10) : null,
+              onPressed: go && file ? () => to(pos + 10) : null,
             ),
           ],
         ),
@@ -556,30 +658,35 @@ class _MediaControlsState extends State<MediaControls> {
             Expanded(
               child: Slider(
                 value: pos,
-                max: file ? g.mediaDuration : 1.0,
+                max: file ? length : 1.0,
                 onChanged: go && file ? (v) => setState(() => _drag = v) : null,
-                onChangeEnd: go && file
-                    ? (v) {
-                        g.seek(v);
-                        // Held where it was dropped until the sender's position catches up
-                        _settle?.cancel();
-                        _settle = Timer(const Duration(milliseconds: 900), () {
-                          if (mounted) setState(() => _drag = null);
-                        });
-                      }
-                    : null,
+                onChangeEnd: go && file ? to : null,
+              ),
+            ),
+            // The time: type one (m:ss, h:mm:ss or seconds) and press Enter to go there
+            SizedBox(
+              width: 64,
+              child: TextField(
+                controller: _typed,
+                focusNode: _focus,
+                enabled: go && file,
+                textAlign: TextAlign.right,
+                style: Kc.term(13, color: file ? Kc.text : Kc.dim),
+                decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 6)),
+                onSubmitted: (t) {
+                  final v = parseTime(t);
+                  _focus.unfocus();
+                  if (v == null) {
+                    setState(() => _typed.text = _time(pos));
+                  } else {
+                    to(v);
+                  }
+                },
               ),
             ),
             SizedBox(
-              width: 104,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerRight,
-                child: Text(
-                  file ? '${_time(pos)} / ${_time(g.mediaDuration)}' : '– / –',
-                  style: Kc.term(13, color: file ? Kc.muted : Kc.dim),
-                ),
-              ),
+              width: 56,
+              child: Text(file ? ' / ${_time(length)}' : ' / –', style: Kc.term(13, color: file ? Kc.muted : Kc.dim)),
             ),
           ],
         ),
@@ -587,7 +694,9 @@ class _MediaControlsState extends State<MediaControls> {
         SizedBox(
           height: 18,
           child: Text(
-            g.playTakesCue ? 'Play puts "${g.cueSpec!['file']}" on, by the transition set.' : '',
+            cueing
+                ? 'Play puts "${HiveSightGuide.baseName('${g.cueSpec!['file']}')}" on from ${_time(pos)}, by the transition set.'
+                : '',
             style: gSmall,
             overflow: TextOverflow.ellipsis,
           ),

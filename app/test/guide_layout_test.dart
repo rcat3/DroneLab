@@ -24,6 +24,14 @@ class _Fake implements GuideSettings {
   @override
   void setMany(Map<String, Object> values) => v.addAll(values);
   @override
+  bool get canUndo => false;
+  @override
+  bool get canRedo => false;
+  @override
+  void undo() {}
+  @override
+  void redo() {}
+  @override
   void addListener(listener) {}
   @override
   void removeListener(listener) {}

@@ -574,6 +574,12 @@ print(" ".join(missing))
   ];
   Map<String, double> resume = const {};
 
+  /// The sender's built-in sources (the test pattern, the logos), how long the cued film is, and the
+  /// files the Guide picked from outside the folders (shown above the folder's own).
+  List<({String id, String label})> builtins = const [];
+  double cueDuration = 0;
+  final Map<String, List<String>> chosen = {'file': [], 'image': [], 'music': []};
+
   /// The music: the folder and its files, the queue, what's playing, the level going out.
   String musicDir = '';
   List<String> musicFiles = const [];
@@ -673,6 +679,11 @@ print(" ".join(missing))
     resume = {
       for (final e in (sw['resume'] as Map<String, dynamic>? ?? const {}).entries) e.key: (e.value as num).toDouble(),
     };
+    builtins = [
+      for (final b in sw['builtins'] as List<dynamic>? ?? const [])
+        (id: (b as Map)['id'] as String, label: b['label'] as String),
+    ];
+    cueDuration = (sw['cue_duration'] as num?)?.toDouble() ?? 0;
     final tr = sw['transition'] as Map<String, dynamic>?;
     transitioning = tr != null;
     transitionPhase = tr?['phase'] as String? ?? '';
@@ -888,13 +899,47 @@ print(" ".join(missing))
   static Map<String, dynamic> imageSpec(String f) => {'kind': 'image', 'file': f};
   static Map<String, dynamic> colorSpec(int rgb) => {'kind': 'color', 'rgb': rgb};
   static const cameraSpec = {'kind': 'camera'};
+  static const blackSpec = {'kind': 'black'};
+  static Map<String, dynamic> builtinSpec(String id) => {'kind': 'builtin', 'id': id};
 
-  bool get liveIsFile => text('media.source') == 'file';
-  String get liveKind => text('media.source').isEmpty ? 'camera' : text('media.source');
-  String get liveFile => liveKind == 'file' || liveKind == 'image' ? text('media.file') : '';
+  /// A file's name for showing: a file picked from anywhere has its whole path.
+  static String baseName(String f) => f.split(RegExp(r'[/\\]')).last;
+
+  /// A film is on (one of the folder's, or a built-in one: the test pattern has no length).
+  bool get liveIsFile => text('media.source') == 'file' || (text('media.source') == 'builtin' && mediaDuration > 0);
+  String get liveKind => text('media.source').isEmpty ? 'black' : text('media.source');
+  String get liveFile => const ['file', 'image', 'builtin'].contains(liveKind) ? text('media.file') : '';
 
   static bool sameSpec(Map<String, dynamic>? a, Map<String, dynamic>? b) =>
-      a != null && b != null && a['kind'] == b['kind'] && a['file'] == b['file'] && a['rgb'] == b['rgb'];
+      a != null &&
+      b != null &&
+      a['kind'] == b['kind'] &&
+      a['file'] == b['file'] &&
+      a['rgb'] == b['rgb'] &&
+      a['id'] == b['id'];
+
+  /// Where the cued film will start: as set, or where it was left, or the start.
+  double get cueStart {
+    final c = cueSpec;
+    if (c == null || c['kind'] != 'file') return 0;
+    return (c['start'] as num?)?.toDouble() ?? resume[c['file']] ?? 0;
+  }
+
+  /// The cued film starts at [s] seconds.
+  void setCueStart(double s) {
+    final c = cueSpec;
+    if (c != null && c['kind'] == 'file') cue({...c, 'start': s < 0 ? 0.0 : s});
+  }
+
+  /// Files picked from outside the folders: shown with the folder's, cued or played.
+  void choose(String kind, List<String> paths) {
+    final l = chosen[kind]!;
+    for (final p in paths.reversed) {
+      l.remove(p);
+      l.insert(0, p);
+    }
+    notifyListeners();
+  }
 
   /// Pick what goes on next: the sender looks at it (nextPreview) but doesn't put it on.
   void cue(Map<String, dynamic>? spec) {
@@ -920,6 +965,7 @@ print(" ".join(missing))
   }
 
   void goCamera() => take(cameraSpec);
+  void goBlack() => take(blackSpec);
   void nextQueued() => command('next');
 
   /// A film goes on from the start, not from where it was left.
@@ -937,7 +983,7 @@ print(" ".join(missing))
   /// Whether Play would bring the picked file on, rather than play or pause the one on.
   bool get playTakesCue {
     final c = cueSpec;
-    return c != null && c['kind'] == 'file' && !(liveIsFile && c['file'] == liveFile);
+    return c != null && c['kind'] == 'file' && !(liveKind == 'file' && c['file'] == liveFile);
   }
 
   /// Whether Play can do anything: a film's on, or one's picked.
