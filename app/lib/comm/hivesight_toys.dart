@@ -167,6 +167,16 @@ class GuideToys {
     }
   }
 
+  /// Stop every Vessel's toys, not only the one being driven: the top bar's STOP TOYS.
+  void stopAll() {
+    stop();
+    for (final v in g.vessels) {
+      if (v.id == target) continue;
+      g.sendToys(v, OthersCommand.stopAll().what);
+      Timer(_stopAgainAfter, () => g.sendToys(v, OthersCommand.stopAll().what));
+    }
+  }
+
   /// Stop everything on the Vessel's toys, always, whatever's shown.
   void stop() {
     for (final t in _drag.values) {

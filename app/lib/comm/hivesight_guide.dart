@@ -22,6 +22,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_profile.dart';
 import 'comm_controller.dart';
+import 'guide_presets.dart';
+import 'guide_settings.dart';
 import 'conversations.dart';
 import 'hivesight_invite.dart';
 import 'hivesight_toys.dart';
@@ -138,7 +140,7 @@ class GuideVessel {
 
 enum SenderState { stopped, starting, running, failed }
 
-class HiveSightGuide extends ChangeNotifier {
+class HiveSightGuide extends ChangeNotifier implements GuideSettings {
   final CommController comm;
   HiveSightGuide._(this.comm);
 
@@ -434,6 +436,7 @@ print(" ".join(missing))
   // ----- The link to it -----
 
   WebSocket? _ws;
+  @override
   bool get linked => _ws != null;
   Timer? _retry;
 
@@ -521,6 +524,9 @@ print(" ".join(missing))
 
   /// The settings, by dotted key ("spiral.speed").
   final Map<String, Object?> values = {};
+
+  /// The Guide's own presets for the panels, kept on this computer.
+  final GuidePresets presetStore = GuidePresets();
   List<GuideVessel> vessels = const [];
   List<String> scenes = const [], presets = const [];
   double micDb = -100, outDb = -100;
@@ -565,6 +571,12 @@ print(" ".join(missing))
       case 'set':
         values[m['path'] as String] = m['value'];
         notifyListeners();
+      case 'preset_values':
+        // What each built-in voice preset comes to, to compare the voice with
+        presetStore.setBuiltInVoice({
+          for (final e in (m['presets'] as Map<String, dynamic>).entries)
+            e.key: {for (final v in (e.value as Map<String, dynamic>).entries) v.key: v.value as Object},
+        });
       case 'notice':
         notices.add(m['text'] as String? ?? '');
       case 'vessel_left':
@@ -651,6 +663,7 @@ print(" ".join(missing))
 
   /// Set [path] to [value]: shown at once, and sent, a slider's at most
   /// every 50 ms with its last value sent last.
+  @override
   void set(String path, Object value) {
     values[path] = value;
     notifyListeners();
@@ -666,8 +679,27 @@ print(" ".join(missing))
     });
   }
 
+  /// Set [values] at once: all shown, and sent as one change (the sender
+  /// applies the voice and sends the state once).
+  @override
+  void setMany(Map<String, Object> values) {
+    for (final e in values.entries) {
+      this.values[e.key] = e.value;
+      _pending.remove(e.key);
+    }
+    notifyListeners();
+    _send({'type': 'set_many', 'values': values});
+  }
+
+  @override
+  Object? value(String path) => values[path];
+  @override
+  Iterable<String> get paths => values.keys;
+  @override
   num number(String path, [num or = 0]) => values[path] is num ? values[path] as num : or;
+  @override
   bool flag(String path) => values[path] == true;
+  @override
   String text(String path) => values[path]?.toString() ?? '';
 
   /// BLACKOUT: the view faded to black and the light pulse stopped, or back.
