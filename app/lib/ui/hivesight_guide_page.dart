@@ -881,6 +881,11 @@ class _VoicePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final mode = g.text('voice.fx_mode');
     return _Card('Voice', [
+      if (g.voiceProblem.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text('No voice: ${g.voiceProblem}', style: const TextStyle(fontSize: 13, color: Kc.softRed)),
+        ),
       Row(
         children: [
           const SizedBox(width: 112, child: Text('Preset', style: TextStyle(fontSize: 14))),

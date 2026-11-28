@@ -28,6 +28,11 @@ Who may connect:
 The Guide page changes the camera, its mode, the microphone and the media
 folder while it runs ({"type": "capture", "device": ..., ...}), Vessels
 staying connected.
+
+The Guide's voice effects are the studio chain in libdronelab_fx
+(core/audio/studio/, studio.py), the app's own C: --fx-lib, or the app
+bundle's lib/, or build/ from build_fx.sh. Without it there's no voice, and
+the clients summary's voice_problem says why.
 """
 from __future__ import annotations
 
@@ -54,9 +59,8 @@ from gi.repository import GLib, Gst  # noqa: E402
 import numpy as np  # noqa: E402
 from aiohttp import WSMsgType, web  # noqa: E402
 
-from dynamics import Dynamics  # noqa: E402
-from voicefx import SpectralVoice  # noqa: E402
 import media  # noqa: E402
+import studio  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 log = logging.getLogger("hivesight")
@@ -214,16 +218,6 @@ def h264_bitrate_prop(enc_name):
     return ("bitrate", 1000) if enc_name == "openh264" else ("bitrate", 1)
 
 
-def parse_level_db(structure_str: str):
-    """Extract per-channel RMS dB from a 'level' message (GValueArray is awkward in PyGObject)."""
-    m = re.search(r"rms=\(double\)\{([^}]*)\}", structure_str) or \
-        re.search(r"rms=\(GValueArray\)<([^>]*)>", structure_str)
-    if not m:
-        return None
-    vals = [float(v.strip().replace("(double)", "")) for v in m.group(1).split(",") if v.strip()]
-    return max(vals) if vals else None
-
-
 # H.264 profiles NVIDIA's decoders (nvh264dec / nvh264sldec) handle. For others
 # (High 4:4:4, High 4:2:2, High 10) they are still auto-plugged at equal rank to
 # the software decoder and then stall silently, so steer decodebin away from them.
@@ -244,7 +238,7 @@ def _autoplug_select(_bin, _pad, caps, factory):
 class GstPipeline:
     """Owns one Gst pipeline: build, watch bus, restart on error."""
 
-    def __init__(self, name, build_desc, on_built=None, on_level=None, on_eos=None, on_error=None):
+    def __init__(self, name, build_desc, on_built=None, on_eos=None, on_error=None):
         self.name = name
         self.on_error = on_error
         # Off, it isn't built at all (the camera and mic are let go), and
@@ -252,7 +246,6 @@ class GstPipeline:
         self.enabled = True
         self.build_desc = build_desc
         self.on_built = on_built
-        self.on_level = on_level
         self.on_eos = on_eos
         self.pipeline = None
         self._restart_pending = False
@@ -334,12 +327,6 @@ class GstPipeline:
         elif t == Gst.MessageType.WARNING:
             w, _ = msg.parse_warning()
             log.warning("%s warning: %s", self.name, w.message)
-        elif t == Gst.MessageType.ELEMENT and self.on_level:
-            s = msg.get_structure()
-            if s and s.get_name() == "level":
-                db = parse_level_db(s.to_string())
-                if db is not None:
-                    self.on_level(db)
 
 
 # --------------------------------------------------------------------------
@@ -372,8 +359,18 @@ class Sender:
         self.last_keyframe = 0.0
         self.video_packets = 0
         self.media_generation = 0
-        self.mic_level_db = -100.0
-        self.dynamics: Dynamics | None = None
+        # The Guide's voice effects (libdronelab_fx's studio chain); without the
+        # library there's no voice, and the Guide page is told why
+        self.voice_problem = ""
+        self.studio: studio.Studio | None = None
+        if not args.no_audio:
+            try:
+                path = studio.find_library(args.fx_lib)
+                self.studio = studio.Studio(path)
+                log.info("voice effects: %s", path)
+            except studio.LibraryMissing as e:
+                self.voice_problem = str(e)
+                log.error("%s: no voice", e)
 
         self.encoder = pick_encoder(args.encoder)
         log.info("video encoder: %s", self.encoder)
@@ -386,9 +383,9 @@ class Sender:
                                  on_error=self._on_video_error)
         if args.file:
             self._select_file_sync(args.file)
-        self.audio = GstPipeline("audio", self.audio_desc, on_built=self._attach_audio_clients,
-                                 on_level=self._on_mic_level) if not args.no_audio else None
-        self._audio_structure = self._audio_structure_key()
+        self.audio = GstPipeline("audio", self.audio_desc, on_built=self._attach_audio_clients) \
+            if self.studio else None
+        self.apply_voice()
         # The camera and mic run only while there's a session (or --also-send)
         for p in (self.video, self.audio):
             if p:
@@ -632,13 +629,10 @@ class Sender:
     async def notify(self, text):
         await self.broadcast({"type": "notice", "text": text}, roles={"guide"})
 
-    def _audio_structure_key(self):
-        v = self.state["voice"]
-        return (abs(v["pitch"] - 1.0) > 1e-3, bool(v["denoise"]))
-
     def audio_desc(self):
-        v = self.state["voice"]
-        use_pitch, denoise = self._audio_structure_key()
+        """The microphone out through appsink to the studio chain (studio.py),
+        and its stereo back in through appsrc to RTP. All the voice effects,
+        denoise included, are in the chain."""
         mic = f"device={self.args.mic} " if self.args.mic else ""
         if self.args.test_tone:
             src = ("audiotestsrc is-live=true wave=sine freq=300 volume=0.012 "
@@ -649,31 +643,12 @@ class Sender:
             src,
             "audio/x-raw,rate=48000,channels=1",
             "audioconvert",
-        ]
-        if denoise:
-            chain += ["audio/x-raw,format=S16LE,rate=48000,channels=1",
-                      "webrtcdsp echo-cancel=false noise-suppression=true noise-suppression-level=high "
-                      "gain-control=false high-pass-filter=false",
-                      "audioconvert"]
-        chain += [
             "audio/x-raw,format=F32LE,rate=48000,channels=1",
-            "audiocheblimit name=hp mode=high-pass poles=4",
-            "audiocheblimit name=lp mode=low-pass poles=4",
-            # Gain, gate, compressor and limiter run in Python (dynamics.py):
-            # out through appsink, back in through appsrc, same thread.
-            "appsink name=dyn_in emit-signals=true sync=false max-buffers=8 drop=true",
+            "appsink name=voice_in emit-signals=true sync=false max-buffers=8 drop=true",
         ]
         chain_b = [
-            "appsrc name=dyn_out is-live=true format=time do-timestamp=false "
-            f"caps=audio/x-raw,format=F32LE,rate=48000,channels=1,layout=interleaved",
-        ]
-        if use_pitch:
-            chain_b += ["pitch name=pitch", "audioconvert",
-                        "audio/x-raw,format=F32LE,rate=48000,channels=1"]
-        chain_b += [
-            "audioecho name=echo max-delay=2000000000",
-            "freeverb name=reverb",
-            "level name=meter interval=100000000 post-messages=true",
+            "appsrc name=voice_out is-live=true format=time do-timestamp=false "
+            "caps=audio/x-raw,format=F32LE,rate=48000,channels=2,layout=interleaved",
             "audioconvert",
             "audio/x-raw,format=S16BE,rate=48000,channels=2",
             "rtpL16pay name=pay pt=97 max-ptime=5000000 min-ptime=5000000",
@@ -699,14 +674,11 @@ class Sender:
         sink = pipeline.get_by_name("sink")
         for host, _, aport, _ in self.destinations:
             sink.emit("add", host, aport)
-        self.dynamics = Dynamics()
-        self.voicefx = SpectralVoice()
-        dyn_out = pipeline.get_by_name("dyn_out")
-        pipeline.get_by_name("dyn_in").connect("new-sample", self._on_voice_block, dyn_out)
-        self.apply_voice(pipeline)
+        voice_out = pipeline.get_by_name("voice_out")
+        pipeline.get_by_name("voice_in").connect("new-sample", self._on_voice_block, voice_out)
 
     def _on_voice_block(self, appsink, appsrc):
-        """Streaming thread: run one mic buffer through the dynamics stage."""
+        """Streaming thread: one microphone buffer through the voice effects."""
         sample = appsink.emit("pull-sample")
         if sample is None:
             return Gst.FlowReturn.EOS
@@ -714,45 +686,19 @@ class Sender:
         ok, info = buf.map(Gst.MapFlags.READ)
         if not ok:
             return Gst.FlowReturn.OK
-        x = np.frombuffer(info.data, dtype=np.float32).copy()
+        x = np.frombuffer(info.data, dtype=np.float32)
+        y = self.studio.process(x)
         buf.unmap(info)
-        v = self.state["voice"]
-        y = self.dynamics.process(x, float(v["gain_db"]), float(v["gate_db"]),
-                                  float(v["comp_ratio"]), bool(v["mute"]))
-        y = self.voicefx.process(y, str(v["fx_mode"]), float(v["shift_pitch"]),
-                                 float(v["shift_formant"]), float(v["robot_hz"]),
-                                 float(v["robot_noise"]))
         out = Gst.Buffer.new_wrapped(y.tobytes())
         out.pts, out.dts, out.duration = buf.pts, buf.dts, buf.duration
         appsrc.emit("push-buffer", out)
         return Gst.FlowReturn.OK
 
-    def apply_voice(self, pipeline=None):
-        if self.audio is None:
-            return
-        if pipeline is None:
-            if self._audio_structure_key() != self._audio_structure:
-                self._audio_structure = self._audio_structure_key()
-                log.info("voice chain structure changed; rebuilding audio pipeline")
-                GLib.idle_add(lambda: (self.audio.start(), False)[1])
-                return
-            pipeline = self.audio.pipeline
-            if pipeline is None:
-                return
-        v = self.state["voice"]
-        g = pipeline.get_by_name
-        g("hp").set_property("cutoff", float(max(10, v["highpass_hz"])))
-        g("lp").set_property("cutoff", float(min(23000, max(200, v["lowpass_hz"]))))
-        if g("pitch"):
-            g("pitch").set_property("pitch", float(v["pitch"]))
-        echo = g("echo")
-        echo.set_property("delay", int(max(1, v["echo_ms"]) * Gst.MSECOND))
-        echo.set_property("feedback", float(min(0.95, v["echo_feedback"])))
-        echo.set_property("intensity", float(v["echo_mix"]))
-        rev = g("reverb")
-        rev.set_property("room-size", float(v["reverb_room"]))
-        rev.set_property("damping", float(v["reverb_damp"]))
-        rev.set_property("level", float(v["reverb_mix"]))
+    def apply_voice(self):
+        """The voice settings to the effects: they take them at the next block,
+        from any thread, so nothing's rebuilt."""
+        if self.studio:
+            self.studio.set_all(self.state["voice"])
 
     def apply_preset_values(self, name):
         p = self.presets.get(name)
@@ -829,9 +775,6 @@ class Sender:
             await self.notify(f"{name}: no picture after 6 s (unsupported format?) — back to camera")
             await self.use_camera()
 
-    def _on_mic_level(self, db):
-        self.mic_level_db = db
-
     # ---------------- control protocol ----------------
     async def broadcast(self, msg, roles=None, exclude=None):
         """To every client that has said hello ([roles]: only those)."""
@@ -843,6 +786,14 @@ class Sender:
                 await ws.send_str(data)
             except ConnectionError:
                 pass
+
+    def _voice_meters(self):
+        if not self.studio:
+            return {"mic_db": -100.0, "out_db": -100.0, "gate_open": False, "voice_problem": self.voice_problem}
+        mic, out, gate = self.studio.meter()
+        if not (self.audio and self.audio.enabled):
+            mic = out = -100.0
+        return {"mic_db": round(mic, 1), "out_db": round(out, 1), "gate_open": gate, "voice_problem": ""}
 
     def summary(self):
         return {
@@ -856,9 +807,7 @@ class Sender:
             "session": {"on": self.session_token is not None, "expires": self.session_expires},
             "scenes": sorted(self.scenes),
             "presets": list(self.presets),
-            "mic_db": round(self.dynamics.in_db, 1) if self.dynamics else -100.0,
-            "out_db": round(self.mic_level_db, 1),
-            "gate_open": bool(self.dynamics and self.dynamics.gate_open),
+            **self._voice_meters(),
             "media": {
                 "dir": str(self.media_dir), "files": self.media_files(),
                 "position": round(self.media_position(), 2),
@@ -877,10 +826,10 @@ class Sender:
         if section == "voice":
             if path == "voice.preset":
                 self.apply_preset_values(value)
-                GLib.idle_add(lambda: (self.apply_voice(), False)[1])
+                self.apply_voice()
                 await self.broadcast({"type": "state", "state": self.state})
                 return
-            GLib.idle_add(lambda: (self.apply_voice(), False)[1])
+            self.apply_voice()
         elif path == "video.bitrate_kbps":
             GLib.idle_add(lambda: (self.apply_bitrate(), False)[1])
         elif section == "media":
@@ -1021,7 +970,7 @@ class Sender:
             for section, values in self.scenes[msg["name"]].items():
                 if section in self.state:
                     self.state[section].update(values)
-            GLib.idle_add(lambda: (self.apply_voice(), False)[1])
+            self.apply_voice()
             await self.broadcast({"type": "state", "state": self.state})
         elif t == "scene_delete" and msg.get("name") in self.scenes:
             del self.scenes[msg["name"]]
@@ -1289,6 +1238,8 @@ def main():
     ap.add_argument("--bitrate", type=int, default=8000, help="video kbit/s")
     ap.add_argument("--mic", default=None, help="PulseAudio/PipeWire source name (default source if omitted)")
     ap.add_argument("--no-audio", action="store_true")
+    ap.add_argument("--fx-lib", default=None,
+                    help="libdronelab_fx with the voice effects (default: the app bundle's lib/, then build/)")
     ap.add_argument("--test-tone", action="store_true",
                     help="replace the mic with a quiet 300 Hz tone (checks the voice path)")
     ap.add_argument("--guide-port", type=int, default=0,

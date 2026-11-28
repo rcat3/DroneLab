@@ -155,6 +155,12 @@ class HiveSightGuide extends ChangeNotifier {
   /// Only on Linux for now: the sender's GStreamer pipelines are Linux's.
   static bool get supported => Platform.isLinux && script != null;
 
+  /// The voice effects for the sender: the app's own libdronelab_fx.
+  static String? get fxLibrary {
+    final f = File('${File(Platform.resolvedExecutable).parent.path}/lib/libdronelab_fx.so');
+    return f.existsSync() ? f.path : null;
+  }
+
   static String? get script {
     final f = File('${File(Platform.resolvedExecutable).parent.path}/hivesight-sender/hivesight_sender.py');
     return f.existsSync() ? f.path : null;
@@ -327,6 +333,7 @@ print(" ".join(missing))
         '$vesselPort',
         '--scenes',
         '${dir.path}/scenes.json',
+        if (fxLibrary != null) ...['--fx-lib', fxLibrary!],
         ...options.args,
       ]);
       _process = p;
@@ -452,6 +459,9 @@ print(" ".join(missing))
   List<String> scenes = const [], presets = const [];
   double micDb = -100, outDb = -100;
   bool gateOpen = false;
+
+  /// Why the sender has no voice (its effects library missing), or ''.
+  String voiceProblem = '';
   String mediaDir = '';
   List<String> mediaFiles = const [];
   double mediaPosition = 0, mediaDuration = 0;
@@ -511,6 +521,7 @@ print(" ".join(missing))
     micDb = (m['mic_db'] as num?)?.toDouble() ?? -100;
     outDb = (m['out_db'] as num?)?.toDouble() ?? -100;
     gateOpen = m['gate_open'] == true;
+    voiceProblem = m['voice_problem'] as String? ?? '';
     final media = m['media'] as Map<String, dynamic>? ?? const {};
     mediaDir = media['dir'] as String? ?? '';
     mediaFiles = [for (final f in media['files'] as List<dynamic>? ?? const []) f as String];
