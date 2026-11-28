@@ -102,7 +102,7 @@ DEFAULT_STATE = {
     },
     "mix": {
         "master": 1.0, "voice_vol": 0.9, "voice_pan": 0.0, "autopan_hz": 0.0,
-        "beats_vol": 0.25, "noise_vol": 0.0, "media_vol": 1.0, "jitter_ms": 40,
+        "beats_vol": 0.25, "noise_vol": 0.0, "media_vol": 1.0, "type_vol": 0.5, "jitter_ms": 40,
     },
     # source: tone (two sine waves), or pink or white noise with the same beat (the
     # right ear's noise is the left's moved up by the beat, so there is a true binaural

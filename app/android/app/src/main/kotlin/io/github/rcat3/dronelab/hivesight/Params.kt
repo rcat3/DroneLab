@@ -25,7 +25,7 @@ object Params {
 
     private val DEFAULTS = mapOf<String, Any>(
         "mix.master" to 1.0, "mix.voice_vol" to 0.9, "mix.voice_pan" to 0.0,
-        "mix.autopan_hz" to 0.0, "mix.beats_vol" to 0.25, "mix.noise_vol" to 0.0, "mix.media_vol" to 1.0,
+        "mix.autopan_hz" to 0.0, "mix.beats_vol" to 0.25, "mix.noise_vol" to 0.0, "mix.media_vol" to 1.0, "mix.type_vol" to 0.5,
         "mix.jitter_ms" to 40,
         "beats.on" to false, "beats.carrier_hz" to 200.0, "beats.beat_hz" to 6.0,
         "beats.glide_s" to 4.0, "beats.source" to "tone", "beats.noise_bw" to 1500.0,

@@ -186,6 +186,8 @@ class AudioEngine(voicePort: Int, mediaPort: Int) {
         val pink = Array(2) { DoubleArray(7) }
         var rng = 0x2545F491L
         val noiseBeats = NoiseBeats(rate)
+        val typeSynth = TypeSynth(rate)
+        var typeGain = 0.0
         val nb = DoubleArray(2)
         val dt = block.toDouble() / rate
 
@@ -203,6 +205,8 @@ class AudioEngine(voicePort: Int, mediaPort: Int) {
             val gs = 1.0 - exp(-dt / 0.05) // 50 ms de-zipper for gains
             beatsGain += ((if (Params.b("beats.on")) Params.f("mix.beats_vol") else 0f) * master - beatsGain) * gs
             noiseGain += (Params.f("mix.noise_vol") * master - noiseGain) * gs
+            typeGain = Params.f("mix.type_vol") * master.toDouble()
+            typeSynth.poll()
             voiceGain += (Params.f("mix.voice_vol") * master - voiceGain) * gs
             mediaGain += (Params.f("mix.media_vol") * master - mediaGain) * gs
 
@@ -254,6 +258,8 @@ class AudioEngine(voicePort: Int, mediaPort: Int) {
                         if (ch == 0) l += noiseGain * p else r += noiseGain * p
                     }
                 }
+                val tk = typeSynth.next() * typeGain
+                l += tk; r += tk
                 l += vl * voice[2 * n] + mediaGain * mediaBuf[2 * n]
                 r += vr * voice[2 * n + 1] + mediaGain * mediaBuf[2 * n + 1]
                 out[2 * n] = softClip(l)
@@ -384,5 +390,76 @@ private class NoiseBeats(private val rate: Int) {
         if (phase > 2 * PI) phase -= 2 * PI
         out[0] = inPhase * norm
         out[1] = (inPhase * cos(phase) - q * sin(phase)) * norm
+    }
+}
+
+
+/**
+ * The sound of text being typed, made as it's needed (the words layer says a letter has been typed):
+ * "blip", short electronic chirps at a pitch that goes with the letter, as on an old computer's
+ * screen; "click", a teletype's key. Several in one block are spread out a little.
+ */
+object TypeSound {
+    const val OFF = 0
+    const val BLIP = 1
+    const val CLICK = 2
+    private val pending = java.util.concurrent.ConcurrentLinkedQueue<Int>()
+
+    fun trigger(kind: Int, code: Int) {
+        if (pending.size < 64) pending.add((kind shl 16) or (code and 0xffff))
+    }
+
+    internal fun take(): Int? = pending.poll()
+}
+
+private class TypeSynth(private val rate: Int) {
+    private class Voice(var kind: Int, var freq: Double, var delay: Int, var age: Int, val len: Int, var phase: Double = 0.0)
+    private val voices = ArrayList<Voice>()
+    private var rng = 0x1F3D5B79L
+
+    /** Starts a voice for each letter typed since the last block. */
+    fun poll() {
+        var n = 0
+        while (true) {
+            val e = TypeSound.take() ?: break
+            val kind = e shr 16
+            val code = e and 0xffff
+            if (voices.size >= 24) { voices.removeAt(0) }
+            val spread = n * rate / 90
+            if (kind == TypeSound.BLIP) {
+                // A pitch from the letter: a run of a few notes, like the chirps of a screen filling
+                val f = 880.0 + (code * 37 % 9) * 165.0
+                voices.add(Voice(kind, f, spread, 0, rate * 26 / 1000))
+            } else {
+                voices.add(Voice(kind, 1500.0 + (code * 13 % 5) * 220.0, spread, 0, rate * 14 / 1000))
+            }
+            n++
+        }
+    }
+
+    fun next(): Double {
+        if (voices.isEmpty()) return 0.0
+        var out = 0.0
+        val it = voices.iterator()
+        while (it.hasNext()) {
+            val v = it.next()
+            if (v.delay > 0) { v.delay--; continue }
+            if (v.age >= v.len) { it.remove(); continue }
+            val t = v.age.toDouble() / rate
+            if (v.kind == TypeSound.BLIP) {
+                val env = minOf(1.0, v.age / (rate * 0.0015)) * exp(-t * 90.0)
+                v.phase += 2 * PI * v.freq / rate
+                if (v.phase > 2 * PI) v.phase -= 2 * PI
+                // A sine with some of a square's edge to it
+                out += 0.30 * env * (sin(v.phase) + 0.35 * sin(3 * v.phase))
+            } else {
+                rng = rng xor (rng shl 13); rng = rng xor (rng ushr 7); rng = rng xor (rng shl 17)
+                val w = (rng and 0xffffff).toDouble() / 0x800000 - 1.0
+                v.phase += 2 * PI * v.freq / rate
+                out += 0.45 * exp(-t * 600.0) * w + 0.25 * exp(-t * 350.0) * sin(v.phase) + 0.2 * exp(-t * 200.0) * sin(2 * PI * 140.0 * t)
+            }
+            v.age++
+        }
+        return out
     }
 }

@@ -78,6 +78,9 @@ class WordsLook {
   bool typing = false;
   double typeSpeed = 25;
 
+  /// A sound for each letter typed: 'off', 'blip' (electronic chirps) or 'click' (a teletype).
+  String typeSound = 'off';
+
   WordsLook();
 
   WordsLook copy() => WordsLook.fromJson(toJson());
@@ -89,7 +92,7 @@ class WordsLook {
     bold = false;
     italic = false;
     underline = false;
-    outline = false;
+    outline = true;
     color = 0x33FF33;
     size = 0.07;
     crt = true;
@@ -109,6 +112,7 @@ class WordsLook {
     crt = false;
     cursor = false;
     typing = false;
+    typeSound = 'off';
   }
 
   void whisper() {
@@ -181,6 +185,7 @@ class WordsLook {
     'cursor': cursor,
     'typing': typing,
     'type_speed': typeSpeed,
+    'type_sound': typeSound,
   };
 
   factory WordsLook.fromJson(Map<String, dynamic> j) {
@@ -211,6 +216,7 @@ class WordsLook {
     l.cursor = j['cursor'] == true;
     l.typing = j['typing'] == true;
     l.typeSpeed = d('type_speed', l.typeSpeed);
+    l.typeSound = j['type_sound'] as String? ?? 'off';
     return l;
   }
 }

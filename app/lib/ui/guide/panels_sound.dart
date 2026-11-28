@@ -82,6 +82,7 @@ class MixTab extends StatelessWidget {
     GSlide(g, 'mix.beats_vol', 'Beats', 0, 1, 0.01, enabled: enabled),
     GSlide(g, 'mix.noise_vol', 'Pink noise', 0, 1, 0.01, enabled: enabled),
     GSlide(g, 'mix.media_vol', 'Film sound', 0, 1.5, 0.01, enabled: enabled),
+    GSlide(g, 'mix.type_vol', 'Typing sound', 0, 1, 0.01, enabled: enabled),
     GSection('sound.mix_more', 'Placement and buffer', [
       GSlide(g, 'mix.voice_pan', 'Voice pan', -1, 1, 0.01, enabled: enabled),
       GSlide(g, 'mix.autopan_hz', 'Auto-pan', 0, 2, 0.01, unit: 'Hz', enabled: enabled),

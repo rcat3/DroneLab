@@ -59,6 +59,8 @@ class Cue(private val j: JSONObject) {
     /** Types out letter by letter, like the unit's terminal; [typeSpeed] letters a second to start with. */
     val typing = j.optBoolean("typing")
     val typeSpeed = j.optDouble("type_speed", 25.0).toFloat().coerceIn(2f, 120f)
+    /** A sound for each letter typed: off, "blip" (electronic chirps) or "click" (a teletype). */
+    val typeSound = when (j.optString("type_sound")) { "blip" -> TypeSound.BLIP; "click" -> TypeSound.CLICK; else -> TypeSound.OFF }
     /** A change to a phrase that's already showing: no fade out and in. */
     val update = j.optBoolean("update")
 
@@ -276,7 +278,13 @@ class Words {
                     // odd hesitation of a modem
                     val boost = 1f + (len - typed) / 120f
                     val jitter = 0.45f + 1.1f * hash(typed.toInt())
+                    val before = typed.toInt()
                     typed = min(len.toFloat(), typed + dt * c.typeSpeed * boost * jitter)
+                    if (c.typeSound != TypeSound.OFF && vis > 0.05f) {
+                        for (i in before until min(typed.toInt(), len)) {
+                            if (!c.text[i].isWhitespace()) TypeSound.trigger(c.typeSound, c.text[i].code)
+                        }
+                    }
                 } else typed = len.toFloat()
             }
             // All typed, and more to come: a pause, then it goes on from where it stopped
