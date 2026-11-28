@@ -107,6 +107,9 @@ class GuideTopBar extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
+        IconButton(tooltip: 'Undo (Ctrl+Z)', icon: const Icon(Icons.undo), onPressed: g.canUndo ? g.undo : null),
+        IconButton(tooltip: 'Redo (Ctrl+Shift+Z)', icon: const Icon(Icons.redo), onPressed: g.canRedo ? g.redo : null),
+        const SizedBox(width: 4),
         LayoutMenu(compact: compact),
       ],
     );

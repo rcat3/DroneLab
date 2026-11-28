@@ -65,6 +65,18 @@ class _HiveSightGuidePageState extends State<HiveSightGuidePage> {
       if (e is KeyUpEvent) _talk(false);
       return KeyEventResult.handled;
     }
+    // Ctrl+Z undoes, Ctrl+Shift+Z (or Ctrl+Y) redoes: a text field takes its own first
+    if (e is KeyDownEvent && HardwareKeyboard.instance.isControlPressed) {
+      final shift = HardwareKeyboard.instance.isShiftPressed;
+      if (e.logicalKey == LogicalKeyboardKey.keyZ) {
+        shift ? g.redo() : g.undo();
+        return KeyEventResult.handled;
+      }
+      if (e.logicalKey == LogicalKeyboardKey.keyY) {
+        g.redo();
+        return KeyEventResult.handled;
+      }
+    }
     return KeyEventResult.ignored;
   }
 

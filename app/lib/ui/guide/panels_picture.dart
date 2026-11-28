@@ -2,6 +2,8 @@
 /// file, how it looks, and the screen and video settings).
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../comm/guide_presets.dart';
@@ -148,61 +150,73 @@ class CameraPicker extends StatelessWidget {
   }
 }
 
+/// The video switcher: what's on (the camera, or a file), what's picked to
+/// go on next, how it changes over (a fade), then the controls for the file
+/// and the files to pick from. Every control stays where it is whatever's on.
 class SourceTab extends StatelessWidget {
   final HiveSightGuide g;
   final bool enabled;
   const SourceTab(this.g, {super.key, required this.enabled});
 
-  static String _time(double s) {
-    final m = s ~/ 60, r = (s % 60).floor();
-    return '$m:${r.toString().padLeft(2, '0')}';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final file = g.text('media.source') == 'file';
-    final paused = g.flag('media.paused');
+    final busy = g.transitioning;
+    final go = enabled && !busy;
+    final cue = g.cue;
     return GCard(null, [
       Row(
         children: [
           Expanded(
-            child: Text(
-              file ? g.text('media.file') : 'Camera: ${g.text('stream.source')}',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-              overflow: TextOverflow.ellipsis,
+            child: _SourceTile(
+              icon: Icons.videocam_outlined,
+              title: 'Camera',
+              sub: g.options.camera.isEmpty
+                  ? 'Test pattern'
+                  : (g.cameras.where((c) => c.path == g.options.camera).firstOrNull?.name ?? g.options.camera),
+              onAir: !g.liveIsFile,
+              onTap: go && g.liveIsFile ? g.goCamera : null,
+              hint: 'Fade back to the camera',
             ),
           ),
-          if (file) ...[
-            IconButton(
-              tooltip: paused ? 'Play' : 'Pause',
-              icon: Icon(paused ? Icons.play_arrow : Icons.pause),
-              onPressed: enabled ? () => g.set('media.paused', !paused) : null,
+          const SizedBox(width: 8),
+          Expanded(
+            child: _SourceTile(
+              icon: Icons.movie_outlined,
+              title: 'File',
+              sub: cue ?? 'Pick one below',
+              onAir: g.liveIsFile,
+              cued: g.playTakesCue,
+              onTap: null,
+              hint: 'Pick a file below, then press Play',
             ),
-            OutlinedButton(onPressed: enabled ? g.useCamera : null, child: const Text('Use camera')),
-          ],
+          ),
         ],
       ),
-      CameraPicker(g, enabled: enabled),
-      if (file && g.mediaDuration > 0)
+      const SizedBox(height: 6),
+      gRow(
+        'Transition',
         Row(
           children: [
-            Expanded(
-              child: Slider(
-                value: g.mediaPosition.clamp(0, g.mediaDuration),
-                max: g.mediaDuration,
-                onChanged: enabled ? (_) {} : null,
-                onChangeEnd: enabled ? g.seek : null,
-              ),
+            DropdownButton<String>(
+              value: 'fade',
+              items: const [DropdownMenuItem(value: 'fade', child: Text('Fade'))],
+              onChanged: enabled ? (_) {} : null,
             ),
-            Text('${_time(g.mediaPosition)} / ${_time(g.mediaDuration)}', style: Kc.term(13, color: Kc.muted)),
+            Expanded(
+              child: GSlide(g, 'fx.fade_s', '', 0, 10, 0.1, unit: 's', enabled: enabled, labelWidth: 0),
+            ),
           ],
         ),
+      ),
+      GSection('picture.camera', 'Camera setup', [CameraPicker(g, enabled: enabled)]),
+      const Divider(height: 16),
+      MediaControls(g, enabled: enabled),
       gGroup('Video files in ${g.mediaDir.isEmpty ? 'the media folder' : g.mediaDir}'),
       if (g.mediaFiles.isEmpty)
         const Text('None found. Set the folder under Session → Sender.', style: gSmall)
       else
         ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 220),
+          constraints: const BoxConstraints(maxHeight: 260),
           child: ListView(
             shrinkWrap: true,
             children: [
@@ -210,15 +224,17 @@ class SourceTab extends StatelessWidget {
                 ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  selected: file && g.text('media.file') == f,
-                  leading: const Icon(Icons.movie_outlined, size: 18),
+                  selected: f == cue,
+                  leading: f == g.liveFile
+                      ? const Icon(Icons.sensors, size: 18, color: Kc.red)
+                      : const Icon(Icons.movie_outlined, size: 18),
                   title: Text(f, overflow: TextOverflow.ellipsis),
-                  onTap: enabled ? () => g.playFile(f) : null,
+                  onTap: () => g.cueFile(f),
                 ),
             ],
           ),
         ),
-      GSection('picture.playback', 'Playback', [
+      GSection('picture.playback', 'Playback options', [
         GChoice(g, 'media.at_end', 'At the end', const [
           ('loop', 'Loop'),
           ('camera', 'Camera'),
@@ -228,6 +244,172 @@ class SourceTab extends StatelessWidget {
         GSlide(g, 'mix.media_vol', 'Film sound', 0, 1.5, 0.01, enabled: enabled),
       ]),
     ]);
+  }
+}
+
+/// A source on the switcher: what it is, and whether it's on air or picked
+/// to go on next.
+class _SourceTile extends StatelessWidget {
+  final IconData icon;
+  final String title, sub, hint;
+  final bool onAir, cued;
+  final VoidCallback? onTap;
+  const _SourceTile({
+    required this.icon,
+    required this.title,
+    required this.sub,
+    required this.hint,
+    required this.onAir,
+    this.cued = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: hint,
+    child: Material(
+      color: onAir ? Kc.raised : Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: onAir ? Kc.red : Kc.line, width: onAir ? 2 : 1),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 18, color: onAir ? Kc.text : Kc.muted),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                  // The same place whatever it says
+                  Text(
+                    onAir ? 'ON AIR' : (cued ? 'NEXT' : ''),
+                    style: Kc.term(12, color: onAir ? Kc.softRed : Kc.warn),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(sub, style: gSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+String _time(double s) {
+  final m = s ~/ 60, r = (s % 60).floor();
+  return '$m:${r.toString().padLeft(2, '0')}';
+}
+
+/// Skip back, Play or Pause, skip on, and the progress bar you can drag: in
+/// the same place whatever's on. With the camera on they wait (disabled);
+/// Play puts the picked file on.
+class MediaControls extends StatefulWidget {
+  final HiveSightGuide g;
+  final bool enabled;
+  const MediaControls(this.g, {super.key, required this.enabled});
+
+  @override
+  State<MediaControls> createState() => _MediaControlsState();
+}
+
+class _MediaControlsState extends State<MediaControls> {
+  double? _drag; // where the slider is being dragged to
+  Timer? _settle;
+
+  @override
+  void dispose() {
+    _settle?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final g = widget.g;
+    final go = widget.enabled && !g.transitioning;
+    final file = g.liveIsFile && g.mediaDuration > 0;
+    final playing = g.liveIsFile && !g.playTakesCue && !g.flag('media.paused');
+    final pos = (_drag ?? g.mediaPosition).clamp(0.0, file ? g.mediaDuration : 1.0).toDouble();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              tooltip: 'Back 10 seconds',
+              iconSize: 28,
+              icon: const Icon(Icons.replay_10),
+              onPressed: go && file ? () => g.skip(-10) : null,
+            ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(minimumSize: const Size(130, 44)),
+              onPressed: go && g.cue != null ? g.playOrPause : null,
+              icon: Icon(playing ? Icons.pause : Icons.play_arrow),
+              label: Text(playing ? 'Pause' : 'Play'),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'On 10 seconds',
+              iconSize: 28,
+              icon: const Icon(Icons.forward_10),
+              onPressed: go && file ? () => g.skip(10) : null,
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: Slider(
+                value: pos,
+                max: file ? g.mediaDuration : 1.0,
+                onChanged: go && file ? (v) => setState(() => _drag = v) : null,
+                onChangeEnd: go && file
+                    ? (v) {
+                        g.seek(v);
+                        // Held where it was dropped until the sender's position catches up
+                        _settle?.cancel();
+                        _settle = Timer(const Duration(milliseconds: 900), () {
+                          if (mounted) setState(() => _drag = null);
+                        });
+                      }
+                    : null,
+              ),
+            ),
+            SizedBox(
+              width: 104,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  file ? '${_time(pos)} / ${_time(g.mediaDuration)}' : '– / –',
+                  style: Kc.term(13, color: file ? Kc.muted : Kc.dim),
+                ),
+              ),
+            ),
+          ],
+        ),
+        // A line kept for what Play will do, so nothing below moves
+        SizedBox(
+          height: 18,
+          child: Text(
+            g.playTakesCue ? 'Play puts "${g.cue}" on, with a fade.' : '',
+            style: gSmall,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
   }
 }
 

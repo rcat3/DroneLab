@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 
 import '../../comm/guide_presets.dart';
 import '../../comm/hivesight_guide.dart';
+import '../theme.dart';
 import 'guide_widgets.dart';
+import 'words_panel.dart' show pickColor;
 
 class SpiralTab extends StatelessWidget {
   final HiveSightGuide g;
@@ -18,14 +20,11 @@ class SpiralTab extends StatelessWidget {
     GSlide(g, 'spiral.amount', 'Amount', 0, 1, 0.01, enabled: enabled),
     GSlide(g, 'spiral.speed', 'Spin', -2, 2, 0.01, unit: 'rev/s', enabled: enabled),
     GSlide(g, 'spiral.zoom_hz', 'Zoom flow', -2, 2, 0.01, unit: 'Hz', enabled: enabled),
+    _SpiralColour(g, enabled: enabled),
     GSection('visuals.shape', 'Shape', [
       GSlide(g, 'spiral.arms', 'Arms', 1, 12, 1, enabled: enabled),
       GSlide(g, 'spiral.twist', 'Twist', -20, 20, 0.1, enabled: enabled),
       GSlide(g, 'spiral.sharp', 'Sharpness', 0, 1, 0.01, enabled: enabled),
-    ]),
-    GSection('visuals.colour', 'Colour', [
-      GSlide(g, 'spiral.hue', 'Hue', 0, 1, 0.01, enabled: enabled),
-      GSlide(g, 'spiral.sat', 'Colour', 0, 1, 0.01, enabled: enabled),
     ]),
   ]);
 }
@@ -57,5 +56,48 @@ class LightPulseTab extends StatelessWidget {
         GSlide(g, 'photic.hue_cycle_s', 'Hue cycle', 0, 120, 1, unit: 's', enabled: enabled),
       ]),
     ]);
+  }
+}
+
+/// The spiral's colour, picked on a colour wheel's worth of sliders (its hue
+/// and how strong the colour is: it has no brightness of its own).
+class _SpiralColour extends StatelessWidget {
+  final HiveSightGuide g;
+  final bool enabled;
+  const _SpiralColour(this.g, {required this.enabled});
+
+  @override
+  Widget build(BuildContext context) {
+    final hue = g.number('spiral.hue', 0).toDouble().clamp(0.0, 1.0);
+    final sat = g.number('spiral.sat', 0).toDouble().clamp(0.0, 1.0);
+    final now = HSVColor.fromAHSV(1, hue * 360, sat, 1).toColor();
+    return gRow(
+      'Colour',
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          icon: Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              color: now,
+              shape: BoxShape.circle,
+              border: Border.all(color: Kc.muted),
+            ),
+          ),
+          label: Text(
+            sat < 0.02 ? 'White' : '#${(now.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}',
+          ),
+          onPressed: enabled
+              ? () async {
+                  final c = await pickColor(context, now.toARGB32() & 0xFFFFFF);
+                  if (c == null) return;
+                  final h = HSVColor.fromColor(Color(0xFF000000 | c));
+                  g.setMany({'spiral.hue': h.hue / 360, 'spiral.sat': h.saturation});
+                }
+              : null,
+        ),
+      ),
+    );
   }
 }

@@ -904,7 +904,9 @@ class Sender:
                 # What each built-in preset comes to, for the Guide to compare with
                 await ws.send_str(json.dumps({
                     "type": "preset_values",
-                    "presets": resolved_presets(self.presets, DEFAULT_STATE["voice"], VOICE_MIC_KEYS)}))
+                    "presets": resolved_presets(self.presets, DEFAULT_STATE["voice"], VOICE_MIC_KEYS),
+                    # And every setting's default, for the Guide's reset buttons
+                    "defaults": DEFAULT_STATE}))
             if info["role"] == "vessel":
                 for cue in self.word_cues.values():
                     await ws.send_str(json.dumps(cue))

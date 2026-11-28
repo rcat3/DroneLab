@@ -48,6 +48,7 @@ class GSlide extends StatelessWidget {
   final String path, label, unit;
   final double min, max, step;
   final bool enabled;
+  final double labelWidth;
   const GSlide(
     this.g,
     this.path,
@@ -58,6 +59,7 @@ class GSlide extends StatelessWidget {
     super.key,
     this.unit = '',
     required this.enabled,
+    this.labelWidth = 100,
   });
 
   @override
@@ -74,7 +76,7 @@ class GSlide extends StatelessWidget {
     return Row(
       children: [
         SizedBox(
-          width: 100,
+          width: labelWidth,
           child: Text(label, style: TextStyle(color: enabled ? Kc.text : Kc.dim, fontSize: 14)),
         ),
         Expanded(
@@ -243,10 +245,6 @@ class PresetBar extends StatelessWidget {
     final v = store.valuesOf(panel, name);
     if (v == null) {
       if (_voice) g.set('voice.preset', name);
-      return;
-    }
-    if (_voice && store.isBuiltIn(panel, name)) {
-      g.set('voice.preset', name); // the sender knows it, and leaves the mic's settings
       return;
     }
     store.select(panel, name);

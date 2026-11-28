@@ -131,11 +131,17 @@ class GuideVessel {
   final bool lightPulse; // they allow us the light pulse
   final Map<String, dynamic> stats;
   final VesselToysInfo? toys; // what their unit and permissions let us do with their toys, once they've said
-  const GuideVessel(this.id, this.name, this.addr, this.key, this.verified, this.lightPulse, this.stats,
-      {this.toys});
+  const GuideVessel(this.id, this.name, this.addr, this.key, this.verified, this.lightPulse, this.stats, {this.toys});
 
   /// Who they are, as known_people has them, if they're signed.
   String? get personId => key != null && verified ? 'k:${Identity.idOf(key!)}' : null;
+}
+
+class _Step {
+  final Map<String, Object?> before;
+  final Map<String, Object> after;
+  DateTime at;
+  _Step(this.before, this.after, this.at);
 }
 
 enum SenderState { stopped, starting, running, failed }
@@ -193,6 +199,7 @@ class HiveSightGuide extends ChangeNotifier implements GuideSettings {
   Process? _process;
   bool _stopping = false;
   int _guidePort = 0;
+
   /// Where Vessels can reach this computer: the sender's list at its start,
   /// then this computer's own, read again (see [refreshAddrs]).
   List<String> addrs = const [];
@@ -515,7 +522,7 @@ print(" ".join(missing))
     final ws = _ws;
     if (ws == null) return;
     final out = Uint8List(1 + pcm.lengthInBytes);
-    out[0] = 0x01;      // the sender's MSG_UNIT_VOICE: 16-bit little-endian PCM, 48 kHz
+    out[0] = 0x01; // the sender's MSG_UNIT_VOICE: 16-bit little-endian PCM, 48 kHz
     out.setRange(1, out.length, pcm.buffer.asUint8List(pcm.offsetInBytes, pcm.lengthInBytes));
     ws.add(out);
   }
@@ -524,6 +531,9 @@ print(" ".join(missing))
 
   /// The settings, by dotted key ("spiral.speed").
   final Map<String, Object?> values = {};
+
+  /// Every setting's default, as the sender says.
+  final Map<String, Object?> defaults = {};
 
   /// The Guide's own presets for the panels, kept on this computer.
   final GuidePresets presetStore = GuidePresets();
@@ -572,6 +582,11 @@ print(" ".join(missing))
         values[m['path'] as String] = m['value'];
         notifyListeners();
       case 'preset_values':
+        // Every setting's default, for the reset buttons
+        defaults.clear();
+        (m['defaults'] as Map<String, dynamic>? ?? const {}).forEach((section, v) {
+          if (v is Map<String, dynamic>) v.forEach((k, x) => defaults['$section.$k'] = x);
+        });
         // What each built-in voice preset comes to, to compare the voice with
         presetStore.setBuiltInVoice({
           for (final e in (m['presets'] as Map<String, dynamic>).entries)
@@ -662,9 +677,17 @@ print(" ".join(missing))
   final Map<String, Timer> _throttle = {};
 
   /// Set [path] to [value]: shown at once, and sent, a slider's at most
-  /// every 50 ms with its last value sent last.
+  /// every 50 ms with its last value sent last. A change made by hand, so
+  /// it can be undone.
   @override
   void set(String path, Object value) {
+    _record({path: values[path]}, {path: value});
+    setQuiet(path, value);
+  }
+
+  /// [set], but not a step to undo: what the Guide page does by itself
+  /// (the fades of a transition, BLACKOUT, the mic's mute).
+  void setQuiet(String path, Object value) {
     values[path] = value;
     notifyListeners();
     if (_throttle.containsKey(path)) {
@@ -675,7 +698,7 @@ print(" ".join(missing))
     _throttle[path] = Timer(const Duration(milliseconds: 50), () {
       _throttle.remove(path);
       final v = _pending.remove(path);
-      if (v != null) set(path, v);
+      if (v != null) setQuiet(path, v);
     });
   }
 
@@ -683,12 +706,75 @@ print(" ".join(missing))
   /// applies the voice and sends the state once).
   @override
   void setMany(Map<String, Object> values) {
+    _record({for (final p in values.keys) p: this.values[p]}, values);
+    _sendMany(values);
+  }
+
+  void _sendMany(Map<String, Object> values) {
     for (final e in values.entries) {
       this.values[e.key] = e.value;
       _pending.remove(e.key);
     }
     notifyListeners();
     _send({'type': 'set_many', 'values': values});
+  }
+
+  // ----- Undo and redo -----
+
+  final List<_Step> _undo = [], _redo = [];
+  static const _maxSteps = 200;
+
+  /// What changes by itself or isn't a setting to go back on.
+  static bool _notHistory(String path) =>
+      path.startsWith('media.') || path.startsWith('preview.') || path == 'voice.mute';
+
+  void _record(Map<String, Object?> before, Map<String, Object> after) {
+    final b = <String, Object?>{}, a = <String, Object>{};
+    for (final p in after.keys) {
+      if (_notHistory(p) || before[p] == null || before[p] == after[p]) continue;
+      b[p] = before[p];
+      a[p] = after[p]!;
+    }
+    if (a.isEmpty) return;
+    final now = DateTime.now();
+    final last = _undo.isEmpty ? null : _undo.last;
+    // A slider moving is one step: the same single setting again soon after
+    if (last != null &&
+        a.length == 1 &&
+        last.after.length == 1 &&
+        last.after.containsKey(a.keys.first) &&
+        now.difference(last.at) < const Duration(milliseconds: 700)) {
+      last.after[a.keys.first] = a.values.first;
+      last.at = now;
+      _redo.clear();
+      notifyListeners();
+      return;
+    }
+    _undo.add(_Step(b, a, now));
+    if (_undo.length > _maxSteps) _undo.removeAt(0);
+    _redo.clear();
+    notifyListeners();
+  }
+
+  @override
+  bool get canUndo => _undo.isNotEmpty;
+  @override
+  bool get canRedo => _redo.isNotEmpty;
+
+  @override
+  void undo() {
+    if (_undo.isEmpty) return;
+    final s = _undo.removeLast();
+    _redo.add(s);
+    _sendMany({for (final e in s.before.entries) e.key: e.value!});
+  }
+
+  @override
+  void redo() {
+    if (_redo.isEmpty) return;
+    final s = _redo.removeLast();
+    _undo.add(s..at = DateTime.fromMillisecondsSinceEpoch(0));
+    _sendMany(Map.of(s.after));
   }
 
   @override
@@ -705,11 +791,12 @@ print(" ".join(missing))
   /// BLACKOUT: the view faded to black and the light pulse stopped, or back.
   bool get blackedOut => number('fx.fade', 1) < 0.5;
   void blackout() {
+    _transitionId++; // a transition under way doesn't fade back in
     if (blackedOut) {
-      set('fx.fade', 1.0);
+      setQuiet('fx.fade', 1.0);
     } else {
-      set('fx.fade', 0.0);
-      set('photic.on', false);
+      setQuiet('fx.fade', 0.0);
+      setQuiet('photic.on', false);
     }
   }
 
@@ -723,7 +810,11 @@ print(" ".join(missing))
   void sendToys(GuideVessel v, List<int> what) => command('toys', {'to': v.id, 'v': toysWire(what)});
 
   void command(String type, [Map<String, Object?> more = const {}]) => _send({'type': type, ...more});
-  void playFile(String name) => command('media_play', {'file': name});
+  void playFile(String name) {
+    cuedFile = null;
+    command('media_play', {'file': name});
+  }
+
   void useCamera() => command('media_camera');
   void seek(double s) => command('media_seek', {'pos': s});
   void saveScene(String name) => command('scene_save', {'name': name});
@@ -733,6 +824,68 @@ print(" ".join(missing))
     if (toys.target == v.id) toys.stop();
     command('kick', {'id': v.id});
   }
+
+  // ----- The video switcher: camera or a file, changed by a fade -----
+
+  /// The file picked to go on next: not playing until Play.
+  String? cuedFile;
+
+  bool get liveIsFile => text('media.source') == 'file';
+  String get liveFile => liveIsFile ? text('media.file') : '';
+
+  /// The file Play would put on: the one picked, or the one on now.
+  String? get cue => cuedFile ?? (liveIsFile ? liveFile : null);
+
+  /// Whether Play would bring the picked file on, rather than play or pause the one on.
+  bool get playTakesCue => cuedFile != null && cuedFile != liveFile;
+
+  bool transitioning = false;
+  int _transitionId = 0;
+
+  void cueFile(String name) {
+    cuedFile = name;
+    notifyListeners();
+  }
+
+  /// Change what's on by a fade: out over the fade time, [change], and back
+  /// in. Already blacked out, or no fade time: just the change. BLACKOUT
+  /// pressed meanwhile stays.
+  Future<void> _transition(void Function() change) async {
+    if (transitioning) return;
+    final secs = number('fx.fade_s', 1.5).toDouble();
+    if (blackedOut || secs <= 0) {
+      change();
+      return;
+    }
+    final id = ++_transitionId;
+    transitioning = true;
+    notifyListeners();
+    setQuiet('fx.fade', 0.0);
+    await Future<void>.delayed(Duration(milliseconds: (secs * 1000).round() + 150));
+    if (id == _transitionId) change();
+    await Future<void>.delayed(const Duration(milliseconds: 500)); // the first picture
+    if (id == _transitionId) setQuiet('fx.fade', 1.0);
+    transitioning = false;
+    notifyListeners();
+  }
+
+  /// Fade to the camera.
+  Future<void> goCamera() => _transition(useCamera);
+
+  /// Play or pause the file that's on; or, with another picked, fade to it
+  /// and play it from the start.
+  Future<void> playOrPause() {
+    final f = cue;
+    if (f == null) return Future.value();
+    if (liveIsFile && !playTakesCue) {
+      set('media.paused', !flag('media.paused'));
+      return Future.value();
+    }
+    return _transition(() => playFile(f));
+  }
+
+  /// Jump [s] seconds on or back in the file that's on.
+  void skip(double s) => seek((mediaPosition + s).clamp(0, mediaDuration).toDouble());
 
   // ----- The session -----
 

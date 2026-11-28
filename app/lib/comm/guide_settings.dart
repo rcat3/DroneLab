@@ -26,4 +26,11 @@ abstract interface class GuideSettings implements Listenable {
 
   /// Set many at once: all shown, and sent as one change.
   void setMany(Map<String, Object> values);
+
+  /// Undo and redo what was changed by hand: a slider's drag is one step,
+  /// and so is a preset or a reset.
+  bool get canUndo;
+  bool get canRedo;
+  void undo();
+  void redo();
 }

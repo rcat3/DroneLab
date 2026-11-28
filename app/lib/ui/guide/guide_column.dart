@@ -4,6 +4,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../comm/guide_presets.dart';
 import '../../comm/hivesight_guide.dart';
 import '../theme.dart';
 import 'guide_layout.dart';
@@ -13,6 +14,27 @@ import 'panels_sound.dart';
 import 'panels_toys.dart';
 import 'panels_visuals.dart';
 import 'words_panel.dart';
+
+/// The settings a tab's reset button puts back to their defaults: none for
+/// a tab with nothing of the sender's settings on it.
+List<String> resetPaths(ColumnSpec spec, HiveSightGuide g) {
+  List<String> under(String prefix, [Set<String> leave = const {}]) => [
+    for (final p in g.paths)
+      if (p.startsWith(prefix) && !leave.contains(p)) p,
+  ];
+  return switch ((spec.panel, spec.shownTab)) {
+    (GuidePanel.session, 'calibrate') => under('view.'),
+    (GuidePanel.picture, 'look') => PresetPanel.pictureLook.pathsIn(g),
+    (GuidePanel.picture, 'screen') => ['fx.screen', 'fx.fade', 'fx.fade_s', 'fx.delay_ms', 'video.bitrate_kbps'],
+    (GuidePanel.picture, 'source') => ['fx.fade_s', 'media.at_end', 'media.av_offset_ms', 'mix.media_vol'],
+    (GuidePanel.sound, 'mix') => under('mix.'),
+    (GuidePanel.sound, 'beats') => under('beats.'),
+    (GuidePanel.sound, 'voice') => under('voice.', {'voice.mute'}),
+    (GuidePanel.visuals, 'light') => under('photic.'),
+    (GuidePanel.visuals, _) => under('spiral.'),
+    _ => const [],
+  };
+}
 
 /// The controls of [spec]'s panel on its tab.
 Widget guideTab(ColumnSpec spec, HiveSightGuide g) {
@@ -73,6 +95,7 @@ class GuideColumn extends StatelessWidget {
                     ),
                   ),
                 ),
+                _ResetButton(g, spec),
               ],
             ),
             if (tabs.length > 1)
@@ -111,4 +134,32 @@ class GuideColumn extends StatelessWidget {
       },
     );
   }
+}
+
+/// Puts every setting on the tab back to its default: in the same corner of
+/// every column, grey when the tab has none to reset. One step to undo.
+class _ResetButton extends StatelessWidget {
+  final HiveSightGuide g;
+  final ColumnSpec spec;
+  const _ResetButton(this.g, this.spec);
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: g,
+    builder: (context, _) {
+      final values = <String, Object>{
+        for (final p in resetPaths(spec, g))
+          if (g.defaults[p] != null) p: g.defaults[p]!,
+      };
+      if (spec.panel == GuidePanel.sound && spec.shownTab == 'voice' && values.isNotEmpty) {
+        values['voice.preset'] = g.defaults['voice.preset'] ?? 'clean';
+      }
+      return IconButton(
+        tooltip: values.isEmpty ? 'Nothing here to reset' : 'Reset this tab to its defaults',
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.restart_alt),
+        onPressed: g.linked && values.isNotEmpty ? () => g.setMany(values) : null,
+      );
+    },
+  );
 }
