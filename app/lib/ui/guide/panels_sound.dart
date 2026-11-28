@@ -99,6 +99,26 @@ class BeatsTab extends StatelessWidget {
   Widget build(BuildContext context) => GCard(null, [
     PresetBar(g, g.presetStore, PresetPanel.beats, enabled: enabled),
     GToggle(g, 'beats.on', 'Binaural beats', enabled: enabled),
+    GChoice(g, 'beats.source', 'Made of', const [
+      ('tone', 'Tones'),
+      ('pink', 'Pink noise'),
+      ('white', 'White noise'),
+    ], enabled: enabled),
+    GSlide(
+      g,
+      'beats.noise_bw',
+      'Noise width',
+      100,
+      6000,
+      50,
+      unit: 'Hz',
+      enabled: enabled && g.text('beats.source') != 'tone',
+    ),
+    if (g.text('beats.source') != 'tone')
+      const Text(
+        'The same beat, on noise around the carrier: softer than two plain tones. Narrower sounds more like a tone.',
+        style: gSmall,
+      ),
     GSlide(g, 'beats.carrier_hz', 'Carrier', 60, 600, 1, unit: 'Hz', enabled: enabled),
     GSlide(g, 'beats.beat_hz', 'Beat', 0.5, 40, 0.1, unit: 'Hz', enabled: enabled),
     GSlide(g, 'beats.glide_s', 'Glide', 0, 30, 0.5, unit: 's', enabled: enabled),

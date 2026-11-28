@@ -645,7 +645,7 @@ class Sender:
     def apply_switch_settings(self, paths):
         sw, st = self.switcher, self.state
         sw.effect, sw.secs = st["switch"]["effect"], float(st["switch"]["secs"])
-        for src in [sw.on_air] + ([sw.trans["src"]] if sw.trans else []):
+        for src in [sw.on_air, sw.pv] + ([sw.trans["src"]] if sw.trans else []):
             if isinstance(src, switcher.ColorSource) and any(p.startswith("color.") for p in paths):
                 src.set_color(st["color"]["rgb"])
             if isinstance(src, switcher.ImageSource) and any(p.startswith("image.") for p in paths):

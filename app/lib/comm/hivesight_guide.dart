@@ -40,6 +40,7 @@ class SenderOptions {
   final String mic; // a PipeWire/PulseAudio source; '' for the default
   final bool audio; // the Guide's voice at all
   final String mediaDir; // '' for ~/Videos
+  final String musicDir; // '' for ~/Music
 
   const SenderOptions({
     this.camera = '',
@@ -51,6 +52,7 @@ class SenderOptions {
     this.mic = '',
     this.audio = true,
     this.mediaDir = '',
+    this.musicDir = '',
   });
 
   SenderOptions copyWith({
@@ -63,6 +65,7 @@ class SenderOptions {
     String? mic,
     bool? audio,
     String? mediaDir,
+    String? musicDir,
   }) => SenderOptions(
     camera: camera ?? this.camera,
     format: format ?? this.format,
@@ -73,6 +76,7 @@ class SenderOptions {
     mic: mic ?? this.mic,
     audio: audio ?? this.audio,
     mediaDir: mediaDir ?? this.mediaDir,
+    musicDir: musicDir ?? this.musicDir,
   );
 
   Map<String, Object> toJson() => {
@@ -85,6 +89,7 @@ class SenderOptions {
     'mic': mic,
     'audio': audio,
     'mediaDir': mediaDir,
+    'musicDir': musicDir,
   };
 
   static SenderOptions fromJson(Map<String, dynamic> j) => SenderOptions(
@@ -97,6 +102,7 @@ class SenderOptions {
     mic: j['mic'] as String? ?? '',
     audio: j['audio'] as bool? ?? true,
     mediaDir: j['mediaDir'] as String? ?? '',
+    musicDir: j['musicDir'] as String? ?? '',
   );
 
   List<String> get args => [
@@ -111,6 +117,7 @@ class SenderOptions {
     layout,
     if (!audio) '--no-audio' else if (mic.isNotEmpty) ...['--mic', mic],
     if (mediaDir.isNotEmpty) ...['--media-dir', mediaDir],
+    if (musicDir.isNotEmpty) ...['--music-dir', musicDir],
   ];
 }
 
@@ -237,6 +244,7 @@ class HiveSightGuide extends ChangeNotifier implements GuideSettings {
         'layout': o.layout,
         'mic': o.mic,
         'media_dir': o.mediaDir,
+        'music_dir': o.musicDir,
       });
       if (useCamera) this.useCamera();
     } else if (state == SenderState.running || state == SenderState.starting) {
@@ -548,9 +556,27 @@ print(" ".join(missing))
   List<String> mediaFiles = const [];
   double mediaPosition = 0, mediaDuration = 0;
   bool mediaHasAudio = false;
+  List<String> mediaImages = const [];
+
+  /// The switcher's queue, and what's picked to go on next (a map: kind, file or rgb).
+  List<Map<String, dynamic>> queue = const [];
+  Map<String, dynamic>? cueSpec;
+  bool _cueLocal = false; // the pick just made, until the sender says it has it
+  bool transitioning = false;
+  String transitionPhase = '';
+
+  /// The music: the folder and its files, the queue, what's playing, the level going out.
+  String musicDir = '';
+  List<String> musicFiles = const [];
+  List<String> musicQueue = const [];
+  Map<String, dynamic>? musicNow;
+  double musicLevelDb = -100;
 
   /// The latest preview frame from a Vessel (both eyes, flat), JPEG.
   Uint8List? preview;
+
+  /// What's cued to go on next, as the sender sees it (both eyes, small), JPEG.
+  Uint8List? nextPreview;
 
   /// Something the sender said for the Guide to see.
   final notices = StreamController<String>.broadcast();
@@ -561,6 +587,10 @@ print(" ".join(missing))
     if (data is List<int>) {
       if (data.isNotEmpty && data[0] == 0x01) {
         preview = Uint8List.fromList(data.sublist(1));
+        notifyListeners();
+      } else if (data.isNotEmpty && data[0] == 0x02) {
+        // What's cued, small; nothing after the byte: nothing cued
+        nextPreview = data.length > 1 ? Uint8List.fromList(data.sublist(1)) : null;
         notifyListeners();
       }
       return;
@@ -622,6 +652,20 @@ print(" ".join(missing))
     mediaPosition = (media['position'] as num?)?.toDouble() ?? 0;
     mediaDuration = (media['duration'] as num?)?.toDouble() ?? 0;
     mediaHasAudio = media['has_audio'] == true;
+    mediaImages = [for (final f in media['images'] as List<dynamic>? ?? const []) f as String];
+    final sw = m['switch'] as Map<String, dynamic>? ?? const {};
+    queue = [for (final q in sw['queue'] as List<dynamic>? ?? const []) Map<String, dynamic>.from(q as Map)];
+    final cueNow = sw['cue'];
+    if (!_cueLocal) cueSpec = cueNow is Map ? Map<String, dynamic>.from(cueNow) : null;
+    final tr = sw['transition'] as Map<String, dynamic>?;
+    transitioning = tr != null;
+    transitionPhase = tr?['phase'] as String? ?? '';
+    final mu = m['music'] as Map<String, dynamic>? ?? const {};
+    musicDir = mu['dir'] as String? ?? '';
+    musicFiles = [for (final f in mu['files'] as List<dynamic>? ?? const []) f as String];
+    musicQueue = [for (final f in mu['queue'] as List<dynamic>? ?? const []) f as String];
+    musicNow = mu['current'] is Map ? Map<String, dynamic>.from(mu['current'] as Map) : null;
+    musicLevelDb = (mu['level_db'] as num?)?.toDouble() ?? -100;
     // The sender's ended it (its time's up)
     final on = (m['session'] as Map<String, dynamic>?)?['on'] == true;
     if (!on && s != null && s.expires.isBefore(DateTime.now())) _session = null;
@@ -791,7 +835,6 @@ print(" ".join(missing))
   /// BLACKOUT: the view faded to black and the light pulse stopped, or back.
   bool get blackedOut => number('fx.fade', 1) < 0.5;
   void blackout() {
-    _transitionId++; // a transition under way doesn't fade back in
     if (blackedOut) {
       setQuiet('fx.fade', 1.0);
     } else {
@@ -810,10 +853,7 @@ print(" ".join(missing))
   void sendToys(GuideVessel v, List<int> what) => command('toys', {'to': v.id, 'v': toysWire(what)});
 
   void command(String type, [Map<String, Object?> more = const {}]) => _send({'type': type, ...more});
-  void playFile(String name) {
-    cuedFile = null;
-    command('media_play', {'file': name});
-  }
+  void playFile(String name) => command('media_play', {'file': name});
 
   void useCamera() => command('media_camera');
   void seek(double s) => command('media_seek', {'pos': s});
@@ -825,67 +865,82 @@ print(" ".join(missing))
     command('kick', {'id': v.id});
   }
 
-  // ----- The video switcher: camera or a file, changed by a fade -----
+  // ----- The video switcher: the sender changes the picture over, by a cut, a fade or a dissolve -----
 
-  /// The file picked to go on next: not playing until Play.
-  String? cuedFile;
+  /// A source as the sender takes it.
+  static Map<String, dynamic> fileSpec(String f) => {'kind': 'file', 'file': f};
+  static Map<String, dynamic> imageSpec(String f) => {'kind': 'image', 'file': f};
+  static Map<String, dynamic> colorSpec(int rgb) => {'kind': 'color', 'rgb': rgb};
+  static const cameraSpec = {'kind': 'camera'};
 
   bool get liveIsFile => text('media.source') == 'file';
-  String get liveFile => liveIsFile ? text('media.file') : '';
+  String get liveKind => text('media.source').isEmpty ? 'camera' : text('media.source');
+  String get liveFile => liveKind == 'file' || liveKind == 'image' ? text('media.file') : '';
 
-  /// The file Play would put on: the one picked, or the one on now.
-  String? get cue => cuedFile ?? (liveIsFile ? liveFile : null);
+  static bool sameSpec(Map<String, dynamic>? a, Map<String, dynamic>? b) =>
+      a != null && b != null && a['kind'] == b['kind'] && a['file'] == b['file'] && a['rgb'] == b['rgb'];
+
+  /// Pick what goes on next: the sender looks at it (nextPreview) but doesn't put it on.
+  void cue(Map<String, dynamic>? spec) {
+    cueSpec = spec;
+    _cueLocal = true;
+    Timer(const Duration(seconds: 1), () => _cueLocal = false);
+    notifyListeners();
+    command('cue', {'spec': spec});
+  }
+
+  /// Put [spec] on, by the effect set (Fade, Dissolve or Cut).
+  void take(Map<String, dynamic> spec) {
+    if (sameSpec(cueSpec, spec)) cueSpec = null;
+    command('take', {'spec': spec});
+  }
+
+  /// The effect set, or a cut.
+  void takeCue({bool cut = false}) {
+    final c = cueSpec;
+    if (c == null) return;
+    if (cut) setQuiet('switch.effect', 'cut');
+    take(c);
+  }
+
+  void goCamera() => take(cameraSpec);
+  void nextQueued() => command('next');
+  void queueAdd(Map<String, dynamic> spec) => command('queue_add', {'spec': spec});
+  void queueRemove(int i) => command('queue_remove', {'index': i});
+  void queueMove(int from, int to) => command('queue_move', {'from': from, 'to': to});
+  void queueClear() => command('queue_clear');
 
   /// Whether Play would bring the picked file on, rather than play or pause the one on.
-  bool get playTakesCue => cuedFile != null && cuedFile != liveFile;
-
-  bool transitioning = false;
-  int _transitionId = 0;
-
-  void cueFile(String name) {
-    cuedFile = name;
-    notifyListeners();
+  bool get playTakesCue {
+    final c = cueSpec;
+    return c != null && c['kind'] == 'file' && !(liveIsFile && c['file'] == liveFile);
   }
 
-  /// Change what's on by a fade: out over the fade time, [change], and back
-  /// in. Already blacked out, or no fade time: just the change. BLACKOUT
-  /// pressed meanwhile stays.
-  Future<void> _transition(void Function() change) async {
-    if (transitioning) return;
-    final secs = number('fx.fade_s', 1.5).toDouble();
-    if (blackedOut || secs <= 0) {
-      change();
-      return;
-    }
-    final id = ++_transitionId;
-    transitioning = true;
-    notifyListeners();
-    setQuiet('fx.fade', 0.0);
-    await Future<void>.delayed(Duration(milliseconds: (secs * 1000).round() + 150));
-    if (id == _transitionId) change();
-    await Future<void>.delayed(const Duration(milliseconds: 500)); // the first picture
-    if (id == _transitionId) setQuiet('fx.fade', 1.0);
-    transitioning = false;
-    notifyListeners();
-  }
+  /// Whether Play can do anything: a film's on, or one's picked.
+  bool get canPlay => liveIsFile || (cueSpec?['kind'] == 'file');
 
-  /// Fade to the camera.
-  Future<void> goCamera() => _transition(useCamera);
-
-  /// Play or pause the file that's on; or, with another picked, fade to it
-  /// and play it from the start.
-  Future<void> playOrPause() {
-    final f = cue;
-    if (f == null) return Future.value();
-    if (liveIsFile && !playTakesCue) {
+  void playOrPause() {
+    if (playTakesCue) {
+      take(cueSpec!);
+    } else if (liveIsFile) {
       set('media.paused', !flag('media.paused'));
-      return Future.value();
     }
-    return _transition(() => playFile(f));
   }
 
-  /// Jump [s] seconds on or back in the file that's on.
+  /// Jump [s] seconds on or back in the film that's on.
   void skip(double s) => seek((mediaPosition + s).clamp(0, mediaDuration).toDouble());
+
+  // ----- Music -----
+
+  void musicPlay(String f) => command('music_play', {'file': f});
+  void musicAdd(String f) => command('music_add', {'file': f});
+  void musicRemove(int i) => command('music_remove', {'index': i});
+  void musicMove(int from, int to) => command('music_move', {'from': from, 'to': to});
+  void musicClear() => command('music_clear');
+  void musicNext() => command('music_next');
+  void musicPause(bool on) => command('music_pause', {'paused': on});
+  void musicSeek(double s) => command('music_seek', {'pos': s});
+  void musicStop() => command('music_stop');
 
   // ----- The session -----
 

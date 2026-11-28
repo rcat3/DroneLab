@@ -9,7 +9,9 @@ import '../../comm/hivesight_guide.dart';
 import '../theme.dart';
 import 'guide_layout.dart';
 import 'panels_picture.dart';
+import 'panels_source.dart';
 import 'panels_session.dart';
+import 'panels_music.dart';
 import 'panels_sound.dart';
 import 'panels_toys.dart';
 import 'panels_visuals.dart';
@@ -26,7 +28,14 @@ List<String> resetPaths(ColumnSpec spec, HiveSightGuide g) {
     (GuidePanel.session, 'calibrate') => under('view.'),
     (GuidePanel.picture, 'look') => PresetPanel.pictureLook.pathsIn(g),
     (GuidePanel.picture, 'screen') => ['fx.screen', 'fx.fade', 'fx.fade_s', 'fx.delay_ms', 'video.bitrate_kbps'],
-    (GuidePanel.picture, 'source') => ['fx.fade_s', 'media.at_end', 'media.av_offset_ms', 'mix.media_vol'],
+    (GuidePanel.picture, 'source') => [
+      'switch.effect',
+      'switch.secs',
+      'media.at_end',
+      'media.av_offset_ms',
+      'mix.media_vol',
+    ],
+    (GuidePanel.sound, 'music') => ['music.vol', 'music.xfade_s', 'music.at_end'],
     (GuidePanel.sound, 'mix') => under('mix.'),
     (GuidePanel.sound, 'beats') => under('beats.'),
     (GuidePanel.sound, 'voice') => under('voice.', {'voice.mute'}),
@@ -49,6 +58,7 @@ Widget guideTab(ColumnSpec spec, HiveSightGuide g) {
     (GuidePanel.picture, _) => SourceTab(g, enabled: on),
     (GuidePanel.sound, 'mix') => MixTab(g, enabled: on),
     (GuidePanel.sound, 'beats') => BeatsTab(g, enabled: on),
+    (GuidePanel.sound, 'music') => MusicTab(g, enabled: on),
     (GuidePanel.sound, _) => VoiceTab(g, enabled: on),
     (GuidePanel.visuals, 'light') => LightPulseTab(g, enabled: on),
     (GuidePanel.visuals, _) => SpiralTab(g, enabled: on),

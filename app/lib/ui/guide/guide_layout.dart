@@ -17,7 +17,7 @@ enum GuidePanel {
     ('calibrate', 'Calibrate'),
   ]),
   picture('Picture', [('source', 'Source'), ('look', 'Look'), ('screen', 'Screen and video')]),
-  sound('Sound', [('voice', 'Voice'), ('mix', 'Mix'), ('beats', 'Beats')]),
+  sound('Sound', [('voice', 'Voice'), ('mix', 'Mix'), ('beats', 'Beats'), ('music', 'Music')]),
   visuals('Visuals', [('spiral', 'Spiral'), ('light', 'Light pulse')]),
   words('Words', [('cues', 'Cues'), ('phrase', 'Phrase')]),
   toys('Toys', [('toys', 'Toys')]),

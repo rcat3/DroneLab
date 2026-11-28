@@ -7,7 +7,7 @@ import '../../comm/guide_presets.dart';
 import '../../comm/hivesight_guide.dart';
 import '../theme.dart';
 import 'guide_widgets.dart';
-import 'words_panel.dart' show pickColor;
+import 'color_picker.dart';
 
 class SpiralTab extends StatelessWidget {
   final HiveSightGuide g;

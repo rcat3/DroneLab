@@ -266,10 +266,12 @@ class _SenderTabState extends State<SenderTab> {
   late bool _audio = widget.g.options.audio;
   late String _mic = widget.g.options.mic;
   late final _media = TextEditingController(text: widget.g.options.mediaDir);
+  late final _music = TextEditingController(text: widget.g.options.musicDir);
 
   @override
   void dispose() {
     _media.dispose();
+    _music.dispose();
     super.dispose();
   }
 
@@ -277,7 +279,8 @@ class _SenderTabState extends State<SenderTab> {
   Widget build(BuildContext context) {
     final g = widget.g;
     final o = g.options;
-    final changed = _audio != o.audio || _mic != o.mic || _media.text.trim() != o.mediaDir;
+    final changed =
+        _audio != o.audio || _mic != o.mic || _media.text.trim() != o.mediaDir || _music.text.trim() != o.musicDir;
     final row = gRow;
     return GCard(null, [
       if (g.state == SenderState.failed && g.problem != null) ...[
@@ -335,13 +338,23 @@ class _SenderTabState extends State<SenderTab> {
           onChanged: (_) => setState(() {}),
         ),
       ),
+      row(
+        'Music folder',
+        TextField(
+          controller: _music,
+          decoration: const InputDecoration(hintText: '~/Music', isDense: true),
+          onChanged: (_) => setState(() {}),
+        ),
+      ),
       const SizedBox(height: 10),
       Row(
         children: [
           Expanded(
             child: FilledButton(
               onPressed: changed
-                  ? () => g.setOptions(o.copyWith(audio: _audio, mic: _mic, mediaDir: _media.text.trim()))
+                  ? () => g.setOptions(
+                      o.copyWith(audio: _audio, mic: _mic, mediaDir: _media.text.trim(), musicDir: _music.text.trim()),
+                    )
                   : null,
               child: const Text('Apply'),
             ),
@@ -356,7 +369,7 @@ class _SenderTabState extends State<SenderTab> {
       ),
       const SizedBox(height: 4),
       const Text(
-        'The camera is chosen under Source. A new microphone or folder applies at once; turning your voice on or '
+        'The camera is chosen under Picture → Source. A new microphone or folder applies at once; turning your voice on or '
         'off restarts the sender, and a session carries on.',
         style: gSmall,
       ),
