@@ -228,6 +228,7 @@ class ControlClient(
             "state" -> m.optJSONObject("state")?.let { Params.applyState(it) }
             "set" -> Params.set(m.getString("path"), m.get("value"))
             "words" -> words.show(m.optInt("layer", -1), m)
+            "words_append" -> words.append(m.optInt("layer", -1), m)
             "words_clear" -> words.clear(
                 m.optJSONArray("layers")?.let { a -> (0 until a.length()).map { a.optInt(it, -1) } },
                 m.optDouble("fade", 1.0).toFloat(),

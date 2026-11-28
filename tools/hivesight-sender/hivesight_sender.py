@@ -1141,6 +1141,21 @@ class Sender:
             if isinstance(layer, int) and 0 <= layer < WORD_LAYERS and len(json.dumps(msg)) <= 4096:
                 self.word_cues[layer] = msg
                 await self.broadcast(msg, roles={"vessel"})
+        elif t == "words_append":
+            # More text for the end of a layer's phrase, typed on after a pause (the Vessel
+            # does the timing). A Vessel who joins later is given the whole text at once.
+            layer, text = msg.get("layer"), msg.get("text")
+            if isinstance(layer, int) and 0 <= layer < WORD_LAYERS and isinstance(text, str) and 0 < len(text) <= 600:
+                pause = msg.get("pause")
+                more = {"type": "words_append", "layer": layer, "text": text,
+                        "pause": min(600.0, max(0.0, float(pause))) if isinstance(pause, (int, float)) else 2.0,
+                        "newline": msg.get("newline") is not False}
+                kept = self.word_cues.get(layer)
+                if kept is not None:
+                    kept = dict(kept)
+                    kept["text"] = (str(kept.get("text", "")) + ("\n" if more["newline"] else "") + text)[:600]
+                    self.word_cues[layer] = kept
+                await self.broadcast(more, roles={"vessel"})
         elif t == "words_clear":
             layers = msg.get("layers")
             if not isinstance(layers, list):

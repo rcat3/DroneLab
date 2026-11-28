@@ -27,7 +27,10 @@ import kotlin.math.sin
  * One phrase and how it looks and moves, as the Guide cued it. Every field
  * is checked and limited here, whatever the Guide sent.
  */
-class Cue(j: JSONObject) {
+/** Text to be typed on after a pause. */
+private class More(val text: String, val pause: Float, val newline: Boolean)
+
+class Cue(private val j: JSONObject) {
     val text = j.optString("text").take(600)
     val font = j.optString("font", "sans").let { if (it in FONTS) it else "sans" }
     val bold = j.optBoolean("bold")
@@ -58,6 +61,9 @@ class Cue(j: JSONObject) {
     val typeSpeed = j.optDouble("type_speed", 25.0).toFloat().coerceIn(2f, 120f)
     /** A change to a phrase that's already showing: no fade out and in. */
     val update = j.optBoolean("update")
+
+    /** The same cue with other text (more typed on the end of it). */
+    fun withText(t: String) = Cue(JSONObject(j.toString()).put("text", t))
 
     /** What the texture depends on: a different key means redrawing it. */
     val key = "$text|$font|$bold|$italic|$underline|$outline|${Math.round(size * 500)}|$crt|$cursor|$typing"
@@ -91,6 +97,7 @@ class Words {
     private sealed interface Cmd
     private class Show(val layer: Int, val cue: Cue) : Cmd
     private class Clear(val layers: List<Int>, val fade: Float) : Cmd
+    private class Append(val layer: Int, val text: String, val pause: Float, val newline: Boolean) : Cmd
 
     private val queue = ConcurrentLinkedQueue<Cmd>()
     private val layers = Array(LAYERS) { Layer() }
@@ -102,6 +109,14 @@ class Words {
     fun show(layer: Int, j: JSONObject) {
         if (layer !in 0 until LAYERS) return
         queue.add(Show(layer, Cue(j)))
+    }
+
+    /** More text for the end of what's on [layer]: once it's all typed, after [pause] seconds of nothing,
+     *  it goes on typing. Queued behind any other, and dropped when the layer shows or clears something. */
+    fun append(layer: Int, j: JSONObject) {
+        if (layer !in 0 until LAYERS) return
+        queue.add(Append(layer, j.optString("text").take(600), j.optDouble("pause", 2.0).toFloat().coerceIn(0f, 600f),
+            j.optBoolean("newline", true)))
     }
 
     fun clear(layerList: List<Int>?, fade: Float) {
@@ -125,6 +140,7 @@ class Words {
             when (val c = queue.poll() ?: break) {
                 is Show -> layers[c.layer].show(c.cue)
                 is Clear -> for (n in c.layers) layers[n].clear(c.fade)
+                is Append -> layers[c.layer].append(c.text, c.pause, c.newline)
             }
         }
         blinkOn = (System.nanoTime() / 530_000_000L) % 2L == 0L
@@ -199,11 +215,21 @@ class Words {
         fun contextLost() { texA = 0; texB = 0; shownKey = "" }
 
         fun clearNow() {
+            more.clear(); waited = 0f
             shown = null; pending = null; pendingClear = false; vis = 0f; alpha = 0f
             release()
         }
 
+        // More text waiting to be typed on, each after its pause
+        private val more = ArrayDeque<More>()
+        private var waited = 0f
+
+        fun append(text: String, pause: Float, newline: Boolean) {
+            if (text.isNotEmpty() && more.size < 32) more.addLast(More(text, pause, newline))
+        }
+
         fun show(c: Cue) {
+            if (!c.update) { more.clear(); waited = 0f }
             val cur = shown
             if (c.update && cur != null && cur.text.isNotEmpty() && pending == null) {
                 shown = c // the same phrase, looking different
@@ -213,6 +239,7 @@ class Words {
         }
 
         fun clear(fade: Float) {
+            more.clear(); waited = 0f
             if (shown == null && pending == null) return
             pending = null; pendingClear = true; fadeS = max(fade, 0.01f)
         }
@@ -251,6 +278,17 @@ class Words {
                     val jitter = 0.45f + 1.1f * hash(typed.toInt())
                     typed = min(len.toFloat(), typed + dt * c.typeSpeed * boost * jitter)
                 } else typed = len.toFloat()
+            }
+            // All typed, and more to come: a pause, then it goes on from where it stopped
+            if (more.isNotEmpty() && pending == null && !pendingClear) {
+                if (vis >= 1f && (!c.typing || typed >= c.text.length)) {
+                    waited += dt
+                    val m = more.first()
+                    if (waited >= m.pause) {
+                        more.removeFirst(); waited = 0f
+                        shown = c.withText(c.text + (if (m.newline) "\n" else "") + m.text)
+                    }
+                } else waited = 0f
             }
 
             phase = (phase + 2 * PI * c.speed * 0.25 * dt) % (2 * PI * 1000)

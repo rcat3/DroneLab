@@ -282,12 +282,104 @@ class WordsPhraseTab extends StatefulWidget {
 
 class _WordsPhraseTabState extends State<WordsPhraseTab> {
   final _text = TextEditingController();
+  final _live = TextEditingController();
+  double _livePause = 2;
   WordsPhrase? _shownIn; // whose text the field holds
 
   @override
   void dispose() {
     _text.dispose();
+    _live.dispose();
     super.dispose();
+  }
+
+  /// Text typed on after the phrase, each part after a pause, and a box to add some to what's on screen now.
+  List<Widget> _typedOn(GuideWords w, WordsPhrase p, bool enabled, void Function(void Function()) changed) => [
+    gGroup('Then keep typing'),
+    const Text(
+      'More text typed on after a pause, once the phrase is all out: the typing stops, then carries on.',
+      style: gSmall,
+    ),
+    for (final m in p.then)
+      Padding(
+        key: ObjectKey(m),
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 96,
+              child: DropdownButton<double>(
+                isExpanded: true,
+                value: const [0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 12.0, 20.0, 30.0].contains(m.pause) ? m.pause : 2.0,
+                items: [
+                  for (final v in const [0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 12.0, 20.0, 30.0])
+                    DropdownMenuItem(value: v, child: Text('pause $v s'.replaceAll('.0 s', ' s'))),
+                ],
+                onChanged: (v) => changed(() => m.pause = v ?? 2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextFormField(
+                initialValue: m.text,
+                minLines: 1,
+                maxLines: 4,
+                onChanged: (t) => changed(() => m.text = t),
+                decoration: const InputDecoration(hintText: 'What comes next', isDense: true),
+              ),
+            ),
+            IconButton(
+              tooltip: m.newline ? 'On a new line' : 'On the same line',
+              icon: Icon(m.newline ? Icons.keyboard_return : Icons.arrow_right_alt),
+              onPressed: () => changed(() => m.newline = !m.newline),
+            ),
+            IconButton(
+              tooltip: 'Remove',
+              icon: const Icon(Icons.close),
+              onPressed: () => changed(() => p.then.remove(m)),
+            ),
+          ],
+        ),
+      ),
+    Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: () => changed(() => p.then.add(WordsMore(''))),
+        icon: const Icon(Icons.add, size: 16),
+        label: const Text('Add more text'),
+      ),
+    ),
+    Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _live,
+            enabled: enabled,
+            decoration: const InputDecoration(hintText: "Add to what's showing now", isDense: true),
+            onSubmitted: (_) => _addLive(w),
+          ),
+        ),
+        const SizedBox(width: 8),
+        DropdownButton<double>(
+          value: _livePause,
+          items: [
+            for (final v in const [0.0, 1.0, 2.0, 3.0, 5.0, 10.0])
+              DropdownMenuItem(value: v, child: Text(v == 0 ? 'no pause' : 'pause ${v.round()} s')),
+          ],
+          onChanged: (v) => setState(() => _livePause = v ?? 2),
+        ),
+        IconButton(
+          tooltip: 'Type it on',
+          icon: const Icon(Icons.keyboard_double_arrow_right),
+          onPressed: enabled ? () => _addLive(w) : null,
+        ),
+      ],
+    ),
+  ];
+
+  void _addLive(GuideWords w) {
+    if (w.appendLive(_live.text, pause: _livePause)) _live.clear();
   }
 
   @override
@@ -415,6 +507,7 @@ class _WordsPhraseTabState extends State<WordsPhraseTab> {
           ),
           if (look.typing)
             _num(w, 'Typing speed', 2, 120, 1, (l) => l.typeSpeed, (l, v) => l.typeSpeed = v, unit: 'letters/s'),
+          if (look.typing) ..._typedOn(w, p, enabled, changed),
           const SizedBox(height: 4),
           Row(
             children: [

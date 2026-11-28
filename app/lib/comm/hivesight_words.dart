@@ -215,10 +215,29 @@ class WordsLook {
   }
 }
 
+/// More text typed on after a phrase: once it's all typed, a pause of
+/// [pause] seconds, then this carries on from where the typing stopped.
+class WordsMore {
+  String text;
+  double pause;
+  bool newline;
+  WordsMore(this.text, {this.pause = 2, this.newline = true});
+
+  Map<String, Object?> toJson() => {'text': text, 'pause': pause, 'newline': newline};
+  factory WordsMore.fromJson(Map<String, dynamic> j) => WordsMore(
+    j['text'] as String? ?? '',
+    pause: (j['pause'] as num?)?.toDouble() ?? 2,
+    newline: j['newline'] != false,
+  );
+}
+
 /// A phrase, its look, and where and for how long it shows.
 class WordsPhrase {
   String text;
   WordsLook look;
+
+  /// What's typed on after it, each part after its pause (the typing look).
+  List<WordsMore> then = [];
 
   /// Which layer: [replaceAll] the only one (the usual), [addLayer] the next
   /// free one, or 0..7 that one (replacing what's on it).
@@ -230,13 +249,19 @@ class WordsPhrase {
 
   WordsPhrase(this.text, {WordsLook? look, this.layer = replaceAll, this.hold = -1}) : look = look ?? WordsLook();
 
-  Map<String, Object?> toJson() => {'text': text, 'look': look.toJson(), 'layer': layer, 'hold': hold};
+  Map<String, Object?> toJson() => {
+    'text': text,
+    'look': look.toJson(),
+    'layer': layer,
+    'hold': hold,
+    if (then.isNotEmpty) 'then': [for (final m in then) m.toJson()],
+  };
   factory WordsPhrase.fromJson(Map<String, dynamic> j) => WordsPhrase(
     j['text'] as String? ?? '',
     look: WordsLook.fromJson(j['look'] as Map<String, dynamic>? ?? const {}),
     layer: j['layer'] as int? ?? replaceAll,
     hold: j['hold'] as int? ?? -1,
-  );
+  )..then = [for (final m in j['then'] as List<dynamic>? ?? const []) WordsMore.fromJson(m as Map<String, dynamic>)];
 }
 
 class WordsList {
@@ -316,6 +341,7 @@ class GuideWords extends ChangeNotifier {
         draft.look = p.look;
         draft.layer = p.layer;
         draft.hold = p.hold;
+        draft.then = p.then;
       }
     } catch (_) {}
     if (lists.isEmpty) lists = [WordsList('Words')];
@@ -387,9 +413,10 @@ class GuideWords extends ChangeNotifier {
         look: draft.look.copy(),
         layer: draft.layer,
         hold: draft.hold,
-      ),
+      )..then = [for (final m in draft.then) WordsMore(m.text, pause: m.pause, newline: m.newline)],
     );
     draft.text = '';
+    draft.then = [];
     selected = l.phrases.length - 1;
     _changed();
   }
@@ -503,19 +530,18 @@ class GuideWords extends ChangeNotifier {
     final slot = _Slot(p);
     _slots[layer] = slot;
     _command('words', {'layer': layer, 'text': _text(p), ...p.look.toJson()});
-    final seconds = wordsHolds[p.hold >= 0 ? p.hold : hold];
-    if (seconds > 0) {
-      slot.timer = Timer(Duration(seconds: seconds), () {
-        if (!identical(_slots[layer], slot)) return;
-        _slots[layer] = null;
-        if (_linked())
-          _command('words_clear', {
-            'layers': [layer],
-            'fade': p.look.fade,
-          });
-        notifyListeners();
-      });
+    // What's typed on after it, each after its pause: the Vessel keeps the time
+    var extra = 0.0;
+    if (p.look.typing) {
+      for (final m in p.then) {
+        final t = m.text.trim().isEmpty ? '' : m.text;
+        if (t.isEmpty) continue;
+        _command('words_append', {'layer': layer, 'text': t, 'pause': m.pause, 'newline': m.newline});
+        extra += m.pause + t.length / p.look.typeSpeed;
+      }
     }
+    final seconds = wordsHolds[p.hold >= 0 ? p.hold : hold] + (wordsHolds[p.hold >= 0 ? p.hold : hold] > 0 ? extra.ceil() : 0);
+    if (seconds > 0) _arm(layer, slot, seconds);
     if (index != null) {
       current = index;
       _advance?.cancel();
@@ -526,6 +552,41 @@ class GuideWords extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  /// Takes [slot] off its layer after [seconds].
+  void _arm(int layer, _Slot slot, int seconds) {
+    slot.timer?.cancel();
+    slot.timer = Timer(Duration(seconds: seconds), () {
+      if (!identical(_slots[layer], slot)) return;
+      _slots[layer] = null;
+      if (_linked()) {
+        _command('words_clear', {
+          'layers': [layer],
+          'fade': slot.phrase.look.fade,
+        });
+      }
+      notifyListeners();
+    });
+  }
+
+  /// More text for the end of what's showing (the edited phrase's layer if it's on screen, else the
+  /// first that is), typed on after [pause] seconds once what's there is all typed. What it was
+  /// doing stays up that much longer.
+  bool appendLive(String text, {double pause = 2, bool newline = true}) {
+    if (text.trim().isEmpty || !_linked()) return false;
+    var layer = _slots.indexWhere((s) => s != null && identical(s.phrase, edited));
+    if (layer < 0) layer = _slots.indexWhere((s) => s != null);
+    if (layer < 0) return false;
+    _command('words_append', {'layer': layer, 'text': text, 'pause': pause, 'newline': newline});
+    final slot = _slots[layer]!;
+    if (slot.timer != null) {
+      // It stays as long as it was meant to, from when the new part has been typed
+      final p = slot.phrase;
+      final base = wordsHolds[p.hold >= 0 ? p.hold : hold];
+      _arm(layer, slot, base + (pause + text.length / p.look.typeSpeed).ceil() + 2);
+    }
+    return true;
   }
 
   void cue(int i) {
