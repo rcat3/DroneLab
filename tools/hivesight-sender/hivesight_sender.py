@@ -61,6 +61,7 @@ from aiohttp import WSMsgType, web  # noqa: E402
 
 import media  # noqa: E402
 import studio  # noqa: E402
+import voice_input  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 log = logging.getLogger("hivesight")
@@ -91,6 +92,9 @@ DEFAULT_STATE = {
         "robot_hz": 200.0, "robot_noise": 0.1, "highpass_hz": 90, "lowpass_hz": 16000,
         "echo_ms": 1, "echo_feedback": 0.0, "echo_mix": 0.0,
         "reverb_room": 0.2, "reverb_damp": 0.5, "reverb_mix": 0.0,
+        # The display unit's simpler effects, for its presets ("... (unit)")
+        "crowd": False, "drive_db": 0.0, "ring_hz": 30.0, "ring_mix": 0.0, "crush_bits": 0.0,
+        "chorus_rate": 0.5, "chorus_depth_ms": 2.0, "chorus_mix": 0.0, "out_gain_db": 0.0,
     },
     "mix": {
         "master": 1.0, "voice_vol": 0.9, "voice_pan": 0.0, "autopan_hz": 0.0,
@@ -133,6 +137,8 @@ DEFAULT_STATE = {
 }
 
 # Settings saved with a scene (calibration and encoder settings are not).
+# The Guide's own microphone settings, which a voice preset leaves as they are
+VOICE_MIC_KEYS = {"preset", "mute", "gain_db", "denoise", "gate_db", "comp_ratio"}
 SCENE_SECTIONS = ("voice", "mix", "beats", "fx", "spiral", "photic")
 
 
@@ -363,6 +369,7 @@ class Sender:
         # library there's no voice, and the Guide page is told why
         self.voice_problem = ""
         self.studio: studio.Studio | None = None
+        self.unit_voice = voice_input.UnitVoice()
         if not args.no_audio:
             try:
                 path = studio.find_library(args.fx_lib)
@@ -637,6 +644,10 @@ class Sender:
         if self.args.test_tone:
             src = ("audiotestsrc is-live=true wave=sine freq=300 volume=0.012 "
                    "samplesperbuffer=240")
+        elif self.args.mic == voice_input.UNIT_SOURCE:
+            # The display unit's voice comes from the Guide page (voice_input.py):
+            # a silent live source is the clock it's taken at
+            src = "audiotestsrc is-live=true wave=silence samplesperbuffer=240"
         else:
             src = f"pulsesrc {mic}buffer-time=20000 latency-time=5000 do-timestamp=true"
         chain = [
@@ -687,6 +698,8 @@ class Sender:
         if not ok:
             return Gst.FlowReturn.OK
         x = np.frombuffer(info.data, dtype=np.float32)
+        if self.args.mic == voice_input.UNIT_SOURCE and not self.args.test_tone:
+            x = self.unit_voice.take(len(x))
         y = self.studio.process(x)
         buf.unmap(info)
         out = Gst.Buffer.new_wrapped(y.tobytes())
@@ -704,6 +717,11 @@ class Sender:
         p = self.presets.get(name)
         if not p:
             return False
+        # The effects a preset doesn't mention go back to none, so one preset's
+        # ring or chorus doesn't stay on in the next; the mic's own settings stay
+        for k, val in DEFAULT_STATE["voice"].items():
+            if k not in VOICE_MIC_KEYS:
+                self.state["voice"][k] = val
         for k, val in p.items():
             if k in self.state["voice"]:
                 self.state["voice"][k] = val
@@ -793,7 +811,9 @@ class Sender:
         mic, out, gate = self.studio.meter()
         if not (self.audio and self.audio.enabled):
             mic = out = -100.0
-        return {"mic_db": round(mic, 1), "out_db": round(out, 1), "gate_open": gate, "voice_problem": ""}
+        return {"mic_db": round(mic, 1), "out_db": round(out, 1), "gate_open": gate, "voice_problem": "",
+                **({"unit_voice": self.unit_voice.status()}
+                   if self.args.mic == voice_input.UNIT_SOURCE else {})}
 
     def summary(self):
         return {
@@ -1027,6 +1047,9 @@ class Sender:
                         log.exception("error handling %s", m.data[:200])
                 elif m.type == WSMsgType.BINARY and info.get("role") == "vessel":
                     self._relay_preview(m.data)
+                elif m.type == WSMsgType.BINARY and info.get("role") == "guide" and m.data[:1] == \
+                        bytes([voice_input.MSG_UNIT_VOICE]):
+                    self.unit_voice.add(m.data[1:])
                 elif m.type == WSMsgType.ERROR:
                     break
         finally:
@@ -1252,7 +1275,9 @@ def main():
     ap.add_argument("--test-pattern", action="store_true", help="synthetic SBS source instead of a camera")
     ap.add_argument("--encoder", choices=["auto"] + ENCODER_ORDER, default="auto")
     ap.add_argument("--bitrate", type=int, default=8000, help="video kbit/s")
-    ap.add_argument("--mic", default=None, help="PulseAudio/PipeWire source name (default source if omitted)")
+    ap.add_argument("--mic", default=None,
+                    help="PulseAudio/PipeWire source name (default source if omitted), or @unit for the display "
+                         "unit's microphone, sent by the Guide page")
     ap.add_argument("--no-audio", action="store_true")
     ap.add_argument("--fx-lib", default=None,
                     help="libdronelab_fx with the voice effects (default: the app bundle's lib/, then build/)")

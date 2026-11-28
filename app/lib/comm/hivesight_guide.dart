@@ -15,6 +15,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -154,6 +155,10 @@ class HiveSightGuide extends ChangeNotifier {
 
   /// Only on Linux for now: the sender's GStreamer pipelines are Linux's.
   static bool get supported => Platform.isLinux && script != null;
+
+  /// The microphone choice that means the display unit's (the sender's
+  /// voice_input.UNIT_SOURCE).
+  static const unitSource = '@unit';
 
   /// The voice effects for the sender: the app's own libdronelab_fx.
   static String? get fxLibrary {
@@ -355,6 +360,8 @@ print(" ".join(missing))
             state = SenderState.running;
             notifyListeners();
             _connect();
+            _unitTimer?.cancel();
+            _unitTimer = Timer.periodic(const Duration(seconds: 1), (_) => _reconcileUnit());
           } catch (_) {}
         } else {
           _say(line);
@@ -396,6 +403,9 @@ print(" ".join(missing))
       return;
     }
     _stopping = true;
+    _unitTimer?.cancel();
+    _unitTimer = null;
+    await comm.stopUnitVoice();
     if (!keepSession) await endSession();
     _closeLink();
     await p.stdin.close(); // the sender stops when its stdin closes
@@ -450,6 +460,49 @@ print(" ".join(missing))
   }
 
   void _send(Map<String, Object?> m) => _ws?.add(jsonEncode(m));
+
+  // ----- The display unit's microphone as the voice -----
+
+  /// The Guide's voice is the display unit's microphone (Sender panel).
+  bool get usesUnit => options.audio && options.mic == unitSource;
+
+  /// Why the unit's microphone isn't coming, while it's the voice, or null.
+  String? unitProblem;
+
+  /// From the sender: the unit's voice is arriving.
+  bool unitReceiving = false;
+
+  Timer? _unitTimer;
+  DateTime _unitAsked = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Wanted while it's the voice and a session is on (the sender only sends
+  /// the voice then): started, asked again if the unit isn't recording (it
+  /// reconnected), or stopped, HiveMind voice coming back.
+  Future<void> _reconcileUnit() async {
+    final want = usesUnit && state == SenderState.running && session != null;
+    if (!want) {
+      unitProblem = null;
+      if (comm.unitVoiceOn) await comm.stopUnitVoice();
+      return;
+    }
+    final before = unitProblem;
+    unitProblem = comm.unitVoiceProblem;
+    final streaming = comm.unitVoiceOn && (comm.board.status?.recording ?? false);
+    if (unitProblem == null && !streaming && DateTime.now().difference(_unitAsked) > const Duration(seconds: 3)) {
+      _unitAsked = DateTime.now();
+      unitProblem = await comm.startUnitVoice(_sendUnitPcm);
+    }
+    if (unitProblem != before) notifyListeners();
+  }
+
+  void _sendUnitPcm(Int16List pcm) {
+    final ws = _ws;
+    if (ws == null) return;
+    final out = Uint8List(1 + pcm.lengthInBytes);
+    out[0] = 0x01;      // the sender's MSG_UNIT_VOICE: 16-bit little-endian PCM, 48 kHz
+    out.setRange(1, out.length, pcm.buffer.asUint8List(pcm.offsetInBytes, pcm.lengthInBytes));
+    ws.add(out);
+  }
 
   // ----- What it says -----
 
@@ -522,6 +575,7 @@ print(" ".join(missing))
     outDb = (m['out_db'] as num?)?.toDouble() ?? -100;
     gateOpen = m['gate_open'] == true;
     voiceProblem = m['voice_problem'] as String? ?? '';
+    unitReceiving = (m['unit_voice'] as Map<String, dynamic>?)?['receiving'] == true;
     final media = m['media'] as Map<String, dynamic>? ?? const {};
     mediaDir = media['dir'] as String? ?? '';
     mediaFiles = [for (final f in media['files'] as List<dynamic>? ?? const []) f as String];

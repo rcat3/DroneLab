@@ -927,6 +927,17 @@ class _VoicePanel extends StatelessWidget {
       _Slide(g, 'voice.reverb_room', 'Reverb room', 0, 1, 0.01, enabled: enabled),
       _Slide(g, 'voice.reverb_damp', 'Reverb damping', 0, 1, 0.01, enabled: enabled),
       _Slide(g, 'voice.reverb_mix', 'Reverb mix', 0, 1, 0.01, enabled: enabled),
+      // The display unit's simpler effects, for its presets ("… (unit)"): 0 leaves each out
+      _group('Character'),
+      _Toggle(g, 'voice.crowd', 'Crowd (three voices)', enabled: enabled),
+      _Slide(g, 'voice.drive_db', 'Drive', 0, 36, 0.5, unit: 'dB', enabled: enabled),
+      _Slide(g, 'voice.ring_hz', 'Ring rate', 1, 1000, 1, unit: 'Hz', enabled: enabled),
+      _Slide(g, 'voice.ring_mix', 'Ring mix', 0, 1, 0.01, enabled: enabled),
+      _Slide(g, 'voice.crush_bits', 'Bit crush', 0, 16, 1, unit: 'bits', enabled: enabled),
+      _Slide(g, 'voice.chorus_rate', 'Chorus rate', 0.05, 5, 0.05, unit: 'Hz', enabled: enabled),
+      _Slide(g, 'voice.chorus_depth_ms', 'Chorus depth', 0, 10, 0.1, unit: 'ms', enabled: enabled),
+      _Slide(g, 'voice.chorus_mix', 'Chorus mix', 0, 1, 0.01, enabled: enabled),
+      _Slide(g, 'voice.out_gain_db', 'Output gain', -12, 12, 0.5, unit: 'dB', enabled: enabled),
     ]);
   }
 }
@@ -1368,9 +1379,10 @@ class _SenderPanelState extends State<_SenderPanel> {
           'Microphone',
           DropdownButton<String>(
             isExpanded: true,
-            value: _mic.isEmpty || g.mics.any((m) => m.name == _mic) ? _mic : null,
+            value: _mic.isEmpty || _mic == HiveSightGuide.unitSource || g.mics.any((m) => m.name == _mic) ? _mic : null,
             items: [
               const DropdownMenuItem(value: '', child: Text('Default')),
+              const DropdownMenuItem(value: HiveSightGuide.unitSource, child: Text("Display unit's microphone")),
               for (final m in g.mics)
                 DropdownMenuItem(
                   value: m.name,
@@ -1378,6 +1390,20 @@ class _SenderPanelState extends State<_SenderPanel> {
                 ),
             ],
             onChanged: (m) => setState(() => _mic = m ?? ''),
+          ),
+        ),
+      if (_audio && _mic == HiveSightGuide.unitSource)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            g.usesUnit && g.unitProblem != null
+                ? g.unitProblem!
+                : g.usesUnit && g.unitReceiving
+                ? "Your voice is coming from the display unit, dry: the effects here make it. HiveMind voice is "
+                      'paused meanwhile.'
+                : "The display unit's microphone, dry: the effects here make the voice. It's used while a session "
+                      'is on, and HiveMind voice pauses meanwhile.',
+            style: TextStyle(fontSize: 13, color: g.usesUnit && g.unitProblem != null ? Kc.softRed : Kc.muted),
           ),
         ),
       row(
