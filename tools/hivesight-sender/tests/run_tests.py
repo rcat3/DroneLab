@@ -29,6 +29,7 @@ import gst_ref  # noqa: E402
 import voicefx as ref_voicefx  # noqa: E402
 
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE))
 import settings  # noqa: E402
 
 BUILD = HERE.parent / "build"
@@ -568,6 +569,9 @@ def main():
     test_switching(x)
     test_set_many()
     test_preset_values()
+    if "--no-switcher" not in sys.argv:
+        import switcher_test
+        switcher_test.run(check)
     failed = [r for r in RESULTS if not r[1]]
     print(f"\n{len(RESULTS) - len(failed)} passed, {len(failed)} failed")
     return 1 if failed else 0

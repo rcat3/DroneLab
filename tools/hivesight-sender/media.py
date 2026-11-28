@@ -60,6 +60,16 @@ def list_media(folder: Path) -> list[str]:
         key=str.lower)
 
 
+def list_images(folder: Path) -> list[str]:
+    import stills
+    if not folder.is_dir():
+        return []
+    return sorted(
+        (str(p.relative_to(folder)) for p in folder.rglob("*")
+         if p.is_file() and p.suffix.lower() in stills.IMAGE_EXTS and not p.name.startswith(".")),
+        key=str.lower)
+
+
 def resolve(folder: Path, name: str) -> Path | None:
     """Resolve a console-supplied name, refusing anything outside the media folder."""
     try:

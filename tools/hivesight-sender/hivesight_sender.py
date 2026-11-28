@@ -59,7 +59,10 @@ from gi.repository import GLib, Gst  # noqa: E402
 import numpy as np  # noqa: E402
 from aiohttp import WSMsgType, web  # noqa: E402
 
+import audiomix  # noqa: E402
 import media  # noqa: E402
+import music  # noqa: E402
+import switcher  # noqa: E402
 import studio  # noqa: E402
 import voice_input  # noqa: E402
 from settings import preset_values, resolved_presets, set_many, set_path  # noqa: E402
@@ -101,7 +104,11 @@ DEFAULT_STATE = {
         "master": 1.0, "voice_vol": 0.9, "voice_pan": 0.0, "autopan_hz": 0.0,
         "beats_vol": 0.25, "noise_vol": 0.0, "media_vol": 1.0, "jitter_ms": 40,
     },
-    "beats": {"on": False, "carrier_hz": 200.0, "beat_hz": 6.0, "glide_s": 4.0},
+    # source: tone (two sine waves), or pink or white noise with the same beat (the
+    # right ear's noise is the left's moved up by the beat, so there is a true binaural
+    # beat in it), kept to noise_bw Hz wide around the carrier
+    "beats": {"on": False, "carrier_hz": 200.0, "beat_hz": 6.0, "glide_s": 4.0,
+              "source": "tone", "noise_bw": 1500.0},
     "fx": {
         "fade": 1.0, "fade_s": 1.5, "screen": 0.0, "delay_ms": 0, "swap": False, "mirror": False,
         "rotate180": False, "mono": False, "brightness": 0.0, "contrast": 1.0,
@@ -131,8 +138,17 @@ DEFAULT_STATE = {
     # Video source: the live camera (or test pattern) or a file from --media-dir.
     # av_offset_ms > 0 delays the file's video to line up with the phone's
     # later-arriving audio (jitter buffer + Bluetooth); < 0 delays the audio.
+    # at_end: loop, camera, hold, or next (the next one queued)
     "media": {"source": "camera", "file": "", "paused": False, "at_end": "loop",
               "av_offset_ms": 150},
+    # How the picture changes over: fade (out to black, then in), dissolve, or cut
+    "switch": {"effect": "fade", "secs": 1.5},
+    "color": {"rgb": 0x202020},
+    # A still picture's place in each eye: zoom 1 shows all of it; x, y -1..1
+    "image": {"zoom": 1.0, "x": 0.0, "y": 0.0},
+    # The music: volume, how long one track crossfades into the next, and what's
+    # done when the queue is empty: stop or loop
+    "music": {"vol": 0.8, "xfade_s": 4.0, "at_end": "stop"},
     "video": {"bitrate_kbps": 8000},
     "stream": {},
 }
@@ -343,12 +359,16 @@ class Sender:
         for host in args.also_send:
             self.destinations.add((host, VIDEO_PORT, AUDIO_PORT, MEDIA_PORT))
         self.media_dir = Path(args.media_dir).expanduser()
+        self.music_dir = Path(args.music_dir).expanduser()
         self.media_info: media.MediaInfo | None = None
         self._media_list: list[str] = []
+        self._image_list: list[str] = []
         self._media_list_t = 0.0
+        self._music_list: list[str] = []
+        self._music_list_t = 0.0
+        self.queue: list[dict] = []     # what's to go on next: {"kind": "file", "file": ...} ...
         self.last_keyframe = 0.0
         self.video_packets = 0
-        self.media_generation = 0
         # The Guide's voice effects (libdronelab_fx's studio chain); without the
         # library there's no voice, and the Guide page is told why
         self.voice_problem = ""
@@ -365,174 +385,192 @@ class Sender:
 
         self.encoder = pick_encoder(args.encoder)
         log.info("video encoder: %s", self.encoder)
-        self._set_camera_stream_state()
         self.state["video"]["bitrate_kbps"] = args.bitrate
         self.apply_preset_values(self.state["voice"]["preset"])
 
+        # The picture: a permanent program stream, and the switcher that feeds it
+        self.mixer = audiomix.MediaMixer()
+        self.switcher = switcher.Switcher(self.mixer, self._switch_changed, self._notify_sync)
+        self.music = music.MusicPlayer(self.mixer, self.music_dir, lambda: self.state["music"], self._notify_sync)
+        self._set_stream_state(None)
         self.video = GstPipeline("video", self.video_desc, on_built=self._attach_video_clients,
-                                 on_eos=lambda: GLib.idle_add(self._on_file_eos),
                                  on_error=self._on_video_error)
-        if args.file:
-            self._select_file_sync(args.file)
+        self.media_pipe = GstPipeline("media", self.media_desc, on_built=self._attach_media_clients)
         self.audio = GstPipeline("audio", self.audio_desc, on_built=self._attach_audio_clients) \
             if self.studio else None
         self.apply_voice()
         # The camera and mic run only while there's a session (or --also-send)
-        for p in (self.video, self.audio):
+        for p in (self.video, self.audio, self.media_pipe):
             if p:
                 p.enabled = False
 
     # ---------------- pipelines ----------------
     def video_desc(self):
-        if self.state["media"]["source"] == "file" and self.media_info:
-            return self.file_desc(self.media_info)
-        a = self.args
-        w, h, fps = a.width, a.height, a.fps
-        gop = fps * 2
-        if a.test_pattern:
-            # Two moving-ball sources composited side by side, labelled per eye.
-            hw = w // 2
-            src_head = (f"compositor name=comp background=black sink_1::xpos={hw} ! "
-                        f"video/x-raw,width={w},height={h},framerate={fps}/1 ! videoconvert ! ")
-            extra = "".join(
-                f" videotestsrc is-live=true pattern=ball ! "
-                f"video/x-raw,width={hw},height={h},framerate={fps}/1 ! "
-                f"textoverlay text={label} font-desc=\"Sans 36\" valignment=top ! "
-                f"timeoverlay font-desc=\"Sans 28\" ! comp.sink_{i}"
-                for i, label in enumerate(("LEFT", "RIGHT")))
-        else:
-            if a.format == "mjpeg":
-                caps = f"image/jpeg,width={w},height={h},framerate={fps}/1"
-                dec = "jpegdec ! "
-            else:
-                caps = f"video/x-raw,format=YUY2,width={w},height={h},framerate={fps}/1"
-                dec = ""
-            src_head = (f"v4l2src device={a.device} do-timestamp=true ! {caps} ! {dec}"
-                        "videoconvert ! ")
-            extra = ""
+        """The program: black and two decks mixed, encoded and sent
+        (switcher.py). The encoder never restarts when a source changes."""
         vbr = self.state["video"]["bitrate_kbps"]
-        # Force 4:2:0 into the encoder. Without this, sources like the compositor
-        # negotiate Y444 and NVENC emits "High 4:4:4", which phone hardware
-        # decoders reject outright.
+        # Force 4:2:0 into the encoder: phone hardware decoders reject High 4:4:4
         yuv = "I420" if self.encoder == "openh264" else "NV12"
-        return (
-            f"{src_head}video/x-raw,format={yuv} ! queue max-size-buffers=1 leaky=downstream ! "
-            f"{encoder_desc(self.encoder, vbr, gop)} ! "
-            "h264parse config-interval=-1 ! "
-            "rtph264pay name=pay pt=96 mtu=1200 config-interval=-1 aggregate-mode=zero-latency ! "
-            f"multiudpsink name=sink sync=false async=false qos-dscp={VIDEO_DSCP} buffer-size=4194304"
-            f"{extra}"
-        )
+        chain = (f"videoconvert ! video/x-raw,format={yuv} ! queue max-size-buffers=1 leaky=downstream ! "
+                 f"{encoder_desc(self.encoder, vbr, switcher.FPS * 2)} ! "
+                 "h264parse config-interval=-1 ! "
+                 "rtph264pay name=pay pt=96 mtu=1200 config-interval=-1 aggregate-mode=zero-latency ! "
+                 f"multiudpsink name=sink sync=false async=false qos-dscp={VIDEO_DSCP} buffer-size=4194304")
+        return switcher.program_desc(chain, VIDEO_DSCP)
 
-    def _av_offsets_ns(self):
-        off = int(self.state["media"]["av_offset_ms"] * Gst.MSECOND)
-        return (off, 0) if off >= 0 else (0, -off)  # (video sink, media-audio sink)
-
-    def file_desc(self, mi: "media.MediaInfo"):
-        """Play a file in real time: decode, re-encode for the phone, and send its
-        soundtrack on the media port. Sinks sync to the clock (that is what paces
-        playback) and the queues block rather than drop. Unlike the live camera
-        path, the sinks preroll (async=true): flushing seeks (and looping) then
-        get a fresh base time; without that, playback runs flat out after a seek."""
-        w, h = mi.encode_size
-        fps = mi.nominal_fps
-        vbr = self.state["video"]["bitrate_kbps"]
-        yuv = "I420" if self.encoder == "openh264" else "NV12"
-        v_off, a_off = self._av_offsets_ns()
-        big_q = "queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0"
-        desc = (
-            f'uridecodebin uri="{mi.path.resolve().as_uri()}" name=dec '
-            f"dec. ! video/x-raw ! {big_q} ! videoconvert ! videoscale ! "
-            f"video/x-raw,width={w},height={h},pixel-aspect-ratio=1/1 ! videoconvert ! "
-            f"video/x-raw,format={yuv} ! queue max-size-buffers=3 ! "
-            f"{encoder_desc(self.encoder, vbr, fps * 2)} ! h264parse config-interval=-1 ! "
-            "rtph264pay name=pay pt=96 mtu=1200 config-interval=-1 aggregate-mode=zero-latency ! "
-            f"multiudpsink name=sink sync=true ts-offset={v_off} "
-            f"qos-dscp={VIDEO_DSCP} buffer-size=4194304"
-        )
-        if mi.has_audio:
-            desc += (
-                f" dec. ! audio/x-raw ! {big_q} ! audioconvert ! audioresample ! "
+    def media_desc(self):
+        """What the media mixer makes (films' sound, music) as RTP L16 on the media port."""
+        return ("appsrc name=out is-live=true format=time do-timestamp=true block=false "
+                "caps=audio/x-raw,format=F32LE,rate=48000,channels=2,layout=interleaved ! queue ! audioconvert ! "
                 "audio/x-raw,format=S16BE,rate=48000,channels=2 ! "
                 "rtpL16pay name=mpay pt=98 max-ptime=10000000 min-ptime=10000000 ! "
-                f"multiudpsink name=msink sync=true ts-offset={a_off} "
-                f"qos-dscp={AUDIO_DSCP}"
-            )
-        return desc
+                f"multiudpsink name=sink sync=false async=false qos-dscp={AUDIO_DSCP}")
 
-    # ---------------- media source control ----------------
-    def _set_camera_stream_state(self):
-        a = self.args
-        self.state["stream"] = {
-            "layout": "sbs" if a.test_pattern else a.layout,
-            "width": a.width, "height": a.height, "fps": a.fps,
-            "encoder": self.encoder, "source": "test pattern" if a.test_pattern else a.device,
-        }
+    # ---------------- the switcher's sources ----------------
+    def _glib(self, fn, *a):
+        GLib.idle_add(lambda: (fn(*a), False)[1])
 
-    def _set_file_stream_state(self, mi: "media.MediaInfo", name: str):
-        w, h = mi.encode_size
-        self.state["stream"] = {
-            "layout": media.guess_layout(name, mi.width, mi.height),
-            "width": w, "height": h, "fps": mi.nominal_fps,
-            "encoder": self.encoder, "source": f"file: {name}",
-        }
+    def _notify_sync(self, text):
+        if self.loop:
+            asyncio.run_coroutine_threadsafe(self.notify(text), self.loop)
+
+    def _source_error(self, src, message):
+        self._notify_sync(f"{src.name}: {message}")
+
+    def _set_stream_state(self, src):
+        """What the Vessels are told about the stream: always the program,
+        both eyes side by side."""
+        what = "test pattern" if src is None and self.args.test_pattern else \
+            "camera" if src is None else (src.name if src.kind == "camera" else f"{src.kind}: {src.name}")
+        self.state["stream"] = {"layout": "sbs", "width": switcher.W, "height": switcher.H, "fps": switcher.FPS,
+                                "encoder": self.encoder, "source": what}
+
+    def _switch_changed(self):
+        """GLib thread: what's on air, or a change over, moved."""
+        sw = self.switcher
+        t = sw.trans
+        src = t["src"] if t is not None and t["phase"] == "ramp" else sw.on_air
+        if src is not None:
+            m = self.state["media"]
+            if (m["source"], m["file"]) != (src.kind, src.name if src.kind in ("file", "image") else ""):
+                m.update(source=src.kind, file=src.name if src.kind in ("file", "image") else "", paused=False)
+            self.media_info = getattr(src, "info", None)
+            self._set_stream_state(src)
+        if self.loop:
+            asyncio.run_coroutine_threadsafe(self.broadcast({"type": "state", "state": self.state}), self.loop)
+
+    def _fx(self):
+        return self.state["switch"]["effect"], self.state["switch"]["secs"]
+
+    def _list_media(self):
+        if time.monotonic() - self._media_list_t > 5:
+            self._media_list, self._image_list = media.list_media(self.media_dir), media.list_images(self.media_dir)
+            self._media_list_t = time.monotonic()
 
     def media_files(self):
-        if time.monotonic() - self._media_list_t > 5:
-            self._media_list = media.list_media(self.media_dir)
-            self._media_list_t = time.monotonic()
+        self._list_media()
         return self._media_list
 
-    def _select_file_sync(self, name_or_path: str):
-        p = Path(name_or_path).expanduser()
-        if p.is_absolute() or p.exists():
-            p = p.resolve()
-            if not self.args.media_dir_given:
-                self.media_dir = p.parent
-            name = str(p.relative_to(self.media_dir)) if p.is_relative_to(self.media_dir) else p.name
-        else:
-            name = name_or_path
-            p = media.resolve(self.media_dir, name)
-            if p is None:
-                raise FileNotFoundError(name_or_path)
-        mi = media.probe(p)
-        self.media_info = mi
-        self.state["media"].update(source="file", file=name, paused=False)
-        self._set_file_stream_state(mi, name)
-        log.info("playing %s (%dx%d @ %.2f fps, %s, audio: %s, layout guess: %s)",
-                 name, mi.width, mi.height, mi.fps, media.fmt_time(mi.duration_s),
-                 "yes" if mi.has_audio else "no", self.state["stream"]["layout"])
+    def image_files(self):
+        self._list_media()
+        return self._image_list
 
-    async def play_file(self, name: str):
+    def music_files(self):
+        if time.monotonic() - self._music_list_t > 30:
+            self._music_list = music.list_audio(self.music_dir)
+            self._music_list_t = time.monotonic()
+        return self._music_list
+
+    def _camera_source(self):
+        return switcher.CameraSource(self.args, self._source_error)
+
+    async def take_camera(self, effect=None):
+        eff, secs = self._fx()
+        src = self._camera_source()
+        self._glib(self.switcher.take, src, effect or eff, secs)
+
+    async def take_file(self, name: str, trusted: bool = False):
+        # A path on the command line (--file) may be anywhere; the Guide's names are in the media folder
+        p = Path(name).expanduser() if trusted and Path(name).expanduser().is_file() else media.resolve(self.media_dir, name)
+        if p is None:
+            await self.notify(f"not found in media folder: {name}")
+            return
+        try:
+            mi = await asyncio.get_running_loop().run_in_executor(None, media.probe, p)
+        except Exception as e:  # unreadable / no video stream
+            log.warning("can't play %s: %s", name, e)
+            await self.notify(f"can't play {name}: {e}")
+            return
+        layout = media.guess_layout(name, mi.width, mi.height)
+        log.info("playing %s (%dx%d @ %.2f fps, %s, audio: %s, layout guess: %s)", name, mi.width, mi.height,
+                 mi.fps, media.fmt_time(mi.duration_s), "yes" if mi.has_audio else "no", layout)
+        eff, secs = self._fx()
+        src = switcher.FileSource(name, mi, layout, self.state["media"]["av_offset_ms"], self._on_file_eos,
+                                  self._source_error, autoplug=_autoplug_select)
+        self._glib(self.switcher.take, src, eff, secs)
+
+    async def take_color(self, rgb=None):
+        eff, secs = self._fx()
+        if rgb is not None:
+            self.state["color"]["rgb"] = int(rgb) & 0xFFFFFF
+        src = switcher.ColorSource(self.state["color"]["rgb"], self._source_error)
+        self._glib(self.switcher.take, src, eff, secs)
+
+    async def take_image(self, name: str):
         p = media.resolve(self.media_dir, name)
         if p is None:
             await self.notify(f"not found in media folder: {name}")
             return
         try:
-            await asyncio.get_running_loop().run_in_executor(None, self._select_file_sync, name)
-        except Exception as e:  # unreadable / no video stream
-            log.warning("can't play %s: %s", name, e)
-            await self.notify(f"can't play {name}: {e}")
+            im = self.state["image"]
+            src = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: switcher.ImageSource(name, p, "mono", im["zoom"], im["x"], im["y"]))
+            src.layout = media.guess_layout(name, src.im.width, src.im.height)
+            src._render()
+        except Exception as e:
+            await self.notify(f"can't show {name}: {e}")
             return
-        GLib.idle_add(lambda: (self.video.start(), False)[1])
-        GLib.timeout_add(400, lambda: (self.force_keyframe(), False)[1])
-        self.media_generation += 1
-        asyncio.create_task(self._file_watchdog(name, self.media_generation))
-        await self.broadcast({"type": "state", "state": self.state})
+        eff, secs = self._fx()
+        self._glib(self.switcher.take, src, eff, secs)
 
-    async def use_camera(self):
-        self.media_generation += 1
-        self.media_info = None
-        self.state["media"].update(source="camera", file="", paused=False)
-        self._set_camera_stream_state()
-        GLib.idle_add(lambda: (self.video.start(), False)[1])
-        GLib.timeout_add(400, lambda: (self.force_keyframe(), False)[1])
-        await self.broadcast({"type": "state", "state": self.state})
+    async def take_spec(self, spec):
+        kind = spec.get("kind") if isinstance(spec, dict) else None
+        if kind == "camera":
+            await self.take_camera()
+        elif kind == "file" and spec.get("file"):
+            await self.take_file(str(spec["file"]))
+        elif kind == "image" and spec.get("file"):
+            await self.take_image(str(spec["file"]))
+        elif kind == "color":
+            await self.take_color(spec.get("rgb"))
+
+    async def take_next(self):
+        if not self.queue:
+            await self.notify("Nothing queued")
+            return
+        await self.take_spec(self.queue.pop(0))
+        await self.broadcast(self.summary(), roles={"guide"})
+
+    def _clean_spec(self, spec):
+        """A queue item from the Guide, kept to what it's allowed to say."""
+        if not isinstance(spec, dict):
+            return None
+        kind = spec.get("kind")
+        if kind in ("file", "image") and isinstance(spec.get("file"), str):
+            return {"kind": kind, "file": spec["file"][:300]}
+        if kind == "color":
+            try:
+                return {"kind": "color", "rgb": int(spec.get("rgb", 0)) & 0xFFFFFF}
+            except (TypeError, ValueError):
+                return None
+        if kind == "camera":
+            return {"kind": "camera"}
+        return None
 
     async def set_capture(self, msg):
         """A new camera, mode, microphone or media folder, without stopping:
-        the video is rebuilt if the camera is on, and the voice if the
-        microphone changed. Vessels stay connected."""
+        the camera is rebuilt if it's on, and the voice if the microphone
+        changed. Vessels stay connected."""
         a = self.args
         old_mic = a.mic
         try:
@@ -549,54 +587,58 @@ class Sender:
                 a.media_dir_given = bool(msg["media_dir"])
                 self.media_dir = Path(msg["media_dir"] or "~/Videos").expanduser()
                 self._media_list_t = 0.0
+            if "music_dir" in msg:
+                self.music_dir = Path(msg["music_dir"] or "~/Music").expanduser()
+                self.music.folder = self.music_dir
+                self._music_list_t = 0.0
         except (TypeError, ValueError):
             await self.notify("bad camera settings")
             return
         log.info("capture: %s %s %dx%d@%d %s, mic %s", "test pattern" if a.test_pattern else a.device,
                  a.format, a.width, a.height, a.fps, a.layout, a.mic or "default")
-        if self.state["media"]["source"] == "camera":
-            await self.use_camera()
+        if self.state["media"]["source"] == "camera" and self.video.enabled:
+            await self.take_camera("cut")
         if self.audio and a.mic != old_mic:
             GLib.idle_add(lambda: (self.audio.start(), False)[1])
         await self.broadcast(self.summary(), roles={"guide"})
 
     def seek(self, seconds: float):
-        p = self.video.pipeline
-        if p is None or self.state["media"]["source"] != "file":
-            return
-        p.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE,
-                      int(max(0.0, seconds) * Gst.SECOND))
+        self.switcher.seek(seconds)
         GLib.timeout_add(150, lambda: (self.force_keyframe(), False)[1])
 
     def media_position(self):
-        p = self.video.pipeline
-        if p is None or self.state["media"]["source"] != "file":
-            return 0.0
-        ok, pos = p.query_position(Gst.Format.TIME)
-        return pos / Gst.SECOND if ok and pos >= 0 else 0.0
+        return self.switcher.position()
 
     def apply_media_settings(self):
         m = self.state["media"]
-        p = self.video.pipeline
-        if p is None or m["source"] != "file":
+        src = self.switcher.on_air
+        if src is None:
             return
-        p.set_state(Gst.State.PAUSED if m["paused"] else Gst.State.PLAYING)
+        if src.kind == "file":
+            src.set_paused(m["paused"])
+            src.apply_offsets(m["av_offset_ms"])
         if not m["paused"]:
             GLib.timeout_add(100, lambda: (self.force_keyframe(), False)[1])
-        v_off, a_off = self._av_offsets_ns()
-        if self.video.get("sink"):
-            self.video.get("sink").set_property("ts-offset", v_off)
-        if self.video.get("msink"):
-            self.video.get("msink").set_property("ts-offset", a_off)
 
-    def _on_file_eos(self):
-        if self.state["media"]["source"] != "file":
+    def apply_switch_settings(self, paths):
+        sw, st = self.switcher, self.state
+        sw.effect, sw.secs = st["switch"]["effect"], float(st["switch"]["secs"])
+        for src in [sw.on_air] + ([sw.trans["src"]] if sw.trans else []):
+            if isinstance(src, switcher.ColorSource) and any(p.startswith("color.") for p in paths):
+                src.set_color(st["color"]["rgb"])
+            if isinstance(src, switcher.ImageSource) and any(p.startswith("image.") for p in paths):
+                src.place(st["image"]["zoom"], st["image"]["x"], st["image"]["y"])
+
+    def _on_file_eos(self, src):
+        if src is not self.switcher.on_air:
             return False
         action = self.state["media"]["at_end"]
         if action == "loop":
-            self.seek(0.0)
+            src.seek(0.0)
         elif action == "camera" and self.loop:
-            asyncio.run_coroutine_threadsafe(self.use_camera(), self.loop)
+            asyncio.run_coroutine_threadsafe(self.take_camera(), self.loop)
+        elif action == "next" and self.queue and self.loop:
+            asyncio.run_coroutine_threadsafe(self.take_next(), self.loop)
         else:  # hold the last frame
             self.state["media"]["paused"] = True
             if self.loop:
@@ -652,18 +694,24 @@ class Sender:
         return " ! ".join(chain) + "  " + " ! ".join(chain_b)
 
     def _attach_video_clients(self, pipeline):
-        dec = pipeline.get_by_name("dec")
-        if dec is not None:
-            dec.connect("autoplug-select", _autoplug_select)
         pay = pipeline.get_by_name("pay")
         if pay is not None:
             pay.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, self._count_video)
         sink = pipeline.get_by_name("sink")
-        msink = pipeline.get_by_name("msink")
-        for host, vport, _, mport in self.destinations:
+        for host, vport, _, _ in self.destinations:
             sink.emit("add", host, vport)
-            if msink:
-                msink.emit("add", host, mport)
+        self.switcher.bind(pipeline)
+        if self.switcher.on_air is None and self.switcher.trans is None:
+            # Starting: the camera (or test pattern) is on, or the --file
+            self.switcher.take(self._camera_source(), "cut", 0.0)
+            if self.args.file and self.loop:
+                asyncio.run_coroutine_threadsafe(self.take_file(self.args.file, trusted=True), self.loop)
+
+    def _attach_media_clients(self, pipeline):
+        sink = pipeline.get_by_name("sink")
+        for host, _, _, mport in self.destinations:
+            sink.emit("add", host, mport)
+        self.mixer.bind(pipeline.get_by_name("out"))
 
     def _attach_audio_clients(self, pipeline):
         sink = pipeline.get_by_name("sink")
@@ -737,7 +785,7 @@ class Sender:
 
         def do():
             for pl, el, port in ((self.video, "sink", vport), (self.audio, "sink", aport),
-                                 (self.video, "msink", mport)):
+                                 (self.media_pipe, "sink", mport)):
                 if pl and pl.get(el):
                     pl.get(el).emit("add", host, port)
             return False
@@ -752,7 +800,7 @@ class Sender:
 
         def do():
             for pl, el, port in ((self.video, "sink", vport), (self.audio, "sink", aport),
-                                 (self.video, "msink", mport)):
+                                 (self.media_pipe, "sink", mport)):
                 if pl and pl.get(el):
                     pl.get(el).emit("remove", host, port)
             return False
@@ -761,16 +809,6 @@ class Sender:
     def _count_video(self, _pad, _info):
         self.video_packets += 1
         return Gst.PadProbeReturn.OK
-
-    async def _file_watchdog(self, name: str, generation: int):
-        """If a file produces no video within a few seconds, say so and fall back."""
-        start = self.video_packets
-        await asyncio.sleep(6)
-        if (self.media_generation == generation and self.state["media"]["source"] == "file"
-                and not self.state["media"]["paused"] and self.video_packets == start):
-            log.warning("no video from %s after 6 s; returning to the camera", name)
-            await self.notify(f"{name}: no picture after 6 s (unsupported format?) — back to camera")
-            await self.use_camera()
 
     # ---------------- control protocol ----------------
     async def broadcast(self, msg, roles=None, exclude=None):
@@ -812,7 +850,11 @@ class Sender:
                 "position": round(self.media_position(), 2),
                 "duration": round(self.media_info.duration_s, 2) if self.media_info else 0.0,
                 "has_audio": bool(self.media_info and self.media_info.has_audio),
+                "images": self.image_files(),
             },
+            "switch": {**self.switcher.status(), "queue": list(self.queue)},
+            "music": {**self.music.status(), "files": self.music_files(),
+                      "level_db": round(self.mixer.level_db, 1)},
         }
 
     def _side_effects(self, paths):
@@ -825,6 +867,8 @@ class Sender:
             GLib.idle_add(lambda: (self.apply_bitrate(), False)[1])
         if "media" in sections:
             GLib.idle_add(lambda: (self.apply_media_settings(), False)[1])
+        if sections & {"switch", "color", "image"}:
+            GLib.idle_add(lambda: (self.apply_switch_settings(list(paths)), False)[1])
 
     async def handle_set(self, path, value):
         try:
@@ -969,9 +1013,45 @@ class Sender:
                 if i.get("role") == "vessel" and i["id"] == msg.get("id"):
                     await w.close(code=4002, message=b"removed by the Guide")
         elif t == "media_play" and msg.get("file"):
-            await self.play_file(str(msg["file"]))
+            await self.take_file(str(msg["file"]))
         elif t == "media_camera":
-            await self.use_camera()
+            await self.take_camera()
+        elif t == "take":
+            await self.take_spec(self._clean_spec(msg.get("spec")))
+        elif t == "next":
+            await self.take_next()
+        elif t == "queue_add":
+            spec = self._clean_spec(msg.get("spec"))
+            if spec and len(self.queue) < 200:
+                self.queue.append(spec)
+        elif t == "queue_remove":
+            i = msg.get("index")
+            if isinstance(i, int) and 0 <= i < len(self.queue):
+                del self.queue[i]
+        elif t == "queue_move":
+            i, j = msg.get("from"), msg.get("to")
+            if isinstance(i, int) and isinstance(j, int) and 0 <= i < len(self.queue):
+                self.queue.insert(max(0, min(j, len(self.queue) - 1)), self.queue.pop(i))
+        elif t == "queue_clear":
+            self.queue.clear()
+        elif t == "music_play" and isinstance(msg.get("file"), str):
+            self._glib(self.music.play, msg["file"])
+        elif t == "music_add" and isinstance(msg.get("file"), str):
+            self._glib(self.music.enqueue, msg["file"])
+        elif t == "music_remove" and isinstance(msg.get("index"), int):
+            self._glib(self.music.remove, msg["index"])
+        elif t == "music_move" and isinstance(msg.get("from"), int) and isinstance(msg.get("to"), int):
+            self._glib(self.music.move, msg["from"], msg["to"])
+        elif t == "music_clear":
+            self._glib(self.music.clear)
+        elif t == "music_next":
+            self._glib(self.music.next)
+        elif t == "music_pause":
+            self._glib(self.music.pause, bool(msg.get("paused")))
+        elif t == "music_seek":
+            self._glib(self.music.seek, float(msg.get("pos", 0)))
+        elif t == "music_stop":
+            self._glib(self.music.stop)
         elif t == "capture":
             await self.set_capture(msg)
         elif t == "media_seek":
@@ -1005,7 +1085,15 @@ class Sender:
     def _set_live(self, on: bool):
         """Run the camera and mic, or let them go (their lights go out)."""
         on = on or bool(self.args.also_send)
-        for p in (self.video, self.audio):
+        if not on:
+            # Every source goes first (the camera's light goes out), then the pipelines
+            self.queue.clear()
+            self._glib(self.switcher.stop_all)
+            self._glib(self.music.shutdown)
+            self.mixer.stop()
+        else:
+            self.mixer.start()
+        for p in (self.video, self.audio, self.media_pipe):
             if p is None or p.enabled == on:
                 continue
             p.enabled = on
@@ -1299,6 +1387,8 @@ def main():
                     help="always stream to HOST too (e.g. 127.0.0.1 for tools/preview.sh)")
     ap.add_argument("--media-dir", default=None,
                     help="folder of video files offered on the Guide page's Source panel (default ~/Videos)")
+    ap.add_argument("--music-dir", default="~/Music",
+                    help="folder of music offered on the Guide page's Sound panel (default ~/Music)")
     ap.add_argument("--file", default=None, help="start by playing this video file instead of the camera")
     ap.add_argument("--scenes", default=str(HERE / "scenes.json"))
     ap.add_argument("--list-devices", action="store_true")
@@ -1334,7 +1424,11 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        sender.switcher.stop_all()
+        sender.music.shutdown()
+        sender.mixer.stop()
         sender.video.stop()
+        sender.media_pipe.stop()
         if sender.audio:
             sender.audio.stop()
         glib_loop.quit()
