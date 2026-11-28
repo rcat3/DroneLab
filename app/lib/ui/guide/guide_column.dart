@@ -33,6 +33,7 @@ List<String> resetPaths(ColumnSpec spec, HiveSightGuide g) {
       'switch.secs',
       'media.at_end',
       'media.av_offset_ms',
+      'media.layout',
       'mix.media_vol',
     ],
     (GuidePanel.sound, 'music') => ['music.vol', 'music.xfade_s', 'music.at_end'],

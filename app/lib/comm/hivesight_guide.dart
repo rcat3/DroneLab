@@ -565,6 +565,15 @@ print(" ".join(missing))
   bool transitioning = false;
   String transitionPhase = '';
 
+  /// The ways to change over, as the sender has them (so a new one it learns shows up here), and
+  /// where each film that went off air was left.
+  List<({String id, String label, bool instant})> effects = const [
+    (id: 'fade', label: 'Fade', instant: false),
+    (id: 'dissolve', label: 'Dissolve', instant: false),
+    (id: 'cut', label: 'Cut', instant: true),
+  ];
+  Map<String, double> resume = const {};
+
   /// The music: the folder and its files, the queue, what's playing, the level going out.
   String musicDir = '';
   List<String> musicFiles = const [];
@@ -657,6 +666,13 @@ print(" ".join(missing))
     queue = [for (final q in sw['queue'] as List<dynamic>? ?? const []) Map<String, dynamic>.from(q as Map)];
     final cueNow = sw['cue'];
     if (!_cueLocal) cueSpec = cueNow is Map ? Map<String, dynamic>.from(cueNow) : null;
+    effects = [
+      for (final e in sw['effects'] as List<dynamic>? ?? const [])
+        (id: (e as Map)['id'] as String, label: e['label'] as String, instant: e['instant'] == true),
+    ];
+    resume = {
+      for (final e in (sw['resume'] as Map<String, dynamic>? ?? const {}).entries) e.key: (e.value as num).toDouble(),
+    };
     final tr = sw['transition'] as Map<String, dynamic>?;
     transitioning = tr != null;
     transitionPhase = tr?['phase'] as String? ?? '';
@@ -905,6 +921,14 @@ print(" ".join(missing))
 
   void goCamera() => take(cameraSpec);
   void nextQueued() => command('next');
+
+  /// A film goes on from the start, not from where it was left.
+  void startOver(String file) {
+    resume = {...resume}..remove(file);
+    notifyListeners();
+    command('resume_clear', {'file': file});
+  }
+
   void queueAdd(Map<String, dynamic> spec) => command('queue_add', {'spec': spec});
   void queueRemove(int i) => command('queue_remove', {'index': i});
   void queueMove(int from, int to) => command('queue_move', {'from': from, 'to': to});

@@ -117,14 +117,10 @@ class _SourceTabState extends State<SourceTab> {
         Row(
           children: [
             DropdownButton<String>(
-              value: const ['fade', 'dissolve', 'cut'].contains(g.text('switch.effect'))
+              value: g.effects.any((e) => e.id == g.text('switch.effect'))
                   ? g.text('switch.effect')
-                  : 'fade',
-              items: const [
-                DropdownMenuItem(value: 'fade', child: Text('Fade')),
-                DropdownMenuItem(value: 'dissolve', child: Text('Dissolve')),
-                DropdownMenuItem(value: 'cut', child: Text('Cut')),
-              ],
+                  : g.effects.first.id,
+              items: [for (final e in g.effects) DropdownMenuItem(value: e.id, child: Text(e.label))],
               onChanged: en ? (v) => v == null ? null : g.set('switch.effect', v) : null,
             ),
             Expanded(
@@ -136,7 +132,7 @@ class _SourceTabState extends State<SourceTab> {
                 10,
                 0.1,
                 unit: 's',
-                enabled: en && g.text('switch.effect') != 'cut',
+                enabled: en && !(g.effects.where((e) => e.id == g.text('switch.effect')).firstOrNull?.instant ?? false),
                 labelWidth: 0,
               ),
             ),
@@ -269,15 +265,29 @@ class _SourceTabState extends State<SourceTab> {
   Widget _image(bool en) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      GChoice(g, 'image.layout', 'Shown as', const [
+        ('mono', 'Same in both eyes'),
+        ('sbs', 'Side by side'),
+        ('tb', 'Top / bottom'),
+        ('hsbs', 'Half side by side'),
+        ('htb', 'Half top / bottom'),
+      ], enabled: en),
+      GChoice(g, 'image.fit', 'Fitted', const [
+        ('fit', 'All of it'),
+        ('fill', 'Fill the eye'),
+        ('stretch', 'Stretch'),
+      ], enabled: en),
       GSlide(g, 'image.zoom', 'Zoom', 0.2, 8, 0.01, unit: '×', enabled: en),
       GSlide(g, 'image.x', 'Left / right', -1, 1, 0.01, enabled: en),
       GSlide(g, 'image.y', 'Up / down', -1, 1, 0.01, enabled: en),
       Align(
         alignment: Alignment.centerLeft,
         child: TextButton.icon(
-          onPressed: en ? () => g.setMany({'image.zoom': 1.0, 'image.x': 0.0, 'image.y': 0.0}) : null,
+          onPressed: en
+              ? () => g.setMany({'image.zoom': 1.0, 'image.x': 0.0, 'image.y': 0.0, 'image.fit': 'fit'})
+              : null,
           icon: const Icon(Icons.center_focus_strong, size: 18),
-          label: const Text('Fit the whole picture'),
+          label: const Text('Whole picture, centred'),
         ),
       ),
       gGroup('Images in ${g.mediaDir.isEmpty ? 'the media folder' : g.mediaDir}'),
@@ -291,19 +301,43 @@ class _SourceTabState extends State<SourceTab> {
     ],
   );
 
-  Widget _files() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      gGroup('Video files in ${g.mediaDir.isEmpty ? 'the media folder' : g.mediaDir}'),
-      if (g.mediaFiles.isEmpty)
-        const Text('None found. Set the folder under Session → Sender.', style: gSmall)
-      else
-        _list(g.mediaFiles, 'file', (f) {
-          _lastFile = f;
-          g.cue(HiveSightGuide.fileSpec(f));
-        }),
-    ],
-  );
+  Widget _files() {
+    final cueFile = g.cueSpec?['kind'] == 'file' ? g.cueSpec!['file'] as String : null;
+    final at = cueFile == null || g.liveFile == cueFile ? null : g.resume[cueFile];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GChoice(g, 'media.layout', 'Laid out as', const [
+          ('auto', 'Guess'),
+          ('mono', 'Plain picture'),
+          ('sbs', 'Side by side'),
+          ('tb', 'Top / bottom'),
+          ('hsbs', 'Half side by side'),
+          ('htb', 'Half top / bottom'),
+        ], enabled: widget.enabled),
+        // Kept for where a film was left, so it can be taken from there again (or from the start)
+        SizedBox(
+          height: 34,
+          child: at == null
+              ? null
+              : Row(
+                  children: [
+                    Expanded(child: Text('Goes on from ${_time(at)}, where it was left.', style: gSmall)),
+                    TextButton(onPressed: () => g.startOver(cueFile!), child: const Text('From the start')),
+                  ],
+                ),
+        ),
+        gGroup('Video files in ${g.mediaDir.isEmpty ? 'the media folder' : g.mediaDir}'),
+        if (g.mediaFiles.isEmpty)
+          const Text('None found. Set the folder under Session → Sender.', style: gSmall)
+        else
+          _list(g.mediaFiles, 'file', (f) {
+            _lastFile = f;
+            g.cue(HiveSightGuide.fileSpec(f));
+          }),
+      ],
+    );
+  }
 
   /// Files to pick from: one cues it, + adds it to the queue.
   Widget _list(List<String> files, String kind, void Function(String) pick) => ConstrainedBox(
@@ -322,6 +356,9 @@ class _SourceTabState extends State<SourceTab> {
               ? const Icon(Icons.sensors, size: 18, color: Kc.red)
               : Icon(_kindIcon(kind), size: 18),
           title: Text(f, overflow: TextOverflow.ellipsis),
+          subtitle: kind == 'file' && g.resume[f] != null && g.liveFile != f
+              ? Text('left at ${_time(g.resume[f]!)}', style: gSmall)
+              : null,
           trailing: IconButton(
             tooltip: 'Add to the queue',
             visualDensity: VisualDensity.compact,
