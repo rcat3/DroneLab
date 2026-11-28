@@ -1,6 +1,7 @@
 /*
  * The studio chain (see studio.h): the effects in order, their settings, the
- * fades when one is switched on or off, and the meters.
+ * fades when one is switched on or off, a soft limit at the end, and the
+ * meters.
  */
 #include <math.h>
 #include <string.h>
@@ -12,6 +13,7 @@
 #define FADE        (STUDIO_RATE / 50)  // 20 ms
 #define METER       (STUDIO_RATE / 10)  // 100 ms
 #define ECHO_MAX_S  2.0f
+#define LIMIT       0.89f   // -1 dBFS: the output's soft limit starts here
 
 static const char *const key_names[STUDIO_KEYS] = {
     [STUDIO_MUTE] = "mute",
@@ -33,6 +35,15 @@ static const char *const key_names[STUDIO_KEYS] = {
     [STUDIO_REVERB_ROOM] = "reverb_room",
     [STUDIO_REVERB_DAMP] = "reverb_damp",
     [STUDIO_REVERB_MIX] = "reverb_mix",
+    [STUDIO_CROWD_ON] = "crowd",
+    [STUDIO_DRIVE_DB] = "drive_db",
+    [STUDIO_RING_HZ] = "ring_hz",
+    [STUDIO_RING_MIX] = "ring_mix",
+    [STUDIO_CRUSH_BITS] = "crush_bits",
+    [STUDIO_CHORUS_RATE] = "chorus_rate",
+    [STUDIO_CHORUS_DEPTH_MS] = "chorus_depth_ms",
+    [STUDIO_CHORUS_MIX] = "chorus_mix",
+    [STUDIO_OUT_GAIN_DB] = "out_gain_db",
 };
 
 // The sender's DEFAULT_STATE
@@ -56,6 +67,15 @@ static const float defaults[STUDIO_KEYS] = {
     [STUDIO_REVERB_ROOM] = 0.2f,
     [STUDIO_REVERB_DAMP] = 0.5f,
     [STUDIO_REVERB_MIX] = 0,
+    [STUDIO_CROWD_ON] = 0,
+    [STUDIO_DRIVE_DB] = 0,
+    [STUDIO_RING_HZ] = 30,
+    [STUDIO_RING_MIX] = 0,
+    [STUDIO_CRUSH_BITS] = 0,
+    [STUDIO_CHORUS_RATE] = 0.5f,
+    [STUDIO_CHORUS_DEPTH_MS] = 2,
+    [STUDIO_CHORUS_MIX] = 0,
+    [STUDIO_OUT_GAIN_DB] = 0,
 };
 
 /* A step that can be switched: faded between the dry signal and its own. */
@@ -76,7 +96,10 @@ struct studio
     studio_pitch_t *pitch;
     studio_echo_t echo;
     studio_reverb_t *reverb;
-    fade_t f_denoise, f_spectral, f_pitch;
+    studio_crowd_t crowd;
+    studio_ring_t ring;
+    studio_chorus_t chorus;
+    fade_t f_denoise, f_spectral, f_pitch, f_crowd;
     int fx_mode;        // the spectral effect while it fades out
     float pitch_ratio;  // simple pitch's, likewise
 
@@ -121,6 +144,8 @@ void studio_free(studio_t *s)
     studio_pitch_free(s->pitch);
     studio_echo_free(&s->echo);
     studio_reverb_free(s->reverb);
+    studio_crowd_free(&s->crowd);
+    studio_chorus_free(&s->chorus);
     STUDIO_FREE(s);
 }
 
@@ -140,7 +165,8 @@ studio_t *studio_new(void)
     s->pitch = studio_pitch_new(STUDIO_RATE);
     s->reverb = studio_reverb_new(STUDIO_RATE);
     if (s->denoise == NULL || s->spectral == NULL || s->pitch == NULL || s->reverb == NULL ||
-        !studio_echo_init(&s->echo, STUDIO_RATE, ECHO_MAX_S))
+        !studio_echo_init(&s->echo, STUDIO_RATE, ECHO_MAX_S) || !studio_crowd_init(&s->crowd, STUDIO_RATE) ||
+        !studio_chorus_init(&s->chorus, STUDIO_RATE))
     {
         studio_free(s);
         return NULL;
@@ -161,7 +187,11 @@ void studio_reset(studio_t *s)
     s->echo.pos = 0;
     studio_reverb_free(s->reverb);
     s->reverb = studio_reverb_new(STUDIO_RATE);
-    s->f_denoise = s->f_spectral = s->f_pitch = (fade_t){ 0 };
+    studio_crowd_reset(&s->crowd);
+    studio_chorus_reset(&s->chorus);
+    s->ring.rate = STUDIO_RATE;
+    s->ring.phase = 0;
+    s->f_denoise = s->f_spectral = s->f_pitch = s->f_crowd = (fade_t){ 0 };
     s->fx_mode = STUDIO_FX_OFF;
     s->pitch_ratio = 1;
     s->meter_sq[0] = s->meter_sq[1] = 0;
@@ -188,6 +218,10 @@ int studio_latency(const studio_t *s)
     if (s->f_pitch.running)
     {
         n += studio_pitch_latency(s->pitch, s->pitch_ratio);
+    }
+    if (s->f_crowd.running)
+    {
+        n += studio_crowd_latency(&s->crowd);
     }
     return n;
 }
@@ -298,10 +332,59 @@ static void run_chunk(studio_t *s, float *x, int n, float *lr)
         fade_mix(&s->f_pitch, want, x, wet, n);
     }
 
+    // The crowd: three voices at once
+    want = p[STUDIO_CROWD_ON] > 0.5f;
+    if (fade_begin(&s->f_crowd, want, &fresh))
+    {
+        if (fresh)
+        {
+            studio_crowd_reset(&s->crowd);
+        }
+        memcpy(wet, x, (size_t)n * sizeof(float));
+        studio_crowd_process(&s->crowd, wet, n);
+        fade_mix(&s->f_crowd, want, x, wet, n);
+    }
+    if (p[STUDIO_DRIVE_DB] > 0)
+    {
+        studio_drive_process(x, n, fminf(48.0f, p[STUDIO_DRIVE_DB]));
+    }
+    if (p[STUDIO_RING_MIX] > 0)
+    {
+        studio_ring_process(&s->ring, x, n, fminf(4000.0f, fmaxf(1.0f, p[STUDIO_RING_HZ])),
+                            fminf(1.0f, p[STUDIO_RING_MIX]));
+    }
+    if (p[STUDIO_CRUSH_BITS] >= 1)
+    {
+        studio_crush_process(x, n, fminf(16.0f, p[STUDIO_CRUSH_BITS]));
+    }
+    if (p[STUDIO_CHORUS_MIX] > 0)
+    {
+        studio_chorus_process(&s->chorus, x, n, fminf(10.0f, fmaxf(0.01f, p[STUDIO_CHORUS_RATE])),
+                              p[STUDIO_CHORUS_DEPTH_MS], fminf(1.0f, p[STUDIO_CHORUS_MIX]));
+    }
+    if (p[STUDIO_OUT_GAIN_DB] != 0)
+    {
+        const float g = powf(10.0f, fminf(24.0f, fmaxf(-24.0f, p[STUDIO_OUT_GAIN_DB])) / 20.0f);
+        for (int i = 0; i < n; i++)
+        {
+            x[i] *= g;
+        }
+    }
+
     studio_echo_process(&s->echo, x, n, fmaxf(1.0f, p[STUDIO_ECHO_MS]), fminf(0.95f, p[STUDIO_ECHO_FEEDBACK]),
                         p[STUDIO_ECHO_MIX]);
     studio_reverb_process(s->reverb, x, lr, n, fminf(1, fmaxf(0, p[STUDIO_REVERB_ROOM])),
                           fminf(1, fmaxf(0, p[STUDIO_REVERB_DAMP])), fminf(1, fmaxf(0, p[STUDIO_REVERB_MIX])));
+
+    // A soft limit above -1 dBFS, so a peaky effect (the robot's buzz) doesn't clip on its way out
+    for (int i = 0; i < 2 * n; i++)
+    {
+        float v = lr[i], a = fabsf(v);
+        if (a > LIMIT)
+        {
+            lr[i] = copysignf(LIMIT + (1.0f - LIMIT) * tanhf((a - LIMIT) / (1.0f - LIMIT)), v);
+        }
+    }
 
     // The output's level, every 100 ms: the louder side, as GStreamer's level element
     for (int i = 0; i < n; i++)

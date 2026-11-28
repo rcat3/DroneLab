@@ -20,7 +20,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := dronelab_fx
 LOCAL_SRC_FILES := voice_fx_app.c ../../core/audio/voice_fx_chain.c ../../core/audio/fft.c \
     voice_studio_app.c $(addprefix ../../core/audio/studio/,studio.c sfft.c dynamics.c filters.c \
-    spectral.c pitch.c echo.c reverb.c denoise.c)
+    spectral.c pitch.c echo.c reverb.c denoise.c character.c)
 LOCAL_C_INCLUDES := $(CORE) $(RNNOISE)/include
 LOCAL_CFLAGS := -O2 -fvisibility=hidden -Wall
 LOCAL_STATIC_LIBRARIES := rnnoise_dl

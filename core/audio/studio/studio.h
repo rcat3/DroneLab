@@ -8,10 +8,12 @@
  * built for 16 kHz and the board's processor.
  *
  * In this order: denoise (RNNoise), high pass, low pass, gain / gate /
- * compressor / limiter, spectral shift or robot, simple pitch, echo, reverb.
- * Mono in, stereo out (the reverb is stereo). Denoise, the spectral effects
- * and simple pitch each add their delay only while they're on, and fade in
- * and out over 20 ms when they're switched.
+ * compressor / limiter, spectral shift or robot, simple pitch, then the
+ * board's simpler effects for the DroneLab presets (crowd, drive, ring
+ * modulator, bit crusher, chorus, output gain), echo, reverb.
+ * Mono in, stereo out (the reverb is stereo). Denoise, the spectral effects,
+ * simple pitch and the crowd each add their delay only while they're on, and
+ * fade in and out over 20 ms when they're switched.
  *
  * Settings can be changed from any thread; a change takes effect at the next
  * block. studio_process takes any number of samples and gives back as many.
@@ -42,6 +44,16 @@ enum
     STUDIO_REVERB_ROOM,
     STUDIO_REVERB_DAMP,
     STUDIO_REVERB_MIX,
+    // The board's simpler effects, for the DroneLab presets: 0 (or off) leaves each out
+    STUDIO_CROWD_ON,        // three voices at once, as the Borg
+    STUDIO_DRIVE_DB,        // soft clipping, this far below full scale
+    STUDIO_RING_HZ,
+    STUDIO_RING_MIX,
+    STUDIO_CRUSH_BITS,
+    STUDIO_CHORUS_RATE,     // Hz
+    STUDIO_CHORUS_DEPTH_MS,
+    STUDIO_CHORUS_MIX,
+    STUDIO_OUT_GAIN_DB,     // after them all, before the echo and reverb
     STUDIO_KEYS
 };
 

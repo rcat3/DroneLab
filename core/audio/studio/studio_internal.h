@@ -141,6 +141,46 @@ void studio_reverb_free(studio_reverb_t *r);
 void studio_reverb_process(studio_reverb_t *r, const float *x, float *lr, int n, float room, float damp,
                            float level);
 
+/* ----- The board's simpler effects, for the DroneLab presets (character.c) ----- */
+
+void studio_drive_process(float *x, int n, float knee_db);
+
+typedef struct
+{
+    int rate;
+    float phase;
+} studio_ring_t;
+
+void studio_ring_process(studio_ring_t *r, float *x, int n, float hz, float mix);
+void studio_crush_process(float *x, int n, float bits);
+
+typedef struct
+{
+    int rate;
+    float *buf;
+    int size;
+    unsigned pos;
+    float phase;
+} studio_chorus_t;
+
+bool studio_chorus_init(studio_chorus_t *c, int rate);
+void studio_chorus_free(studio_chorus_t *c);
+void studio_chorus_reset(studio_chorus_t *c);
+void studio_chorus_process(studio_chorus_t *c, float *x, int n, float rate_hz, float depth_ms, float mix);
+
+#define STUDIO_CROWD 3
+
+typedef struct
+{
+    studio_pitch_t *voice[STUDIO_CROWD];
+} studio_crowd_t;
+
+bool studio_crowd_init(studio_crowd_t *c, int rate);
+void studio_crowd_free(studio_crowd_t *c);
+void studio_crowd_reset(studio_crowd_t *c);
+int studio_crowd_latency(const studio_crowd_t *c);
+void studio_crowd_process(studio_crowd_t *c, float *x, int n);
+
 /* ----- Noise removal, RNNoise, 48 kHz only (denoise.c) ----- */
 
 typedef struct studio_denoise studio_denoise_t;

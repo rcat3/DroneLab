@@ -13,7 +13,7 @@ mkdir -p "$OUT"
 R="$ROOT/third_party/rnnoise"
 S="$ROOT/core/audio/studio"
 RNN_SRC="denoise rnn pitch kiss_fft celt_lpc nnet nnet_default parse_lpcnet_weights rnnoise_data rnnoise_tables"
-STUDIO_SRC="studio sfft dynamics filters spectral pitch echo reverb denoise"
+STUDIO_SRC="studio sfft dynamics filters spectral pitch echo reverb denoise character"
 
 # RNNoise once into objects (its weights take a while to compile)
 for f in $RNN_SRC; do

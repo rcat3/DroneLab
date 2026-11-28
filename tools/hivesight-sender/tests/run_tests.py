@@ -45,6 +45,11 @@ T.t_pitch.argtypes = [F, c_i, c_i, c_f]
 T.t_pitch.restype = c_i
 T.t_denoise.argtypes = [F, c_i, c_i]
 T.t_denoise.restype = c_i
+T.t_drive.argtypes = [F, c_i, c_f]
+T.t_ring.argtypes = [F, c_i, c_f, c_f]
+T.t_crush.argtypes = [F, c_i, c_f]
+T.t_chorus.argtypes = [F, c_i, c_f, c_f, c_f]
+T.t_crowd.argtypes = [F, c_i]
 FX.dl_voice_new.restype = ctypes.c_void_p
 FX.dl_voice_free.argtypes = [ctypes.c_void_p]
 FX.dl_voice_key.argtypes = [ctypes.c_char_p]
@@ -297,6 +302,75 @@ def test_denoise():
 
 
 # ---------------------------------------------------------------------------
+# The display unit's simpler effects: against the board's own code
+# (core/audio/voice_fx_chain.c), written out here in numpy at 48 kHz
+# ---------------------------------------------------------------------------
+def test_character(x):
+    k = 10 ** (-24 / 20)
+    ref = (k * np.tanh(x.astype(np.float64) / k)).astype(np.float32)
+    y = x.copy()
+    T.t_drive(ptr(y), len(y), 24)
+    check("drive 24 dB", float(np.max(np.abs(ref - y))) < 1e-5, f"max diff {np.max(np.abs(ref - y)):.1e}")
+
+    for hz, mix in [(30, 1.0), (500, 0.15), (60, 0.6)]:
+        step = np.float32(2 * np.pi * hz / RATE)
+        ph = np.float32(0)
+        ref = np.empty_like(x)
+        tp = np.float32(2 * np.pi)
+        for i in range(len(x)):
+            ph = np.float32(ph + step)
+            if ph > tp:
+                ph = np.float32(ph - tp)
+            ref[i] = x[i] * (np.float32(1 - mix) + np.float32(mix) * np.sin(ph))
+        y = x.copy()
+        T.t_ring(ptr(y), len(y), hz, mix)
+        err = float(np.max(np.abs(ref - y)))
+        check(f"ring {hz} Hz mix {mix}", err < 1e-4, f"max diff {err:.1e}")
+
+    for bits in [12, 10]:
+        lv = 2.0 ** (bits - 1)
+        ref = (np.round(x.astype(np.float64) * lv) / lv).astype(np.float32)
+        y = x.copy()
+        T.t_crush(ptr(y), len(y), bits)
+        # roundf rounds halves away from zero, numpy to even: at most one step apart, rarely
+        bad = int(np.sum(np.abs(ref - y) > 1e-6))
+        check(f"crush {bits} bits", bad <= len(x) // 10000 + 1, f"{bad} samples a step apart")
+
+    for rate, depth, mix in [(0.4, 4, 0.3), (1.5, 2, 0.4), (0.3, 2, 0.5)]:
+        d = depth * RATE / 1000
+        base = d + 2
+        buf = np.zeros(len(x) + 4096)
+        # The sweep's phase kept in float, as the C does (in double it drifts apart over seconds)
+        ph = np.float32(0)
+        step = np.float32(2 * np.pi * rate / RATE)
+        tp = np.float32(2 * np.pi)
+        ref = np.empty_like(x)
+        for i in range(len(x)):
+            buf[i + 4096] = x[i]
+            ph = np.float32(ph + step)
+            if ph > tp:
+                ph = np.float32(ph - tp)
+            wet = 0.0
+            for tap in range(2):
+                dl = base + d * 0.5 * (1 + np.sin(ph + np.pi * tap))
+                w = int(dl)
+                fr = dl - w
+                a = buf[i + 4096 - w]
+                b = buf[i + 4096 - w - 1]
+                wet += a + (b - a) * fr
+            ref[i] = (1 - mix) * x[i] + mix * 0.5 * wet
+        y = x.copy()
+        T.t_chorus(ptr(y), len(y), rate, depth, mix)
+        err = float(np.max(np.abs(ref - y)))
+        check(f"chorus {rate} Hz {depth} ms mix {mix}", err < 1e-4, f"max diff {err:.1e}")
+
+    y = x.copy()
+    T.t_crowd(ptr(y), len(y))
+    level = rms_db(y[RATE // 2:]) - rms_db(x[RATE // 2:])
+    check("crowd", np.all(np.isfinite(y)) and abs(level) < 3, f"level {level:+.1f} dB")
+
+
+# ---------------------------------------------------------------------------
 # The whole chain: presets against the old pipeline, and speed
 # ---------------------------------------------------------------------------
 def c_chain(x, settings, block=BLOCK):
@@ -342,6 +416,12 @@ def test_presets(x):
     for name, p in presets.items():
         v = dict(base, **p)
         y, took = c_chain(x, v)
+        if name.endswith("(unit)"):
+            # The display unit's presets: the old pipeline hadn't these effects. Fine, and fast
+            ok = bool(np.all(np.isfinite(y))) and np.max(np.abs(y)) <= 1.0 and seconds / took > 10
+            check(f"preset {name}", ok, f"{seconds / took:.0f}x real time, level {rms_db(y[RATE // 2:]):.1f} dBFS, "
+                                        f"peak {np.max(np.abs(y)):.2f}")
+            continue
         ok = bool(np.all(np.isfinite(y)))
         speed = seconds / took
         detail = f"{speed:.0f}x real time"
@@ -413,6 +493,7 @@ def main():
     test_reverb(x)
     test_pitch()
     test_denoise()
+    test_character(x)
     test_presets(x)
     test_switching(x)
     failed = [r for r in RESULTS if not r[1]]

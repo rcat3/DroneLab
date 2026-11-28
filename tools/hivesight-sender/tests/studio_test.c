@@ -92,3 +92,44 @@ EXPORT int t_denoise(float *x, int n, int block)
     studio_denoise_free(d);
     return studio_denoise_latency();
 }
+
+EXPORT void t_drive(float *x, int n, float knee_db)
+{
+    studio_drive_process(x, n, knee_db);
+}
+
+EXPORT void t_ring(float *x, int n, float hz, float mix)
+{
+    studio_ring_t r = { 48000, 0 };
+    for (int at = 0; at < n; at += 480)
+    {
+        studio_ring_process(&r, x + at, n - at < 480 ? n - at : 480, hz, mix);
+    }
+}
+
+EXPORT void t_crush(float *x, int n, float bits)
+{
+    studio_crush_process(x, n, bits);
+}
+
+EXPORT void t_chorus(float *x, int n, float rate, float depth_ms, float mix)
+{
+    studio_chorus_t c;
+    studio_chorus_init(&c, 48000);
+    for (int at = 0; at < n; at += 480)
+    {
+        studio_chorus_process(&c, x + at, n - at < 480 ? n - at : 480, rate, depth_ms, mix);
+    }
+    studio_chorus_free(&c);
+}
+
+EXPORT void t_crowd(float *x, int n)
+{
+    studio_crowd_t c;
+    studio_crowd_init(&c, 48000);
+    for (int at = 0; at < n; at += 240)
+    {
+        studio_crowd_process(&c, x + at, n - at < 240 ? n - at : 240);
+    }
+    studio_crowd_free(&c);
+}

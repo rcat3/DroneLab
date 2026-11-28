@@ -126,7 +126,7 @@ add_library(dronelab_fx SHARED "../native/voice_fx_app.c" "../../core/audio/voic
   "../../core/audio/fft.c" "../native/voice_studio_app.c"
   "${STUDIO_DIR}/studio.c" "${STUDIO_DIR}/sfft.c" "${STUDIO_DIR}/dynamics.c" "${STUDIO_DIR}/filters.c"
   "${STUDIO_DIR}/spectral.c" "${STUDIO_DIR}/pitch.c" "${STUDIO_DIR}/echo.c" "${STUDIO_DIR}/reverb.c"
-  "${STUDIO_DIR}/denoise.c")
+  "${STUDIO_DIR}/denoise.c" "${STUDIO_DIR}/character.c")
 target_include_directories(dronelab_fx PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../core"
   "${RNNOISE_DIR}/include")
 target_compile_options(dronelab_fx PRIVATE -O2 -fvisibility=hidden)
