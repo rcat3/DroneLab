@@ -275,7 +275,6 @@ class _HiveSightButtonState extends State<HiveSightButton> {
     return ListenableBuilder(
       listenable: widget.comm,
       builder: (context, _) {
-        if (!widget.comm.developerOptions) return const SizedBox.shrink();
         // On a computer that can guide: the Guide page
         if (HiveSightGuide.supported) {
           return Padding(
@@ -410,8 +409,8 @@ class _HiveSightInviteCardState extends State<HiveSightInviteCard> {
 }
 
 /// Whether we can invite people to a HiveSight session: on a computer that
-/// can guide one, with developer options on.
-bool canInviteToHiveSight(CommController comm) => HiveSightGuide.supported && comm.developerOptions;
+/// can guide one.
+bool canInviteToHiveSight(CommController comm) => HiveSightGuide.supported;
 
 /// Invite [c] to our HiveSight session, as a text with a Join button,
 /// after asking (the sender and a session are started first if they aren't

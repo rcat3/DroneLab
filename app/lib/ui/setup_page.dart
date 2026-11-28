@@ -5,12 +5,10 @@ import '../comm/board_link.dart';
 import '../comm/board_protocol.dart';
 import '../comm/calls.dart';
 import '../comm/comm_controller.dart';
-import '../comm/hivesight_guide.dart';
 import '../comm/notifier.dart';
 import '../comm/virtual_unit.dart';
 import 'about_page.dart';
 import 'developer_page.dart';
-import 'hivesight_guide_page.dart';
 import 'display_unit_page.dart';
 import 'identity_page.dart';
 import 'permissions_page.dart';
@@ -282,16 +280,6 @@ class SetupPage extends StatelessWidget {
                     onTap: () =>
                         Navigator.of(context).push(MaterialPageRoute(builder: (_) => DeveloperPage(comm: comm))),
                   ),
-                  // Experimental: the Guide's side, on a computer
-                  if (HiveSightGuide.supported)
-                    PanelRow(
-                      leading: const Icon(Icons.visibility_outlined, color: Kc.muted),
-                      title: 'HiveSight Guide',
-                      subtitle: 'Guide Vessels in a HiveSight session: what they see and hear',
-                      trailing: const [Icon(Icons.chevron_right, color: Kc.muted)],
-                      onTap: () => Navigator.of(context)
-                          .push(MaterialPageRoute(builder: (_) => HiveSightGuidePage(comm: comm))),
-                    ),
                 ]),
               ],
               const SectionHeader('About'),
