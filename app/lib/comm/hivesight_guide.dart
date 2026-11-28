@@ -636,7 +636,12 @@ print(" ".join(missing))
   String nameOf(GuideVessel v) {
     final id = v.personId;
     final p = id == null ? null : comm.people[id];
-    return p?.name ?? (v.name.isEmpty ? v.addr : v.name);
+    if (p != null && p.name.isNotEmpty) return p.name;
+    // Not someone we know (one who joined by a code, say): their phone's name
+    // for itself, with their key's short id, which is what tells them apart
+    final short = v.key != null && v.verified ? '⬡ ${Identity.idOf(v.key!).substring(0, 8)}' : '';
+    final own = v.name.isEmpty ? (short.isEmpty ? v.addr : '') : v.name;
+    return [own, short].where((x) => x.isNotEmpty).join(' ');
   }
 
   // ----- Changing things -----
