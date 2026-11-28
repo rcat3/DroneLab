@@ -103,3 +103,24 @@ def to_i420(rgb: np.ndarray) -> bytes:
                           np.clip(half(u), 0, 255).astype(np.uint8).ravel(),
                           np.clip(half(v), 0, 255).astype(np.uint8).ravel()])
     return out.tobytes()
+
+
+def i420_to_jpeg(data, w: int, h: int, step: int = 4, quality: int = 70) -> bytes:
+    """A small JPEG of an I420 frame (every [step]th pixel), for the Guide's look at it."""
+    import io
+    buf = np.frombuffer(data, np.uint8)
+    y = buf[: w * h].reshape(h, w)[::step, ::step].astype(np.float32)
+    cw, ch = w // 2, h // 2
+    u = buf[w * h: w * h + cw * ch].reshape(ch, cw)
+    v = buf[w * h + cw * ch: w * h + 2 * cw * ch].reshape(ch, cw)
+    s2 = max(1, step // 2)
+    u = np.repeat(np.repeat(u[::s2, ::s2], 1, axis=0), 1, axis=1).astype(np.float32)[: y.shape[0], : y.shape[1]]
+    v = v[::s2, ::s2].astype(np.float32)[: y.shape[0], : y.shape[1]]
+    yy = (y - 16) * 1.164
+    r = yy + 1.596 * (v - 128)
+    g = yy - 0.392 * (u - 128) - 0.813 * (v - 128)
+    b = yy + 2.017 * (u - 128)
+    rgb = np.clip(np.stack([r, g, b], axis=-1), 0, 255).astype(np.uint8)
+    out = io.BytesIO()
+    Image.fromarray(rgb).save(out, "JPEG", quality=quality)
+    return out.getvalue()

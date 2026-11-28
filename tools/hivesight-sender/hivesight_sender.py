@@ -367,6 +367,8 @@ class Sender:
         self._music_list: list[str] = []
         self._music_list_t = 0.0
         self.queue: list[dict] = []     # what's to go on next: {"kind": "file", "file": ...} ...
+        self.cue_spec: dict | None = None   # what's picked to go on, and looked at
+        self.preview_gen = 0
         self.last_keyframe = 0.0
         self.video_packets = 0
         # The Guide's voice effects (libdronelab_fx's studio chain); without the
@@ -391,6 +393,7 @@ class Sender:
         # The picture: a permanent program stream, and the switcher that feeds it
         self.mixer = audiomix.MediaMixer()
         self.switcher = switcher.Switcher(self.mixer, self._switch_changed, self._notify_sync)
+        self.switcher.on_preview = self._preview_jpeg
         self.music = music.MusicPlayer(self.mixer, self.music_dir, lambda: self.state["music"], self._notify_sync)
         self._set_stream_state(None)
         self.video = GstPipeline("video", self.video_desc, on_built=self._attach_video_clients,
@@ -484,71 +487,90 @@ class Sender:
     def _camera_source(self):
         return switcher.CameraSource(self.args, self._source_error)
 
-    async def take_camera(self, effect=None):
-        eff, secs = self._fx()
-        src = self._camera_source()
-        self._glib(self.switcher.take, src, effect or eff, secs)
-
-    async def take_file(self, name: str, trusted: bool = False):
-        # A path on the command line (--file) may be anywhere; the Guide's names are in the media folder
-        p = Path(name).expanduser() if trusted and Path(name).expanduser().is_file() else media.resolve(self.media_dir, name)
-        if p is None:
-            await self.notify(f"not found in media folder: {name}")
-            return
-        try:
-            mi = await asyncio.get_running_loop().run_in_executor(None, media.probe, p)
-        except Exception as e:  # unreadable / no video stream
-            log.warning("can't play %s: %s", name, e)
-            await self.notify(f"can't play {name}: {e}")
-            return
-        layout = media.guess_layout(name, mi.width, mi.height)
-        log.info("playing %s (%dx%d @ %.2f fps, %s, audio: %s, layout guess: %s)", name, mi.width, mi.height,
-                 mi.fps, media.fmt_time(mi.duration_s), "yes" if mi.has_audio else "no", layout)
-        eff, secs = self._fx()
-        src = switcher.FileSource(name, mi, layout, self.state["media"]["av_offset_ms"], self._on_file_eos,
-                                  self._source_error, autoplug=_autoplug_select)
-        self._glib(self.switcher.take, src, eff, secs)
-
-    async def take_color(self, rgb=None):
-        eff, secs = self._fx()
-        if rgb is not None:
-            self.state["color"]["rgb"] = int(rgb) & 0xFFFFFF
-        src = switcher.ColorSource(self.state["color"]["rgb"], self._source_error)
-        self._glib(self.switcher.take, src, eff, secs)
-
-    async def take_image(self, name: str):
-        p = media.resolve(self.media_dir, name)
-        if p is None:
-            await self.notify(f"not found in media folder: {name}")
-            return
-        try:
-            im = self.state["image"]
-            src = await asyncio.get_running_loop().run_in_executor(
-                None, lambda: switcher.ImageSource(name, p, "mono", im["zoom"], im["x"], im["y"]))
-            src.layout = media.guess_layout(name, src.im.width, src.im.height)
-            src._render()
-        except Exception as e:
-            await self.notify(f"can't show {name}: {e}")
-            return
-        eff, secs = self._fx()
-        self._glib(self.switcher.take, src, eff, secs)
-
-    async def take_spec(self, spec):
+    async def make_source(self, spec):
+        """A source for [spec] (not started), or None, the Guide told why."""
         kind = spec.get("kind") if isinstance(spec, dict) else None
         if kind == "camera":
-            await self.take_camera()
-        elif kind == "file" and spec.get("file"):
-            await self.take_file(str(spec["file"]))
-        elif kind == "image" and spec.get("file"):
-            await self.take_image(str(spec["file"]))
-        elif kind == "color":
-            await self.take_color(spec.get("rgb"))
+            return self._camera_source()
+        if kind == "color":
+            rgb = spec.get("rgb")
+            if rgb is not None:
+                self.state["color"]["rgb"] = int(rgb) & 0xFFFFFF
+            return switcher.ColorSource(self.state["color"]["rgb"], self._source_error)
+        name = str(spec.get("file", "")) if isinstance(spec, dict) else ""
+        trusted = bool(spec.get("trusted")) if isinstance(spec, dict) else False
+        # A path on the command line (--file) may be anywhere; the Guide's names are in the media folder
+        p = Path(name).expanduser() if trusted and Path(name).expanduser().is_file() \
+            else media.resolve(self.media_dir, name)
+        if kind in ("file", "image") and p is None:
+            await self.notify(f"not found in media folder: {name}")
+            return None
+        if kind == "file":
+            try:
+                mi = await asyncio.get_running_loop().run_in_executor(None, media.probe, p)
+            except Exception as e:  # unreadable / no video stream
+                log.warning("can't play %s: %s", name, e)
+                await self.notify(f"can't play {name}: {e}")
+                return None
+            layout = media.guess_layout(name, mi.width, mi.height)
+            log.info("file %s (%dx%d @ %.2f fps, %s, audio: %s, layout guess: %s)", name, mi.width, mi.height,
+                     mi.fps, media.fmt_time(mi.duration_s), "yes" if mi.has_audio else "no", layout)
+            return switcher.FileSource(name, mi, layout, self.state["media"]["av_offset_ms"], self._on_file_eos,
+                                       self._source_error, autoplug=_autoplug_select)
+        if kind == "image":
+            try:
+                im = self.state["image"]
+                src = await asyncio.get_running_loop().run_in_executor(
+                    None, lambda: switcher.ImageSource(name, p, "mono", im["zoom"], im["x"], im["y"]))
+                src.layout = media.guess_layout(name, src.im.width, src.im.height)
+                src._render()
+                return src
+            except Exception as e:
+                await self.notify(f"can't show {name}: {e}")
+        return None
+
+    async def take_spec(self, spec):
+        src = await self.make_source(spec)
+        if src is not None:
+            eff, secs = self._fx()
+            self._glib(self.switcher.take, src, eff, secs)
+            if spec == self.cue_spec:
+                self.cue_spec = None
+            await self.update_preview()
+
+    async def take_camera(self, effect=None):
+        eff, secs = self._fx()
+        self._glib(self.switcher.take, self._camera_source(), effect or eff, secs)
+
+    async def take_file(self, name: str, trusted: bool = False):
+        await self.take_spec({"kind": "file", "file": name, "trusted": trusted})
+
+    async def update_preview(self):
+        """Look at what's cued, or failing that what's first in the queue."""
+        spec = self.cue_spec or (self.queue[0] if self.queue else None)
+        if spec is None or not self.video.enabled:
+            self._glib(self.switcher.preview, None)
+            return
+        self.preview_gen += 1
+        gen = self.preview_gen
+        src = await self.make_source(spec)
+        if src is None or gen != self.preview_gen:
+            if src is not None:
+                src.stop()
+            return
+        self._glib(self.switcher.preview, src)
+
+    def _preview_jpeg(self, jpeg: bytes):
+        """Streaming thread: a picture of what's next, to the Guide pages."""
+        if self.loop:
+            self.loop.call_soon_threadsafe(self._relay_preview, bytes([0x02]) + jpeg)
 
     async def take_next(self):
         if not self.queue:
             await self.notify("Nothing queued")
             return
         await self.take_spec(self.queue.pop(0))
+        await self.update_preview()
         await self.broadcast(self.summary(), roles={"guide"})
 
     def _clean_spec(self, spec):
@@ -852,7 +874,7 @@ class Sender:
                 "has_audio": bool(self.media_info and self.media_info.has_audio),
                 "images": self.image_files(),
             },
-            "switch": {**self.switcher.status(), "queue": list(self.queue)},
+            "switch": {**self.switcher.status(), "queue": list(self.queue), "cue": self.cue_spec},
             "music": {**self.music.status(), "files": self.music_files(),
                       "level_db": round(self.mixer.level_db, 1)},
         }
@@ -1018,22 +1040,29 @@ class Sender:
             await self.take_camera()
         elif t == "take":
             await self.take_spec(self._clean_spec(msg.get("spec")))
+        elif t == "cue":
+            self.cue_spec = self._clean_spec(msg.get("spec"))
+            await self.update_preview()
         elif t == "next":
             await self.take_next()
         elif t == "queue_add":
             spec = self._clean_spec(msg.get("spec"))
             if spec and len(self.queue) < 200:
                 self.queue.append(spec)
+                await self.update_preview()
         elif t == "queue_remove":
             i = msg.get("index")
             if isinstance(i, int) and 0 <= i < len(self.queue):
                 del self.queue[i]
+                await self.update_preview()
         elif t == "queue_move":
             i, j = msg.get("from"), msg.get("to")
             if isinstance(i, int) and isinstance(j, int) and 0 <= i < len(self.queue):
                 self.queue.insert(max(0, min(j, len(self.queue) - 1)), self.queue.pop(i))
+                await self.update_preview()
         elif t == "queue_clear":
             self.queue.clear()
+            await self.update_preview()
         elif t == "music_play" and isinstance(msg.get("file"), str):
             self._glib(self.music.play, msg["file"])
         elif t == "music_add" and isinstance(msg.get("file"), str):

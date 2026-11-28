@@ -100,6 +100,40 @@ class Slot:
             self.film.set(0.0)
 
 
+class PreviewSlot:
+    """Where a source about to go on sends its pictures: not to the program
+    but, small and a few times a second, to the Guide (as JPEG), so it can be
+    seen before it's cut to. A film shows its first picture and waits there."""
+    PERIOD = 0.25
+
+    def __init__(self, on_jpeg, on_first):
+        self.film = None
+        self.on_jpeg = on_jpeg
+        self.on_first = on_first
+        self._t = 0.0
+        self._seen = None
+        self._first = False
+
+    def push(self, buf):
+        now = time.monotonic()
+        if not self._first:
+            self._first = True
+            self.on_first()
+        # A still sends the same picture over and over: once is enough, then now and then
+        if buf is self._seen and now - self._t < 2.0:
+            return
+        if now - self._t < self.PERIOD:
+            return
+        self._t, self._seen = now, buf
+        ok, info = buf.map(Gst.MapFlags.READ)
+        if not ok:
+            return
+        try:
+            self.on_jpeg(stills.i420_to_jpeg(info.data, W, H))
+        finally:
+            buf.unmap(info)
+
+
 # ---------------------------------------------------------------- sources
 class Source:
     kind = ""
@@ -360,6 +394,8 @@ class Switcher:
         self._keep = None
         self.effect = "fade"
         self.secs = 1.5
+        self.pv: Source | None = None   # the source being looked at before it goes on
+        self.on_preview = lambda jpeg: None
 
     # ---- the program pipeline ----
     def bind(self, pipeline):
@@ -385,6 +421,31 @@ class Switcher:
         if self.slots[idx].film:
             self.slots[idx].film.set(alpha)
 
+    # ---- the preview ----
+    def preview(self, src: Source | None):
+        """Look at [src] before it's on (None: nothing). One camera can't be
+        opened twice, so one that's on air isn't looked at again."""
+        old, self.pv = self.pv, None
+        if old is not None:
+            old.stop()
+        if src is None:
+            self.on_preview(b"")
+            return
+        air = self.on_air
+        if src.kind == "camera" and (air is not None and air.kind == "camera" or
+                                     self.trans is not None and self.trans["src"].kind == "camera"):
+            src.stop()
+            self.on_preview(b"")
+            return
+        self.pv = src
+        slot = PreviewSlot(self.on_preview, lambda: GLib.idle_add(self._pause_preview, src))
+        src.start(slot)
+
+    def _pause_preview(self, src):
+        if src is self.pv and src.kind == "file":
+            src.set_paused(True)
+        return False
+
     # ---- what's on ----
     @property
     def on_air(self) -> Source | None:
@@ -400,6 +461,8 @@ class Switcher:
         """Put [src] on air by [effect]. Nothing on air yet: a cut."""
         effect = effect if effect in EFFECTS else self.effect
         secs = self.secs if secs is None else max(0.0, float(secs))
+        if self.pv is not None and (src.kind == "camera" or self.pv.kind == src.kind == "camera"):
+            self.preview(None)          # the camera's wanted for the program
         if self.trans is not None:
             self._finish()              # one at a time: the last is over at once
         cur = self.slots[self.program]
@@ -506,6 +569,7 @@ class Switcher:
     def stop_all(self):
         """No session: every source is let go (the camera's light goes out)."""
         self.trans = None
+        self.preview(None)
         for s in self.slots:
             if s.source is not None:
                 s.source.stop()

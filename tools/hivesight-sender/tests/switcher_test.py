@@ -26,6 +26,7 @@ class Guide:
         self.sum = {}
         self.state = {}
         self.notices = []
+        self.next_jpeg = b""
 
     async def connect(self):
         import aiohttp
@@ -36,6 +37,9 @@ class Guide:
 
     async def _rx(self, aiohttp):
         async for m in self.ws:
+            if m.type == aiohttp.WSMsgType.BINARY and m.data[:1] == b"\x02":
+                self.next_jpeg = m.data[1:]      # what's cued, small
+                continue
             if m.type != aiohttp.WSMsgType.TEXT:
                 continue
             j = json.loads(m.data)
@@ -160,6 +164,33 @@ async def scenario(check, d: Path):
         check("a dissolve mixes the two", len(mid) >= 3, f"{len(mid)} frames with both showing")
         check("a dissolve doesn't pass through black", min(s.sum() for s in seq) > 150,
               f"darkest {min(s.sum() for s in seq):.0f}")
+
+        # What's cued is looked at before it goes on
+        import io
+        from PIL import Image
+
+        def seen():
+            return np.asarray(Image.open(io.BytesIO(g.next_jpeg)).convert("RGB")).astype(float)[:, :100].mean(axis=(0, 1))
+
+        await g.send(type="cue", spec={"kind": "color", "rgb": 0x00FF00})
+        await asyncio.sleep(1.5)
+        c = seen()
+        check("a cued colour can be looked at", c[1] > 180 and c[0] < 70 and c[2] < 70, f"{c.round()}")
+        await g.send(type="cue", spec={"kind": "image", "file": "pic.png"})
+        await asyncio.sleep(1.5)
+        c = seen()
+        check("a cued image can be looked at", c[2] > 130 and c[1] < 140, f"{c.round()}")
+        await g.send(type="cue", spec={"kind": "file", "file": "film.mkv"})
+        await asyncio.sleep(2.5)
+        check("a cued film shows its first picture, and the program is untouched",
+              len(g.next_jpeg) > 1000 and g.sum["media"]["position"] == 0.0 and g.state["media"]["source"] == "color",
+              f"{len(g.next_jpeg)} bytes of picture")
+        await g.send(type="cue", spec={"kind": "camera"})
+        await asyncio.sleep(1.5)
+        check("a cued camera shows live", len(g.next_jpeg) > 1000, f"{len(g.next_jpeg)} bytes")
+        await g.send(type="cue", spec=None)
+        await asyncio.sleep(1)
+        check("nothing cued, nothing to look at", g.next_jpeg == b"" or len(g.next_jpeg) == 0, f"{len(g.next_jpeg)} bytes")
 
         # A film: its pictures and sound; pause keeps the stream going on its last picture
         await g.set("switch.effect", "cut")
