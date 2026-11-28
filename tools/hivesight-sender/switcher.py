@@ -194,6 +194,7 @@ class PreviewSlot:
 class Source:
     kind = ""
     name = ""
+    ident = ""              # what the Guide is told is on air (a file's name, a built-in's id)
     static = False          # makes its picture at once (no waiting for a first frame)
 
     def start(self, slot: Slot):
@@ -301,7 +302,7 @@ class FileSource(_PipelineSource):
 
     def __init__(self, name: str, info, layout: str, av_offset_ms: int, on_eos, on_error, autoplug=None,
                  start_pos: float = 0.0):
-        self.name = name
+        self.name = self.ident = name
         self.start_pos = start_pos
         self._started = False
         self.info = info
@@ -408,12 +409,69 @@ class ColorSource(_PipelineSource):
         return {"kind": "color", "rgb": self.rgb}
 
 
+class BlackSource(ColorSource):
+    """Black: where a session starts, and a place to go. Not a colour the
+    Guide can change."""
+    kind = "black"
+
+    def __init__(self, on_error):
+        super().__init__(0, on_error)
+        self.name = "black"
+
+    def set_color(self, rgb):
+        pass
+
+    def spec(self):
+        return {"kind": "black"}
+
+
+# Built in to the sender, for the Guide's "Built-in" sources: id -> label,
+# and for the ones that are films, the file, in builtin/ (made by
+# make_logo_loops.py). To add one, add it here and teach make_builtin about it.
+BUILTIN_DIR = Path(__file__).resolve().parent / "builtin"
+BUILTINS = {
+    "test": {"label": "Test pattern", "file": None},
+    "katcorp": {"label": "KatCorp logo", "file": "katcorp.mp4"},
+    "dronelab": {"label": "DroneLab logo", "file": "dronelab.mp4"},
+}
+
+
+class TestPatternSource(CameraSource):
+    """The moving balls, wanted whatever the camera is set to."""
+    kind = "builtin"
+    ident = "test"
+
+    def __init__(self, args, on_error):
+        import copy
+        a = copy.copy(args)
+        a.test_pattern = True
+        super().__init__(a, on_error)
+        self.name = BUILTINS["test"]["label"]
+
+    def spec(self):
+        return {"kind": "builtin", "id": "test"}
+
+
+class LoopSource(FileSource):
+    """A built-in film (a logo turning), played over and over; the Guide's
+    play controls work on it like any film's."""
+    kind = "builtin"
+    loops = True
+
+    def __init__(self, bid: str, info, on_eos, on_error, autoplug=None):
+        super().__init__(BUILTINS[bid]["label"], info, "sbs", 0, on_eos, on_error, autoplug=autoplug)
+        self.ident = bid
+
+    def spec(self):
+        return {"kind": "builtin", "id": self.ident}
+
+
 class ImageSource(Source):
     """A still picture, placed in each eye with a zoom and a position."""
     kind = "image"
 
     def __init__(self, name: str, path: Path, layout: str, zoom: float, x: float, y: float, fit: str = "fit"):
-        self.name = name
+        self.name = self.ident = name
         self.im = stills.load(path)
         self.layout = layout
         self.fit = fit

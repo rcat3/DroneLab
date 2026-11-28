@@ -33,7 +33,8 @@ def list_audio(folder: Path, limit: int = 4000) -> list[str]:
 def resolve(folder: Path, name: str) -> Path | None:
     try:
         p = (folder / name).resolve(strict=True)
-        p.relative_to(folder.resolve())
+        if not Path(name).is_absolute():        # a file picked from anywhere is the Guide's to play
+            p.relative_to(folder.resolve())
     except (OSError, ValueError):
         return None
     return p if p.is_file() else None

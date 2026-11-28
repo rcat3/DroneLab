@@ -136,9 +136,10 @@ async def scenario(check, d: Path):
 
         await g.send(type="session", token="x" * 24, expires=time.time() + 600)
         await asyncio.sleep(2)
-        check("the program stream starts with the test pattern", len(frames()) > 10 and
-              g.state["stream"]["source"] == "test pattern" and g.state["stream"]["layout"] == "sbs",
-              f"{len(frames())} frames, stream {g.state['stream']}")
+        check("a session starts on black, with the stream running", len(frames()) > 10 and
+              g.state["media"]["source"] == "black" and left_mean(frames()[-1]).sum() < 60 and
+              g.state["stream"]["layout"] == "sbs",
+              f"{len(frames())} frames, source {g.state['media']['source']}, stream {g.state['stream']}")
 
         # A cut to red, then a fade to blue: out to black, then in on the new one
         await g.set("switch.effect", "cut")
@@ -203,8 +204,37 @@ async def scenario(check, d: Path):
 
         check("the Guide is told the effects and kinds of source there are",
               [e["id"] for e in g.sum["switch"]["effects"]] == ["cut", "fade", "dissolve"] and
-              set(g.sum["switch"]["kinds"]) == {"camera", "color", "file", "image"},
+              set(g.sum["switch"]["kinds"]) == {"camera", "black", "color", "file", "image", "builtin"} and
+              {b["id"] for b in g.sum["switch"]["builtins"]} >= {"test", "katcorp", "dronelab"},
               f"{[e['id'] for e in g.sum['switch']['effects']]}, {g.sum['switch']['kinds']}")
+
+        # Where a film starts is the Guide's to set, and files can come from anywhere
+        await g.send(type="cue", spec={"kind": "file", "file": "film.mkv", "start": 6.0})
+        await asyncio.sleep(3)
+        check("a cued film's length is known, for the start bar", 8 < g.sum["switch"]["cue_duration"] < 12,
+              f"{g.sum['switch']['cue_duration']}")
+        check("a cued film keeps the start set", (g.sum["switch"]["cue"] or {}).get("start") == 6.0,
+              f"{g.sum['switch']['cue']}")
+        await g.send(type="take", spec={"kind": "file", "file": str(d / "media" / "film.mkv"), "start": 6.0})
+        await asyncio.sleep(3)
+        check("a film by its full path starts where it was set to", g.state["media"]["source"] == "file" and
+              g.sum["media"]["position"] > 6.0, f"{g.sum['media']['position']} s")
+        await g.send(type="take", spec={"kind": "builtin", "id": "test"})
+        await asyncio.sleep(2.5)
+        check("the built-in test pattern goes on", g.state["media"]["source"] == "builtin" and
+              g.state["media"]["file"] == "test" and
+              np.asarray(Image.open(frames()[-1]).convert("L")).max() > 150,
+              f"{g.state['media']['source']} {g.state['media']['file']}")
+        if (Path(__file__).resolve().parent.parent / "builtin" / "katcorp.mp4").exists():
+            await g.send(type="take", spec={"kind": "builtin", "id": "katcorp"})
+            await asyncio.sleep(4)
+            m = g.sum["media"]
+            check("a built-in logo plays and has a length", g.state["media"]["file"] == "katcorp" and
+                  m["duration"] > 5 and m["position"] > 0.5, f"{m['position']} of {m['duration']}")
+            await g.send(type="take", spec={"kind": "black"})
+            await asyncio.sleep(3)
+            check("black is a place to go", g.state["media"]["source"] == "black" and
+                  left_mean(frames()[-1]).sum() < 60, f"{left_mean(frames()[-1]).round()}")
 
         # A portrait photo: the same in both eyes unless it's said to be a pair
         await g.set("switch.effect", "cut")

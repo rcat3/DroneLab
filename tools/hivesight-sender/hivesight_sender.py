@@ -141,7 +141,7 @@ DEFAULT_STATE = {
     # at_end: loop, camera, hold, or next (the next one queued)
     # layout: how a film is laid out for the two eyes: auto (guessed from its name and shape), or
     # mono, sbs, hsbs, tb, htb
-    "media": {"source": "camera", "file": "", "paused": False, "at_end": "loop",
+    "media": {"source": "black", "file": "", "paused": False, "at_end": "loop",
               "av_offset_ms": 150, "layout": "auto"},
     # How the picture changes over: fade (out to black, then in), dissolve, or cut
     "switch": {"effect": "fade", "secs": 1.5},
@@ -370,6 +370,7 @@ class Sender:
         self._music_list: list[str] = []
         self._music_list_t = 0.0
         self.queue: list[dict] = []     # what's to go on next: {"kind": "file", "file": ...} ...
+        self.cue_duration = 0.0                # how long the cued film is
         self.cue_spec: dict | None = None   # what's picked to go on, and looked at
         self.preview_gen = 0
         self.last_keyframe = 0.0
@@ -448,8 +449,7 @@ class Sender:
     def _set_stream_state(self, src):
         """What the Vessels are told about the stream: always the program,
         both eyes side by side."""
-        what = "test pattern" if src is None and self.args.test_pattern else \
-            "camera" if src is None else (src.name if src.kind == "camera" else f"{src.kind}: {src.name}")
+        what = "black" if src is None else (src.name if src.kind == "camera" else f"{src.kind}: {src.name}")
         self.state["stream"] = {"layout": "sbs", "width": switcher.W, "height": switcher.H, "fps": switcher.FPS,
                                 "encoder": self.encoder, "source": what}
 
@@ -460,8 +460,8 @@ class Sender:
         src = t["src"] if t is not None and t["phase"] == "ramp" else sw.on_air
         if src is not None:
             m = self.state["media"]
-            if (m["source"], m["file"]) != (src.kind, src.name if src.kind in ("file", "image") else ""):
-                m.update(source=src.kind, file=src.name if src.kind in ("file", "image") else "", paused=False)
+            if (m["source"], m["file"]) != (src.kind, src.ident):
+                m.update(source=src.kind, file=src.ident, paused=False)
             self.media_info = getattr(src, "info", None)
             self._set_stream_state(src)
         if self.loop:
@@ -499,8 +499,8 @@ class Sender:
     # in _clean_spec, and add the kind to this table. Taking, cueing, queueing and
     # the preview then work for it with nothing else changed.
     def _source_makers(self):
-        return {"camera": self._make_camera, "color": self._make_color, "file": self._make_file,
-                "image": self._make_image}
+        return {"camera": self._make_camera, "black": self._make_black, "color": self._make_color,
+                "file": self._make_file, "image": self._make_image, "builtin": self._make_builtin}
 
     async def make_source(self, spec):
         """A source for [spec] (not started), or None, the Guide told why."""
@@ -517,6 +517,24 @@ class Sender:
 
     async def _make_camera(self, spec):
         return self._camera_source()
+
+    async def _make_black(self, spec):
+        return switcher.BlackSource(self._source_error)
+
+    async def _make_builtin(self, spec):
+        bid = spec.get("id")
+        info = switcher.BUILTINS.get(bid)
+        if info is None:
+            return None
+        if info["file"] is None:
+            return switcher.TestPatternSource(self.args, self._source_error)
+        path = switcher.BUILTIN_DIR / info["file"]
+        try:
+            mi = await asyncio.get_running_loop().run_in_executor(None, media.probe, path)
+        except Exception as e:
+            await self.notify(f"can't play {info['label']}: {e}")
+            return None
+        return switcher.LoopSource(bid, mi, self._on_file_eos, self._source_error, autoplug=_autoplug_select)
 
     async def _make_color(self, spec):
         rgb = spec.get("rgb")
@@ -539,7 +557,7 @@ class Sender:
         if layout not in media.LAYOUTS:
             layout = media.guess_layout(name, mi.width, mi.height)
         # Back where it was left, unless it had come to the end
-        start = self.switcher.resume.get(name, 0.0)
+        start = spec["start"] if isinstance(spec.get("start"), (int, float)) else self.switcher.resume.get(name, 0.0)
         if mi.duration_s and start > mi.duration_s - 1.5:
             start = 0.0
         log.info("file %s (%dx%d @ %.2f fps, %s, audio: %s, layout: %s, from %.1f s)", name, mi.width, mi.height,
@@ -585,6 +603,7 @@ class Sender:
         """Look at what's cued, or failing that what's first in the queue."""
         spec = self.cue_spec or (self.queue[0] if self.queue else None)
         if spec is None or not self.video.enabled:
+            self.cue_duration = 0.0
             self._glib(self.switcher.preview, None)
             return
         self.preview_gen += 1
@@ -594,7 +613,9 @@ class Sender:
             if src is not None:
                 src.stop()
             return
+        self.cue_duration = getattr(src, "duration", 0.0)
         self._glib(self.switcher.preview, src)
+        await self.broadcast(self.summary(), roles={"guide"})
 
     def _preview_jpeg(self, jpeg: bytes):
         """Streaming thread: a picture of what's next, to the Guide pages."""
@@ -684,7 +705,12 @@ class Sender:
 
     @staticmethod
     def _clean_file(spec):
-        return {"kind": spec["kind"], "file": spec["file"][:300]} if isinstance(spec.get("file"), str) else None
+        if not isinstance(spec.get("file"), str):
+            return None
+        out = {"kind": spec["kind"], "file": spec["file"][:600]}
+        if spec["kind"] == "file" and isinstance(spec.get("start"), (int, float)) and spec["start"] >= 0:
+            out["start"] = float(spec["start"])     # where a film starts, if the Guide set it
+        return out
 
     @staticmethod
     def _clean_color(spec):
@@ -697,7 +723,8 @@ class Sender:
         """A source from the Guide, kept to what it's allowed to say (None if it isn't one)."""
         if not isinstance(spec, dict) or spec.get("kind") not in self.source_makers:
             return None
-        cleaners = {"file": self._clean_file, "image": self._clean_file, "color": self._clean_color}
+        cleaners = {"file": self._clean_file, "image": self._clean_file, "color": self._clean_color,
+                    "builtin": lambda sp: {"kind": "builtin", "id": str(sp.get("id", ""))[:40]}}
         clean = cleaners.get(spec["kind"])
         return clean(spec) if clean else {"kind": spec["kind"]}
 
@@ -774,7 +801,7 @@ class Sender:
         if src is not self.switcher.on_air:
             return False
         action = self.state["media"]["at_end"]
-        if action == "loop":
+        if action == "loop" or getattr(src, "loops", False):
             src.seek(0.0)
         elif action == "camera" and self.loop:
             asyncio.run_coroutine_threadsafe(self.take_camera(), self.loop)
@@ -843,8 +870,8 @@ class Sender:
             sink.emit("add", host, vport)
         self.switcher.bind(pipeline)
         if self.switcher.on_air is None and self.switcher.trans is None:
-            # Starting: the camera (or test pattern) is on, or the --file
-            self.switcher.take(self._camera_source(), "cut", 0.0)
+            # Starting: black (the camera isn't opened until it's wanted), or the --file
+            self.switcher.take(switcher.BlackSource(self._source_error), "cut", 0.0)
             if self.args.file and self.loop:
                 asyncio.run_coroutine_threadsafe(self.take_file(self.args.file, trusted=True), self.loop)
 
@@ -994,7 +1021,9 @@ class Sender:
                 "images": self.image_files(),
             },
             "switch": {**self.switcher.status(), "queue": list(self.queue), "cue": self.cue_spec,
-                       "kinds": list(self.source_makers)},
+                       "cue_duration": round(self.cue_duration, 2),
+                       "kinds": list(self.source_makers),
+                       "builtins": [{"id": k, "label": v["label"]} for k, v in switcher.BUILTINS.items()]},
             "music": {**self.music.status(), "files": self.music_files(),
                       "level_db": round(self.mixer.level_db, 1)},
         }
