@@ -395,15 +395,26 @@ private class NoiseBeats(private val rate: Int) {
 
 
 /**
- * The sound of text being typed, made as it's needed (the words layer says a letter has been typed):
- * "blip", short electronic chirps at a pitch that goes with the letter, as on an old computer's
- * screen; "click", a teletype's key. Several in one block are spread out a little.
+ * The sound of text being typed, made as it's needed (the words layer says a letter has been typed).
+ * "blip": electronic chirps at a pitch that goes with the letter. The others keep to one pitch each,
+ * and no more than about 25 a second: "tick" a soft data tick, "scan" a short rising sweep, "pulse" a
+ * low console thud, "fm" a glassy cyber bleep. "click": a soft teletype key. Several in one block
+ * are spread out a little.
  */
 object TypeSound {
     const val OFF = 0
     const val BLIP = 1
     const val CLICK = 2
+    const val TICK = 3
+    const val SCAN = 4
+    const val PULSE = 5
+    const val FM = 6
     private val pending = java.util.concurrent.ConcurrentLinkedQueue<Int>()
+
+    fun kind(name: String) = when (name) {
+        "blip" -> BLIP; "click" -> CLICK; "tick" -> TICK; "scan" -> SCAN; "pulse" -> PULSE; "fm" -> FM
+        else -> OFF
+    }
 
     fun trigger(kind: Int, code: Int) {
         if (pending.size < 64) pending.add((kind shl 16) or (code and 0xffff))
@@ -413,9 +424,11 @@ object TypeSound {
 }
 
 private class TypeSynth(private val rate: Int) {
-    private class Voice(var kind: Int, var freq: Double, var delay: Int, var age: Int, val len: Int, var phase: Double = 0.0)
+    private class Voice(val kind: Int, val freq: Double, var delay: Int, var age: Int, val len: Int, var phase: Double = 0.0)
     private val voices = ArrayList<Voice>()
     private var rng = 0x1F3D5B79L
+    private var lp = 0.0
+    private var lastSteady = 0L
 
     /** Starts a voice for each letter typed since the last block. */
     fun poll() {
@@ -424,14 +437,24 @@ private class TypeSynth(private val rate: Int) {
             val e = TypeSound.take() ?: break
             val kind = e shr 16
             val code = e and 0xffff
-            if (voices.size >= 24) { voices.removeAt(0) }
+            if (voices.size >= 24) voices.removeAt(0)
             val spread = n * rate / 90
-            if (kind == TypeSound.BLIP) {
-                // A pitch from the letter: a run of a few notes, like the chirps of a screen filling
-                val f = 880.0 + (code * 37 % 9) * 165.0
-                voices.add(Voice(kind, f, spread, 0, rate * 26 / 1000))
-            } else {
-                voices.add(Voice(kind, 1500.0 + (code * 13 % 5) * 220.0, spread, 0, rate * 14 / 1000))
+            val ms = { m: Int -> rate * m / 1000 }
+            when (kind) {
+                TypeSound.BLIP -> voices.add(Voice(kind, 880.0 + (code * 37 % 9) * 165.0, spread, 0, ms(26)))
+                TypeSound.CLICK -> voices.add(Voice(kind, 0.0, spread, 0, ms(12)))
+                else -> {
+                    // The steady ones are thinned to about 25 a second so a fast line isn't a buzz
+                    val now = System.nanoTime()
+                    if (now - lastSteady < 40_000_000L) continue
+                    lastSteady = now
+                    when (kind) {
+                        TypeSound.TICK -> voices.add(Voice(kind, 1760.0, spread, 0, ms(18)))
+                        TypeSound.SCAN -> voices.add(Voice(kind, 1100.0, spread, 0, ms(32)))
+                        TypeSound.PULSE -> voices.add(Voice(kind, 196.0, spread, 0, ms(80)))
+                        else -> voices.add(Voice(kind, 1320.0, spread, 0, ms(34)))
+                    }
+                }
             }
             n++
         }
@@ -446,17 +469,41 @@ private class TypeSynth(private val rate: Int) {
             if (v.delay > 0) { v.delay--; continue }
             if (v.age >= v.len) { it.remove(); continue }
             val t = v.age.toDouble() / rate
-            if (v.kind == TypeSound.BLIP) {
-                val env = minOf(1.0, v.age / (rate * 0.0015)) * exp(-t * 90.0)
-                v.phase += 2 * PI * v.freq / rate
-                if (v.phase > 2 * PI) v.phase -= 2 * PI
-                // A sine with some of a square's edge to it
-                out += 0.30 * env * (sin(v.phase) + 0.35 * sin(3 * v.phase))
-            } else {
-                rng = rng xor (rng shl 13); rng = rng xor (rng ushr 7); rng = rng xor (rng shl 17)
-                val w = (rng and 0xffffff).toDouble() / 0x800000 - 1.0
-                v.phase += 2 * PI * v.freq / rate
-                out += 0.45 * exp(-t * 600.0) * w + 0.25 * exp(-t * 350.0) * sin(v.phase) + 0.2 * exp(-t * 200.0) * sin(2 * PI * 140.0 * t)
+            val soft = minOf(1.0, v.age / (rate * 0.002))      // no click at the start
+            when (v.kind) {
+                TypeSound.BLIP -> {
+                    val env = minOf(1.0, v.age / (rate * 0.0015)) * exp(-t * 90.0)
+                    v.phase += 2 * PI * v.freq / rate
+                    if (v.phase > 2 * PI) v.phase -= 2 * PI
+                    out += 0.30 * env * (sin(v.phase) + 0.35 * sin(3 * v.phase))
+                }
+                TypeSound.TICK -> {
+                    v.phase += 2 * PI * v.freq / rate
+                    out += 0.20 * soft * exp(-t * 170.0) * sin(v.phase)
+                }
+                TypeSound.SCAN -> {
+                    // A sweep up from 1100 Hz to 2000 Hz over its length, in a smooth hump
+                    val f = v.freq + 900.0 * (v.age.toDouble() / v.len)
+                    v.phase += 2 * PI * f / rate
+                    out += 0.17 * sin(PI * v.age / v.len) * sin(v.phase)
+                }
+                TypeSound.PULSE -> {
+                    v.phase += 2 * PI * v.freq / rate
+                    out += 0.30 * soft * exp(-t * 48.0) * (sin(v.phase) + 0.4 * sin(2 * v.phase))
+                }
+                TypeSound.FM -> {
+                    // A carrier with a modulator at 1.5 times, its depth falling: glassy, then pure
+                    v.phase += 2 * PI * v.freq / rate
+                    val mod = 2.4 * exp(-t * 120.0) * sin(1.5 * v.phase)
+                    out += 0.18 * soft * exp(-t * 105.0) * sin(v.phase + mod)
+                }
+                else -> {
+                    // A soft key: dulled noise and a low thump
+                    rng = rng xor (rng shl 13); rng = rng xor (rng ushr 7); rng = rng xor (rng shl 17)
+                    val w = (rng and 0xffffff).toDouble() / 0x800000 - 1.0
+                    lp += 0.18 * (w - lp)
+                    out += soft * (0.55 * exp(-t * 450.0) * lp + 0.22 * exp(-t * 260.0) * sin(2 * PI * 120.0 * t))
+                }
             }
             v.age++
         }

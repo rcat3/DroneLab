@@ -78,7 +78,7 @@ class WordsLook {
   bool typing = false;
   double typeSpeed = 25;
 
-  /// A sound for each letter typed: 'off', 'blip' (electronic chirps) or 'click' (a teletype).
+  /// A sound for each letter typed: 'off', 'blip', 'click', 'tick', 'scan', 'pulse' or 'fm'.
   String typeSound = 'off';
 
   WordsLook();

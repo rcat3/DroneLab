@@ -508,8 +508,20 @@ class _WordsPhraseTabState extends State<WordsPhraseTab> {
           if (look.typing)
             _num(w, 'Typing speed', 2, 120, 1, (l) => l.typeSpeed, (l, v) => l.typeSpeed = v, unit: 'letters/s'),
           if (look.typing)
-            gChips('Typing sound', const [('off', 'None'), ('blip', 'Blips'), ('click', 'Clicks')], look.typeSound,
-                (v) => changed(() => look.typeSound = v)),
+            gChips(
+              'Typing sound',
+              const [
+                ('off', 'None'),
+                ('tick', 'Data tick'),
+                ('scan', 'Scan'),
+                ('pulse', 'Pulse'),
+                ('fm', 'Cyber'),
+                ('blip', 'Blips'),
+                ('click', 'Soft clicks'),
+              ],
+              look.typeSound,
+              (v) => changed(() => look.typeSound = v),
+            ),
           if (look.typing) ..._typedOn(w, p, enabled, changed),
           const SizedBox(height: 4),
           Row(

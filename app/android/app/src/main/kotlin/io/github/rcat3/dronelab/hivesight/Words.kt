@@ -59,8 +59,8 @@ class Cue(private val j: JSONObject) {
     /** Types out letter by letter, like the unit's terminal; [typeSpeed] letters a second to start with. */
     val typing = j.optBoolean("typing")
     val typeSpeed = j.optDouble("type_speed", 25.0).toFloat().coerceIn(2f, 120f)
-    /** A sound for each letter typed: off, "blip" (electronic chirps) or "click" (a teletype). */
-    val typeSound = when (j.optString("type_sound")) { "blip" -> TypeSound.BLIP; "click" -> TypeSound.CLICK; else -> TypeSound.OFF }
+    /** A sound for each letter typed (see [TypeSound]). */
+    val typeSound = TypeSound.kind(j.optString("type_sound"))
     /** A change to a phrase that's already showing: no fade out and in. */
     val update = j.optBoolean("update")
 
