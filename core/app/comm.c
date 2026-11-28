@@ -131,6 +131,7 @@
 #define MSG_FAVOURITES      0x19    // from the phone: the wearer's favourite patterns, in pieces
 #define MSG_PICTURE         0x1A    // both ways: a picture for the screen, in pieces, and the ack
 #define MSG_SENT_SOUND      0x1B    // both ways: a sound for the speaker, in pieces, and the ack, as a picture's
+#define MSG_HOLD            0x1F    // from the phone: HiveMind voice held (1) or not (0), for HiveSight
 #define MSG_TOY_LEASE       0x1E    // from the phone: stop the toys if this isn't sent again within these seconds (0: no lease)
 #define MSG_STORAGE         0x1D    // both ways: a picture or sound to save to the SD card, in pieces, and the ack
 #define STORAGE_ABORT       0x08    // in 0x1D: give up on the file, deleting what's there of it
@@ -262,6 +263,7 @@ static target_t target;
 static volatile uint32_t target_seq;
 static volatile uint32_t refused_ms;            // when talking was last refused, 0 for never
 static volatile bool recording;     // the phone's recording what's said, and nothing goes anywhere else
+static volatile bool held;          // HiveMind voice held (MSG_HOLD): nothing talks but a recording
 static uint32_t beep_seen;          // speaker_beep_count(), by the microphone's task
 static uint32_t beep_pos = UINT32_MAX;  // samples since the speaker made it, UINT32_MAX while there's none
 static uint32_t direct_peers_ms;
@@ -538,6 +540,13 @@ static void send_talked(uint8_t what, uint8_t flags)
 
 static bool talking(void)
 {
+    // Held for a HiveSight session: the button, voice mode, the screen and the
+    // phone's talk say nothing, on the server or direct comms; a recording (the
+    // Guide's dry microphone) goes on
+    if (held)
+    {
+        return recording;
+    }
     return recording || phone_talk ||
            (!phone_mic && (screen_talk || talk_button_held() || (mode == COMM_VOICE && voice_heard)));
 }
@@ -1583,6 +1592,7 @@ static void forget_phone(void)
     updater_app_cancel();   // an update from it that hasn't finished
     storage_save_abort();   // and a file for the card
     phone_talk = false;     // so a phone that's gone doesn't leave it talking
+    held = false;           // nor held quiet
     phone_mic = false;      // and the board's own mic talks again
     phone_mic_sending = false;
     if (recording)
@@ -2245,6 +2255,11 @@ void comm_poll(uint32_t now_ms)
         {
             // The phone's mic records: the speaker's effect to match, alone
             hold_preset(msg[1] != 0 && len >= 4 ? msg[3] : -1);
+        }
+        else if (msg[0] == MSG_HOLD && len >= 2)
+        {
+            held = msg[1] != 0;
+            printf("comm: HiveMind voice %s\n", held ? "held" : "let go");
         }
         else if (msg[0] == MSG_TOY_LEASE && len >= 2)
         {

@@ -373,7 +373,10 @@
  *  25  a lease on the toys (0x1E, from the phone): the toys stop if it
  *      isn't sent again in time, for a Guide's HiveSight session
  *  26  recording the microphone dry (0x0A flag 0x08), with no effect, for
- *      the HiveSight Guide's own effects on the computer */
+ *      the HiveSight Guide's own effects on the computer; HiveMind voice
+ *      held (0x1F, from the phone) for a HiveSight session: the board
+ *      doesn't talk, on the server or direct comms, but records, and
+ *      direct comms stay up */
 #define COMM_VERSION            26
 
 /* Who's heard at once, at most, and the longest name kept, in bytes. */
