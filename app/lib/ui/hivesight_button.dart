@@ -16,6 +16,7 @@ import '../comm/rules.dart' show RuleClass;
 import 'hivesight_code.dart';
 import 'hivesight_guide_page.dart';
 import 'hivesight_scan_page.dart';
+import 'permissions_page.dart' show PermissionsPage;
 import 'theme.dart';
 
 /// HiveSight on the Vessel's side: joining a Guide's invitation, and the
@@ -63,7 +64,29 @@ Future<String?> joinHiveSight(
     from: from,
     fromCode: fromCode,
   );
-  if (d.refusal != null) return d.refusal;
+  if (d.refusal != null) {
+    // Set to Nobody: offer the setting itself
+    if (d.refusal == hiveSightOffMessage && context.mounted) {
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text("HiveSight is set to Nobody"),
+          content: const Text("You've turned HiveSight off in Permissions, so no Guide can start a session with you."),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Close')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Open HiveSight permissions')),
+          ],
+        ),
+      );
+      if (go == true && context.mounted) {
+        final navigator = Navigator.of(context);
+        beforeOpen?.call();
+        navigator.push(MaterialPageRoute<void>(builder: (_) => PermissionsPage(comm: comm, feature: RuleClass.hiveSight)));
+      }
+      return null;
+    }
+    return d.refusal;
+  }
   if (me == null) return "This phone's identity isn't ready";
   from = d.from;
   final keyHex = _hex(i.guideKey);

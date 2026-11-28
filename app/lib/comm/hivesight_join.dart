@@ -8,6 +8,9 @@ import 'hivesight_invite.dart';
 import 'known_people.dart';
 import 'rules.dart';
 
+/// Said when HiveSight is set to Nobody; the Vessel's app offers the setting instead.
+const hiveSightOffMessage = 'HiveSight is set to Nobody in Setup → Permissions';
+
 /// What reading a scanned code gave.
 enum CodeResult { ok, notHiveSight, damaged, altered, expired }
 
@@ -81,7 +84,7 @@ Future<JoinDecision> decideJoin(
     return JoinDecision.no(fromCode ? 'That HiveSight code has been altered' : "This invitation isn't from the person who sent it");
   }
   if (i.expired) return JoinDecision.no('This session ended at ${HiveSightInvite.clock(i.expires)}');
-  if (rules.policy(RuleClass.hiveSight) == Policy.off) return const JoinDecision.no('HiveSight is set to Nobody in Setup → Permissions');
+  if (rules.policy(RuleClass.hiveSight) == Policy.off) return const JoinDecision.no(hiveSightOffMessage);
   var name = from, saved = from;
   if (fromCode) {
     final known = people[KnownPerson.keyId(i.guideKey)]?.name ?? '';

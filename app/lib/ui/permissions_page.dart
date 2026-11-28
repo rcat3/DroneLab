@@ -61,8 +61,9 @@ class PermissionsRow extends StatelessWidget {
       );
 }
 
-void openPermissions(BuildContext context, CommController comm) =>
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => PermissionsPage(comm: comm)));
+/// The Permissions page, on Features and [feature] (a RuleClass) if given.
+void openPermissions(BuildContext context, CommController comm, {int? feature}) =>
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => PermissionsPage(comm: comm, feature: feature)));
 
 String _ago(DateTime t) {
   final s = DateTime.now().difference(t).inSeconds;
@@ -156,7 +157,8 @@ Future<Set<int>?> showGrantSheet(BuildContext context, CommController comm,
 /// allowed, and who's been declined. The log of commands is a tap away.
 class PermissionsPage extends StatelessWidget {
   final CommController comm;
-  const PermissionsPage({super.key, required this.comm});
+  final int? feature;
+  const PermissionsPage({super.key, required this.comm, this.feature});
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -175,7 +177,7 @@ class PermissionsPage extends StatelessWidget {
               );
           return DefaultTabController(
             length: 4,
-            initialIndex: perms.requests.isEmpty ? 1 : 0,
+            initialIndex: perms.requests.isEmpty || feature != null ? 1 : 0,
             child: Scaffold(
               appBar: AppBar(
                 title: const Text('Permissions'),
@@ -225,7 +227,7 @@ class PermissionsPage extends StatelessWidget {
                 Expanded(
                   child: TabBarView(children: [
                     _RequestsTab(comm: comm, policy: policy),
-                    _FeaturesTab(comm: comm, policy: policy),
+                    _FeaturesTab(comm: comm, policy: policy, feature: feature),
                     _PeopleTab(comm: comm, policy: policy),
                     _DeclinedTab(comm: comm, policy: policy),
                   ]),
@@ -297,14 +299,15 @@ class _RequestsTab extends StatelessWidget {
 class _FeaturesTab extends StatefulWidget {
   final CommController comm;
   final PolicyView policy;
-  const _FeaturesTab({required this.comm, required this.policy});
+  final int? feature;
+  const _FeaturesTab({required this.comm, required this.policy, this.feature});
 
   @override
   State<_FeaturesTab> createState() => _FeaturesTabState();
 }
 
 class _FeaturesTabState extends State<_FeaturesTab> {
-  int _cap = permissionKinds.first.id;
+  late int _cap = widget.feature ?? permissionKinds.first.id;
 
   Future<void> _set(ListedPerson u, bool on) async {
     final failed = await widget.comm.permissions.setAllowed(u.id, {_cap: on});
