@@ -33,8 +33,64 @@ log = logging.getLogger("hivesight")
 EYE_W, EYE_H, FPS = 1280, 720, 30
 W, H = EYE_W * 2, EYE_H
 PROGRAM_CAPS = f"video/x-raw,format=I420,width={W},height={H},framerate={FPS}/1"
-EFFECTS = ("fade", "dissolve", "cut")
 TICK_MS = 33
+
+
+# ---------------------------------------------------------- transitions
+class Transition:
+    """How one deck gives way to the other. To add one: subclass, set [id] and
+    [label], make [apply] set the decks' picture (alpha 0..1: [new] is above
+    [old] over black) and their film sound for the progress [p] (0..1), and
+    add an instance to TRANSITIONS. The Guide is told the list, so its menu has it."""
+    id = ""
+    label = ""
+    instant = False         # takes no time whatever the time set
+
+    def apply(self, p: float, old: "Slot", new: "Slot"):
+        raise NotImplementedError
+
+    @staticmethod
+    def show(slot: "Slot", alpha: float, sound: float | None = None):
+        slot.alpha(alpha)
+        if slot.film is not None:
+            slot.film.set(alpha if sound is None else sound)
+
+
+class Cut(Transition):
+    id, label, instant = "cut", "Cut", True
+
+    def apply(self, p, old, new):
+        self.show(old, 0.0)
+        self.show(new, 1.0)
+
+
+class FadeThroughBlack(Transition):
+    id, label = "fade", "Fade"
+
+    def apply(self, p, old, new):
+        if p < 0.5:
+            self.show(old, 1 - 2 * p)
+            self.show(new, 0.0)
+        else:
+            self.show(old, 0.0)
+            self.show(new, 2 * p - 1)
+
+
+class Dissolve(Transition):
+    id, label = "dissolve", "Dissolve"
+
+    def apply(self, p, old, new):
+        # The old stays whole below while the new comes up over it; the sound crosses the same way
+        old.alpha(1.0)
+        new.alpha(p)
+        if old.film is not None:
+            old.film.set(1 - p)
+        if new.film is not None:
+            new.film.set(p)
+
+
+TRANSITIONS: dict[str, Transition] = {t.id: t for t in (Cut(), FadeThroughBlack(), Dissolve())}
+EFFECTS = tuple(TRANSITIONS)
 
 
 def program_desc(encoder_chain: str, dscp: int, latency_ms: int = 60) -> str:
@@ -243,8 +299,11 @@ class FileSource(_PipelineSource):
     """A video file, played in real time, its soundtrack to the deck's film track."""
     kind = "file"
 
-    def __init__(self, name: str, info, layout: str, av_offset_ms: int, on_eos, on_error, autoplug=None):
+    def __init__(self, name: str, info, layout: str, av_offset_ms: int, on_eos, on_error, autoplug=None,
+                 start_pos: float = 0.0):
         self.name = name
+        self.start_pos = start_pos
+        self._started = False
         self.info = info
         self.layout = layout
         self.duration = info.duration_s
@@ -292,6 +351,21 @@ class FileSource(_PipelineSource):
         if s is not None:
             s.set_property("ts-offset", a)
 
+    def start(self, slot):
+        # Starts paused, to go to where it was left (if it was) before it plays
+        self.slot = slot
+        self.pipeline.get_bus().connect("message::async-done", self._ready)
+        self.pipeline.set_state(Gst.State.PAUSED if self.start_pos > 0 else Gst.State.PLAYING)
+
+    def _ready(self, _bus, _msg):
+        if self._started or self.pipeline is None:
+            return
+        self._started = True
+        if self.start_pos > 0:
+            self.pipeline.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE,
+                                      int(self.start_pos * Gst.SECOND))
+            self.pipeline.set_state(Gst.State.PLAYING)
+
     def set_paused(self, on):
         if self.pipeline is not None:
             self.pipeline.set_state(Gst.State.PAUSED if on else Gst.State.PLAYING)
@@ -338,23 +412,25 @@ class ImageSource(Source):
     """A still picture, placed in each eye with a zoom and a position."""
     kind = "image"
 
-    def __init__(self, name: str, path: Path, layout: str, zoom: float, x: float, y: float):
+    def __init__(self, name: str, path: Path, layout: str, zoom: float, x: float, y: float, fit: str = "fit"):
         self.name = name
         self.im = stills.load(path)
         self.layout = layout
+        self.fit = fit
         self.zoom, self.x, self.y = zoom, x, y
         self.buf = None
         self._timer = None
         self._render()
 
     def _render(self):
-        rgb = stills.render_program(self.im, self.layout, EYE_W, EYE_H, self.zoom, self.x, self.y)
+        rgb = stills.render_program(self.im, self.layout, EYE_W, EYE_H, self.zoom, self.x, self.y, self.fit)
         self.buf = Gst.Buffer.new_wrapped(stills.to_i420(rgb))
 
-    def place(self, zoom: float, x: float, y: float):
-        if (zoom, x, y) == (self.zoom, self.x, self.y):
+    def place(self, zoom: float, x: float, y: float, layout: str | None = None, fit: str | None = None):
+        layout, fit = layout or self.layout, fit or self.fit
+        if (zoom, x, y, layout, fit) == (self.zoom, self.x, self.y, self.layout, self.fit):
             return
-        self.zoom, self.x, self.y = zoom, x, y
+        self.zoom, self.x, self.y, self.layout, self.fit = zoom, x, y, layout, fit
         self._render()
         if self._timer is not None:
             self._push()
@@ -394,6 +470,7 @@ class Switcher:
         self._keep = None
         self.effect = "fade"
         self.secs = 1.5
+        self.resume: dict[str, float] = {}      # where each film was when it went off air
         self.pv: Source | None = None   # the source being looked at before it goes on
         self.on_preview = lambda jpeg: None
 
@@ -454,6 +531,8 @@ class Switcher:
     def status(self) -> dict:
         t = self.trans
         return {"effect": self.effect, "secs": self.secs,
+                "effects": [{"id": t.id, "label": t.label, "instant": t.instant} for t in TRANSITIONS.values()],
+                "resume": {k: round(v, 1) for k, v in self.resume.items()},
                 "transition": None if t is None else {"to": t["src"].spec(), "phase": t["phase"],
                                                      "progress": round(t.get("p", 0.0), 2)}}
 
@@ -473,8 +552,8 @@ class Switcher:
         free.reset()
         free.source = src
         src.start(free)
-        if cur.source is None:
-            effect, secs = "cut", 0.0
+        if cur.source is None or TRANSITIONS[effect].instant:
+            effect, secs = ("cut" if cur.source is None else effect), 0.0
         self.trans = {"src": src, "slot": free, "effect": effect, "secs": secs, "phase": "waiting",
                       "t0": time.monotonic(), "p": 0.0}
         self.on_change()
@@ -507,24 +586,10 @@ class Switcher:
                 return False
             else:
                 return True
-        secs = t["secs"] if t["effect"] != "cut" else 0.0
+        secs = t["secs"]
         p = 1.0 if secs <= 0 else min(1.0, (now - t["t0"]) / secs)
         t["p"] = p
-        eff = t["effect"]
-        if eff == "dissolve":
-            # The old stays whole below while the new comes up over it
-            cur.alpha(1.0)
-            free.alpha(p)
-            self._film(cur, 1 - p), self._film(free, p)
-        elif eff == "fade":
-            if p < 0.5:
-                cur.alpha(1 - 2 * p)
-                free.alpha(0.0)
-                self._film(cur, 1 - 2 * p), self._film(free, 0.0)
-            else:
-                cur.alpha(0.0)
-                free.alpha(2 * p - 1)
-                self._film(cur, 0.0), self._film(free, 2 * p - 1)
+        TRANSITIONS[t["effect"]].apply(p, cur, free)
         if p >= 1.0:
             self._finish()
             return False
@@ -545,11 +610,28 @@ class Switcher:
         self._film(free, 1.0)
         old.alpha(0.0)
         if old.source is not None:
+            self._remember(old.source)
             old.source.stop()
         old.reset()
         self.program = free.idx
         self._ticker = None
         self.on_change()
+
+    def _remember(self, src: Source):
+        """A film going off air keeps its place, to carry on from when it's back."""
+        if src.kind != "file":
+            return
+        pos = src.position()
+        if src.duration and pos > src.duration - 1.5:
+            self.resume.pop(src.name, None)     # it had finished
+        elif pos > 1.0:
+            self.resume[src.name] = pos
+
+    def forget(self, name: str | None = None):
+        if name is None:
+            self.resume.clear()
+        else:
+            self.resume.pop(name, None)
 
     # ---- the source on air ----
     def set_paused(self, on: bool):
@@ -569,6 +651,7 @@ class Switcher:
     def stop_all(self):
         """No session: every source is let go (the camera's light goes out)."""
         self.trans = None
+        self.resume.clear()
         self.preview(None)
         for s in self.slots:
             if s.source is not None:

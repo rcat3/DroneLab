@@ -34,15 +34,22 @@ def eye_regions(layout: str, w: int, h: int):
     return (0, 0, w, h), (0, 0, w, h), False
 
 
+FITS = ("fit", "fill", "stretch")
+
+
 def render_eye(im: Image.Image, region, stretch: bool, eye_w: int, eye_h: int,
-               zoom: float, px: float, py: float) -> Image.Image:
+               zoom: float, px: float, py: float, fit: str = "fit") -> Image.Image:
     """One eye: [region] of [im] fitted into the eye (zoom 1: all of it
     showing), magnified by [zoom] about the middle, and moved by [px], [py]
-    in -1..1: at either end the picture's edge is at the eye's."""
+    in -1..1: at either end the picture's edge is at the eye's. [fit]: "fit"
+    shows all of it, "fill" covers the eye (some is cut off), "stretch" fills
+    the eye whatever the shape."""
     x0, y0, rw, rh = region
     zoom = max(0.05, min(zoom, 40.0))
-    if stretch:
+    if stretch or fit == "stretch":
         sx, sy = eye_w / rw * zoom, eye_h / rh * zoom
+    elif fit == "fill":
+        sx = sy = max(eye_w / rw, eye_h / rh) * zoom
     else:
         sx = sy = min(eye_w / rw, eye_h / rh) * zoom
     dw, dh = rw * sx, rh * sy                    # the region as drawn
@@ -68,15 +75,15 @@ def render_eye(im: Image.Image, region, stretch: bool, eye_w: int, eye_h: int,
 
 
 def render_program(im: Image.Image, layout: str, eye_w: int, eye_h: int,
-                   zoom: float = 1.0, px: float = 0.0, py: float = 0.0) -> np.ndarray:
+                   zoom: float = 1.0, px: float = 0.0, py: float = 0.0, fit: str = "fit") -> np.ndarray:
     """RGB program frame (eye_h x 2 eye_w x 3, uint8) with the image in both eyes."""
     left, right, stretch = eye_regions(layout, im.width, im.height)
     frame = Image.new("RGB", (eye_w * 2, eye_h))
-    frame.paste(render_eye(im, left, stretch, eye_w, eye_h, zoom, px, py), (0, 0))
+    frame.paste(render_eye(im, left, stretch, eye_w, eye_h, zoom, px, py, fit), (0, 0))
     if right == left:
         frame.paste(frame.crop((0, 0, eye_w, eye_h)), (eye_w, 0))
     else:
-        frame.paste(render_eye(im, right, stretch, eye_w, eye_h, zoom, px, py), (eye_w, 0))
+        frame.paste(render_eye(im, right, stretch, eye_w, eye_h, zoom, px, py, fit), (eye_w, 0))
     return np.asarray(frame)
 
 

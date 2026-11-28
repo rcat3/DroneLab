@@ -79,6 +79,9 @@ def make_media(d: Path):
     dr = ImageDraw.Draw(im)
     dr.rectangle((100, 100, 700, 400), fill=(240, 200, 40))
     im.save(d / "media" / "pic.png")
+    tall = Image.new("RGB", (900, 1600), (220, 30, 30))      # a portrait photo: red above, blue below
+    ImageDraw.Draw(tall).rectangle((0, 800, 900, 1600), fill=(30, 30, 220))
+    tall.save(d / "media" / "tall.png")
     for name, f in (("a.wav", 330), ("b.wav", 660)):
         subprocess.run(
             ["gst-launch-1.0", "-q", "-e", "audiotestsrc", "num-buffers=1000", "wave=sine", f"freq={f}",
@@ -90,6 +93,12 @@ def left_mean(path):
     from PIL import Image
     im = np.asarray(Image.open(path).convert("RGB").resize((64, 18))).astype(float)
     return im[:, 4:28].mean(axis=(0, 1))
+
+
+def right_mean(path):
+    from PIL import Image
+    im = np.asarray(Image.open(path).convert("RGB").resize((64, 18))).astype(float)
+    return im[:, 36:60].mean(axis=(0, 1))
 
 
 async def scenario(check, d: Path):
@@ -192,6 +201,30 @@ async def scenario(check, d: Path):
         await asyncio.sleep(1)
         check("nothing cued, nothing to look at", g.next_jpeg == b"" or len(g.next_jpeg) == 0, f"{len(g.next_jpeg)} bytes")
 
+        check("the Guide is told the effects and kinds of source there are",
+              [e["id"] for e in g.sum["switch"]["effects"]] == ["cut", "fade", "dissolve"] and
+              set(g.sum["switch"]["kinds"]) == {"camera", "color", "file", "image"},
+              f"{[e['id'] for e in g.sum['switch']['effects']]}, {g.sum['switch']['kinds']}")
+
+        # A portrait photo: the same in both eyes unless it's said to be a pair
+        await g.set("switch.effect", "cut")
+        await g.send(type="take", spec={"kind": "image", "file": "tall.png"})
+        await asyncio.sleep(2.5)
+        lm, rm = left_mean(frames()[-1]), right_mean(frames()[-1])
+        check("a photo is the same in both eyes (not split top and bottom)",
+              np.allclose(lm, rm, atol=12) and lm[0] > 25 and lm[2] > 25, f"left {lm.round()} right {rm.round()}")
+        await g.set("image.layout", "tb")
+        await asyncio.sleep(1.5)
+        lm, rm = left_mean(frames()[-1]), right_mean(frames()[-1])
+        check("as a top and bottom pair, the top is the left eye's", lm[0] > 100 and lm[2] < 60 and rm[2] > 100 and rm[0] < 60,
+              f"left {lm.round()} right {rm.round()}")
+        await g.set("image.layout", "mono")
+        await g.set("image.fit", "fill")
+        await asyncio.sleep(1.5)
+        fl = left_mean(frames()[-1])
+        check("fill covers the eye (the middle of the photo, both colours)", fl[0] > 80 and fl[2] > 80, f"{fl.round()}")
+        await g.set("image.fit", "fit")
+
         # A film: its pictures and sound; pause keeps the stream going on its last picture
         await g.set("switch.effect", "cut")
         await g.send(type="media_play", file="film.mkv")
@@ -216,6 +249,28 @@ async def scenario(check, d: Path):
         await g.send(type="media_seek", pos=7.0)
         await asyncio.sleep(1.5)
         check("seeking works", 7.0 <= g.sum["media"]["position"] < 9.5, f"{g.sum['media']['position']} s")
+
+        # A film put aside carries on from where it was, unless it's told to start again
+        await g.send(type="media_seek", pos=3.0)
+        await asyncio.sleep(1.0)
+        await g.send(type="take", spec={"kind": "color", "rgb": 0x0000FF})
+        await asyncio.sleep(1.5)
+        left = g.sum["switch"]["resume"].get("film.mkv", 0)
+        check("a film off air is remembered", 3.0 <= left < 6.0, f"{g.sum['switch']['resume']}")
+        await g.send(type="take", spec={"kind": "file", "file": "film.mkv"})
+        await asyncio.sleep(2.5)
+        check("and goes on from there, not from the start", g.state["media"]["file"] == "film.mkv" and
+              left + 1.0 <= g.sum["media"]["position"] < left + 5.0, f"left at {left} s, now {g.sum['media']['position']} s")
+        await g.send(type="take", spec={"kind": "color", "rgb": 0x0000FF})
+        await asyncio.sleep(1.5)
+        await g.send(type="resume_clear", file="film.mkv")
+        await asyncio.sleep(0.5)
+        await g.send(type="take", spec={"kind": "file", "file": "film.mkv"})
+        await asyncio.sleep(2.5)
+        check("told to start again, it does", g.sum["media"]["position"] < 4.0 and g.state["media"]["file"] == "film.mkv",
+              f"{g.sum['media']['position']} s")
+        await g.send(type="media_seek", pos=3.0)
+        await asyncio.sleep(1.0)
 
         # The queue, and Next
         await g.send(type="queue_add", spec={"kind": "image", "file": "pic.png"})

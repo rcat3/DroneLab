@@ -139,13 +139,16 @@ DEFAULT_STATE = {
     # av_offset_ms > 0 delays the file's video to line up with the phone's
     # later-arriving audio (jitter buffer + Bluetooth); < 0 delays the audio.
     # at_end: loop, camera, hold, or next (the next one queued)
+    # layout: how a film is laid out for the two eyes: auto (guessed from its name and shape), or
+    # mono, sbs, hsbs, tb, htb
     "media": {"source": "camera", "file": "", "paused": False, "at_end": "loop",
-              "av_offset_ms": 150},
+              "av_offset_ms": 150, "layout": "auto"},
     # How the picture changes over: fade (out to black, then in), dissolve, or cut
     "switch": {"effect": "fade", "secs": 1.5},
     "color": {"rgb": 0x202020},
-    # A still picture's place in each eye: zoom 1 shows all of it; x, y -1..1
-    "image": {"zoom": 1.0, "x": 0.0, "y": 0.0},
+    # A still picture: laid out for the eyes (mono: the same in both; or a stereo pair: sbs, hsbs,
+    # tb, htb), fitted (fit: all of it, fill: covers, stretch), then zoomed; x, y -1..1
+    "image": {"layout": "mono", "fit": "fit", "zoom": 1.0, "x": 0.0, "y": 0.0},
     # The music: volume, how long one track crossfades into the next, and what's
     # done when the queue is empty: stop or loop
     "music": {"vol": 0.8, "xfade_s": 4.0, "at_end": "stop"},
@@ -394,6 +397,8 @@ class Sender:
         self.mixer = audiomix.MediaMixer()
         self.switcher = switcher.Switcher(self.mixer, self._switch_changed, self._notify_sync)
         self.switcher.on_preview = self._preview_jpeg
+        self.guide_commands = self._guide_commands()
+        self.source_makers = self._source_makers()
         self.music = music.MusicPlayer(self.mixer, self.music_dir, lambda: self.state["music"], self._notify_sync)
         self._set_stream_state(None)
         self.video = GstPipeline("video", self.video_desc, on_built=self._attach_video_clients,
@@ -487,47 +492,73 @@ class Sender:
     def _camera_source(self):
         return switcher.CameraSource(self.args, self._source_error)
 
+    # ---------------- sources ----------------
+    # One coroutine per kind of source, registered here: to add one (a web page, a
+    # slideshow, a second camera...), write a Source in switcher.py, an
+    # `async def _make_x(self, spec)` that makes it from the Guide's spec, a cleaner
+    # in _clean_spec, and add the kind to this table. Taking, cueing, queueing and
+    # the preview then work for it with nothing else changed.
+    def _source_makers(self):
+        return {"camera": self._make_camera, "color": self._make_color, "file": self._make_file,
+                "image": self._make_image}
+
     async def make_source(self, spec):
         """A source for [spec] (not started), or None, the Guide told why."""
         kind = spec.get("kind") if isinstance(spec, dict) else None
-        if kind == "camera":
-            return self._camera_source()
-        if kind == "color":
-            rgb = spec.get("rgb")
-            if rgb is not None:
-                self.state["color"]["rgb"] = int(rgb) & 0xFFFFFF
-            return switcher.ColorSource(self.state["color"]["rgb"], self._source_error)
-        name = str(spec.get("file", "")) if isinstance(spec, dict) else ""
-        trusted = bool(spec.get("trusted")) if isinstance(spec, dict) else False
+        maker = self.source_makers.get(kind)
+        return await maker(spec) if maker else None
+
+    def _media_path(self, spec):
+        name = str(spec.get("file", ""))
         # A path on the command line (--file) may be anywhere; the Guide's names are in the media folder
-        p = Path(name).expanduser() if trusted and Path(name).expanduser().is_file() \
-            else media.resolve(self.media_dir, name)
-        if kind in ("file", "image") and p is None:
+        if spec.get("trusted") and Path(name).expanduser().is_file():
+            return name, Path(name).expanduser()
+        return name, media.resolve(self.media_dir, name)
+
+    async def _make_camera(self, spec):
+        return self._camera_source()
+
+    async def _make_color(self, spec):
+        rgb = spec.get("rgb")
+        if rgb is not None:
+            self.state["color"]["rgb"] = int(rgb) & 0xFFFFFF
+        return switcher.ColorSource(self.state["color"]["rgb"], self._source_error)
+
+    async def _make_file(self, spec):
+        name, p = self._media_path(spec)
+        if p is None:
             await self.notify(f"not found in media folder: {name}")
             return None
-        if kind == "file":
-            try:
-                mi = await asyncio.get_running_loop().run_in_executor(None, media.probe, p)
-            except Exception as e:  # unreadable / no video stream
-                log.warning("can't play %s: %s", name, e)
-                await self.notify(f"can't play {name}: {e}")
-                return None
+        try:
+            mi = await asyncio.get_running_loop().run_in_executor(None, media.probe, p)
+        except Exception as e:  # unreadable / no video stream
+            log.warning("can't play %s: %s", name, e)
+            await self.notify(f"can't play {name}: {e}")
+            return None
+        layout = self.state["media"]["layout"]
+        if layout not in media.LAYOUTS:
             layout = media.guess_layout(name, mi.width, mi.height)
-            log.info("file %s (%dx%d @ %.2f fps, %s, audio: %s, layout guess: %s)", name, mi.width, mi.height,
-                     mi.fps, media.fmt_time(mi.duration_s), "yes" if mi.has_audio else "no", layout)
-            return switcher.FileSource(name, mi, layout, self.state["media"]["av_offset_ms"], self._on_file_eos,
-                                       self._source_error, autoplug=_autoplug_select)
-        if kind == "image":
-            try:
-                im = self.state["image"]
-                src = await asyncio.get_running_loop().run_in_executor(
-                    None, lambda: switcher.ImageSource(name, p, "mono", im["zoom"], im["x"], im["y"]))
-                src.layout = media.guess_layout(name, src.im.width, src.im.height)
-                src._render()
-                return src
-            except Exception as e:
-                await self.notify(f"can't show {name}: {e}")
-        return None
+        # Back where it was left, unless it had come to the end
+        start = self.switcher.resume.get(name, 0.0)
+        if mi.duration_s and start > mi.duration_s - 1.5:
+            start = 0.0
+        log.info("file %s (%dx%d @ %.2f fps, %s, audio: %s, layout: %s, from %.1f s)", name, mi.width, mi.height,
+                 mi.fps, media.fmt_time(mi.duration_s), "yes" if mi.has_audio else "no", layout, start)
+        return switcher.FileSource(name, mi, layout, self.state["media"]["av_offset_ms"], self._on_file_eos,
+                                   self._source_error, autoplug=_autoplug_select, start_pos=start)
+
+    async def _make_image(self, spec):
+        name, p = self._media_path(spec)
+        if p is None:
+            await self.notify(f"not found in media folder: {name}")
+            return None
+        im = self.state["image"]
+        try:
+            return await asyncio.get_running_loop().run_in_executor(
+                None, lambda: switcher.ImageSource(name, p, im["layout"], im["zoom"], im["x"], im["y"], im["fit"]))
+        except Exception as e:
+            await self.notify(f"can't show {name}: {e}")
+            return None
 
     async def take_spec(self, spec):
         src = await self.make_source(spec)
@@ -544,6 +575,11 @@ class Sender:
 
     async def take_file(self, name: str, trusted: bool = False):
         await self.take_spec({"kind": "file", "file": name, "trusted": trusted})
+
+    async def _retake(self, name):
+        src = await self.make_source({"kind": "file", "file": name})
+        if src is not None:
+            self._glib(self.switcher.take, src, "cut", 0.0)
 
     async def update_preview(self):
         """Look at what's cued, or failing that what's first in the queue."""
@@ -573,21 +609,97 @@ class Sender:
         await self.update_preview()
         await self.broadcast(self.summary(), roles={"guide"})
 
-    def _clean_spec(self, spec):
-        """A queue item from the Guide, kept to what it's allowed to say."""
-        if not isinstance(spec, dict):
+    # ---------------- commands from the Guide ----------------
+    # One coroutine per message type, registered here: to add a command, write
+    # `async def _cmd_x(self, msg)` and add it to the table. (The older ones, in
+    # handle_message's chain, take the same shape if they're moved.)
+    def _guide_commands(self):
+        return {
+            "take": self._cmd_take, "cue": self._cmd_cue, "next": self._cmd_next,
+            "queue_add": self._cmd_queue_add, "queue_remove": self._cmd_queue_remove,
+            "queue_move": self._cmd_queue_move, "queue_clear": self._cmd_queue_clear,
+            "resume_clear": self._cmd_resume_clear,
+            "music_play": self._cmd_music("play", "file", str), "music_add": self._cmd_music("enqueue", "file", str),
+            "music_remove": self._cmd_music("remove", "index", int),
+            "music_move": self._cmd_music_move, "music_clear": self._cmd_music("clear"),
+            "music_next": self._cmd_music("next"), "music_stop": self._cmd_music("stop"),
+            "music_pause": self._cmd_music_pause, "music_seek": self._cmd_music_seek,
+        }
+
+    async def _cmd_take(self, msg):
+        await self.take_spec(self._clean_spec(msg.get("spec")))
+
+    async def _cmd_cue(self, msg):
+        self.cue_spec = self._clean_spec(msg.get("spec"))
+        await self.update_preview()
+
+    async def _cmd_next(self, msg):
+        await self.take_next()
+
+    async def _cmd_queue_add(self, msg):
+        spec = self._clean_spec(msg.get("spec"))
+        if spec and len(self.queue) < 200:
+            self.queue.append(spec)
+            await self.update_preview()
+
+    async def _cmd_queue_remove(self, msg):
+        i = msg.get("index")
+        if isinstance(i, int) and 0 <= i < len(self.queue):
+            del self.queue[i]
+            await self.update_preview()
+
+    async def _cmd_queue_move(self, msg):
+        i, j = msg.get("from"), msg.get("to")
+        if isinstance(i, int) and isinstance(j, int) and 0 <= i < len(self.queue):
+            self.queue.insert(max(0, min(j, len(self.queue) - 1)), self.queue.pop(i))
+            await self.update_preview()
+
+    async def _cmd_queue_clear(self, msg):
+        self.queue.clear()
+        await self.update_preview()
+
+    async def _cmd_resume_clear(self, msg):
+        """A film goes on from the start, not from where it was left."""
+        name = msg.get("file")
+        self._glib(self.switcher.forget, name if isinstance(name, str) else None)
+        await self.update_preview()
+
+    def _cmd_music(self, method, key=None, kind=None):
+        async def run(msg):
+            if key is None:
+                self._glib(getattr(self.music, method))
+            elif isinstance(msg.get(key), kind):
+                self._glib(getattr(self.music, method), msg[key])
+        return run
+
+    async def _cmd_music_move(self, msg):
+        if isinstance(msg.get("from"), int) and isinstance(msg.get("to"), int):
+            self._glib(self.music.move, msg["from"], msg["to"])
+
+    async def _cmd_music_pause(self, msg):
+        self._glib(self.music.pause, bool(msg.get("paused")))
+
+    async def _cmd_music_seek(self, msg):
+        self._glib(self.music.seek, float(msg.get("pos", 0)))
+
+    @staticmethod
+    def _clean_file(spec):
+        return {"kind": spec["kind"], "file": spec["file"][:300]} if isinstance(spec.get("file"), str) else None
+
+    @staticmethod
+    def _clean_color(spec):
+        try:
+            return {"kind": "color", "rgb": int(spec.get("rgb", 0)) & 0xFFFFFF}
+        except (TypeError, ValueError):
             return None
-        kind = spec.get("kind")
-        if kind in ("file", "image") and isinstance(spec.get("file"), str):
-            return {"kind": kind, "file": spec["file"][:300]}
-        if kind == "color":
-            try:
-                return {"kind": "color", "rgb": int(spec.get("rgb", 0)) & 0xFFFFFF}
-            except (TypeError, ValueError):
-                return None
-        if kind == "camera":
-            return {"kind": "camera"}
-        return None
+
+    def _clean_spec(self, spec):
+        """A source from the Guide, kept to what it's allowed to say (None if it isn't one)."""
+        if not isinstance(spec, dict) or spec.get("kind") not in self.source_makers:
+            return None
+        cleaners = {"file": self._clean_file, "image": self._clean_file, "color": self._clean_color}
+        clean = cleaners.get(spec["kind"])
+        return clean(spec) if clean else {"kind": spec["kind"]}
 
     async def set_capture(self, msg):
         """A new camera, mode, microphone or media folder, without stopping:
@@ -631,10 +743,16 @@ class Sender:
     def media_position(self):
         return self.switcher.position()
 
-    def apply_media_settings(self):
+    def apply_media_settings(self, paths=()):
         m = self.state["media"]
         src = self.switcher.on_air
         if src is None:
+            return
+        if "media.layout" in paths and src.kind == "file" and self.loop:
+            # Laid out another way: the film is made again, from where it is
+            self.switcher.forget(src.name)
+            self.switcher.resume[src.name] = src.position()
+            asyncio.run_coroutine_threadsafe(self._retake(src.name), self.loop)
             return
         if src.kind == "file":
             src.set_paused(m["paused"])
@@ -649,7 +767,8 @@ class Sender:
             if isinstance(src, switcher.ColorSource) and any(p.startswith("color.") for p in paths):
                 src.set_color(st["color"]["rgb"])
             if isinstance(src, switcher.ImageSource) and any(p.startswith("image.") for p in paths):
-                src.place(st["image"]["zoom"], st["image"]["x"], st["image"]["y"])
+                im = st["image"]
+                src.place(im["zoom"], im["x"], im["y"], im["layout"], im["fit"])
 
     def _on_file_eos(self, src):
         if src is not self.switcher.on_air:
@@ -874,7 +993,8 @@ class Sender:
                 "has_audio": bool(self.media_info and self.media_info.has_audio),
                 "images": self.image_files(),
             },
-            "switch": {**self.switcher.status(), "queue": list(self.queue), "cue": self.cue_spec},
+            "switch": {**self.switcher.status(), "queue": list(self.queue), "cue": self.cue_spec,
+                       "kinds": list(self.source_makers)},
             "music": {**self.music.status(), "files": self.music_files(),
                       "level_db": round(self.mixer.level_db, 1)},
         }
@@ -888,7 +1008,7 @@ class Sender:
         if "video.bitrate_kbps" in paths:
             GLib.idle_add(lambda: (self.apply_bitrate(), False)[1])
         if "media" in sections:
-            GLib.idle_add(lambda: (self.apply_media_settings(), False)[1])
+            GLib.idle_add(lambda: (self.apply_media_settings(list(paths)), False)[1])
         if sections & {"switch", "color", "image"}:
             GLib.idle_add(lambda: (self.apply_switch_settings(list(paths)), False)[1])
 
@@ -933,6 +1053,9 @@ class Sender:
             return
         if role == "vessel" and t not in self.VESSEL_MESSAGES:
             log.warning("vessel %s sent %r; ignored", info["id"], t)
+            return
+        if role == "guide" and t in self.guide_commands:
+            await self.guide_commands[t](msg)
             return
         if t == "hello":
             if role is not None:
@@ -1038,49 +1161,6 @@ class Sender:
             await self.take_file(str(msg["file"]))
         elif t == "media_camera":
             await self.take_camera()
-        elif t == "take":
-            await self.take_spec(self._clean_spec(msg.get("spec")))
-        elif t == "cue":
-            self.cue_spec = self._clean_spec(msg.get("spec"))
-            await self.update_preview()
-        elif t == "next":
-            await self.take_next()
-        elif t == "queue_add":
-            spec = self._clean_spec(msg.get("spec"))
-            if spec and len(self.queue) < 200:
-                self.queue.append(spec)
-                await self.update_preview()
-        elif t == "queue_remove":
-            i = msg.get("index")
-            if isinstance(i, int) and 0 <= i < len(self.queue):
-                del self.queue[i]
-                await self.update_preview()
-        elif t == "queue_move":
-            i, j = msg.get("from"), msg.get("to")
-            if isinstance(i, int) and isinstance(j, int) and 0 <= i < len(self.queue):
-                self.queue.insert(max(0, min(j, len(self.queue) - 1)), self.queue.pop(i))
-                await self.update_preview()
-        elif t == "queue_clear":
-            self.queue.clear()
-            await self.update_preview()
-        elif t == "music_play" and isinstance(msg.get("file"), str):
-            self._glib(self.music.play, msg["file"])
-        elif t == "music_add" and isinstance(msg.get("file"), str):
-            self._glib(self.music.enqueue, msg["file"])
-        elif t == "music_remove" and isinstance(msg.get("index"), int):
-            self._glib(self.music.remove, msg["index"])
-        elif t == "music_move" and isinstance(msg.get("from"), int) and isinstance(msg.get("to"), int):
-            self._glib(self.music.move, msg["from"], msg["to"])
-        elif t == "music_clear":
-            self._glib(self.music.clear)
-        elif t == "music_next":
-            self._glib(self.music.next)
-        elif t == "music_pause":
-            self._glib(self.music.pause, bool(msg.get("paused")))
-        elif t == "music_seek":
-            self._glib(self.music.seek, float(msg.get("pos", 0)))
-        elif t == "music_stop":
-            self._glib(self.music.stop)
         elif t == "capture":
             await self.set_capture(msg)
         elif t == "media_seek":
