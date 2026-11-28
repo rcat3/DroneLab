@@ -1960,7 +1960,6 @@ class CommController extends ChangeNotifier {
   void Function(Int16List pcm)? _unitVoiceSink;
   OpusVoiceDecoder? _unitVoiceDecoder;
   int? _unitVoiceSeq;
-  bool _unitVoiceResumeServer = false, _unitVoiceResumeDirect = false;
 
   bool get unitVoiceOn => _unitVoiceSink != null;
 
@@ -1973,19 +1972,16 @@ class CommController extends ChangeNotifier {
   }
 
   /// The unit's microphone with no effect on it (the Guide's effects are
-  /// made elsewhere), streamed as a recording is, to [sink]. HiveMind voice
-  /// pauses meanwhile (the server and direct comms), as for recording, and
-  /// comes back after [stopUnitVoice]. Called again while on, it asks the
-  /// unit again (after it reconnects). Returns why not, or null.
+  /// made elsewhere), streamed as a recording is, to [sink]. While it
+  /// streams, the unit doesn't talk on HiveMind; the server stays connected
+  /// (HiveSight holds HiveMind voice itself, with [hush]). Called again while
+  /// on, it asks the unit again (after it reconnects). Returns why not, or
+  /// null.
   Future<String?> startUnitVoice(void Function(Int16List pcm) sink) async {
     final why = unitVoiceProblem;
     if (why != null) return why;
     if (_unitVoiceSink == null) {
       holdToTalk(false);
-      _unitVoiceResumeServer = _serverWanted;
-      _unitVoiceResumeDirect = boardSettings?.direct?.on ?? false;
-      if (_serverWanted) await disconnectServer(forGood: false);
-      if (_unitVoiceResumeDirect) await setDirect(false);
       _unitVoiceDecoder = OpusVoiceDecoder();
     }
     _unitVoiceSink = sink;
@@ -1999,11 +1995,7 @@ class CommController extends ChangeNotifier {
     if (_unitVoiceSink == null) return;
     _unitVoiceSink = null;
     _unitVoiceDecoder = null;
-    if (board.state == BoardState.connected) {
-      await board.send(recordMessage(false));
-      if (_unitVoiceResumeDirect) await setDirect(true);
-    }
-    if (_unitVoiceResumeServer) await connectServer();
+    if (board.state == BoardState.connected) await board.send(recordMessage(false));
     notifyListeners();
   }
 
@@ -2343,6 +2335,7 @@ class CommController extends ChangeNotifier {
   /// starts afresh.
   void holdToTalk(bool held) {
     if (held) {
+      if (hushed) return;
       _talk(true);
     } else if (headsetTalking) {
       _setHeadsetTalking(false);    // sets the board's talk off too
@@ -2354,6 +2347,7 @@ class CommController extends ChangeNotifier {
   /// Talk, or stop: through the unit when it's connected, else from the
   /// phone's own mic.
   void _talk(bool talk) {
+    if (talk && hushed) return;
     if (phoneMicTalks) {
       _setPhoneTalk(talk);
     } else {
@@ -2362,24 +2356,51 @@ class CommController extends ChangeNotifier {
   }
 
   /// A HiveSight Vessel's view is open on this phone: HiveMind voice is held
-  /// for as long as it is. Nothing's played to the headphones (voices, calls
-  /// and tones are dropped), and the headphones' button doesn't talk, so
-  /// nothing breaks the session or goes out by accident. Texts carry on.
+  /// for as long as it is (see [hush]).
   bool inVesselView = false;
 
-  void setVesselView(bool on) {
-    if (on == inVesselView) return;
-    inVesselView = on;
-    mixer.hushed = on;
-    if (on) {
+  /// Why HiveMind voice is held: 'vessel' (a Vessel's view is open here),
+  /// 'guide' (this computer's Guide has a HiveSight session on).
+  final Set<String> _hush = {};
+  bool _hushResumeDirect = false;
+
+  /// HiveMind voice held: nothing's played (voices, calls and tones are
+  /// dropped), and nothing of ours goes out (the app's talk, the headphones'
+  /// button, the unit's own button or voice mode), so nothing breaks the
+  /// session or goes out by accident. Texts carry on, and the server stays
+  /// connected (a session can ride it). For the Guide, direct comms pause on
+  /// the unit too (it would play others in the mask), back after.
+  bool get hushed => _hush.isNotEmpty;
+
+  Future<void> hush(String why, bool on) async {
+    final was = hushed;
+    if (on ? !_hush.add(why) : !_hush.remove(why)) return;
+    mixer.hushed = hushed;
+    if (hushed && !was) {
       mixer.stopTones();
       _setHeadsetTalking(false, chirp: false);
+      _talk(false);
+    }
+    if (why == 'guide') {
+      if (on) {
+        _hushResumeDirect = boardSettings?.direct?.on ?? false;
+        if (_hushResumeDirect) await setDirect(false);
+      } else if (_hushResumeDirect) {
+        _hushResumeDirect = false;
+        if (board.state == BoardState.connected) await setDirect(true);
+      }
     }
     notifyListeners();
   }
 
+  void setVesselView(bool on) {
+    if (on == inVesselView) return;
+    inVesselView = on;
+    unawaited(hush('vessel', on));
+  }
+
   void _onHeadsetPress() {
-    if (inVesselView) return;
+    if (hushed) return;
     // Headphones send a press, not a hold: each press starts or stops
     _setHeadsetTalking(!headsetTalking);
   }
@@ -2403,6 +2424,8 @@ class CommController extends ChangeNotifier {
   void _onBoardSound(BoardSound s) {
     // The phone's mic is talking to the server: not both at once
     if (phoneSending && _phoneSendingRoute == TalkRoute.server) return;
+    // HiveMind voice held: the unit's own talking doesn't go out either
+    if (hushed) return;
     final m = mumble;
     if (m == null || m.state != MumbleState.connected) {
       _lastBoardSeq = null;

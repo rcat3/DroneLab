@@ -458,7 +458,8 @@ class _SessionPanel extends StatelessWidget {
       if (s == null) ...[
         const Text(
           'No session. Start one, then invite your Vessels from here or from a conversation in Text. '
-          'Your camera and mic stay off until then.',
+          'Your camera and mic stay off until then. During a session, HiveMind voice is held: nothing plays '
+          "or goes out (texts still arrive).",
           style: _small,
         ),
         const SizedBox(height: 10),
@@ -1399,10 +1400,9 @@ class _SenderPanelState extends State<_SenderPanel> {
             g.usesUnit && g.unitProblem != null
                 ? g.unitProblem!
                 : g.usesUnit && g.unitReceiving
-                ? "Your voice is coming from the display unit, dry: the effects here make it. HiveMind voice is "
-                      'paused meanwhile.'
+                ? 'Your voice is coming from the display unit, dry: the effects here make it.'
                 : "The display unit's microphone, dry: the effects here make the voice. It's used while a session "
-                      'is on, and HiveMind voice pauses meanwhile.',
+                      'is on.',
             style: TextStyle(fontSize: 13, color: g.usesUnit && g.unitProblem != null ? Kc.softRed : Kc.muted),
           ),
         ),

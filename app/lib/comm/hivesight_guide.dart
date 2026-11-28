@@ -406,6 +406,7 @@ print(" ".join(missing))
     _unitTimer?.cancel();
     _unitTimer = null;
     await comm.stopUnitVoice();
+    await comm.hush('guide', false);
     if (!keepSession) await endSession();
     _closeLink();
     await p.stdin.close(); // the sender stops when its stdin closes
@@ -475,11 +476,16 @@ print(" ".join(missing))
   Timer? _unitTimer;
   DateTime _unitAsked = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// Wanted while it's the voice and a session is on (the sender only sends
-  /// the voice then): started, asked again if the unit isn't recording (it
-  /// reconnected), or stopped, HiveMind voice coming back.
+  /// HiveMind voice is held while a session's on (CommController.hush):
+  /// nothing of HiveMind's plays or goes out, so it doesn't distract the
+  /// Guide or reach a Vessel; the server stays up for sessions that ride it.
+  /// And the unit's microphone, while it's the voice and a session is on
+  /// (the sender only sends the voice then): started, asked again if the
+  /// unit isn't recording (it reconnected), or stopped.
   Future<void> _reconcileUnit() async {
-    final want = usesUnit && state == SenderState.running && session != null;
+    final inSession = state == SenderState.running && session != null;
+    await comm.hush('guide', inSession);
+    final want = usesUnit && inSession;
     if (!want) {
       unitProblem = null;
       if (comm.unitVoiceOn) await comm.stopUnitVoice();
@@ -696,6 +702,7 @@ print(" ".join(missing))
     _session = (token: _randomToken(), expires: DateTime.now().add(HiveSightInvite.lifetime));
     _send({'type': 'session', 'token': _session!.token, 'expires': _session!.expires.millisecondsSinceEpoch / 1000});
     notifyListeners();
+    unawaited(_reconcileUnit());
   }
 
   /// End it: every Vessel's dropped, and the invitations no longer work.
@@ -705,6 +712,7 @@ print(" ".join(missing))
     _session = null;
     _send({'type': 'session_end'});
     notifyListeners();
+    unawaited(_reconcileUnit());
     // Tell those invited, so their invitations lose the Join button (not
     // needed once it's run out: they show that themselves)
     if (s.expires.isAfter(DateTime.now())) {
