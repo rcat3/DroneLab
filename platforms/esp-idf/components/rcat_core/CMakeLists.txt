@@ -8,6 +8,9 @@ if(CMAKE_BUILD_EARLY_EXPANSION)
 else()
     file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS ${CORE_DIR}/*.c)
 endif()
+# The studio chain (HiveSight's Guide voice effects) is for the app's
+# libdronelab_fx only, not the units
+list(FILTER CORE_SOURCES EXCLUDE REGEX "/audio/studio/")
 
 # Optional features, chosen in platforms/esp-idf/features.cmake
 include(${CMAKE_CURRENT_LIST_DIR}/../../features.cmake)

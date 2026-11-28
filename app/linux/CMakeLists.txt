@@ -110,12 +110,27 @@ install(TARGETS dronelab_audio LIBRARY DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
 # The board's voice effects on the computer's microphone (native/voice_fx_app.c
-# and core/audio/voice_fx_chain.c), for lib/comm/voice_fx.dart
+# and core/audio/voice_fx_chain.c), for lib/comm/voice_fx.dart; and the studio
+# chain, HiveSight's Guide voice effects (native/voice_studio_app.c and
+# core/audio/studio/, with RNNoise), for tools/hivesight-sender
+set(STUDIO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../core/audio/studio")
+set(RNNOISE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/rnnoise")
+add_library(rnnoise_dl STATIC
+  "${RNNOISE_DIR}/src/denoise.c" "${RNNOISE_DIR}/src/rnn.c" "${RNNOISE_DIR}/src/pitch.c"
+  "${RNNOISE_DIR}/src/kiss_fft.c" "${RNNOISE_DIR}/src/celt_lpc.c" "${RNNOISE_DIR}/src/nnet.c"
+  "${RNNOISE_DIR}/src/nnet_default.c" "${RNNOISE_DIR}/src/parse_lpcnet_weights.c"
+  "${RNNOISE_DIR}/src/rnnoise_data.c" "${RNNOISE_DIR}/src/rnnoise_tables.c")
+target_include_directories(rnnoise_dl PRIVATE "${RNNOISE_DIR}/include" "${RNNOISE_DIR}/src")
+target_compile_options(rnnoise_dl PRIVATE -O2 -fPIC -fvisibility=hidden -Wno-cpp)
 add_library(dronelab_fx SHARED "../native/voice_fx_app.c" "../../core/audio/voice_fx_chain.c"
-  "../../core/audio/fft.c")
-target_include_directories(dronelab_fx PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../core")
+  "../../core/audio/fft.c" "../native/voice_studio_app.c"
+  "${STUDIO_DIR}/studio.c" "${STUDIO_DIR}/sfft.c" "${STUDIO_DIR}/dynamics.c" "${STUDIO_DIR}/filters.c"
+  "${STUDIO_DIR}/spectral.c" "${STUDIO_DIR}/pitch.c" "${STUDIO_DIR}/echo.c" "${STUDIO_DIR}/reverb.c"
+  "${STUDIO_DIR}/denoise.c")
+target_include_directories(dronelab_fx PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../core"
+  "${RNNOISE_DIR}/include")
 target_compile_options(dronelab_fx PRIVATE -O2 -fvisibility=hidden)
-target_link_libraries(dronelab_fx PRIVATE m)
+target_link_libraries(dronelab_fx PRIVATE rnnoise_dl m)
 install(TARGETS dronelab_fx LIBRARY DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
@@ -129,7 +144,8 @@ install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/../../build-host/dronelab-unit"
 # page to start with the system's Python.
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../tools/hivesight-sender/"
   DESTINATION "${CMAKE_INSTALL_PREFIX}/hivesight-sender" COMPONENT Runtime
-  PATTERN "__pycache__" EXCLUDE PATTERN "scenes.json" EXCLUDE)
+  PATTERN "__pycache__" EXCLUDE PATTERN "scenes.json" EXCLUDE
+  PATTERN "build" EXCLUDE PATTERN "tests" EXCLUDE PATTERN ".ruff_cache" EXCLUDE)
 
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"

@@ -16,6 +16,9 @@
 # RCAT_PYTHON can be set to pick the Python used for the image converter.
 
 file(GLOB_RECURSE RCAT_CORE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/*.c)
+# The studio chain (audio/studio/, HiveSight's Guide voice effects) is for
+# computers and phones only, in the app's libdronelab_fx: not the units
+list(FILTER RCAT_CORE_SOURCES EXCLUDE REGEX "/audio/studio/")
 
 # Optional features, chosen by the platform (see features.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/features.cmake)
