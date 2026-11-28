@@ -51,6 +51,7 @@ Future<String?> joinHiveSight(
   String from = '',
   String who = '',
   bool fromCode = false,
+  VoidCallback? beforeOpen,
 }) async {
   if (!await hiveSightSupported()) return 'HiveSight needs an Android phone with Android 11 or newer';
   final me = comm.identity;
@@ -93,6 +94,9 @@ Future<String?> joinHiveSight(
         toys.stop();
     }
   });
+  // Whatever the view opens over (a sheet this was started from) is closed now, not before: the
+  // dialogs above need their context
+  beforeOpen?.call();
   try {
     await _channel.invokeMethod<void>('open', {
       'hosts': i.hosts,
@@ -235,13 +239,11 @@ class _HiveSightButtonState extends State<HiveSightButton> {
     if (choice == 'scan') {
       final scanned = await navigator.push<HiveSightInvite>(MaterialPageRoute(builder: (_) => const HiveSightScanPage()));
       if (scanned == null || !mounted) return;
-      widget.before?.call();
-      final why = await joinHiveSight(context, widget.comm, scanned, fromCode: true);
+      final why = await joinHiveSight(context, widget.comm, scanned, fromCode: true, beforeOpen: widget.before);
       if (why != null) messenger.showSnackBar(SnackBar(content: Text(why)));
       return;
     }
-    widget.before?.call();
-    final why = await joinHiveSight(context, widget.comm, again!, who: last![0], from: last[1], fromCode: last[0].isEmpty);
+    final why = await joinHiveSight(context, widget.comm, again!, who: last![0], from: last[1], fromCode: last[0].isEmpty, beforeOpen: widget.before);
     if (why != null) messenger.showSnackBar(SnackBar(content: Text(why)));
   }
 
@@ -251,6 +253,20 @@ class _HiveSightButtonState extends State<HiveSightButton> {
       listenable: widget.comm,
       builder: (context, _) {
         if (!widget.comm.developerOptions) return const SizedBox.shrink();
+        // On a computer that can guide: the Guide page
+        if (HiveSightGuide.supported) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: OutlinedButton(
+              onPressed: () {
+                final navigator = Navigator.of(context);
+                widget.before?.call();
+                navigator.push(MaterialPageRoute<void>(builder: (_) => HiveSightGuidePage(comm: widget.comm)));
+              },
+              child: const Text('HiveSight Guide'),
+            ),
+          );
+        }
         return FutureBuilder<bool>(
           future: _supported,
           builder: (context, snap) {
