@@ -65,6 +65,7 @@ const commVersion = 3;
 const commVersionCommands = 4;
 const commVersionRemote = 2;
 const commVersionDryRecord = 26; // recording the microphone dry (0x0A flag 8), for the HiveSight Guide's own effects
+const commVersionHold = 26;      // HiveMind voice held (0x1F): the unit doesn't talk, direct comms stay up
 const commVersionLease = 25;     // a lease on the toys (0x1E): they stop if it lapses, for HiveSight
 const commVersionStorage = 24;   // pictures and sounds saved to the unit's SD card (0x1D), GET and POST /api/storage
 const commVersionRemoteApp = 23;  // the app's own remote: GET /api/screen, POST /api/nav and /api/picture
@@ -109,6 +110,7 @@ const _msgFavourites = 0x19;
 const _msgPicture = 0x1A;     // both ways: a picture for the screen, in pieces, and the ack
 const _msgSentSound = 0x1B;
 const _msgStorage = 0x1D;     // both ways: a picture or sound to save to the SD card, in pieces, and the ack
+const _msgHold = 0x1F;         // to the board: HiveMind voice held, or not (commVersion 26)
 const _msgToyLease = 0x1E;    // to the board: stop the toys unless this is sent again in so many seconds (0: no lease)
 const _msgLevel = 0x1C;       // to the board: send the voice's level; from it, the level   // both ways: a sound for the speaker, in pieces, and the ack, as a picture's
 const _msgIdentity = 0x11;
@@ -475,6 +477,12 @@ Uint8List recordMessage(bool on, {int? preset, bool beep = false, bool speakerOn
       1 | (beep ? 2 : 0) | (speakerOnly ? 4 : 0) | (dry ? 8 : 0),
       if (on && preset != null && preset >= 0) preset,
     ]);
+
+/// HiveMind voice held, for a HiveSight session (commVersion 26): the board
+/// doesn't talk (its button, voice mode, screen or the phone's talk), on the
+/// server or direct comms, but a recording (the Guide's dry microphone) goes
+/// on, and direct comms stay up. Let go when the phone goes.
+Uint8List holdMessage(bool on) => Uint8List.fromList([_msgHold, on ? 1 : 0]);
 
 /// A lease on the board's toys (commVersion 25): they all stop if it isn't
 /// given again within [seconds], as they do if the phone or the link to it

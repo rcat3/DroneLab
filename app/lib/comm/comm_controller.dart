@@ -502,6 +502,7 @@ class CommController extends ChangeNotifier {
 
   void _onBoardChanged() {
     if (recording && !recordingFromPhone && board.state != BoardState.connected) stopRecording();    // the board's gone
+    unawaited(_syncBoardHold());
     _checkDirectSince();
     if (board.state != BoardState.connected) _unitTracks = null;
     _checkBattery();
@@ -1140,6 +1141,7 @@ class CommController extends ChangeNotifier {
   /// A packet of the voice responder's: to the server as ours, or to the
   /// board to send over direct comms. Not while we're talking ourselves.
   Future<bool> _responderSend(bool direct, Uint8List opus, {required bool first, required bool last}) async {
+    if (hushed) return false;
     if (direct) {
       if (!boardTakesDirectVoice) return false;
       return board.sendFast(directVoiceMessage(opus, first: first, last: last), tries: 3, wait: const Duration(milliseconds: 5));
@@ -1261,7 +1263,7 @@ class CommController extends ChangeNotifier {
   /// just played for the same.
   void playUnitSound(UnitSoundEvent e) {
     final track = unitSounds[e];
-    if (track == null || !unitCanPlay) return;
+    if (track == null || !unitCanPlay || hushed) return;
     final now = DateTime.now().millisecondsSinceEpoch;
     if (now - (_unitSoundAt[e] ?? 0) < unitSoundGapMs) return;
     _unitSoundAt[e] = now;
@@ -1399,6 +1401,7 @@ class CommController extends ChangeNotifier {
   /// Whether someone can be called: they've a key to sign for, and are on
   /// the server or nearby. Null if they can, or why not.
   String? whyNotCall(String personId) {
+    if (hushed) return 'Not during a HiveSight session';
     final name = people[personId]?.name ?? 'They';
     if (serverUser(personId) == null && directBoard(personId) == null) return '$name is out of reach';
     if (isPlainMumble(personId)) return null;     // a whisper line
@@ -1653,6 +1656,14 @@ class CommController extends ChangeNotifier {
           break;
         }
         calls[who.id] = c = Call(who.id, id, CallState.ringing, outgoing: false, nowMs: now);
+        if (hushed) {
+          // A HiveSight session: turned down, and kept as missed (once: their app rings again
+          // every few seconds till it hears), with nothing to say so meanwhile
+          _sendCall(who.id, CallOp.decline, id);
+          calls.remove(who.id);
+          if (_heldCalls.add('${who.id}:$id')) missedCalls.add(who.id);
+          break;
+        }
         final busyWith = inCallWith;
         notifier.showCall(who.id, name, avatarOf(who.id),
             inCallWith: busyWith == null ? null : people[busyWith]?.name ?? '?');
@@ -2362,35 +2373,44 @@ class CommController extends ChangeNotifier {
   /// Why HiveMind voice is held: 'vessel' (a Vessel's view is open here),
   /// 'guide' (this computer's Guide has a HiveSight session on).
   final Set<String> _hush = {};
-  bool _hushResumeDirect = false;
+  bool _boardHeld = false;  // the unit's been told (holdMessage), on this connection
+  final Set<String> _heldCalls = {};    // calls turned down while held, "person:call id"
 
-  /// HiveMind voice held: nothing's played (voices, calls and tones are
-  /// dropped), and nothing of ours goes out (the app's talk, the headphones'
-  /// button, the unit's own button or voice mode), so nothing breaks the
-  /// session or goes out by accident. Texts carry on, and the server stays
-  /// connected (a session can ride it). For the Guide, direct comms pause on
-  /// the unit too (it would play others in the mask), back after.
+  /// HiveMind voice held: nothing's played (voices, from the server or
+  /// direct comms, and tones), nothing of ours goes out (the app's talk, the
+  /// headphones' button, the unit's own button or voice mode: the unit's held
+  /// too), and calls are turned down, kept as missed with no notice, so
+  /// nothing breaks the session's mood or goes out by accident. Texts carry
+  /// on, and the server and direct comms stay up, for sessions that ride
+  /// them.
   bool get hushed => _hush.isNotEmpty;
 
   Future<void> hush(String why, bool on) async {
     final was = hushed;
     if (on ? !_hush.add(why) : !_hush.remove(why)) return;
     mixer.hushed = hushed;
+    if (!hushed) _heldCalls.clear();
     if (hushed && !was) {
       mixer.stopTones();
       _setHeadsetTalking(false, chirp: false);
       _talk(false);
-    }
-    if (why == 'guide') {
-      if (on) {
-        _hushResumeDirect = boardSettings?.direct?.on ?? false;
-        if (_hushResumeDirect) await setDirect(false);
-      } else if (_hushResumeDirect) {
-        _hushResumeDirect = false;
-        if (board.state == BoardState.connected) await setDirect(true);
+      for (final id in calls.keys.toList()) {
+        endCall(id);
       }
     }
+    await _syncBoardHold();
     notifyListeners();
+  }
+
+  /// The unit held while HiveMind voice is, told again when it reconnects.
+  Future<void> _syncBoardHold() async {
+    if (board.state != BoardState.connected) {
+      _boardHeld = false;
+      return;
+    }
+    if ((board.status?.version ?? 0) < commVersionHold || _boardHeld == hushed) return;
+    _boardHeld = hushed;
+    await board.send(holdMessage(hushed));
   }
 
   void setVesselView(bool on) {
@@ -3663,6 +3683,8 @@ class CommController extends ChangeNotifier {
 
   /// A text's come in: a notification, unless its conversation's on screen.
   void _notifyText(Conversation c) {
+    // A HiveSight session: it's there, unread, with nothing to say so meanwhile
+    if (hushed) return;
     // In the headphones, whether it's on screen or not; and on the unit
     if (textTone) _tone(_callTones.text());
     playUnitSound(UnitSoundEvent.text);
