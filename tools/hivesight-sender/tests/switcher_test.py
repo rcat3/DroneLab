@@ -205,7 +205,7 @@ async def scenario(check, d: Path):
         check("the Guide is told the effects and kinds of source there are",
               [e["id"] for e in g.sum["switch"]["effects"]] == ["cut", "fade", "dissolve"] and
               set(g.sum["switch"]["kinds"]) == {"camera", "black", "color", "file", "image", "builtin"} and
-              {b["id"] for b in g.sum["switch"]["builtins"]} >= {"test", "katcorp", "dronelab"},
+              {b["id"] for b in g.sum["switch"]["builtins"]} >= {"test", "katcorp", "dronelab", "katmark"},
               f"{[e['id'] for e in g.sum['switch']['effects']]}, {g.sum['switch']['kinds']}")
 
         # Where a film starts is the Guide's to set, and files can come from anywhere

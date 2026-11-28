@@ -433,6 +433,7 @@ BUILTINS = {
     "test": {"label": "Test pattern", "file": None},
     "katcorp": {"label": "KatCorp logo", "file": "katcorp.mp4"},
     "dronelab": {"label": "DroneLab logo", "file": "dronelab.mp4"},
+    "katmark": {"label": "KatCorp mark", "file": "katmark.mp4"},
 }
 
 
