@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../comm/board_protocol.dart' show OthersCommand;
 import '../comm/comm_controller.dart';
 import '../comm/patterns.dart' show builtInPatterns;
+import 'hivesight_code.dart';
 import 'patterns_page.dart';
 import '../comm/conversations.dart';
 import '../comm/hivesight_guide.dart';
@@ -484,6 +485,20 @@ class _SessionPanel extends StatelessWidget {
                 onPressed: g.canInvite ? onInvite : null,
                 icon: const Icon(Icons.send),
                 label: const Text('Invite…'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: g.canInvite
+                    ? () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        final why = await showHiveSightCode(context, g);
+                        if (why != null) messenger.showSnackBar(SnackBar(content: Text(why)));
+                      }
+                    : null,
+                icon: const Icon(Icons.qr_code_2),
+                label: const Text('Show code'),
               ),
             ),
             const SizedBox(width: 8),

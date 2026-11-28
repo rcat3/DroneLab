@@ -18,7 +18,8 @@ import 'dart:typed_data';
 import 'identity.dart';
 
 class HiveSightInvite {
-  static const _prefix = 'dronelab://hivesight?';
+  static const _prefix = linkPrefix;
+  static const linkPrefix = 'dronelab://hivesight?';
   static const _context = 'dronelab-hivesight-invite\n';
   static const _joinContext = 'dronelab-hivesight-join\n';
 

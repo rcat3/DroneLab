@@ -126,6 +126,13 @@ class MainActivity : FlutterActivity() {
                     startActivity(io.github.rcat3.dronelab.hivesight.Quiet.settingsIntent())
                     result.success(null)
                 } else result.success(null)
+                // The app's own page in Android's settings: to give the camera back after refusing it
+                "appSettings" -> {
+                    startActivity(
+                        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            android.net.Uri.parse("package:$packageName")))
+                    result.success(null)
+                }
                 "toysState" -> {
                     io.github.rcat3.dronelab.hivesight.HiveSightActivity.sendToysState(call.arguments as? String ?: "{}")
                     result.success(null)

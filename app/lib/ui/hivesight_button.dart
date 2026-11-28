@@ -9,10 +9,13 @@ import '../comm/comm_controller.dart';
 import '../comm/conversations.dart';
 import '../comm/hivesight_guide.dart';
 import '../comm/hivesight_invite.dart';
+import '../comm/hivesight_join.dart';
 import '../comm/hivesight_vessel_toys.dart';
 import '../comm/permissions.dart';
 import '../comm/rules.dart' show RuleClass;
+import 'hivesight_code.dart';
 import 'hivesight_guide_page.dart';
+import 'hivesight_scan_page.dart';
 import 'theme.dart';
 
 /// HiveSight on the Vessel's side: joining a Guide's invitation, and the
@@ -36,34 +39,44 @@ Future<bool> hiveSightSupported() async {
 
 String _hex(List<int> b) => b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
 
-/// Join [i], from [from] ([who] who they are, as the text came): checked,
-/// allowed (asked first if they aren't yet), and opened. Returns why not,
-/// or null once it's open or was left.
+/// Join [i]: from a text, [from] who sent it and [who] who they are as the
+/// text came; or [fromCode], a scanned QR code, which nobody sent, so the
+/// Guide is named from the people we know. Checked, allowed (asked first if
+/// they aren't yet), and opened. Returns why not, or null once it's open or
+/// was left.
 Future<String?> joinHiveSight(
   BuildContext context,
   CommController comm,
   HiveSightInvite i, {
-  required String from,
-  required String who,
+  String from = '',
+  String who = '',
+  bool fromCode = false,
 }) async {
   if (!await hiveSightSupported()) return 'HiveSight needs an Android phone with Android 11 or newer';
-  if (who != 'k:${i.guideId}' || !await i.verify()) return "This invitation isn't from the person who sent it";
-  if (i.expired) return 'This session ended at ${HiveSightInvite.clock(i.expires)}';
   final me = comm.identity;
+  final d = await decideJoin(
+    i,
+    rules: comm.permissions.rules,
+    people: comm.people,
+    who: who,
+    from: from,
+    fromCode: fromCode,
+  );
+  if (d.refusal != null) return d.refusal;
   if (me == null) return "This phone's identity isn't ready";
+  from = d.from;
   final keyHex = _hex(i.guideKey);
   final rules = comm.permissions.rules;
-  if (rules.policy(RuleClass.hiveSight) == Policy.off) return 'HiveSight is set to Nobody in Setup → Permissions';
   if (!context.mounted) return null;
-  if (!rules.allows(keyHex, RuleClass.hiveSight)) {
-    if (!await _askAllow(context, from)) return null;
-    await comm.permissions.grant(keyHex, from, {RuleClass.hiveSight});
+  if (d.ask) {
+    if (!await _askAllow(context, from, fromCode: fromCode)) return null;
+    await comm.permissions.grant(keyHex, d.savedName, {RuleClass.hiveSight});
   } else {
     if (!context.mounted || !await _notice(context)) return null;
   }
   final sig = await me.sign(HiveSightInvite.joinMessage(i.token, i.fingerprint));
   final prefs = await SharedPreferences.getInstance();
-  await prefs.setString('hiveSightLast', '$who\n$from\n${i.link}');
+  await prefs.setString('hiveSightLast', '${fromCode ? '' : who}\n$from\n${i.link}');
   if (!context.mounted) return null;
   // Off to Android's settings to give it: back here, join again
   if (!await _offerQuiet(context)) return null;
@@ -141,12 +154,13 @@ Future<bool> _offerQuiet(BuildContext context) async {
 }
 
 /// Ask whether [from] may guide us.
-Future<bool> _askAllow(BuildContext context, String from) async =>
+Future<bool> _askAllow(BuildContext context, String from, {bool fromCode = false}) async =>
     await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Let $from guide you?'),
-        content: const Text(
+        content: Text(
+          '${fromCode ? 'This came from a code you scanned, which can be shown by anyone. ' : ''}'
           'Experimental. In a HiveSight session your Guide controls what you see and hear through the '
           'headset. Back leaves the view. The flashing light pulse is only shown if you turn off '
           '"Ignore light pulses" in Setup → Permissions → HiveSight. Your toys only answer a Guide '
@@ -197,20 +211,37 @@ class _HiveSightButtonState extends State<HiveSightButton> {
     final last = prefs.getString('hiveSightLast')?.split('\n');
     final i = last == null || last.length < 3 ? null : HiveSightInvite.parse(last.sublist(2).join('\n'));
     if (!mounted) return;
-    if (i == null || i.expired) {
-      await showDialog<void>(
-        context: context,
-        builder: (c) => AlertDialog(
-          title: const Text('HiveSight'),
-          content: const Text("To be a Vessel, join a Guide's invitation: it comes as a text, with a Join button."),
-          actions: [FilledButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+    final again = i == null || i.expired ? null : i;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('HiveSight'),
+        content: Text(
+          again == null
+              ? "To be a Vessel, join a Guide's invitation: it comes as a text, with a Join button. "
+                    "Or scan the code on a Guide's screen."
+              : 'Join the last session again (until ${HiveSightInvite.clock(again.expires)}), or scan a Guide\'s code.',
         ),
-      );
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, 'scan'), child: const Text("Scan a Guide's code")),
+          if (again != null) FilledButton(onPressed: () => Navigator.pop(c, 'last'), child: const Text('Join again')),
+          if (again == null) TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK')),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    if (choice == 'scan') {
+      final scanned = await navigator.push<HiveSightInvite>(MaterialPageRoute(builder: (_) => const HiveSightScanPage()));
+      if (scanned == null || !mounted) return;
+      widget.before?.call();
+      final why = await joinHiveSight(context, widget.comm, scanned, fromCode: true);
+      if (why != null) messenger.showSnackBar(SnackBar(content: Text(why)));
       return;
     }
-    final messenger = ScaffoldMessenger.of(context);
     widget.before?.call();
-    final why = await joinHiveSight(context, widget.comm, i, who: last![0], from: last[1]);
+    final why = await joinHiveSight(context, widget.comm, again!, who: last![0], from: last[1], fromCode: last[0].isEmpty);
     if (why != null) messenger.showSnackBar(SnackBar(content: Text(why)));
   }
 
@@ -352,7 +383,7 @@ Future<void> inviteToHiveSight(BuildContext context, CommController comm, Conver
   final navigator = Navigator.of(context);
   final starting = !g.canInvite;
   var open = true;
-  final go = await showDialog<bool>(
+  final go = await showDialog<String>(
     context: context,
     builder: (d) => StatefulBuilder(
       builder: (d, setState) => AlertDialog(
@@ -378,16 +409,23 @@ Future<void> inviteToHiveSight(BuildContext context, CommController comm, Conver
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(d, 'code'), child: const Text('Show code instead')),
           FilledButton(
-            onPressed: () => Navigator.pop(d, true),
+            onPressed: () => Navigator.pop(d, 'send'),
             child: Text(starting ? 'Start and invite' : 'Send invitation'),
           ),
         ],
       ),
     ),
   );
-  if (go != true) return;
+  if (go == null) return;
+  if (go == 'code') {
+    if (!context.mounted) return;
+    final why = await showHiveSightCode(context, g);
+    if (why != null) messenger.showSnackBar(SnackBar(content: Text(why)));
+    return;
+  }
   final why = await g.inviteStarting(c);
   messenger.showSnackBar(SnackBar(content: Text(why ?? 'Invitation to HiveSight sent to ${c.audience}')));
   if (why == null && open) {
