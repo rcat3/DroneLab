@@ -191,6 +191,8 @@ class HiveSightGuide extends ChangeNotifier {
   Process? _process;
   bool _stopping = false;
   int _guidePort = 0;
+  /// Where Vessels can reach this computer: the sender's list at its start,
+  /// then this computer's own, read again (see [refreshAddrs]).
   List<String> addrs = const [];
   final String _guideToken = _randomToken();
 
@@ -362,6 +364,8 @@ print(" ".join(missing))
             _connect();
             _unitTimer?.cancel();
             _unitTimer = Timer.periodic(const Duration(seconds: 1), (_) => _reconcileUnit());
+            _addrTimer?.cancel();
+            _addrTimer = Timer.periodic(const Duration(seconds: 5), (_) => refreshAddrs());
           } catch (_) {}
         } else {
           _say(line);
@@ -405,6 +409,8 @@ print(" ".join(missing))
     _stopping = true;
     _unitTimer?.cancel();
     _unitTimer = null;
+    _addrTimer?.cancel();
+    _addrTimer = null;
     await comm.stopUnitVoice();
     await comm.hush('guide', false);
     if (!keepSession) await endSession();
@@ -474,6 +480,7 @@ print(" ".join(missing))
   bool unitReceiving = false;
 
   Timer? _unitTimer;
+  Timer? _addrTimer;
   DateTime _unitAsked = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// HiveMind voice is held while a session's on (CommController.hush):
@@ -727,12 +734,56 @@ print(" ".join(missing))
   /// The conversations invited to this session.
   final Set<String> _invited = {};
 
+  /// The addresses a Vessel could reach us at, from [all] (this computer's
+  /// IPv4 addresses): the sender's rule (hivesight_sender.py's local_ips),
+  /// every one but loopback, link-local and Docker's bridge, sorted.
+  @visibleForTesting
+  static List<String> lanAddresses(Iterable<String> all) {
+    final out = <String>{};
+    for (final a in all) {
+      final p = a.split('.');
+      if (p.length != 4 || p.any((x) => int.tryParse(x) == null)) continue;
+      if (a.startsWith('127.') || a.startsWith('169.254.') || a.startsWith('172.17.')) continue;
+      out.add(a);
+    }
+    return out.toList()..sort();
+  }
+
+  /// Read this computer's addresses again, as a router or a phone's hotspot
+  /// may have been joined since the sender started: so invitations and
+  /// codes carry them as they are now. Unchanged if the list can't be read.
+  Future<void> refreshAddrs() async {
+    if (state != SenderState.running) return;
+    try {
+      final all = <String>[
+        for (final i in await NetworkInterface.list(type: InternetAddressType.IPv4))
+          for (final a in i.addresses) a.address,
+      ];
+      final now = lanAddresses(all);
+      if (!listEquals(now, addrs)) {
+        addrs = now;
+        notifyListeners();
+      }
+    } on SocketException {
+      // keep what we had
+    }
+  }
+
+  /// The invitation to the session as it is now (current addresses), or
+  /// null if there's no session or no way to reach us.
+  Future<HiveSightInvite?> currentInvite() async {
+    final s = session, me = comm.identity;
+    if (s == null || me == null || state != SenderState.running) return null;
+    await refreshAddrs();
+    if (addrs.isEmpty) return null;
+    return HiveSightInvite.make(me, hosts: addrs, port: vesselPort, token: s.token, expires: s.expires);
+  }
+
   /// Invite a conversation, as a text: false if there's no session, or it
   /// couldn't go.
   Future<bool> invite(Conversation c) async {
-    final s = session, me = comm.identity;
-    if (s == null || me == null || state != SenderState.running) return false;
-    final i = await HiveSightInvite.make(me, hosts: addrs, port: vesselPort, token: s.token, expires: s.expires);
+    final i = await currentInvite();
+    if (i == null) return false;
     if (!comm.sendText(c, i.text, typed: false)) return false;
     _invited.add(c.key);
     return true;
@@ -743,6 +794,14 @@ print(" ".join(missing))
   /// Invite a conversation, starting the sender and a session first if
   /// need be: why not, or null once it's sent.
   Future<String?> inviteStarting(Conversation c) async {
+    final why = await startSessionAnyway();
+    if (why != null) return why;
+    return await invite(c) ? null : "Couldn't send it: ${c.title} can't be reached just now";
+  }
+
+  /// Start the sender and a session if they aren't on: why not, or null
+  /// once there's a session and an address to reach it at.
+  Future<String?> startSessionAnyway() async {
     if (state != SenderState.running) {
       await start();
       final done = Completer<void>();
@@ -756,9 +815,10 @@ print(" ".join(missing))
       removeListener(check);
       if (state != SenderState.running) return problem ?? "The HiveSight sender didn't start";
     }
+    await refreshAddrs();
     if (addrs.isEmpty) return "This computer isn't on a network the Vessel can reach";
     if (session == null) startSession(); // sent now, or when the link's up
-    return await invite(c) ? null : "Couldn't send it: ${c.title} can't be reached just now";
+    return null;
   }
 
   static String _randomToken() {
