@@ -4,7 +4,7 @@ Draw the DroneLab logo shown at startup: core/ui/assets/dronelab_logo.png.
 
 "DRONELAB" in the Terminal feature's phosphor green, with a few glitched
 slices, inside targeting-style corner brackets with circuit traces off each
-side, and a "> SYSTEM ONLINE" prompt under it, all on black with scan lines.
+side, and a "> HIVE CONNECTED" prompt under it, all on black with scan lines.
 The cursor after the prompt isn't in the picture: the firmware draws it, so it
 can blink. This prints where it goes, for SPLASH_CURSOR in core/app/app.c.
 
@@ -38,7 +38,7 @@ GREEN_DARK = (10, 90, 10)
 
 TITLE = "DRONELAB"
 TITLE_WIDTH = 300               # in the 480 picture, leaving room for the brackets
-PROMPT = "> SYSTEM ONLINE"
+PROMPT = "> HIVE CONNECTED"
 
 
 def load_font(path, size, weight=None):

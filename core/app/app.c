@@ -30,9 +30,9 @@
 LV_IMAGE_DECLARE(dronelab_logo);
 #define SPLASH_ART_SIZE     480
 
-// The blinking cursor after its "> SYSTEM ONLINE" prompt: x, y, width,
+// The blinking cursor after its "> HIVE CONNECTED" prompt: x, y, width,
 // height in the 480x480 picture, as tools/gen_logo.py prints them
-static const int32_t SPLASH_CURSOR[4] = { 322, 279, 8, 15 };
+static const int32_t SPLASH_CURSOR[4] = { 329, 279, 8, 15 };
 #define SPLASH_CURSOR_COLOR lv_color_hex(0x33ff33)   // the Terminal's phosphor green
 #define SPLASH_BLINK_MS     500
 
