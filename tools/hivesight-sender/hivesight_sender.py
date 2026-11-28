@@ -62,6 +62,7 @@ from aiohttp import WSMsgType, web  # noqa: E402
 import media  # noqa: E402
 import studio  # noqa: E402
 import voice_input  # noqa: E402
+from settings import preset_values, resolved_presets, set_many, set_path  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 log = logging.getLogger("hivesight")
@@ -147,23 +148,6 @@ def get_path(tree, path):
     for key in path.split("."):
         node = node[key]
     return node
-
-
-def set_path(tree, path, value):
-    *parents, leaf = path.split(".")
-    node = tree
-    for key in parents:
-        node = node[key]
-    if leaf not in node:
-        raise KeyError(path)
-    old = node[leaf]
-    # Coerce to the existing type so a slider's "0.5" string can't sneak in.
-    if isinstance(old, bool):
-        value = bool(value)
-    elif isinstance(old, (int, float)) and not isinstance(value, bool):
-        value = type(old)(float(value)) if isinstance(old, float) else int(round(float(value)))
-    node[leaf] = value
-    return value
 
 
 # --------------------------------------------------------------------------
@@ -719,12 +703,7 @@ class Sender:
             return False
         # The effects a preset doesn't mention go back to none, so one preset's
         # ring or chorus doesn't stay on in the next; the mic's own settings stay
-        for k, val in DEFAULT_STATE["voice"].items():
-            if k not in VOICE_MIC_KEYS:
-                self.state["voice"][k] = val
-        for k, val in p.items():
-            if k in self.state["voice"]:
-                self.state["voice"][k] = val
+        self.state["voice"].update(preset_values(p, DEFAULT_STATE["voice"], VOICE_MIC_KEYS))
         self.state["voice"]["preset"] = name
         return True
 
@@ -836,25 +815,42 @@ class Sender:
             },
         }
 
+    def _side_effects(self, paths):
+        """What changed settings do besides being kept: the voice effects take
+        them, the encoder its bitrate, the media player its own."""
+        sections = {p.split(".")[0] for p in paths}
+        if "voice" in sections:
+            self.apply_voice()
+        if "video.bitrate_kbps" in paths:
+            GLib.idle_add(lambda: (self.apply_bitrate(), False)[1])
+        if "media" in sections:
+            GLib.idle_add(lambda: (self.apply_media_settings(), False)[1])
+
     async def handle_set(self, path, value):
         try:
             value = set_path(self.state, path, value)
         except (KeyError, TypeError, ValueError) as e:
             log.warning("bad set %s=%r (%s)", path, value, e)
             return
-        section = path.split(".")[0]
-        if section == "voice":
-            if path == "voice.preset":
-                self.apply_preset_values(value)
-                self.apply_voice()
-                await self.broadcast({"type": "state", "state": self.state})
-                return
+        if path == "voice.preset":
+            self.apply_preset_values(value)
             self.apply_voice()
-        elif path == "video.bitrate_kbps":
-            GLib.idle_add(lambda: (self.apply_bitrate(), False)[1])
-        elif section == "media":
-            GLib.idle_add(lambda: (self.apply_media_settings(), False)[1])
+            await self.broadcast({"type": "state", "state": self.state})
+            return
+        self._side_effects([path])
         await self.broadcast({"type": "set", "path": path, "value": value})
+
+    async def handle_set_many(self, values):
+        """Many settings at once (a preset, a layout of values): all set, the
+        voice given them once, and the state sent once. voice.preset here is
+        only the name: its values are in [values] if they're wanted."""
+        done, skipped = set_many(self.state, values)
+        if skipped:
+            log.warning("set_many skipped %s", ", ".join(skipped[:8]))
+        if not done:
+            return
+        self._side_effects(list(done))
+        await self.broadcast({"type": "state", "state": self.state})
 
     # Messages each role may send. Vessels only report; the Guide page drives.
     VESSEL_MESSAGES = {"hello", "ping", "stats", "keyframe", "left", "toys_state"}
@@ -904,6 +900,11 @@ class Sender:
                 self.add_destination(dest)
                 GLib.timeout_add(300, lambda: (self.force_keyframe(), False)[1])
             await ws.send_str(json.dumps({"type": "state", "state": self.state}))
+            if info["role"] == "guide":
+                # What each built-in preset comes to, for the Guide to compare with
+                await ws.send_str(json.dumps({
+                    "type": "preset_values",
+                    "presets": resolved_presets(self.presets, DEFAULT_STATE["voice"], VOICE_MIC_KEYS)}))
             if info["role"] == "vessel":
                 for cue in self.word_cues.values():
                     await ws.send_str(json.dumps(cue))
@@ -911,6 +912,8 @@ class Sender:
             await self.broadcast(self.summary(), roles={"guide"})
         elif t == "set":
             await self.handle_set(msg["path"], msg["value"])
+        elif t == "set_many":
+            await self.handle_set_many(msg.get("values"))
         elif t == "words":
             # Words for a Vessel's view, one of WORD_LAYERS layers: relayed as
             # they are (the Vessel checks them) and kept for Vessels who join later

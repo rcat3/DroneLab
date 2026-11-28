@@ -12,6 +12,8 @@ The test signal is made here, the same every time: no recordings in the repo.
 """
 from __future__ import annotations
 
+import ast
+import copy
 import ctypes
 import json
 import sys
@@ -25,6 +27,9 @@ sys.path.insert(0, str(HERE / "reference"))
 import dynamics as ref_dynamics  # noqa: E402
 import gst_ref  # noqa: E402
 import voicefx as ref_voicefx  # noqa: E402
+
+sys.path.insert(0, str(HERE.parent))
+import settings  # noqa: E402
 
 BUILD = HERE.parent / "build"
 RATE = 48000
@@ -483,6 +488,71 @@ def test_switching(x):
           f"largest step {jump:.3f}, latency at the end {lat}")
 
 
+def sender_constants():
+    """DEFAULT_STATE and VOICE_MIC_KEYS as the sender has them, read from its
+    source (the sender itself needs GStreamer to import)."""
+    tree = ast.parse((HERE.parent / "hivesight_sender.py").read_text())
+    found = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) \
+                and node.targets[0].id in ("DEFAULT_STATE", "VOICE_MIC_KEYS"):
+            found[node.targets[0].id] = ast.literal_eval(node.value)
+    return found["DEFAULT_STATE"], found["VOICE_MIC_KEYS"]
+
+
+def test_set_many():
+    default, mic_keys = sender_constants()
+    state = copy.deepcopy(default)
+    done, skipped = settings.set_many(state, {
+        "spiral.amount": "0.5", "spiral.arms": 5.4, "beats.on": 1, "voice.fx_mode": "robot",
+        "voice.nope": 1, "nosection.x": 2, "mix.master": "loud"})
+    check("set_many sets what it can", state["spiral"]["amount"] == 0.5 and state["spiral"]["arms"] == 5
+          and state["beats"]["on"] is True and state["voice"]["fx_mode"] == "robot",
+          f"{len(done)} set, skipped {sorted(skipped)}")
+    check("set_many skips the unknown and the unusable",
+          sorted(skipped) == ["mix.master", "nosection.x", "voice.nope"] and state["mix"]["master"] == 1.0,
+          "unknown paths and a word for a number are left alone")
+    check("set_many keeps the types", isinstance(state["spiral"]["arms"], int)
+          and isinstance(state["spiral"]["amount"], float), "int stays int, float stays float")
+    check("set_many with nothing", settings.set_many(state, None) == ({}, []) and
+          settings.set_many(state, {}) == ({}, []), "no values, nothing set")
+    # One by one comes to the same as all at once
+    values = {"fx.contrast": 1.4, "fx.invert": True, "photic.hz": 12.5, "voice.preset": "mine"}
+    one, many = copy.deepcopy(default), copy.deepcopy(default)
+    for k, v in values.items():
+        settings.set_path(one, k, v)
+    settings.set_many(many, values)
+    check("set_many is the same as one by one", one == many, f"{len(values)} values")
+
+
+def test_preset_values():
+    default, mic_keys = sender_constants()
+    presets = json.loads((HERE.parent / "presets.json").read_text())
+    voice = default["voice"]
+    resolved = settings.resolved_presets(presets, voice, mic_keys)
+    check("every preset resolved", set(resolved) == set(presets), f"{len(resolved)} presets")
+    ok = all(not (set(r) & mic_keys) and set(r) == set(voice) - mic_keys for r in resolved.values())
+    check("resolved presets cover every effect and no mic setting", ok, "keys match the voice state's")
+    # An effect a preset doesn't mention is at its default, so a preset after a
+    # ring or chorus one doesn't keep it
+    extra = {k for p in presets.values() for k in p} - set(voice)
+    unit = [n for n in presets if n.endswith("(unit)")]
+    quiet = next((n for n in presets if not n.endswith("(unit)") and "ring_mix" not in presets[n]), None)
+    check("a preset leaves unmentioned effects at default",
+          quiet is not None and resolved[quiet]["ring_mix"] == voice["ring_mix"] and not extra,
+          f"{quiet}: ring_mix {resolved[quiet]['ring_mix']}" if quiet else "no preset to try")
+    check("a preset's own values win",
+          all(resolved[n][k] == v for n, p in presets.items() for k, v in p.items() if k in resolved[n]),
+          f"{len(unit)} unit presets among {len(presets)}")
+    # What the sender does on choosing a preset is what the Guide is told it comes to
+    state = copy.deepcopy(default)
+    state["voice"]["gain_db"] = 20.0
+    name = next(iter(presets))
+    state["voice"].update(settings.preset_values(presets[name], voice, mic_keys))
+    check("choosing a preset leaves the mic's settings", state["voice"]["gain_db"] == 20.0,
+          "gain stays where it was")
+
+
 def main():
     x = speech()
     x16 = speech(rate=16000, seconds=3.0)
@@ -496,6 +566,8 @@ def main():
     test_character(x)
     test_presets(x)
     test_switching(x)
+    test_set_many()
+    test_preset_values()
     failed = [r for r in RESULTS if not r[1]]
     print(f"\n{len(RESULTS) - len(failed)} passed, {len(failed)} failed")
     return 1 if failed else 0
